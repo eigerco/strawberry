@@ -57,7 +57,7 @@ To install Strawberry, ensure you have Go installed on your system. Follow the s
 
 ## Contributing
 
-We welcome contributions to Strawberry. Before contributing please read the [CONTRIBUTING](CONTRIBUTING) file for details.
+We welcome contributions to Strawberry. Before contributing please read the [CONTRIBUTING](CONTRIBUTING.md) file for details.
 
 
 ## License
