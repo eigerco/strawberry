@@ -4,7 +4,7 @@
 
 To contribute to the Strawberry implementation, start with the proper development copy.
 You may want to use the GitHub interface to fork [Strawberry](https://github.com/eigerco/strawberry) and check out your fork.
-For development environment setup and first build, see [Strawberry README](https://github.com/eigerco/strawberry/README.md)
+For development environment setup and first build, see [Strawberry README](README.md).
 
 ### Legal Notice
 
