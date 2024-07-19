@@ -31,7 +31,7 @@ To install Strawberry, ensure you have Go installed on your system. Follow the s
 
 1. Clone the repository:
     ```bash
-    git clone https://github.com/eiger_co/strawberry.git
+    git clone https://github.com/eigerco/strawberry.git
     cd strawberry
     ```
 
