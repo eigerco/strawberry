@@ -13,14 +13,24 @@ const (
 
 	// Custom error codes as defined here https://github.com/w3f/jamtestvectors/blob/master/safrole/safrole.asn#L30
 
-	BadSlot          CustomErrorCode = 0
-	UnexpectedTicket CustomErrorCode = 1
-	BadTicketOrder   CustomErrorCode = 2
-	BadTicketProof   CustomErrorCode = 3
-	BadTicketAttempt CustomErrorCode = 4
-	Reserved         CustomErrorCode = 5
-	DuplicateTicket  CustomErrorCode = 6
+	BadSlot          CustomErrorCode = 0 // Timeslot value must be strictly monotonic.
+	UnexpectedTicket CustomErrorCode = 1 // Received a ticket while in epoch's tail.
+	BadTicketOrder   CustomErrorCode = 2 // Tickets must be sorted.
+	BadTicketProof   CustomErrorCode = 3 // Invalid ticket ring proof.
+	BadTicketAttempt CustomErrorCode = 4 // Invalid ticket attempt value.
+	Reserved         CustomErrorCode = 5 // Reserved
+	DuplicateTicket  CustomErrorCode = 6 // Found a ticket duplicate.
 )
+
+var errorCodeMessages = map[CustomErrorCode]string{
+	BadSlot:          "bad_slot",
+	UnexpectedTicket: "unexpected_ticket",
+	BadTicketOrder:   "bad_ticket_order",
+	BadTicketProof:   "bad_ticket_proof",
+	BadTicketAttempt: "bad_ticket_attempt",
+	Reserved:         "reserved",
+	DuplicateTicket:  "duplicate_ticket",
+}
 
 type OpaqueHash [32]byte
 type Ed25519Key [32]uint8
@@ -247,8 +257,12 @@ func (oe OutputOrError) MarshalJSON() ([]byte, error) {
 			"ok": v,
 		})
 	case CustomErrorCode:
+		message, ok := errorCodeMessages[v]
+		if !ok {
+			return nil, fmt.Errorf("unknown custom error code: %d", v)
+		}
 		return json.Marshal(map[string]interface{}{
-			"err": v,
+			"err": message,
 		})
 	default:
 		return nil, fmt.Errorf("unexpected type in OutputOrError: %T", value)
