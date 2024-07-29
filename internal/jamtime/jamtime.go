@@ -9,6 +9,7 @@ import (
 var now = time.Now
 
 // JamEpoch represents the start of the JAM Common Era
+// 2024-01-01 12:00:00
 var JamEpoch = time.Date(2024, time.January, 1, 12, 0, 0, 0, time.UTC)
 
 // JamTime represents a time in the JAM Common Era
@@ -26,6 +27,15 @@ func FromTime(t time.Time) JamTime {
 	duration := t.Sub(JamEpoch)
 	seconds := uint64(duration.Seconds())
 	return JamTime{Seconds: seconds}
+}
+
+// EpochAndTimeslotToJamTime converts an Epoch and a timeslot within that epoch to JamTime
+func EpochAndTimeslotToJamTime(e Epoch, timeslot Timeslot) (JamTime, error) {
+	if timeslot >= TimeslotsPerEpoch {
+		return JamTime{}, errors.New("timeslot number exceeds epoch length")
+	}
+	epochStart := FromEpoch(e)
+	return JamTime{Seconds: epochStart.Seconds + uint64(timeslot)*uint64(TimeslotDuration.Seconds())}, nil
 }
 
 // ToTime converts a JamTime to a standard time.Time
@@ -74,6 +84,12 @@ func (jt JamTime) ToTimeslot() Timeslot {
 	return Timeslot(jt.Seconds / uint64(TimeslotDuration.Seconds()))
 }
 
+// IsZero reports whether jt represents the zero time instant,
+// IsZero is true when the date and time equal to 2024-01-01 12:00:00
+func (jt JamTime) IsZero() bool {
+	return jt.Seconds == 0
+}
+
 // MarshalJSON implements the json.Marshaler interface
 func (jt JamTime) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf(`"%s"`, []byte(jt.ToTime().Format(time.RFC3339)))), nil
@@ -90,10 +106,10 @@ func (jt *JamTime) UnmarshalJSON(data []byte) error {
 }
 
 // JamTimeToEpochAndTimeslot converts a JamTime to its Epoch and timeslot within that epoch
-func (jt JamTime) ToEpochAndTimeslot() (Epoch, uint32) {
+func (jt JamTime) ToEpochAndTimeslot() (Epoch, Timeslot) {
 	epoch := jt.ToEpoch()
 	timeslotInEpoch := uint32((jt.Seconds / uint64(TimeslotDuration.Seconds())) % TimeslotsPerEpoch)
-	return epoch, timeslotInEpoch
+	return epoch, Timeslot(timeslotInEpoch)
 }
 
 // IsInSameEpoch checks if two JamTimes are in the same epoch
@@ -101,7 +117,13 @@ func (jt JamTime) IsInSameEpoch(other JamTime) bool {
 	return jt.ToEpoch() == other.ToEpoch()
 }
 
+// ToEpoch converts a JamTime to its corresponding Epoch
+func (jt JamTime) ToEpoch() Epoch {
+	return Epoch(jt.Seconds / uint64(EpochDuration.Seconds()))
+}
+
 // ValidateJamTime checks if a given time.Time is within the valid range for JamTime
+// Returns nil if valid and non-nil err if the given time.Time is outside the valid range for JamTime
 func ValidateJamTime(t time.Time) error {
 	if t.Before(JamEpoch) {
 		return errors.New("time is before JAM Epoch")

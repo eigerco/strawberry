@@ -13,19 +13,9 @@ const (
 // Epoch represents a JAM Epoch
 type Epoch uint32
 
-// ToEpoch converts a JamTime to its corresponding Epoch
-func (jt JamTime) ToEpoch() Epoch {
-	return Epoch(jt.Seconds / uint64(EpochDuration.Seconds()))
-}
-
 // FromEpoch creates a JamTime from an Epoch (start of the epoch)
 func FromEpoch(e Epoch) JamTime {
 	return JamTime{Seconds: uint64(e) * uint64(EpochDuration.Seconds())}
-}
-
-// ToEpoch converts a Timeslot to its corresponding Epoch
-func (ts Timeslot) ToEpoch() Epoch {
-	return Epoch(ts / TimeslotsPerEpoch)
 }
 
 // CurrentEpoch returns the current epoch
@@ -45,25 +35,23 @@ func (e Epoch) EpochEnd() JamTime {
 
 // NextEpoch returns the next epoch
 func (e Epoch) NextEpoch() Epoch {
+	maxEpoch := Epoch((1<<32 - 1) / TimeslotsPerEpoch)
+	if e == maxEpoch {
+		return 0
+	}
 	return e + 1
 }
 
 // PreviousEpoch returns the previous epoch
 func (e Epoch) PreviousEpoch() Epoch {
-	return e - 1
+	return e - 1 // This will naturally wrap around at 0
 }
 
 // ValidateEpoch checks if a given Epoch is within the valid range
 func ValidateEpoch(e Epoch) error {
-	jamTime := FromEpoch(e)
-	return ValidateJamTime(jamTime.ToTime())
-}
-
-// EpochAndTimeslotToJamTime converts an Epoch and a timeslot within that epoch to JamTime
-func EpochAndTimeslotToJamTime(e Epoch, timeslotInEpoch uint32) (JamTime, error) {
-	if timeslotInEpoch >= TimeslotsPerEpoch {
-		return JamTime{}, errors.New("timeslot number exceeds epoch length")
+	maxEpoch := Epoch((1<<32 - 1) / TimeslotsPerEpoch)
+	if e > maxEpoch {
+		return errors.New("epoch is after maximum representable JAM time")
 	}
-	epochStart := FromEpoch(e)
-	return JamTime{Seconds: epochStart.Seconds + uint64(timeslotInEpoch)*uint64(TimeslotDuration.Seconds())}, nil
+	return nil
 }

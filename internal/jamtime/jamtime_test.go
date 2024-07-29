@@ -8,16 +8,20 @@ import (
 	"github.com/go-quicktest/qt"
 )
 
-func TestJamTimeConversion(t *testing.T) {
-	t.Run("successfully convert to to and from JamTime", func(t *testing.T) {
+func TestJamTime_FromTime(t *testing.T) {
+	t.Run("successfully convert from time.Time to JamTime", func(t *testing.T) {
 		standardTime := time.Date(2025, time.March, 15, 12, 0, 0, 0, time.UTC)
 		jamTime := FromTime(standardTime)
 		convertedTime := jamTime.ToTime()
 
 		qt.Assert(t, qt.IsTrue(standardTime.Equal(convertedTime)))
+	})
+}
 
+func TestJamTime_FromSeconds(t *testing.T) {
+	t.Run("successfully convert from seconds to JamTime", func(t *testing.T) {
 		secondsInYear := uint64(31_536_000)
-		jamTime = FromSeconds(secondsInYear)
+		jamTime := FromSeconds(secondsInYear)
 		expectedTime := JamEpoch.Add(time.Duration(secondsInYear) * time.Second)
 
 		qt.Assert(t, qt.IsTrue(jamTime.ToTime().Equal(expectedTime)))
@@ -117,7 +121,7 @@ func TestJamTimeFromToTimeslotConversion(t *testing.T) {
 	})
 }
 
-func TestJamTimeIsInFutureTimeSlot(t *testing.T) {
+func TestJamTime_IsInFutureTimeSlot(t *testing.T) {
 	currentTime := Now()
 	pastTime := currentTime.Add(-5 * time.Minute)
 	futureTime := currentTime.Add(10 * time.Minute)
@@ -127,19 +131,156 @@ func TestJamTimeIsInFutureTimeSlot(t *testing.T) {
 	qt.Assert(t, qt.IsTrue(futureTime.IsInFutureTimeSlot()))
 }
 
-func TestEpochConversion(t *testing.T) {
+func TestJamTime_ToEpoch(t *testing.T) {
 	t.Run("jamtime to epoch", func(t *testing.T) {
 		jamTime := FromSeconds(3600) // 1 hour after JAM Epoch
 		epoch := jamTime.ToEpoch()
 
 		qt.Assert(t, qt.Equals(epoch, 1))
 	})
+})
 
+func TestJamTech_FromEpoch(t *testing.T) {
 	t.Run("epoch to jamtime", func(t *testing.T) {
 		e := Epoch(1)
 
 		convertedJamTime := FromEpoch(e)
 
 		qt.Assert(t, qt.Equals(convertedJamTime.Seconds, 3600))
+	})
+}
+
+func TestEpochAndTimeslotConversion(t *testing.T) {
+	t.Run("successfully converts jamtime to epoch and timeslot", func(t *testing.T) {
+		jamTime := FromSeconds(3600) // 1 hour after JAM Epoch
+
+		epoch, timeslot := jamTime.ToEpochAndTimeslot()
+		qt.Assert(t, qt.Equals(epoch, Epoch(1)))
+		qt.Assert(t, qt.Equals(timeslot, Timeslot(0)))
+	})
+
+	t.Run("successfull converts epoch and timeslot to jamtime", func(t *testing.T) {
+		timeslot := Timeslot(1)
+		epoch := Epoch(1)
+
+		jamTime, err := EpochAndTimeslotToJamTime(epoch, timeslot)
+		qt.Assert(t, qt.IsNil(err))
+		qt.Assert(t, qt.Equals(jamTime.Seconds, 3606))
+	})
+
+	t.Run("returns an error when timeslot is outside of accepted range", func(t *testing.T) {
+		timeslot := Timeslot(601)
+		epoch := Epoch(1)
+
+		jamTime, err := EpochAndTimeslotToJamTime(epoch, timeslot)
+		qt.Assert(t, qt.IsNotNil(err))
+		qt.Assert(t, qt.ErrorMatches(err, "timeslot number exceeds epoch length"))
+		qt.Assert(t, qt.IsTrue(jamTime.IsZero()))
+	})
+}
+
+func TestValidateJamTime(t *testing.T) {
+	t.Run("today is valid", func(t *testing.T) {
+		now := time.Now()
+
+		err := ValidateJamTime(now)
+		qt.Assert(t, qt.IsNil(err))
+	})
+
+	t.Run("the future should be valid", func(t *testing.T) {
+		validTime := time.Date(2500, time.July, 27, 0, 0, 0, 0, time.UTC)
+
+		err := ValidateJamTime(validTime)
+		qt.Assert(t, qt.IsNil(err))
+	})
+
+	t.Run("far into the future should be invalid", func(t *testing.T) {
+		inValidTime := time.Date(2840, time.August, 31, 23, 59, 59, 999999999, time.UTC)
+
+		err := ValidateJamTime(inValidTime)
+		qt.Assert(t, qt.IsNotNil(err))
+		qt.Assert(t, qt.ErrorMatches(err, "time is after maximum representable JAM time"))
+	})
+
+	t.Run("date before January 1st 2024 is invalid", func(t *testing.T) {
+		invalidTime := time.Date(2023, time.December, 31, 0, 0, 0, 0, time.UTC)
+		err := ValidateJamTime(invalidTime)
+		qt.Assert(t, qt.IsNotNil(err))
+		qt.Assert(t, qt.ErrorMatches(err, "time is before JAM Epoch"))
+	})
+
+	validEpoch := Epoch(1000)
+	if err := ValidateEpoch(validEpoch); err != nil {
+		t.Errorf("ValidateEpoch failed for valid epoch: %v", err)
+	}
+
+}
+
+func TestJamTime_IsInSameEpoch(t *testing.T) {
+	t.Run("same epoch - beginning", func(t *testing.T) {
+		time1 := JamTime{Seconds: 0}
+		time2 := JamTime{Seconds: 3599}
+		qt.Assert(t, qt.IsTrue(time1.IsInSameEpoch(time2)))
+	})
+
+	t.Run("same epoch - middle", func(t *testing.T) {
+		time1 := JamTime{Seconds: 3600*100 + 1800}
+		time2 := JamTime{Seconds: 3600*100 + 3599}
+		qt.Assert(t, qt.IsTrue(time1.IsInSameEpoch(time2)))
+	})
+
+	t.Run("different epochs - consecutive", func(t *testing.T) {
+		time1 := JamTime{Seconds: 3599}
+		time2 := JamTime{Seconds: 3600}
+		qt.Assert(t, qt.IsFalse(time1.IsInSameEpoch(time2)))
+	})
+
+	t.Run("different epochs - far apart", func(t *testing.T) {
+		time1 := JamTime{Seconds: 3600 * 100}
+		time2 := JamTime{Seconds: 3600 * 200}
+		qt.Assert(t, qt.IsFalse(time1.IsInSameEpoch(time2)))
+	})
+
+	t.Run("same time", func(t *testing.T) {
+		time1 := JamTime{Seconds: 3600 * 50}
+		qt.Assert(t, qt.IsTrue(time1.IsInSameEpoch(time1)))
+	})
+
+	t.Run("epoch boundary - end of epoch", func(t *testing.T) {
+		time1 := JamTime{Seconds: 3600 - 1}
+		time2 := JamTime{Seconds: 3600}
+		qt.Assert(t, qt.IsFalse(time1.IsInSameEpoch(time2)))
+	})
+
+	t.Run("epoch boundary - start of epoch", func(t *testing.T) {
+		time1 := JamTime{Seconds: 3600}
+		time2 := JamTime{Seconds: 3600 + 1}
+		qt.Assert(t, qt.IsTrue(time1.IsInSameEpoch(time2)))
+	})
+
+	t.Run("max time value", func(t *testing.T) {
+		maxTime := JamTime{Seconds: ^uint64(0)}
+		almostMaxTime := JamTime{Seconds: ^uint64(0) - 3599}
+		qt.Assert(t, qt.IsFalse(maxTime.IsInSameEpoch(almostMaxTime)))
+	})
+
+	t.Run("zero and almost one epoch", func(t *testing.T) {
+		time1 := JamTime{Seconds: 0}
+		time2 := JamTime{Seconds: 3599}
+		qt.Assert(t, qt.IsTrue(time1.IsInSameEpoch(time2)))
+	})
+
+	t.Run("fromtime conversion", func(t *testing.T) {
+		now := time.Now()
+		jamTime1 := FromTime(now)
+		jamTime2 := FromTime(now.Add(59 * time.Minute))
+		qt.Assert(t, qt.IsFalse(jamTime1.IsInSameEpoch(jamTime2)))
+	})
+
+	t.Run("fromtime conversion - different epochs", func(t *testing.T) {
+		now := time.Now()
+		jamTime1 := FromTime(now)
+		jamTime2 := FromTime(now.Add(61 * time.Minute))
+		qt.Assert(t, qt.IsFalse(jamTime1.IsInSameEpoch(jamTime2)))
 	})
 }

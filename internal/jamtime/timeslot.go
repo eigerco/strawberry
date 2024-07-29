@@ -1,6 +1,9 @@
 package jamtime
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 const (
 	TimeslotDuration = 6 * time.Second
@@ -36,11 +39,18 @@ func (ts Timeslot) TimeslotEnd() JamTime {
 
 // NextTimeslot returns the next timeslot
 func (ts Timeslot) NextTimeslot() Timeslot {
+	if ts == math.MaxUint32 {
+		return ts
+	}
+
 	return ts + 1
 }
 
 // PreviousTimeslot returns the previous timeslot
 func (ts Timeslot) PreviousTimeslot() Timeslot {
+	if ts == 0 {
+		return ts
+	}
 	return ts - 1
 }
 
@@ -57,6 +67,11 @@ func (ts Timeslot) IsFirstTimeslotInEpoch() bool {
 // IsLastTimeslotInEpoch checks if the timeslot is the last in its epoch
 func (ts Timeslot) IsLastTimeslotInEpoch() bool {
 	return ts.TimeslotInEpoch() == TimeslotsPerEpoch-1
+}
+
+// ToEpoch converts a Timeslot to its corresponding Epoch
+func (ts Timeslot) ToEpoch() Epoch {
+	return Epoch(ts / TimeslotsPerEpoch)
 }
 
 // ValidateTimeslot checks if a given Timeslot is within the valid range
