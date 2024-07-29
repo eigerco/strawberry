@@ -138,7 +138,7 @@ func TestJamTime_ToEpoch(t *testing.T) {
 
 		qt.Assert(t, qt.Equals(epoch, 1))
 	})
-})
+}
 
 func TestJamTech_FromEpoch(t *testing.T) {
 	t.Run("epoch to jamtime", func(t *testing.T) {
