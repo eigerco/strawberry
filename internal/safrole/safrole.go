@@ -114,8 +114,8 @@ func (k MetadataKey) MarshalJSON() ([]byte, error) {
 }
 
 type TicketEnvelope struct {
-	Attempt   uint32
-	Signature [784]uint32
+	Attempt   uint8
+	Signature [784]uint8
 }
 
 type TicketBody struct {
