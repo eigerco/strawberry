@@ -13,17 +13,6 @@ type TicketsMark [time.TimeslotsPerEpoch]block.Ticket
 
 type CustomErrorCode int
 
-//nolint:unused
-var errorCodeMessages = map[CustomErrorCode]string{
-	BadSlot:          "bad_slot",
-	UnexpectedTicket: "unexpected_ticket",
-	BadTicketOrder:   "bad_ticket_order",
-	BadTicketProof:   "bad_ticket_proof",
-	BadTicketAttempt: "bad_ticket_attempt",
-	Reserved:         "reserved",
-	DuplicateTicket:  "duplicate_ticket",
-}
-
 type Safrole struct {
 	Input     Input         `json:"input"`
 	PreState  State         `json:"pre_state"`
