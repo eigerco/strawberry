@@ -7,15 +7,15 @@ import (
 
 // State relevant to Safrole protocol
 type State struct {
-	Tau    uint32         `json:"tau"`     // Most recent block's timeslot.
-	Eta    [4]crypto.Hash `json:"eta"`     // Entropy accumulator and epochal randomness.
-	Lambda ValidatorsData `json:"lambda"`  // Validator keys and metadata which were active in the prior epoch.
-	Kappa  ValidatorsData `json:"kappa"`   // Validator keys and metadata currently active.
-	GammaK ValidatorsData `json:"gamma_k"` // Validator keys for the following epoch.
-	Iota   ValidatorsData `json:"iota"`    // Validator keys and metadata to be drawn from next.
-	GammaA []block.Ticket `json:"gamma_a"` // Sealing-key contest ticket accumulator.
-	GammaS TicketsOrKeys  `json:"gamma_s"` // Sealing-key series of the current epoch.
-	GammaZ GammaZ         `json:"gamma_z"` // Bandersnatch ring commitment.
+	MostRecentTimeslot uint32         `json:"tau"`     // Most recent block's timeslot.
+	EntropyAccumulator [4]crypto.Hash `json:"eta"`     // Entropy accumulator and epochal randomness.
+	PreviousValidators ValidatorsData `json:"lambda"`  // Validator keys and metadata which were active in the prior epoch.
+	CurrentValidators  ValidatorsData `json:"kappa"`   // Validator keys and metadata currently active.
+	NextValidators     ValidatorsData `json:"gamma_k"` // Validator keys for the following epoch.
+	FutureValidators   ValidatorsData `json:"iota"`    // Validator keys and metadata to be drawn from next.
+	TicketAccumulator  []block.Ticket `json:"gamma_a"` // Sealing-key contest ticket accumulator.
+	SealingKeySeries   TicketsOrKeys  `json:"gamma_s"` // Sealing-key series of the current epoch.
+	RingCommitment     GammaZ         `json:"gamma_z"` // Bandersnatch ring commitment.
 }
 
 type ValidatorData struct {
