@@ -105,7 +105,7 @@ func (jt *JamTime) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// JamTimeToEpochAndTimeslot converts a JamTime to its Epoch and timeslot within that epoch
+// ToEpochAndTimeslot converts a JamTime to its Epoch and timeslot within that epoch
 func (jt JamTime) ToEpochAndTimeslot() (Epoch, Timeslot) {
 	epoch := jt.ToEpoch()
 	timeslotInEpoch := uint32((jt.Seconds / uint64(TimeslotDuration.Seconds())) % TimeslotsPerEpoch)
