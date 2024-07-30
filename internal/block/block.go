@@ -9,4 +9,5 @@ type Block struct {
 // Extrinsic represents the block extrinsic data
 type Extrinsic struct {
 	ET []*TicketProof
+	ED *DisputeExtrinsic
 }
