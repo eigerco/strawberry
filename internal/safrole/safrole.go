@@ -43,7 +43,7 @@ type TicketsOrKeys struct {
 }
 
 type TicketsOrKeysValues interface {
-	EpochKeys | TicketsBodies
+	crypto.EpochKeys | TicketsBodies
 }
 
 func setTicketsOrKeys[Value TicketsOrKeysValues](tok *TicketsOrKeys, value Value) {
@@ -52,7 +52,7 @@ func setTicketsOrKeys[Value TicketsOrKeysValues](tok *TicketsOrKeys, value Value
 
 func (tok *TicketsOrKeys) SetValue(value any) (err error) {
 	switch value := value.(type) {
-	case EpochKeys:
+	case crypto.EpochKeys:
 		setTicketsOrKeys(tok, value)
 		return nil
 	case TicketsBodies:
@@ -65,7 +65,7 @@ func (tok *TicketsOrKeys) SetValue(value any) (err error) {
 
 func (tok TicketsOrKeys) IndexValue() (index uint, value any, err error) {
 	switch tok.inner.(type) {
-	case EpochKeys:
+	case crypto.EpochKeys:
 		return 1, tok.inner, nil
 	case TicketsBodies:
 		return 2, tok.inner, nil
@@ -81,7 +81,7 @@ func (tok TicketsOrKeys) Value() (value any, err error) {
 func (tok TicketsOrKeys) ValueAt(index uint) (value any, err error) {
 	switch index {
 	case 1:
-		return EpochKeys{}, nil
+		return crypto.EpochKeys{}, nil
 	case 2:
 		return TicketsBodies{}, nil
 	}
