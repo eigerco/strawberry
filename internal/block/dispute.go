@@ -1,9 +1,7 @@
 package block
 
-import "github.com/eigerco/strawberry/internal/crypto"
-
-const (
-	judgmentSignatureSize = 64 // Size of Ed25519 signature
+import (
+	"github.com/eigerco/strawberry/internal/crypto"
 )
 
 type DisputeExtrinsic struct {
@@ -19,21 +17,21 @@ type Verdict struct {
 }
 
 type Culprit struct {
-	ReportHash                crypto.Hash                 // H, hash of the work report
-	ValidatorEd25519PublicKey crypto.Ed25519PublicKey     // He
-	Signature                 [judgmentSignatureSize]byte // E
+	ReportHash                crypto.Hash                       // H, hash of the work report
+	ValidatorEd25519PublicKey crypto.Ed25519PublicKey           // He
+	Signature                 [crypto.Ed25519SignatureSize]byte // E
 }
 
 type Fault struct {
-	ReportHash                crypto.Hash                 // H, hash of the work report
-	IsValid                   bool                        // {⊺,⊥}
-	ValidatorEd25519PublicKey crypto.Ed25519PublicKey     // He
-	Signature                 [judgmentSignatureSize]byte // E
+	ReportHash                crypto.Hash                       // H, hash of the work report
+	IsValid                   bool                              // {⊺,⊥}
+	ValidatorEd25519PublicKey crypto.Ed25519PublicKey           // He
+	Signature                 [crypto.Ed25519SignatureSize]byte // E
 }
 
 // Judgment represents a single judgment with a signature
 type Judgment struct {
-	IsValid        bool                        // v: {⊺,⊥}
-	ValidatorIndex uint16                      // i: NV
-	Signature      [judgmentSignatureSize]byte // s: E
+	IsValid        bool                              // v: {⊺,⊥}
+	ValidatorIndex uint16                            // i: NV
+	Signature      [crypto.Ed25519SignatureSize]byte // s: E
 }
