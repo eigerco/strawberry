@@ -14,16 +14,16 @@ type TicketsMark [time.TimeslotsPerEpoch]block.Ticket
 type CustomErrorCode int
 
 type Safrole struct {
-	Input     Input         `json:"input"`
-	PreState  State         `json:"pre_state"`
-	Output    OutputOrError `json:"output"`
-	PostState State         `json:"post_state"`
+	Input     Input
+	PreState  State
+	Output    OutputOrError
+	PostState State
 }
 
 type Input struct {
-	Slot      uint32              `json:"slot"`      // Current slot.
-	Entropy   crypto.Hash         `json:"entropy"`   // Per block entropy (originated from block entropy source VRF).
-	Extrinsic []block.TicketProof `json:"extrinsic"` // Safrole extrinsic.
+	Slot      uint32              // Current slot.
+	Entropy   crypto.Hash         // Per block entropy (originated from block entropy source VRF).
+	Extrinsic []block.TicketProof // Safrole extrinsic.
 }
 
 // TicketsOrKeys is enum
@@ -87,8 +87,8 @@ type OutputOrErrorValues interface {
 }
 
 type OutputMarks struct {
-	EpochMark   *block.EpochMarker `json:"epoch_mark"`
-	TicketsMark *TicketsMark       `json:"tickets_mark"`
+	EpochMark   *block.EpochMarker
+	TicketsMark *TicketsMark
 }
 
 func setOutputOrError[Value OutputOrErrorValues](oe *OutputOrError, value Value) {
