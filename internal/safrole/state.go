@@ -15,7 +15,7 @@ type State struct {
 	FutureValidators   ValidatorsData `json:"iota"`    // Validator keys and metadata to be drawn from next.
 	TicketAccumulator  []block.Ticket `json:"gamma_a"` // Sealing-key contest ticket accumulator.
 	SealingKeySeries   TicketsOrKeys  `json:"gamma_s"` // Sealing-key series of the current epoch.
-	RingCommitment     GammaZ         `json:"gamma_z"` // Bandersnatch ring commitment.
+	RingCommitment     RingCommitment `json:"gamma_z"` // Bandersnatch ring commitment.
 }
 
 type ValidatorData struct {
