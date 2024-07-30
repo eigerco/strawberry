@@ -19,9 +19,9 @@ type State struct {
 }
 
 type ValidatorData struct {
-	Bandersnatch BandersnatchKey `json:"bandersnatch"`
-	Ed25519      Ed25519Key      `json:"ed25519"`
-	Bls          BlsKey          `json:"bls"`
-	Metadata     MetadataKey     `json:"metadata"`
+	Bandersnatch crypto.BandersnatchKey  `json:"bandersnatch"`
+	Ed25519      crypto.Ed25519PublicKey `json:"ed25519"`
+	Bls          crypto.BlsKey           `json:"bls"`
+	Metadata     MetadataKey             `json:"metadata"`
 }
 type ValidatorsData [block.NumberOfValidators]ValidatorData
