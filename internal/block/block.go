@@ -11,4 +11,5 @@ type Extrinsic struct {
 	ET []*TicketProof
 	EP *PreimageExtrinsic
 	ED *DisputeExtrinsic
+	EA *AssurancesExtrinsic
 }
