@@ -73,31 +73,40 @@ func TestEpoch_EpochEnd(t *testing.T) {
 		end := Epoch(100).EpochEnd()
 		qt.Assert(t, qt.Equals(end.Seconds, 363600)) // (100 * 3600) + 3599
 	})
+
+	t.Run("max epoch returns jam time for last timeslot", func(t *testing.T) {
+		jamTime := MaxEpoch.EpochEnd()
+		want := FromTimeslot(MaxTimeslot)
+
+		qt.Assert(t, qt.DeepEquals(jamTime, want))
+	})
 }
 
 func TestEpoch_NextEpoch(t *testing.T) {
 	t.Run("from first epoch", func(t *testing.T) {
-		next := Epoch(0).NextEpoch()
+		next, err := Epoch(0).NextEpoch()
+		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(next, 1))
 	})
 
-	t.Run("from last possible epoch", func(t *testing.T) {
-		lastEpoch := Epoch((1<<32 - 1) / TimeslotsPerEpoch)
-		next := lastEpoch.NextEpoch()
-		qt.Assert(t, qt.DeepEquals(next, 0))
+	t.Run("call to NextEpoch at MaxEpoch causes error", func(t *testing.T) {
+		e := MaxEpoch
+		_, err := e.NextEpoch()
+		qt.Assert(t, qt.ErrorIs(err, ErrMaxEpochReached))
 	})
 }
 
 func TestEpoch_PreviousEpoch(t *testing.T) {
 	t.Run("from second epoch", func(t *testing.T) {
-		prev := Epoch(1).PreviousEpoch()
+		prev, err := Epoch(1).PreviousEpoch()
+		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(prev, 0))
 	})
 
-	t.Run("from first epoch", func(t *testing.T) {
-		prev := Epoch(0).PreviousEpoch()
-		lastEpoch := Epoch((1<<32 - 1) / TimeslotsPerEpoch)
-		qt.Assert(t, qt.Not(qt.Equals(prev, lastEpoch)))
+	t.Run("call to PreviousEpoch at MinEpoch causes error", func(t *testing.T) {
+		e := MinEpoch
+		_, err := e.PreviousEpoch()
+		qt.Assert(t, qt.ErrorIs(err, ErrMinEpochReached))
 	})
 }
 

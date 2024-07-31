@@ -1,11 +1,22 @@
 package jamtime
 
 import (
-	"math"
 	"time"
 )
 
 const (
+	// MinTimeslot represents the first timeslot in the JAM protocol.
+	// It corresponds to the beginning of the JAM Epoch (12:00pm on January 1, 2024 UTC).
+	MinTimeslot Timeslot = 0
+
+	// MaxTimeslot represents the last possible timeslot in the JAM protocol.
+	// It is set to the maximum value of a uint32 (2^32 - 1), which allows
+	// the protocol to represent time up to mid-August 2840.
+	MaxTimeslot Timeslot = ^Timeslot(0)
+
+	// TimeslotDuration defines the length of each timeslot in the JAM protocol.
+	// Each timeslot is exactly 6 seconds long, as specified in the JAM Graypaper.
+	// This constant duration is used for conversions between timeslots and actual time.
 	TimeslotDuration = 6 * time.Second
 )
 
@@ -33,25 +44,31 @@ func (ts Timeslot) TimeslotStart() JamTime {
 }
 
 // TimeslotEnd returns the JamTime at the end of the timeslot
-func (ts Timeslot) TimeslotEnd() JamTime {
-	return FromTimeslot(ts + 1).Add(-time.Nanosecond)
+func (ts Timeslot) TimeslotEnd() (JamTime, error) {
+	if ts == MaxTimeslot {
+		return JamTime{}, ErrMaxTimeslotReached
+	}
+
+	nextTs := ts + 1
+	jamTime := FromTimeslot(nextTs)
+	return jamTime.Add(-time.Nanosecond), nil
+
 }
 
 // NextTimeslot returns the next timeslot
-func (ts Timeslot) NextTimeslot() Timeslot {
-	if ts == math.MaxUint32 {
-		return ts
+func (ts Timeslot) NextTimeslot() (Timeslot, error) {
+	if ts == MaxTimeslot {
+		return ts, ErrMaxTimeslotReached
 	}
-
-	return ts + 1
+	return ts + 1, nil
 }
 
 // PreviousTimeslot returns the previous timeslot
-func (ts Timeslot) PreviousTimeslot() Timeslot {
-	if ts == 0 {
-		return ts
+func (ts Timeslot) PreviousTimeslot() (Timeslot, error) {
+	if ts == MinTimeslot {
+		return ts, ErrMinTimeslotReached
 	}
-	return ts - 1
+	return ts - 1, nil
 }
 
 // TimeslotInEpoch returns the timeslot number within the epoch (0-599)

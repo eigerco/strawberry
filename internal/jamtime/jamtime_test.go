@@ -66,41 +66,42 @@ func TestJamTimeArithmetic(t *testing.T) {
 	})
 }
 
-func TestJamTimeJSON(t *testing.T) {
+func TestJamTime_MarshalJSON(t *testing.T) {
 	t.Run("successfully marshal to json", func(t *testing.T) {
 		jamTime := FromSeconds(1000)
 		jsonData, err := json.Marshal(jamTime)
-		if err != nil {
-			t.Fatalf("JSON marshaling failed: %v", err)
-		}
-
+		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.DeepEquals(jsonData, []uint8(`"2024-01-01T12:16:40Z"`)))
 	})
+}
 
+func TestJamTime_UnmarshalJSON(t *testing.T) {
 	t.Run("successfully unmarshal jamtime", func(t *testing.T) {
 		jsonData := []byte(`"2024-01-01T12:00:00Z"`)
 
 		var unmarshaledTime JamTime
 		err := json.Unmarshal(jsonData, &unmarshaledTime)
-		if err != nil {
-			t.Fatalf("JSON unmarshaling failed: %v", err)
-		}
-
+		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.IsTrue(unmarshaledTime.ToTime().Equal(JamEpoch)))
 	})
 
 	t.Run("successfully unmarshal jamtime in future", func(t *testing.T) {
 		jsonData := []byte(`"2024-01-01T12:00:01Z"`)
+		want := JamEpoch.Add(1 * time.Second)
 
 		var unmarshaledTime JamTime
 		err := json.Unmarshal(jsonData, &unmarshaledTime)
-		if err != nil {
-			t.Fatalf("JSON unmarshaling failed: %v", err)
-		}
-
-		want := JamEpoch.Add(1 * time.Second)
-
+		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.IsTrue(unmarshaledTime.ToTime().Equal(want)))
+	})
+
+	t.Run("errors when unmarshalling unknown data structure", func(t *testing.T) {
+		jsonData := []byte(`asdasdasd`)
+		var unmarshaledTime JamTime
+
+		err := unmarshaledTime.UnmarshalJSON(jsonData)
+		qt.Assert(t, qt.IsNotNil(err))
+		qt.Assert(t, qt.ErrorMatches(err, "parsing time .*"))
 	})
 }
 
@@ -116,7 +117,6 @@ func TestJamTimeFromToTimeslotConversion(t *testing.T) {
 		slot := Timeslot(100)
 
 		jamTime := FromTimeslot(slot)
-
 		qt.Assert(t, qt.Equals(jamTime.Seconds, 600))
 	})
 }

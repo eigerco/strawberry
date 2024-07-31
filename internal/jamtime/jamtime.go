@@ -12,6 +12,13 @@ var now = time.Now
 // 2024-01-01 12:00:00
 var JamEpoch = time.Date(2024, time.January, 1, 12, 0, 0, 0, time.UTC)
 
+// MaxRepresentableJamTime is the latest date and time that can be represented
+// in the JAM protocol. It corresponds to the end of the last timeslot in the
+// last epoch (2^32 - 1 timeslots after the JAM Epoch). This time is set to
+// 23:59:59.999999999 UTC on August 15, 2840, as specified in the JAM Graypaper.
+// Any attempt to represent a time beyond this will result in an error.
+var MaxRepresentableJamTime = time.Date(2840, time.August, 15, 23, 59, 59, 999999999, time.UTC)
+
 // JamTime represents a time in the JAM Common Era
 type JamTime struct {
 	Seconds uint64
@@ -32,7 +39,7 @@ func FromTime(t time.Time) JamTime {
 // EpochAndTimeslotToJamTime converts an Epoch and a timeslot within that epoch to JamTime
 func EpochAndTimeslotToJamTime(e Epoch, timeslot Timeslot) (JamTime, error) {
 	if timeslot >= TimeslotsPerEpoch {
-		return JamTime{}, errors.New("timeslot number exceeds epoch length")
+		return JamTime{}, ErrTimeslotExceedsEpochLength
 	}
 	epochStart := FromEpoch(e)
 	return JamTime{Seconds: epochStart.Seconds + uint64(timeslot)*uint64(TimeslotDuration.Seconds())}, nil
@@ -128,7 +135,7 @@ func ValidateJamTime(t time.Time) error {
 	if t.Before(JamEpoch) {
 		return errors.New("time is before JAM Epoch")
 	}
-	if t.After(time.Date(2840, time.August, 15, 23, 59, 59, 999999999, time.UTC)) {
+	if t.After(MaxRepresentableJamTime) {
 		return errors.New("time is after maximum representable JAM time")
 	}
 	return nil

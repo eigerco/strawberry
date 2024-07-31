@@ -1,8 +1,6 @@
 package jamtime
 
 import (
-	"fmt"
-	"math"
 	"testing"
 	"time"
 
@@ -13,6 +11,13 @@ func TestValidateTimeSlot(t *testing.T) {
 	t.Run("is valid timeslot", func(t *testing.T) {
 		validTimeslot := Timeslot(1000000)
 		err := ValidateTimeslot(validTimeslot)
+		qt.Assert(t, qt.IsNil(err))
+	})
+
+	t.Run("max timeslot is valid", func(t *testing.T) {
+		maxTimeslot := MaxTimeslot
+
+		err := ValidateTimeslot(maxTimeslot)
 		qt.Assert(t, qt.IsNil(err))
 	})
 }
@@ -45,11 +50,9 @@ func TestTimeSlot_IsInFuture(t *testing.T) {
 func TestTimeSlot_TimeslotStart(t *testing.T) {
 	t.Run("should be able to get to the start timeslot", func(t *testing.T) {
 		first := Timeslot(1)
-
-		got := first.TimeslotStart()
-
 		want := FromTime(time.Date(2024, time.January, 01, 12, 00, 06, 0, time.UTC))
 
+		got := first.TimeslotStart()
 		qt.Assert(t, qt.DeepEquals(got, want))
 	})
 
@@ -58,50 +61,52 @@ func TestTimeSlot_TimeslotStart(t *testing.T) {
 func TestTimeSlot_TimeslotEnd(t *testing.T) {
 	t.Run("should be able to go to the end timeslot", func(t *testing.T) {
 		first := Timeslot(1)
-
-		got := first.TimeslotEnd()
-
-		fmt.Println(got.ToTime().Format(time.RFC3339))
-
 		want := FromTime(time.Date(2024, time.January, 01, 12, 00, 12, 0, time.UTC))
 
+		got, err := first.TimeslotEnd()
+		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.DeepEquals(got, want))
+	})
+
+	t.Run("if max time slot then we've already reached the end", func(t *testing.T) {
+		maxTimeslot := MaxTimeslot
+
+		zeroJamTime, err := maxTimeslot.TimeslotEnd()
+		qt.Assert(t, qt.IsNotNil(err))
+		qt.Assert(t, qt.IsTrue(zeroJamTime.IsZero()))
+		qt.Assert(t, qt.ErrorIs(err, ErrMaxTimeslotReached))
 	})
 }
 
 func TestTimeSlot_NextTimeslot(t *testing.T) {
 	t.Run("should get the next timeslot", func(t *testing.T) {
 		first := Timeslot(1)
-		next := first.NextTimeslot()
+		next, err := first.NextTimeslot()
 
+		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(next, Timeslot(2)))
 	})
 
-	t.Run("should return same last timeslot", func(t *testing.T) {
-		last := Timeslot(math.MaxUint32)
-		next := last.NextTimeslot()
-
-		qt.Assert(t, qt.Equals(next, Timeslot(math.MaxUint32)))
+	t.Run("call to NextTimeslot at MaxTimeslot should error", func(t *testing.T) {
+		ts := MaxTimeslot
+		_, err := ts.NextTimeslot()
+		qt.Assert(t, qt.ErrorIs(err, ErrMaxTimeslotReached))
 	})
 }
 
 func TestTimeSlot_PreviousTimeslot(t *testing.T) {
 	t.Run("should get the previous timeslot", func(t *testing.T) {
 		first := Timeslot(2)
-		next := first.PreviousTimeslot()
-
+		next, err := first.PreviousTimeslot()
+		qt.Assert(t, qt.IsNil(err))
 		qt.Assert(t, qt.Equals(next, Timeslot(1)))
 	})
 
-	t.Run("should get the same timeslot", func(t *testing.T) {
-		first := Timeslot(0)
-		next := first.PreviousTimeslot()
-
-		fmt.Println(next)
-
-		qt.Assert(t, qt.Equals(next, Timeslot(0)))
+	t.Run("call to PreviousTimeslot at MinTimeslot should return error", func(t *testing.T) {
+		ts := MinTimeslot
+		_, err := ts.PreviousTimeslot()
+		qt.Assert(t, qt.ErrorIs(err, ErrMinTimeslotReached))
 	})
-
 }
 
 func TestTimeSlot_TimeslotInEpoch(t *testing.T) {
