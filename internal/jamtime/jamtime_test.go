@@ -1,11 +1,12 @@
 package jamtime
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestJamTime_FromTime(t *testing.T) {
@@ -14,9 +15,7 @@ func TestJamTime_FromTime(t *testing.T) {
 		jamTime := FromTime(standardTime)
 		convertedTime := jamTime.ToTime()
 
-		if !standardTime.Equal(convertedTime) {
-			t.Errorf("expected standardTime to be equal to convertedTime")
-		}
+		assert.True(t, standardTime.Equal(convertedTime))
 	})
 }
 
@@ -26,9 +25,7 @@ func TestJamTime_FromSeconds(t *testing.T) {
 		jamTime := FromSeconds(secondsInYear)
 		expectedTime := JamEpoch.Add(time.Duration(secondsInYear) * time.Second)
 
-		if !jamTime.ToTime().Equal(expectedTime) {
-			t.Errorf("expected jamTime.ToTime() to be equal to expectedTime")
-		}
+		assert.True(t, jamTime.ToTime().Equal(expectedTime))
 	})
 }
 
@@ -37,30 +34,17 @@ func TestJamTimeComparison(t *testing.T) {
 		t1 := FromSeconds(1000)
 		t2 := FromSeconds(2000)
 
-		if !t1.Before(t2) {
-			t.Errorf("expected t1 to not be before t2: %d < %d", t1.Seconds, t2.Seconds)
-		}
-
-		if !t2.After(t1) {
-			t.Errorf("expected t2 to not be after t1: %d > %d", t2.Seconds, t1.Seconds)
-		}
-
-		if t1.Equal(t2) {
-			t.Errorf("expected t1 and t2 to not be equal: %d == %d", t1.Seconds, t2.Seconds)
-		}
+		assert.True(t, t1.Before(t2))
+		assert.True(t, t2.After(t1))
+		assert.False(t, t1.Equal(t2))
 	})
 
 	t.Run("equal", func(t *testing.T) {
 		t1 := FromSeconds(1000)
 		t2 := FromSeconds(1000)
 
-		if !t1.Equal(t2) {
-			t.Errorf("expected t1 and t2 to be equal: %d != %d", t1.Seconds, t2.Seconds)
-		}
-
-		if !t2.Equal(t1) {
-			t.Errorf("expected t2 and t1 to be equal: %d != %d", t2.Seconds, t1.Seconds)
-		}
+		assert.True(t, t1.Equal(t2))
+		assert.True(t, t2.Equal(t1))
 	})
 }
 
@@ -70,13 +54,8 @@ func TestJamTimeArithmetic(t *testing.T) {
 		duration := 500 * time.Second
 
 		t2 := t1.Add(duration)
-		if t2.Equal(t1) {
-			t.Errorf("did not expected t2 to be equal to t1: %d == %d", t2.Seconds, t1.Seconds)
-		}
-
-		if t2.Seconds == t1.Seconds {
-			t.Errorf("did not expected t2 to be equal to t1: %d == %d", t2.Seconds, t1.Seconds)
-		}
+		assert.False(t, t2.Equal(t1))
+		assert.NotEqual(t, t2.Seconds, t1.Seconds)
 	})
 
 	t.Run("subbing jamtime", func(t *testing.T) {
@@ -84,9 +63,7 @@ func TestJamTimeArithmetic(t *testing.T) {
 		t2 := FromSeconds(500)
 
 		duration := t1.Sub(t2)
-		if duration != time.Duration(500)*time.Second {
-			t.Errorf("expected duration to be 500s got: %f", duration.Seconds())
-		}
+		assert.Equal(t, time.Duration(500)*time.Second, duration)
 	})
 }
 
@@ -94,15 +71,11 @@ func TestJamTime_MarshalJSON(t *testing.T) {
 	t.Run("successfully marshal to json", func(t *testing.T) {
 		jamTime := FromSeconds(1000)
 		jsonData, err := json.Marshal(jamTime)
-		if err != nil {
-			t.Fatalf("did not expect error from json.Marshal: %v", err)
-		}
+		require.NoError(t, err)
 
 		expected := []byte(`"2024-01-01T12:16:40Z"`)
 
-		if !bytes.Equal(jsonData, expected) {
-			t.Errorf("expected jsonData to be %s but got %s", expected, jsonData)
-		}
+		assert.Equal(t, expected, jsonData)
 	})
 }
 
@@ -112,15 +85,11 @@ func TestJamTime_UnmarshalJSON(t *testing.T) {
 
 		var unmarshaledTime JamTime
 		err := json.Unmarshal(jsonData, &unmarshaledTime)
-		if err != nil {
-			t.Fatalf("did not expect error from json.Unmarshal: %v", err)
-		}
+		require.NoError(t, err)
 
 		got := unmarshaledTime.ToTime()
 
-		if !got.Equal(JamEpoch) {
-			t.Errorf("expected unmarshaledTime.ToTime() to be equal to JamEpoch but got: %s", got.Format(time.RFC3339))
-		}
+		assert.True(t, got.Equal(JamEpoch))
 	})
 
 	t.Run("successfully unmarshal jamtime in future", func(t *testing.T) {
@@ -129,14 +98,10 @@ func TestJamTime_UnmarshalJSON(t *testing.T) {
 
 		var unmarshaledTime JamTime
 		err := json.Unmarshal(jsonData, &unmarshaledTime)
-		if err != nil {
-			t.Fatalf("did not expect error from json.Unmarshal: %v", err)
-		}
+		require.NoError(t, err)
 
 		got := unmarshaledTime.ToTime()
-		if !got.Equal(want) {
-			t.Errorf("expected unmarshaledTime.ToTime() to be equal to %s but got: %s", want.Format(time.RFC3339), got.Format(time.RFC3339))
-		}
+		assert.True(t, got.Equal(want))
 	})
 
 	t.Run("errors when unmarshalling unknown data structure", func(t *testing.T) {
@@ -144,13 +109,9 @@ func TestJamTime_UnmarshalJSON(t *testing.T) {
 		var unmarshaledTime JamTime
 
 		err := unmarshaledTime.UnmarshalJSON(jsonData)
-		if err == nil {
-			t.Fatalf("expected error from json.Unmarshal")
-		}
+		assert.Error(t, err)
 
-		if err.Error() != `parsing time "asdasdasd" as "\"2006-01-02T15:04:05Z07:00\"": cannot parse "asdasdasd" as "\""` {
-			t.Errorf("expected parsing time error but got: %s", err.Error())
-		}
+		assert.EqualError(t, err, `parsing time "asdasdasd" as "\"2006-01-02T15:04:05Z07:00\"": cannot parse "asdasdasd" as "\""`)
 	})
 }
 
@@ -160,9 +121,7 @@ func TestJamTimeFromToTimeslotConversion(t *testing.T) {
 		timeslot := jamTime.ToTimeslot()
 
 		expected := Timeslot(600)
-		if timeslot != expected {
-			t.Errorf("expected timeslot to be equal got %d expected %d", timeslot, expected)
-		}
+		assert.Equal(t, expected, timeslot)
 	})
 
 	t.Run("convert timeslot to jamtime", func(t *testing.T) {
@@ -170,9 +129,7 @@ func TestJamTimeFromToTimeslotConversion(t *testing.T) {
 
 		jamTime := FromTimeslot(slot)
 		expected := uint64(600)
-		if jamTime.Seconds != expected {
-			t.Errorf("expected jamTime.Seconds to be equal got %d expected %d", jamTime.Seconds, expected)
-		}
+		assert.Equal(t, expected, jamTime.Seconds)
 	})
 }
 
@@ -181,15 +138,9 @@ func TestJamTime_IsInFutureTimeSlot(t *testing.T) {
 	pastTime := currentTime.Add(-5 * time.Minute)
 	futureTime := currentTime.Add(10 * time.Minute)
 
-	if currentTime.IsInFutureTimeSlot() {
-		t.Errorf("expected currentTime to not be in future timeslot")
-	}
-	if pastTime.IsInFutureTimeSlot() {
-		t.Errorf("expected pastTime to not be in future timeslot")
-	}
-	if !futureTime.IsInFutureTimeSlot() {
-		t.Errorf("expected futureTime to be in future timeslot")
-	}
+	assert.False(t, currentTime.IsInFutureTimeSlot())
+	assert.False(t, pastTime.IsInFutureTimeSlot())
+	assert.True(t, futureTime.IsInFutureTimeSlot())
 }
 
 func TestJamTime_ToEpoch(t *testing.T) {
@@ -197,9 +148,7 @@ func TestJamTime_ToEpoch(t *testing.T) {
 		jamTime := FromSeconds(3600) // 1 hour after JAM Epoch
 		epoch := jamTime.ToEpoch()
 		expected := Epoch(1)
-		if epoch != expected {
-			t.Errorf("expected epoch to be equal to %d but got %d", expected, epoch)
-		}
+		assert.Equal(t, expected, epoch)
 	})
 }
 
@@ -209,9 +158,7 @@ func TestJamTech_FromEpoch(t *testing.T) {
 
 		convertedJamTime := FromEpoch(e)
 
-		if convertedJamTime.Seconds != uint64(3600) {
-			t.Errorf("expected convertedJamTime.Seconds to equal to 3600 but got: %d", convertedJamTime.Seconds)
-		}
+		assert.Equal(t, uint64(3600), convertedJamTime.Seconds)
 	})
 }
 
@@ -223,29 +170,20 @@ func TestEpochAndTimeslotConversion(t *testing.T) {
 		expectedEpoch := Epoch(1)
 		expectedTimeslot := Timeslot(0)
 
-		if epoch != expectedEpoch {
-			t.Errorf("expected epoch to be equal to expected %d but got: %d", expectedEpoch, epoch)
-		}
-
-		if timeslot != expectedTimeslot {
-			t.Errorf("expected timeslot to be equal to expected %d but got: %d", expectedTimeslot, timeslot)
-		}
+		assert.Equal(t, expectedEpoch, epoch)
+		assert.Equal(t, expectedTimeslot, timeslot)
 	})
 
-	t.Run("successfull converts epoch and timeslot to jamtime", func(t *testing.T) {
+	t.Run("successfully converts epoch and timeslot to jamtime", func(t *testing.T) {
 		timeslot := Timeslot(1)
 		epoch := Epoch(1)
 
 		jamTime, err := EpochAndTimeslotToJamTime(epoch, timeslot)
-		if err != nil {
-			t.Fatalf("unexpected when calling EpochAndTimeslotToJamTime err: %v", err)
-		}
+		require.NoError(t, err)
 
 		expected := uint64(3606)
 
-		if jamTime.Seconds != expected {
-			t.Errorf("expected jamTime to be equal to %d but got: %d", expected, jamTime.Seconds)
-		}
+		assert.Equal(t, expected, jamTime.Seconds)
 	})
 
 	t.Run("returns an error when timeslot is outside of accepted range", func(t *testing.T) {
@@ -253,15 +191,9 @@ func TestEpochAndTimeslotConversion(t *testing.T) {
 		epoch := Epoch(1)
 
 		jamTime, err := EpochAndTimeslotToJamTime(epoch, timeslot)
-		if err == nil {
-			t.Fatalf("expected EpochAndTimeslotToJamTime with incorrect input but did not error")
-		}
-		if !errors.Is(err, ErrTimeslotExceedsEpochLength) {
-			t.Errorf("exepected err to be ErrTimeslotExceedsEpochLength but got: %v", err)
-		}
-		if !jamTime.IsZero() {
-			t.Errorf("expected jamTime to be zero'd")
-		}
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrTimeslotExceedsEpochLength)
+		assert.True(t, jamTime.IsZero())
 	})
 }
 
@@ -270,42 +202,29 @@ func TestValidateJamTime(t *testing.T) {
 		now := time.Now()
 
 		err := ValidateJamTime(now)
-		if err != nil {
-			t.Fatalf("unexpected err when validating valid jam time")
-		}
+		assert.NoError(t, err)
 	})
 
 	t.Run("the future should be valid", func(t *testing.T) {
 		validTime := time.Date(2500, time.July, 27, 0, 0, 0, 0, time.UTC)
 
 		err := ValidateJamTime(validTime)
-		if err != nil {
-			t.Fatalf("unexecpted err when validating future date within JamTime date range")
-		}
+		assert.NoError(t, err)
 	})
 
 	t.Run("far into the future should be invalid", func(t *testing.T) {
 		inValidTime := time.Date(2840, time.August, 31, 23, 59, 59, 999999999, time.UTC)
 
 		err := ValidateJamTime(inValidTime)
-		if err == nil {
-			t.Fatalf("expected error for date far into future")
-		}
-
-		if !errors.Is(err, ErrAfterMaxJamTime) {
-			t.Errorf("expected ErrAfterMaxJamTime for invalid future date got: %v", err)
-		}
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrAfterMaxJamTime)
 	})
 
 	t.Run("date before January 1st 2024 is invalid", func(t *testing.T) {
 		invalidTime := time.Date(2023, time.December, 31, 0, 0, 0, 0, time.UTC)
 		err := ValidateJamTime(invalidTime)
-		if err == nil {
-			t.Fatalf("expected error for date before jam epoch")
-		}
-		if !errors.Is(err, ErrBeforeJamEpoch) {
-			t.Errorf("expected ErrBeforeJamEpoch but got: %v", err)
-		}
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrBeforeJamEpoch)
 	})
 }
 
@@ -314,79 +233,61 @@ func TestJamTime_IsInSameEpoch(t *testing.T) {
 		time1 := JamTime{Seconds: 0}
 		time2 := JamTime{Seconds: 3599}
 
-		if !time1.IsInSameEpoch(time2) {
-			t.Errorf("expected time1 and time2 to be in same Epoch")
-		}
+		assert.True(t, time1.IsInSameEpoch(time2))
 	})
 
 	t.Run("same epoch - middle", func(t *testing.T) {
 		time1 := JamTime{Seconds: 3600*100 + 1800}
 		time2 := JamTime{Seconds: 3600*100 + 3599}
 
-		if !time1.IsInSameEpoch(time2) {
-			t.Errorf("expected time1 and time2 to be in same Epoch")
-		}
+		assert.True(t, time1.IsInSameEpoch(time2))
 	})
 
 	t.Run("different epochs - consecutive", func(t *testing.T) {
 		time1 := JamTime{Seconds: 3599}
 		time2 := JamTime{Seconds: 3600}
 
-		if time1.IsInSameEpoch(time2) {
-			t.Errorf("expected time1 and time2 to not be in same Epoch")
-		}
+		assert.False(t, time1.IsInSameEpoch(time2))
 	})
 
 	t.Run("different epochs - far apart", func(t *testing.T) {
 		time1 := JamTime{Seconds: 3600 * 100}
 		time2 := JamTime{Seconds: 3600 * 200}
 
-		if time1.IsInSameEpoch(time2) {
-			t.Errorf("expected time1 and time2 to not be in same Epoch")
-		}
+		assert.False(t, time1.IsInSameEpoch(time2))
 	})
 
 	t.Run("same time", func(t *testing.T) {
 		time1 := JamTime{Seconds: 3600 * 50}
 
-		if !time1.IsInSameEpoch(time1) {
-			t.Errorf("expected time1 and time1 to be in same Epoch")
-		}
+		assert.True(t, time1.IsInSameEpoch(time1))
 	})
 
 	t.Run("epoch boundary - end of epoch", func(t *testing.T) {
 		time1 := JamTime{Seconds: 3600 - 1}
 		time2 := JamTime{Seconds: 3600}
 
-		if time1.IsInSameEpoch(time2) {
-			t.Errorf("expected time1 and time2 to not be in same Epoch")
-		}
+		assert.False(t, time1.IsInSameEpoch(time2))
 	})
 
 	t.Run("epoch boundary - start of epoch", func(t *testing.T) {
 		time1 := JamTime{Seconds: 3600}
 		time2 := JamTime{Seconds: 3600 + 1}
 
-		if !time1.IsInSameEpoch(time2) {
-			t.Errorf("expected time1 and time2 to not be in same Epoch")
-		}
+		assert.True(t, time1.IsInSameEpoch(time2))
 	})
 
 	t.Run("max time value", func(t *testing.T) {
 		maxTime := JamTime{Seconds: ^uint64(0)}
 		almostMaxTime := JamTime{Seconds: ^uint64(0) - 3599}
 
-		if maxTime.IsInSameEpoch(almostMaxTime) {
-			t.Errorf("expected maxTime and almostMaxTime to be in same Epoch")
-		}
+		assert.True(t, maxTime.IsInSameEpoch(almostMaxTime))
 	})
 
 	t.Run("zero and almost one epoch", func(t *testing.T) {
 		time1 := JamTime{Seconds: 0}
 		time2 := JamTime{Seconds: 3599}
 
-		if !time1.IsInSameEpoch(time2) {
-			t.Errorf("expected time1 and time2 to be in same Epoch")
-		}
+		assert.True(t, time1.IsInSameEpoch(time2))
 	})
 }
