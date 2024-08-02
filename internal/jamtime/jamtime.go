@@ -1,7 +1,6 @@
 package jamtime
 
 import (
-	"errors"
 	"fmt"
 	"time"
 )
@@ -133,10 +132,10 @@ func (jt JamTime) ToEpoch() Epoch {
 // Returns nil if valid and non-nil err if the given time.Time is outside the valid range for JamTime
 func ValidateJamTime(t time.Time) error {
 	if t.Before(JamEpoch) {
-		return errors.New("time is before JAM Epoch")
+		return ErrBeforeJamEpoch
 	}
 	if t.After(MaxRepresentableJamTime) {
-		return errors.New("time is after maximum representable JAM time")
+		return ErrAfterMaxJamTime
 	}
 	return nil
 }

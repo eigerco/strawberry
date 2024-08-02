@@ -3,6 +3,19 @@ package jamtime
 import "errors"
 
 var (
+	// ErrBeforeJamEpoch is returned when attempting to create or manipulate a
+	// JamTime that represents a moment before the JAM Epoch (1200 UTC on January 1, 2024).
+	// This error indicates that the given time is outside the valid range for
+	// the JAM protocol.
+	ErrBeforeJamEpoch = errors.New("time is before JAM Epoch")
+
+	// ErrAfterMaxJamTime is returned when attempting to create or manipulate a
+	// JamTime that represents a moment after the maximum representable time in the
+	// JAM protocol (typically around mid-August 2840). This error indicates that
+	// the given time exceeds the maximum value that can be represented within the
+	// protocol's time range.
+	ErrAfterMaxJamTime = errors.New("time is after maximum representable JAM time")
+
 	// ErrMinEpochReached is returned when attempting to get the previous epoch
 	// from the minimum possible epoch value.
 	ErrMinEpochReached = errors.New("minimum epoch reached")
