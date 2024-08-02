@@ -281,7 +281,7 @@ func TestJamTime_IsInSameEpoch(t *testing.T) {
 		maxTime := JamTime{Seconds: ^uint64(0)}
 		almostMaxTime := JamTime{Seconds: ^uint64(0) - 3599}
 
-		assert.True(t, maxTime.IsInSameEpoch(almostMaxTime))
+		assert.False(t, maxTime.IsInSameEpoch(almostMaxTime))
 	})
 
 	t.Run("zero and almost one epoch", func(t *testing.T) {
