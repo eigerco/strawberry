@@ -51,7 +51,7 @@ type Judgements struct {
 	BadWorkReports     []crypto.Hash       //  Bad work-reports (ψb) - Work-reports judged to be incorrect.
 	GoodWorkReports    []crypto.Hash       //  Good work-reports (ψg) - Work-reports judged to be correct.
 	WonkyWorkReports   []crypto.Hash       //  Wonky work-reports (ψw) - Work-reports whose validity is judged to be unknowable.
-	PunishedValidators []ed25519.PublicKey //  Punished validators (ψp) - Validators who made a judgement found to be incorrect.
+	OffenderValidators []ed25519.PublicKey //  Punished validators (ψp) - Validators who made a judgement found to be incorrect.
 }
 
 type CoreAssignments [TotalNumberOfCores]Assignment
