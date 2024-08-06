@@ -24,15 +24,9 @@ type GuaranteesExtrinsic struct {
 
 // Guarantee represents a single guarantee within the E_G extrinsic
 type Guarantee struct {
-	CoreIndex  uint32        // Index of the core this guarantee is for
-	WorkReport WorkReport    // The work report being guaranteed
-	Credential Credential    // The credential proving the guarantee's validity
-	Timeslot   time.Timeslot // The timeslot when this guarantee was made
-}
-
-// Credential represents the credential a in the document
-type Credential struct {
-	Signatures []CredentialSignature
+	WorkReport  WorkReport            // The work report being guaranteed
+	Credentials []CredentialSignature // The credentials proving the guarantee's validity
+	Timeslot    time.Timeslot         // The timeslot when this guarantee was made
 }
 
 // CredentialSignature represents a single signature within the credential
