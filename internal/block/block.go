@@ -12,4 +12,5 @@ type Extrinsic struct {
 	EP *PreimageExtrinsic
 	ED *DisputeExtrinsic
 	EA *AssurancesExtrinsic
+	EG *GuaranteesExtrinsic
 }
