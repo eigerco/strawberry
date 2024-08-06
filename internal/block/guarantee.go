@@ -2,7 +2,7 @@ package block
 
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/time"
+	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
 // WorkResultError represents the type of error that occurred during work execution
@@ -26,7 +26,7 @@ type GuaranteesExtrinsic struct {
 type Guarantee struct {
 	WorkReport  WorkReport            // The work report being guaranteed
 	Credentials []CredentialSignature // The credentials proving the guarantee's validity
-	Timeslot    time.Timeslot         // The timeslot when this guarantee was made
+	Timeslot    jamtime.Timeslot      // The timeslot when this guarantee was made
 }
 
 // CredentialSignature represents a single signature within the credential
@@ -55,12 +55,12 @@ type WorkPackageSpecification struct {
 
 // RefinementContext provides context for the refinement process
 type RefinementContext struct {
-	AnchorHeaderHash         crypto.Hash   // a ∈ H: Anchor header hash
-	AnchorPosteriorStateRoot crypto.Hash   // s ∈ H: Anchor state root
-	AnchorPosteriorBeefyRoot crypto.Hash   // b ∈ H: Anchor Beefy root
-	LookupAnchorHeaderHash   crypto.Hash   // l ∈ H: Lookup anchor hash
-	LookupAnchorTimeslot     time.Timeslot // t ∈ N_T: Lookup anchor timeslot
-	PrerequisiteHash         *crypto.Hash  // p ∈ H?: Optional prerequisite work package hash
+	AnchorHeaderHash         crypto.Hash      // a ∈ H: Anchor header hash
+	AnchorPosteriorStateRoot crypto.Hash      // s ∈ H: Anchor state root
+	AnchorPosteriorBeefyRoot crypto.Hash      // b ∈ H: Anchor Beefy root
+	LookupAnchorHeaderHash   crypto.Hash      // l ∈ H: Lookup anchor hash
+	LookupAnchorTimeslot     jamtime.Timeslot // t ∈ N_T: Lookup anchor timeslot
+	PrerequisiteHash         *crypto.Hash     // p ∈ H?: Optional prerequisite work package hash
 }
 
 // WorkResult represents the result of a single work item
