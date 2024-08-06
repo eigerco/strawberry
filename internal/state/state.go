@@ -2,6 +2,7 @@ package state
 
 // Import necessary packages
 import (
+	"github.com/eigerco/strawberry/internal/block"
 	cryptoTime "github.com/eigerco/strawberry/internal/time"
 )
 
@@ -22,20 +23,20 @@ type State struct {
 
 // UpdateState updates the state
 // TODO: all the calculations which are not dependent on intermediate / new state can be done in parallel
-func (s *State) UpdateState(newBlock Block) {
+func (s *State) UpdateState(newBlock block.Block) {
 	// Calculate newSafroleState state values
 
-	newTimeState := calculateNewTimeState(newBlock.Header)
+	newTimeState := calculateNewTimeState(*newBlock.Header)
 
-	newValidatorStatistics := calculateNewValidatorStatistics(newBlock.Extrinsics, s.TimeslotIndex, newTimeState, s.ValidatorStatistics)
+	newValidatorStatistics := calculateNewValidatorStatistics(*newBlock.Extrinsic, s.TimeslotIndex, newTimeState, s.ValidatorStatistics)
 
-	intermediateCoreAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsics, s.CoreAssignments)
-	intermediateCoreAssignments = calculateIntermediateCoreAssignmentsFromAvailability(newBlock.Extrinsics.Availability, intermediateCoreAssignments)
-	newCoreAssignments := calculateNewCoreAssignments(newBlock.Extrinsics.Reports, intermediateCoreAssignments, s.ValidatorState.Validators, newTimeState)
+	intermediateCoreAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(*newBlock.Extrinsic.ED, s.CoreAssignments)
+	intermediateCoreAssignments = calculateIntermediateCoreAssignmentsFromAvailability(*newBlock.Extrinsic.EA, intermediateCoreAssignments)
+	newCoreAssignments := calculateNewCoreAssignments(*newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState.Validators, newTimeState)
 
-	intermediateServiceState := calculateIntermediateServiceState(newBlock.Extrinsics.Preimages, s.Services, newTimeState)
+	intermediateServiceState := calculateIntermediateServiceState(*newBlock.Extrinsic.EP, s.Services, newTimeState)
 	newServices, newPrivilegedServices, newQueuedValidators, newPendingCoreAuthorizations, context := calculateServiceState(
-		newBlock.Extrinsics.Availability,
+		*newBlock.Extrinsic.EA,
 		newCoreAssignments,
 		intermediateServiceState,
 		s.PrivilegedServices,
@@ -43,20 +44,20 @@ func (s *State) UpdateState(newBlock Block) {
 		s.PendingAuthorizersQueues,
 	)
 
-	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
-	newRecentBlocks := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsics.Reports, intermediateRecentBlocks, context)
+	intermediateRecentBlocks := calculateIntermediateBlockState(*newBlock.Header, s.RecentBlocks)
+	newRecentBlocks := calculateNewRecentBlocks(*newBlock.Header, *newBlock.Extrinsic.EG, intermediateRecentBlocks, context)
 
-	newEntropyPool := calculateNewEntropyPool(newBlock.Header, s.TimeslotIndex, s.EntropyPool)
+	newEntropyPool := calculateNewEntropyPool(*newBlock.Header, s.TimeslotIndex, s.EntropyPool)
 
-	newJudgements := calculateNewJudgements(newBlock.Extrinsics.Judgements, s.PastJudgements)
+	newJudgements := calculateNewJudgements(*newBlock.Extrinsic.ED, s.PastJudgements)
 
-	newCoreAuthorizations := calculateNewCoreAuthorizations(newBlock.Extrinsics.Reports, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
+	newCoreAuthorizations := calculateNewCoreAuthorizations(*newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
 
-	newValidators := calculateNewValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.Validators, s.ValidatorState.SafroleState.NextValidators, newJudgements)
+	newValidators := calculateNewValidators(*newBlock.Header, s.TimeslotIndex, s.ValidatorState.Validators, s.ValidatorState.SafroleState.NextValidators, newJudgements)
 
-	newSafroleState := calculateNewSafroleState(newBlock.Header, s.TimeslotIndex, newBlock.Extrinsics.Tickets, s.ValidatorState.SafroleState.NextValidators, s.ValidatorState.QueuedValidators, newEntropyPool, newValidators)
+	newSafroleState := calculateNewSafroleState(*newBlock.Header, s.TimeslotIndex, newBlock.Extrinsic.ET, s.ValidatorState.SafroleState.NextValidators, s.ValidatorState.QueuedValidators, newEntropyPool, newValidators)
 
-	newArchivedValidators := calculateNewArchivedValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.Validators)
+	newArchivedValidators := calculateNewArchivedValidators(*newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.Validators)
 
 	// Update the state with newSafroleState values
 
