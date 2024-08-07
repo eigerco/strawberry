@@ -18,7 +18,7 @@ type WorkResult struct {
 	ServiceId              ServiceId   // Service ID (s) - The index of the service whose state is to be altered and thus whose refine code was already executed.
 	ServiceHashCode        crypto.Hash // Hash of the service code (c) - The hash of the code of the service at the time of being reported.
 	PayloadHash            crypto.Hash // Hash of the payload (l) - The hash of the payload within the work item which was executed in the refine stage to give this result. Provided to the accumulation logic of the service later on.
-	GasPrioritizationRatio uint64      // Gas prioritization ratio (g) - used when determining how much gas should be allocated to execute of this item’s accumulate. TODO: Is uint64 correct here?
+	GasPrioritizationRatio uint64      // Gas prioritization ratio (g) - used when determining how much gas should be allocated to execute of this item’s accumulate.
 	Output                 *[]byte     // Output of the work result (o) - An optional octet sequence in case it was successful.
 	Error                  ErrorType   // Error type in case of failure.
 }
