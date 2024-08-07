@@ -35,6 +35,7 @@ type CredentialSignature struct {
 	Signature      [crypto.Ed25519SignatureSize]byte // The Ed25519 signature
 }
 
+// TODO: Deduplicate work report/results etc
 // WorkReport represents a report of completed work
 type WorkReport struct {
 	Specification  WorkPackageSpecification

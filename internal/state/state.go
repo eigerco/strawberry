@@ -55,7 +55,7 @@ func (s *State) UpdateState(newBlock block.Block) {
 
 	newValidators := calculateNewValidators(*newBlock.Header, s.TimeslotIndex, s.ValidatorState.Validators, s.ValidatorState.SafroleState.NextValidators, newJudgements)
 
-	newSafroleState := calculateNewSafroleState(*newBlock.Header, s.TimeslotIndex, newBlock.Extrinsic.ET, s.ValidatorState.SafroleState.NextValidators, s.ValidatorState.QueuedValidators, newEntropyPool, newValidators)
+	newSafroleState := calculateNewSafroleState(*newBlock.Header, s.TimeslotIndex, *newBlock.Extrinsic.ET, s.ValidatorState.SafroleState.NextValidators, s.ValidatorState.QueuedValidators, newEntropyPool, newValidators)
 
 	newArchivedValidators := calculateNewArchivedValidators(*newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.Validators)
 

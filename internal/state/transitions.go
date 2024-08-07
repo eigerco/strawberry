@@ -43,7 +43,7 @@ func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesEx
 }
 
 // calculateNewSafroleState Equation 19: γ′ ≺ (H, τ, ET , γ, ι, η′, κ′)
-func calculateNewSafroleState(header block.Header, timeslot time.Timeslot, tickets []*block.TicketProof, nextValidators safrole.ValidatorsData, queuedValidators safrole.ValidatorsData, newEntropyPool EntropyPool, newValidators safrole.ValidatorsData) safrole.State {
+func calculateNewSafroleState(header block.Header, timeslot time.Timeslot, tickets block.TicketExtrinsic, nextValidators safrole.ValidatorsData, queuedValidators safrole.ValidatorsData, newEntropyPool EntropyPool, newValidators safrole.ValidatorsData) safrole.State {
 	return safrole.State{}
 }
 
