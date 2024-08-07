@@ -18,3 +18,8 @@ type TicketProof struct {
 	EntryIndex uint8                 // r ∈ Nn (0, 1)
 	Proof      [ticketProofSize]byte // RingVRF proof
 }
+
+// TicketExtrinsic represents the E_T extrinsic
+type TicketExtrinsic struct {
+	TicketProofs []TicketProof
+}
