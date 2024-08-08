@@ -47,7 +47,8 @@ func TestEpoch_ToEpoch(t *testing.T) {
 }
 
 func TestEpoch_CurrentEpoch(t *testing.T) {
-	currentEpoch := CurrentEpoch()
+	currentEpoch, err := CurrentEpoch()
+	assert.Nil(t, err)
 	now := time.Now().UTC()
 	expectedEpoch := Epoch((now.Unix() - JamEpoch.Unix()) / 3600)
 	assert.Equal(t, expectedEpoch, currentEpoch)

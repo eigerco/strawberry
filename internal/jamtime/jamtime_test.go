@@ -40,6 +40,15 @@ func TestJamTime_FromTime(t *testing.T) {
 
 		assert.True(t, jamTime.IsZero())
 	})
+
+	t.Run("fails to convert time.Time from the past", func(t *testing.T) {
+		year2000 := time.Date(2000, time.March, 15, 12, 0, 0, 0, time.UTC)
+		jamTime, err := FromTime(year2000)
+		assert.NotNil(t, err)
+		assert.ErrorIs(t, err, ErrBeforeJamEpoch)
+
+		assert.True(t, jamTime.IsZero())
+	})
 }
 
 func TestJamTime_FromSeconds(t *testing.T) {

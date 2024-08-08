@@ -36,9 +36,12 @@ func FromEpoch(e Epoch) JamTime {
 }
 
 // CurrentEpoch returns the current epoch
-func CurrentEpoch() Epoch {
-	now, _ := Now()
-	return now.ToEpoch()
+func CurrentEpoch() (Epoch, error) {
+	now, err := Now()
+	if err != nil {
+		return Epoch(0), err
+	}
+	return now.ToEpoch(), nil
 }
 
 // EpochStart returns the JamTime at the start of the epoch

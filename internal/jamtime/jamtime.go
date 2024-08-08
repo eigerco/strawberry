@@ -114,7 +114,11 @@ func (jt JamTime) Sub(u JamTime) time.Duration {
 
 // IsInFutureTimeSlot checks if a given JamTime is in a future timeslot
 func (jt JamTime) IsInFutureTimeSlot() bool {
-	return jt.ToTimeslot() > CurrentTimeslot()
+	now, err := CurrentTimeslot()
+	if err != nil {
+		return false
+	}
+	return jt.ToTimeslot() > now
 }
 
 // ToTimeslot converts a JamTime to its corresponding Timeslot

@@ -7,6 +7,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestCurrentTimeslot(t *testing.T) {
+	t.Run("current timeslot is valid", func(t *testing.T) {
+		currentTimeslot, err := CurrentTimeslot()
+		assert.Nil(t, err)
+
+		err2 := ValidateTimeslot(currentTimeslot)
+		assert.NoError(t, err2)
+	})
+}
+
 func TestValidateTimeSlot(t *testing.T) {
 	t.Run("is valid timeslot", func(t *testing.T) {
 		validTimeslot := Timeslot(1000000)
