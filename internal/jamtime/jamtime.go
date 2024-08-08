@@ -20,19 +20,32 @@ var MaxRepresentableJamTime = time.Date(2840, time.August, 15, 23, 59, 59, 99999
 
 // JamTime represents a time in the JAM Common Era
 type JamTime struct {
+	src     time.Time
 	Seconds uint64
 }
 
 // Now returns the current time as a JamTime
-func Now() JamTime {
+func Now() (JamTime, error) {
 	return FromTime(now())
 }
 
 // FromTime converts a standard time.Time to JamTime
-func FromTime(t time.Time) JamTime {
-	duration := t.Sub(JamEpoch)
-	seconds := uint64(duration.Seconds())
-	return JamTime{Seconds: seconds}
+func FromTime(t time.Time) (JamTime, error) {
+	if t.Before(JamEpoch) {
+		return JamTime{}, ErrBeforeJamEpoch
+	}
+
+	if t.Equal(JamEpoch) {
+		return JamTime{Seconds: 0}, nil
+	}
+
+	if t.After(MaxRepresentableJamTime) {
+		return JamTime{}, ErrAfterMaxJamTime
+	}
+
+	seconds := t.Unix() - JamEpoch.Unix()
+
+	return JamTime{src: t, Seconds: uint64(seconds)}, nil
 }
 
 // EpochAndTimeslotToJamTime converts an Epoch and a timeslot within that epoch to JamTime
@@ -46,8 +59,13 @@ func EpochAndTimeslotToJamTime(e Epoch, timeslot Timeslot) (JamTime, error) {
 
 // ToTime converts a JamTime to a standard time.Time
 func (jt JamTime) ToTime() time.Time {
-	duration := time.Duration(jt.Seconds) * time.Second
-	return JamEpoch.Add(duration)
+	if jt.src.IsZero() {
+		t := JamEpoch.Unix() + int64(jt.Seconds)
+
+		return time.Unix(t, 0).UTC()
+	}
+
+	return jt.src
 }
 
 // FromSeconds creates a JamTime from the number of seconds since the JAM Epoch
@@ -71,8 +89,22 @@ func (jt JamTime) Equal(u JamTime) bool {
 }
 
 // Add returns the time jt+d
-func (jt JamTime) Add(d time.Duration) JamTime {
-	return JamTime{Seconds: jt.Seconds + uint64(d.Seconds())}
+func (jt JamTime) Add(d time.Duration) (JamTime, error) {
+	// Get JamTime back in time.Time representation
+	t := jt.ToTime()
+	t = t.Add(d)
+
+	// Check for overflow after MaxRepresentableJamTime
+	if t.After(MaxRepresentableJamTime) {
+		return JamTime{}, ErrAfterMaxJamTime
+	}
+
+	// Check for underflow past JamEpoch
+	if t.Before(JamEpoch) {
+		return JamTime{}, ErrBeforeJamEpoch
+	}
+
+	return FromTime(t)
 }
 
 // Sub returns the duration jt-u
@@ -107,7 +139,10 @@ func (jt *JamTime) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	*jt = FromTime(t)
+	*jt, err = FromTime(t)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

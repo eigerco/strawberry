@@ -37,7 +37,8 @@ func FromEpoch(e Epoch) JamTime {
 
 // CurrentEpoch returns the current epoch
 func CurrentEpoch() Epoch {
-	return Now().ToEpoch()
+	now, _ := Now()
+	return now.ToEpoch()
 }
 
 // EpochStart returns the JamTime at the start of the epoch
@@ -46,10 +47,10 @@ func (e Epoch) EpochStart() JamTime {
 }
 
 // EpochEnd returns the JamTime at the end of the epoch
-func (e Epoch) EpochEnd() JamTime {
+func (e Epoch) EpochEnd() (JamTime, error) {
 	if e == MaxEpoch {
 		// For the last epoch, we calculate its end based on the last timeslot
-		return FromTimeslot(MaxTimeslot)
+		return FromTimeslot(MaxTimeslot), nil
 	}
 
 	return FromEpoch(e + 1).Add(-time.Nanosecond)

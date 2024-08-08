@@ -2,6 +2,7 @@ package jamtime
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -12,10 +13,32 @@ import (
 func TestJamTime_FromTime(t *testing.T) {
 	t.Run("successfully convert from time.Time to JamTime", func(t *testing.T) {
 		standardTime := time.Date(2025, time.March, 15, 12, 0, 0, 0, time.UTC)
-		jamTime := FromTime(standardTime)
+		jamTime, err := FromTime(standardTime)
+		assert.Nil(t, err)
 		convertedTime := jamTime.ToTime()
-
 		assert.True(t, standardTime.Equal(convertedTime))
+	})
+
+	t.Run("converts correct JamEpoch to JamTime", func(t *testing.T) {
+		jamEpoch, err := FromTime(JamEpoch)
+		assert.Nil(t, err)
+		assert.EqualValues(t, 0, jamEpoch.Seconds)
+	})
+
+	t.Run("converts time between JamEpoch and MaxJamTime to JamTime correctly", func(t *testing.T) {
+		expected := MaxRepresentableJamTime.Add(-1 * time.Hour)
+		jt, err := FromTime(expected)
+		assert.Nil(t, err)
+		got := jt.ToTime()
+		assert.True(t, expected.Equal(got))
+	})
+
+	t.Run("fails to convert time.Time past MaxJamTime to JamTime", func(t *testing.T) {
+		year3000 := time.Date(3000, time.March, 15, 12, 0, 0, 0, time.UTC)
+		jamTime, err := FromTime(year3000)
+		assert.NotNil(t, err)
+
+		assert.True(t, jamTime.IsZero())
 	})
 }
 
@@ -26,6 +49,34 @@ func TestJamTime_FromSeconds(t *testing.T) {
 		expectedTime := JamEpoch.Add(time.Duration(secondsInYear) * time.Second)
 
 		assert.True(t, jamTime.ToTime().Equal(expectedTime))
+	})
+}
+
+func TestJamTime_ToTime(t *testing.T) {
+	t.Run("converts JamEpoch to and from time.Time", func(t *testing.T) {
+		start, err := FromTime(JamEpoch)
+		assert.Nil(t, err)
+		assert.EqualValues(t, 0, start.Seconds)
+		got := start.ToTime()
+		assert.Equal(t, JamEpoch, got)
+	})
+
+	t.Run("converts time.Time to jamTime and back", func(t *testing.T) {
+		in := time.Date(2024, 07, 27, 01, 01, 00, 00, time.UTC)
+		jt, err := FromTime(in)
+		assert.Nil(t, err)
+
+		got := jt.ToTime()
+		assert.True(t, in.Equal(got))
+	})
+
+	t.Run("converts MaxRepresentableJamTime to and from time.Time", func(t *testing.T) {
+		in := MaxRepresentableJamTime
+		start, err := FromTime(in)
+		assert.Nil(t, err)
+
+		got := start.ToTime()
+		assert.Equal(t, MaxRepresentableJamTime, got)
 	})
 }
 
@@ -53,9 +104,32 @@ func TestJamTimeArithmetic(t *testing.T) {
 		t1 := FromSeconds(1000)
 		duration := 500 * time.Second
 
-		t2 := t1.Add(duration)
+		t2, err := t1.Add(duration)
+		assert.Nil(t, err)
 		assert.False(t, t2.Equal(t1))
 		assert.NotEqual(t, t2.Seconds, t1.Seconds)
+	})
+
+	t.Run("subbing time from jamtime epoch", func(t *testing.T) {
+		t1, err := FromTime(JamEpoch)
+		assert.Nil(t, err)
+		duration := time.Duration(-500 * time.Second)
+
+		got, err := t1.Add(duration)
+		assert.NotNil(t, err)
+		assert.ErrorIs(t, err, ErrBeforeJamEpoch)
+		assert.True(t, got.IsZero())
+	})
+
+	t.Run("adding past max jamtime", func(t *testing.T) {
+		t1, err := FromTime(MaxRepresentableJamTime)
+		assert.Nil(t, err)
+		fmt.Println(t1.ToTime())
+		duration := time.Duration(500 * time.Second)
+		got, err := t1.Add(duration)
+		assert.NotNil(t, err)
+		assert.ErrorIs(t, err, ErrAfterMaxJamTime)
+		assert.True(t, got.IsZero())
 	})
 
 	t.Run("subbing jamtime", func(t *testing.T) {
@@ -134,9 +208,12 @@ func TestJamTimeFromToTimeslotConversion(t *testing.T) {
 }
 
 func TestJamTime_IsInFutureTimeSlot(t *testing.T) {
-	currentTime := Now()
-	pastTime := currentTime.Add(-5 * time.Minute)
-	futureTime := currentTime.Add(10 * time.Minute)
+	currentTime, err := Now()
+	assert.Nil(t, err)
+	pastTime, err := currentTime.Add(-5 * time.Minute)
+	assert.Nil(t, err)
+	futureTime, err := currentTime.Add(10 * time.Minute)
+	assert.Nil(t, err)
 
 	assert.False(t, currentTime.IsInFutureTimeSlot())
 	assert.False(t, pastTime.IsInFutureTimeSlot())

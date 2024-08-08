@@ -30,7 +30,8 @@ func FromTimeslot(ts Timeslot) JamTime {
 
 // CurrentTimeslot returns the current timeslot
 func CurrentTimeslot() Timeslot {
-	return Now().ToTimeslot()
+	now, _ := Now()
+	return now.ToTimeslot()
 }
 
 // IsInFutureTimeslot checks if a given Timeslot is in the future
@@ -51,8 +52,7 @@ func (ts Timeslot) TimeslotEnd() (JamTime, error) {
 
 	nextTs := ts + 1
 	jamTime := FromTimeslot(nextTs)
-	return jamTime.Add(-time.Nanosecond), nil
-
+	return jamTime.Add(-time.Nanosecond)
 }
 
 // NextTimeslot returns the next timeslot

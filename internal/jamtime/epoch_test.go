@@ -69,19 +69,22 @@ func TestEpoch_EpochStart(t *testing.T) {
 
 func TestEpoch_EpochEnd(t *testing.T) {
 	t.Run("first epoch", func(t *testing.T) {
-		end := Epoch(0).EpochEnd()
-		expected := uint64(3600)
+		end, err := Epoch(0).EpochEnd()
+		assert.Nil(t, err)
+		expected := uint64(3599)
 		assert.Equal(t, expected, end.Seconds)
 	})
 
 	t.Run("arbitrary epoch", func(t *testing.T) {
-		end := Epoch(100).EpochEnd()
-		expected := uint64(363600) // (100 * 3600) + 3599
+		end, err := Epoch(100).EpochEnd()
+		assert.Nil(t, err)
+		expected := uint64(363599) // (100 * 3600) + 3599
 		assert.Equal(t, expected, end.Seconds)
 	})
 
 	t.Run("max epoch returns jam time for last timeslot", func(t *testing.T) {
-		jamTime := MaxEpoch.EpochEnd()
+		jamTime, err := MaxEpoch.EpochEnd()
+		assert.Nil(t, err)
 		expected := FromTimeslot(MaxTimeslot)
 		assert.Equal(t, expected.Seconds, jamTime.Seconds)
 	})
