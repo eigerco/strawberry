@@ -1,12 +1,12 @@
 package state
 
 import (
+	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/time"
 )
 
-type ServiceId [32]byte
-type ServiceState map[ServiceId]ServiceAccount
+type ServiceState map[block.ServiceId]ServiceAccount
 
 // ServiceAccount represents a service account in the JAM state
 type ServiceAccount struct {
@@ -20,9 +20,9 @@ type ServiceAccount struct {
 }
 
 type PrivilegedServices struct {
-	ManagerServiceId   ServiceId // Manager service ID (m) - the service able to effect an alteration of PrivilegedServices from block to block. Also called Empower service.
-	AssignServiceId    ServiceId // Assign service ID (a) - the service able to effect an alteration of the PendingAuthorizersQueues.
-	DesignateServiceId ServiceId // Designate service ID (v) - the service able to effect an alteration of the NextValidators in ValidatorState.
+	ManagerServiceId   block.ServiceId // Manager service ID (m) - the service able to effect an alteration of PrivilegedServices from block to block. Also called Empower service.
+	AssignServiceId    block.ServiceId // Assign service ID (a) - the service able to effect an alteration of the PendingAuthorizersQueues.
+	DesignateServiceId block.ServiceId // Designate service ID (v) - the service able to effect an alteration of the NextValidators in ValidatorState.
 }
 
 type PreimageLength uint32

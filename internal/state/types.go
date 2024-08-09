@@ -1,6 +1,25 @@
 package state
 
-import "github.com/eigerco/strawberry/internal/crypto"
+import (
+	"crypto/ed25519"
+	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/time"
+)
+
+type Assignment struct {
+	WorkReport block.WorkReport // Work-Report (w)
+	Time       time.Timeslot    // time at which work-report was reported but not yet accumulated (t)
+}
+
+type Judgements struct {
+	BadWorkReports     []crypto.Hash       //  Bad work-reports (ψb) - Work-reports judged to be incorrect.
+	GoodWorkReports    []crypto.Hash       //  Good work-reports (ψg) - Work-reports judged to be correct.
+	WonkyWorkReports   []crypto.Hash       //  Wonky work-reports (ψw) - Work-reports whose validity is judged to be unknowable.
+	OffenderValidators []ed25519.PublicKey //  Punished validators (ψp) - Validators who made a judgement found to be incorrect.
+}
+
+type CoreAssignments [TotalNumberOfCores]Assignment
 
 type PendingAuthorizersQueues [TotalNumberOfCores][PendingAuthorizersQueueSize]crypto.Hash
 
