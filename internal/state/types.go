@@ -4,12 +4,12 @@ import (
 	"crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/time"
+	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
 type Assignment struct {
 	WorkReport block.WorkReport // Work-Report (w)
-	Time       time.Timeslot    // time at which work-report was reported but not yet accumulated (t)
+	Time       jamtime.Timeslot // time at which work-report was reported but not yet accumulated (t)
 }
 
 type Judgements struct {

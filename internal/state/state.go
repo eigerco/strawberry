@@ -3,7 +3,7 @@ package state
 // Import necessary packages
 import (
 	"github.com/eigerco/strawberry/internal/block"
-	cryptoTime "github.com/eigerco/strawberry/internal/time"
+	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
 // State represents the complete state of the system
@@ -16,7 +16,7 @@ type State struct {
 	PendingAuthorizersQueues PendingAuthorizersQueues // Pending Core authorizers queue (φ): the queue which fills core authorizations.
 	CoreAssignments          CoreAssignments          // Core assignments (ρ): each of the cores’ currently assigned report, the availability of whose work-package must yet be assured by a super-majority of validators. This is what each core is up to right now, tracks the work-reports which have been reported but not yet accumulated, the identities of the guarantors who reported them and the time at which it was reported.
 	RecentBlocks             []BlockState             // Block-related state (β): details of the most recent blocks. TODO: Maximum length: MaxRecentBlocks
-	TimeslotIndex            cryptoTime.Timeslot      // Time-related state (τ): the most recent block’s slot index.
+	TimeslotIndex            jamtime.Timeslot         // Time-related state (τ): the most recent block’s slot index.
 	PastJudgements           Judgements               // PastJudgements (ψ) - past judgements on work-reports and validators.
 	ValidatorStatistics      ValidatorStatisticsState // Validator statistics (π) - The activity statistics for the validators.
 }

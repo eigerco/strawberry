@@ -3,7 +3,7 @@ package state
 import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/time"
+	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
 type ServiceState map[block.ServiceId]ServiceAccount
@@ -30,4 +30,4 @@ type PreImageMetaKey struct {
 	Hash   crypto.Hash    // Hash of the preimage ()
 	Length PreimageLength // Length (presupposed) of the preimage ()
 }
-type PreimageHistoricalTimeslots []time.Timeslot // Metadata for preimages (l) - TODO: There is a MaxHistoricalTimeslotsForPreimageMeta.
+type PreimageHistoricalTimeslots []jamtime.Timeslot // Metadata for preimages (l) - TODO: There is a MaxHistoricalTimeslotsForPreimageMeta.

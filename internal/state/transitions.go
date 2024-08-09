@@ -2,8 +2,8 @@ package state
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
-	"github.com/eigerco/strawberry/internal/time"
 )
 
 // TODO: These calculations are just mocks for now. They will be replaced with actual calculations when the state transitions are implemented.
@@ -16,7 +16,7 @@ func calculateIntermediateBlockState(header block.Header, previousRecentBlocks [
 }
 
 // calculateIntermediateServiceState Equation 24: δ† ≺ (EP, δ, τ′)
-func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, serviceState ServiceState, timeslot time.Timeslot) ServiceState {
+func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, serviceState ServiceState, timeslot jamtime.Timeslot) ServiceState {
 	return make(ServiceState)
 }
 
@@ -33,7 +33,7 @@ func calculateIntermediateCoreAssignmentsFromAvailability(assurances block.Assur
 // Final State Calculation Functions
 
 // calculateNewTimeState Equation 16: τ′ ≺ H
-func calculateNewTimeState(header block.Header) time.Timeslot {
+func calculateNewTimeState(header block.Header) jamtime.Timeslot {
 	return header.TimeSlotIndex
 }
 
@@ -43,12 +43,12 @@ func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesEx
 }
 
 // calculateNewSafroleState Equation 19: γ′ ≺ (H, τ, ET , γ, ι, η′, κ′)
-func calculateNewSafroleState(header block.Header, timeslot time.Timeslot, tickets block.TicketExtrinsic, nextValidators safrole.ValidatorsData, queuedValidators safrole.ValidatorsData, newEntropyPool EntropyPool, newValidators safrole.ValidatorsData) safrole.State {
+func calculateNewSafroleState(header block.Header, timeslot jamtime.Timeslot, tickets block.TicketExtrinsic, nextValidators safrole.ValidatorsData, queuedValidators safrole.ValidatorsData, newEntropyPool EntropyPool, newValidators safrole.ValidatorsData) safrole.State {
 	return safrole.State{}
 }
 
 // calculateNewEntropyPool Equation 20: η′ ≺ (H, τ, η)
-func calculateNewEntropyPool(header block.Header, timeslot time.Timeslot, entropyPool EntropyPool) EntropyPool {
+func calculateNewEntropyPool(header block.Header, timeslot jamtime.Timeslot, entropyPool EntropyPool) EntropyPool {
 	return EntropyPool{}
 }
 
@@ -58,7 +58,7 @@ func calculateNewCoreAuthorizations(guarantees block.GuaranteesExtrinsic, pendin
 }
 
 // calculateNewValidators Equation 21: κ′ ≺ (H, τ, κ, γ, ψ′)
-func calculateNewValidators(header block.Header, timeslot time.Timeslot, validators safrole.ValidatorsData, nextValidators safrole.ValidatorsData, judgements Judgements) safrole.ValidatorsData {
+func calculateNewValidators(header block.Header, timeslot jamtime.Timeslot, validators safrole.ValidatorsData, nextValidators safrole.ValidatorsData, judgements Judgements) safrole.ValidatorsData {
 	return safrole.ValidatorsData{}
 }
 
@@ -68,12 +68,12 @@ func calculateNewJudgements(disputes block.DisputeExtrinsic, stateJudgements Jud
 }
 
 // calculateNewCoreAssignments Equation 27: ρ′ ≺ (EG, ρ‡, κ, τ′)
-func calculateNewCoreAssignments(guarantees block.GuaranteesExtrinsic, coreAssignments CoreAssignments, validators safrole.ValidatorsData, timeslot time.Timeslot) CoreAssignments {
+func calculateNewCoreAssignments(guarantees block.GuaranteesExtrinsic, coreAssignments CoreAssignments, validators safrole.ValidatorsData, timeslot jamtime.Timeslot) CoreAssignments {
 	return CoreAssignments{}
 }
 
 // calculateNewArchivedValidators Equation 22: λ′ ≺ (H, τ, λ, κ)
-func calculateNewArchivedValidators(header block.Header, timeslot time.Timeslot, archivedValidators safrole.ValidatorsData, validators safrole.ValidatorsData) safrole.ValidatorsData {
+func calculateNewArchivedValidators(header block.Header, timeslot jamtime.Timeslot, archivedValidators safrole.ValidatorsData, validators safrole.ValidatorsData) safrole.ValidatorsData {
 	return safrole.ValidatorsData{}
 }
 
@@ -83,6 +83,6 @@ func calculateServiceState(assurances block.AssurancesExtrinsic, coreAssignments
 }
 
 // calculateNewValidatorStatistics Equation 30: π′ ≺ (EG, EP, EA, ET, τ, τ′, π)
-func calculateNewValidatorStatistics(extrinsics block.Extrinsic, timeslot time.Timeslot, newTimeSlot time.Timeslot, validatorStatistics ValidatorStatisticsState) ValidatorStatisticsState {
+func calculateNewValidatorStatistics(extrinsics block.Extrinsic, timeslot jamtime.Timeslot, newTimeSlot jamtime.Timeslot, validatorStatistics ValidatorStatisticsState) ValidatorStatisticsState {
 	return ValidatorStatisticsState{}
 }
