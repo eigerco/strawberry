@@ -2,7 +2,7 @@ package block
 
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/time"
+	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
 // GuaranteesExtrinsic represents the E_G extrinsic
@@ -14,7 +14,7 @@ type GuaranteesExtrinsic struct {
 type Guarantee struct {
 	WorkReport  WorkReport            // The work report being guaranteed
 	Credentials []CredentialSignature // The credentials proving the guarantee's validity
-	Timeslot    time.Timeslot         // The timeslot when this guarantee was made
+	Timeslot    jamtime.Timeslot      // The timeslot when this guarantee was made
 }
 
 // CredentialSignature represents a single signature within the credential
@@ -56,7 +56,7 @@ type RefinementContextAnchor struct {
 
 type RefinementContextLookupAnchor struct {
 	HeaderHash crypto.Hash   // HeaderHash of the anchor (l)
-	Timeslot   time.Timeslot // Timeslot (t)
+	Timeslot   jamtime.Timeslot // Timeslot (t)
 }
 
 // WorkResultError represents the type of error that occurred during work execution
