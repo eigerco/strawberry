@@ -25,8 +25,11 @@ type JamTime struct {
 }
 
 // Now returns the current time as a JamTime
-func Now() (JamTime, error) {
-	return FromTime(now())
+func Now() JamTime {
+	t := now()
+	seconds := t.Unix() - JamEpoch.Unix()
+
+	return JamTime{src: t, Seconds: uint64(seconds)}
 }
 
 // FromTime converts a standard time.Time to JamTime
@@ -114,11 +117,7 @@ func (jt JamTime) Sub(u JamTime) time.Duration {
 
 // IsInFutureTimeSlot checks if a given JamTime is in a future timeslot
 func (jt JamTime) IsInFutureTimeSlot() bool {
-	now, err := CurrentTimeslot()
-	if err != nil {
-		return false
-	}
-	return jt.ToTimeslot() > now
+	return jt.ToTimeslot() > CurrentTimeslot()
 }
 
 // ToTimeslot converts a JamTime to its corresponding Timeslot

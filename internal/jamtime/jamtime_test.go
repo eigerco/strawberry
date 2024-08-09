@@ -217,8 +217,7 @@ func TestJamTimeFromToTimeslotConversion(t *testing.T) {
 }
 
 func TestJamTime_IsInFutureTimeSlot(t *testing.T) {
-	currentTime, err := Now()
-	assert.Nil(t, err)
+	currentTime := Now()
 	pastTime, err := currentTime.Add(-5 * time.Minute)
 	assert.Nil(t, err)
 	futureTime, err := currentTime.Add(10 * time.Minute)

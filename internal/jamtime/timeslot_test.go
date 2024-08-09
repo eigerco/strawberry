@@ -9,9 +9,7 @@ import (
 
 func TestCurrentTimeslot(t *testing.T) {
 	t.Run("current timeslot is valid", func(t *testing.T) {
-		currentTimeslot, err := CurrentTimeslot()
-		assert.Nil(t, err)
-
+		currentTimeslot := CurrentTimeslot()
 		err2 := ValidateTimeslot(currentTimeslot)
 		assert.NoError(t, err2)
 	})

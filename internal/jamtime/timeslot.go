@@ -29,21 +29,14 @@ func FromTimeslot(ts Timeslot) JamTime {
 }
 
 // CurrentTimeslot returns the current timeslot
-func CurrentTimeslot() (Timeslot, error) {
-	now, err := Now()
-	if err != nil {
-		return Timeslot(0), err
-	}
-	return now.ToTimeslot(), nil
+func CurrentTimeslot() Timeslot {
+	now := Now()
+	return now.ToTimeslot()
 }
 
 // IsInFutureTimeslot checks if a given Timeslot is in the future
 func (ts Timeslot) IsInFuture() bool {
-	now, err := CurrentTimeslot()
-	if err != nil {
-		return false
-	}
-	return ts > now
+	return ts > CurrentTimeslot()
 }
 
 // TimeslotStart returns the JamTime at the start of the timeslot
