@@ -1,51 +1,58 @@
 package block
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/pkg/scale"
-	"github.com/eigerco/strawberry/internal/time"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/pkg/serialization"
+	"github.com/eigerco/strawberry/pkg/serialization/codec"
 )
 
-func Test_HeaderMarshalUnmarshal(t *testing.T) {
+func Test_HeaderEncodeDecode(t *testing.T) {
 	h := Header{
-		ParentHash:     randomHash(),
-		PriorStateRoot: randomHash(),
-		ExtrinsicHash:  randomHash(),
+		ParentHash:     randomHash(t),
+		PriorStateRoot: randomHash(t),
+		ExtrinsicHash:  randomHash(t),
 		TimeSlotIndex:  123,
 		EpochMarker: &EpochMarker{
 			Keys: [NumberOfValidators]crypto.BandersnatchPublicKey{
-				randomPublicKey(),
-				randomPublicKey(),
+				randomPublicKey(t),
+				randomPublicKey(t),
 			},
-			Entropy: randomHash(),
+			Entropy: randomHash(t),
 		},
-		WinningTicketsMarker: [time.TimeslotsPerEpoch]*Ticket{{
-			Identifier: randomHash(),
+		WinningTicketsMarker: [jamtime.TimeslotsPerEpoch]*Ticket{{
+			Identifier: randomHash(t),
 			EntryIndex: 111,
 		}, {
-			Identifier: randomHash(),
+			Identifier: randomHash(t),
 			EntryIndex: 222,
 		}},
-		JudgementsMarkers: []crypto.Hash{
-			randomHash(),
-			randomHash(),
+		Verdicts: []crypto.Hash{
+			randomHash(t),
+			randomHash(t),
 		},
-		PublicKeyIndex:     1,
-		VRFSignature:       randomSignature(),
-		BlockSealSignature: randomSignature(),
+		OffendersMarkers: []crypto.Ed25519PublicKey{
+			randomED25519PublicKey(t),
+		},
+		BlockAuthorIndex:   1,
+		VRFSignature:       randomSignature(t),
+		BlockSealSignature: randomSignature(t),
 	}
-	bb, err := scale.Marshal(h)
+	serializer := serialization.NewSerializer(&codec.SCALECodec{})
+	bb, err := serializer.Encode(h)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	h2 := Header{}
-	err = scale.Unmarshal(bb, &h2)
+	err = serializer.Decode(bb, &h2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,27 +60,27 @@ func Test_HeaderMarshalUnmarshal(t *testing.T) {
 	assert.Equal(t, h, h2)
 }
 
-func randomHash() crypto.Hash {
+func randomHash(t *testing.T) crypto.Hash {
 	hash := make([]byte, crypto.HashSize)
 	_, err := rand.Read(hash)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	return crypto.Hash(hash)
 }
-func randomPublicKey() crypto.BandersnatchPublicKey {
+func randomED25519PublicKey(t *testing.T) crypto.Ed25519PublicKey {
+	hash := make([]byte, ed25519.PublicKeySize)
+	_, err := rand.Read(hash)
+	require.NoError(t, err)
+	return hash
+}
+func randomPublicKey(t *testing.T) crypto.BandersnatchPublicKey {
 	hash := make([]byte, crypto.BandersnatchSize)
 	_, err := rand.Read(hash)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	return crypto.BandersnatchPublicKey(hash)
 }
-func randomSignature() crypto.BandersnatchSignature {
+func randomSignature(t *testing.T) crypto.BandersnatchSignature {
 	hash := make([]byte, 96)
 	_, err := rand.Read(hash)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	return crypto.BandersnatchSignature(hash)
 }
