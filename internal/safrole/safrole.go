@@ -2,14 +2,15 @@ package safrole
 
 import (
 	"fmt"
+
 	"github.com/ChainSafe/gossamer/pkg/scale"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/time"
+	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
-type TicketsBodies [time.TimeslotsPerEpoch]block.Ticket
-type TicketsMark [time.TimeslotsPerEpoch]block.Ticket
+type TicketsBodies [jamtime.TimeslotsPerEpoch]block.Ticket
+type TicketsMark [jamtime.TimeslotsPerEpoch]block.Ticket
 
 type CustomErrorCode int
 
