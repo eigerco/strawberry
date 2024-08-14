@@ -50,3 +50,20 @@ func TestSCALESerializer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, example, decoded)
 }
+
+func TestGeneralSerializer(t *testing.T) {
+	jamCodec := codec.NewJamCodec()
+	serializer := serialization.NewSerializer(jamCodec)
+
+	// Test Encoding
+	v := uint64(127)
+	encoded, err := serializer.EncodeGeneral(v)
+	require.NoError(t, err)
+	require.Equal(t, []byte{127}, encoded)
+
+	// Test Decoding
+	var decoded uint64
+	err = serializer.DecodeGeneral(encoded, &decoded)
+	require.NoError(t, err)
+	assert.Equal(t, v, decoded)
+}
