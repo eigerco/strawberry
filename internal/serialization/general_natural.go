@@ -10,39 +10,26 @@ import (
 type GeneralNatural struct{}
 
 func (j *GeneralNatural) SerializeUint64(x uint64) []byte {
-	if x == 0 {
-		return []byte{0}
-	}
-
 	var l uint8
-	var found bool
-
 	// Determine the length needed to represent the value
-	for i := 0; i < 8; i++ {
-		if x >= (1<<(7*i)) && x < (1<<(7*(i+1))) {
-			found = true
+	for l = 0; l < 8; l++ {
+		if x < (1 << (7 * (l + 1))) {
 			break
 		}
-		l++
 	}
-
 	bytes := make([]byte, 0)
-
-	if found {
+	if l < 8 {
 		// Calculate the prefix byte, ensure it stays within uint8 range
 		prefix := uint8((256 - (1 << (8 - l))) + (x>>(8*l))&math.MaxUint8)
 		bytes = append(bytes, prefix)
 	} else {
 		bytes = append(bytes, math.MaxUint8)
-		l = 8
 	}
-
 	// Serialize the integer in little-endian order
 	for i := 0; i < int(l); i++ {
 		byteVal := uint8((x >> (8 * i)) & math.MaxUint8)
 		bytes = append(bytes, byteVal)
 	}
-
 	return bytes
 }
 
