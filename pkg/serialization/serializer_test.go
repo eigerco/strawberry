@@ -67,3 +67,35 @@ func TestGeneralSerializer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, v, decoded)
 }
+
+func TestTrivialSerializer(t *testing.T) {
+	jamCodec := codec.NewJamCodec()
+	serializer := serialization.NewSerializer(jamCodec)
+
+	// Test Encoding
+	v := 127
+	encoded, err := serializer.EncodeTrivialUint(uint64(v), 3)
+	require.NoError(t, err)
+	require.Equal(t, []byte{127, 0, 0}, encoded)
+
+	// Test Decoding
+	var d64 uint64
+	err = serializer.DecodeTrivialUint(encoded, &d64)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(v), d64)
+
+	var d32 uint32
+	err = serializer.DecodeTrivialUint(encoded, &d32)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(v), d32)
+
+	var d16 uint16
+	err = serializer.DecodeTrivialUint(encoded, &d16)
+	require.NoError(t, err)
+	assert.Equal(t, uint16(v), d16)
+
+	var d8 uint8
+	err = serializer.DecodeTrivialUint(encoded, &d8)
+	require.NoError(t, err)
+	assert.Equal(t, uint8(v), d8)
+}

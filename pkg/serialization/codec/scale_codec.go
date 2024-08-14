@@ -13,10 +13,18 @@ func (j *SCALECodec) MarshalGeneral(v uint64) ([]byte, error) {
 	return scale.Marshal(v)
 }
 
+func (j *SCALECodec) MarshalTrivialUint(x interface{}, l uint8) ([]byte, error) {
+	return scale.Marshal(x)
+}
+
 func (s *SCALECodec) Unmarshal(data []byte, v interface{}) error {
 	return scale.Unmarshal(data, v)
 }
 
 func (s *SCALECodec) UnmarshalGeneral(data []byte, v *uint64) error {
 	return scale.Unmarshal(data, v)
+}
+
+func (j *SCALECodec) UnmarshalTrivialUint(data []byte, x interface{}) error {
+	return scale.Unmarshal(data, x)
 }
