@@ -1,4 +1,4 @@
-package serialization
+package jam
 
 import (
 	"encoding/binary"

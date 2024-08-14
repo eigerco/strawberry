@@ -17,7 +17,17 @@ func (s *Serializer) Encode(v interface{}) ([]byte, error) {
 	return s.codec.Marshal(v)
 }
 
+// EncodeGeneral is specific encoding for natural numbers up to 2^64
+func (s *Serializer) EncodeGeneral(v uint64) ([]byte, error) {
+	return s.codec.MarshalGeneral(v)
+}
+
 // Decode deserializes the given data into the specified value using the codec.
 func (s *Serializer) Decode(data []byte, v interface{}) error {
 	return s.codec.Unmarshal(data, v)
+}
+
+// DecodeGeneral is specific decoding for natural numbers up to 2^64
+func (s *Serializer) DecodeGeneral(data []byte, v *uint64) error {
+	return s.codec.UnmarshalGeneral(data, v)
 }
