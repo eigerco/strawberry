@@ -2,7 +2,6 @@ package jam
 
 import (
 	"math"
-	"math/bits"
 )
 
 // TrivialNatural implements the formula 273 (subscripted by the number of octets of the final sequence)
@@ -22,19 +21,8 @@ func (j *TrivialNatural[T]) Serialize(x T, l uint8) []byte {
 func (j *TrivialNatural[T]) Deserialize(serialized []byte, u *T) error {
 	*u = 0
 
-	n := len(serialized)
-	if n == 0 {
-		// If the serialized data is empty, just return without modifying u
-		return nil
-	}
-
-	maxBytes := bits.UintSize / 8
-	if n > maxBytes {
-		return ErrDataTooLongForUintType
-	}
-
 	// Iterate over each byte in the serialized array
-	for i := 0; i < n; i++ {
+	for i := 0; i < len(serialized); i++ {
 		*u |= T(serialized[i]) << (8 * i)
 	}
 
