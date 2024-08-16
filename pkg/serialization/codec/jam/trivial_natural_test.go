@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestEncodeDecodeTrivialUint8(t *testing.T) {
@@ -97,8 +96,7 @@ func testEncodeDecodeTrivialUint[T uint8 | uint16 | uint32 | uint64](t *testing.
 
 			// Unmarshal the serialized data back into the type T
 			var deserialized T
-			err := tn.Deserialize(serialized, &deserialized)
-			require.NoError(t, err, "unmarshal(%v) returned an unexpected error", serialized)
+			tn.Deserialize(serialized, &deserialized)
 
 			// Check if the deserialized value matches the original x
 			assert.Equal(t, tc.x, deserialized, "deserialized value mismatch for x %v", tc.x)

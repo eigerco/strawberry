@@ -64,13 +64,17 @@ func (j *JAMCodec) UnmarshalGeneral(data []byte, v *uint64) error {
 func (j *JAMCodec) UnmarshalTrivialUint(data []byte, x interface{}) error {
 	switch v := x.(type) {
 	case *uint8:
-		return j.tn8.Deserialize(data, v)
+		j.tn8.Deserialize(data, v)
+		return nil
 	case *uint16:
-		return j.tn16.Deserialize(data, v)
+		j.tn16.Deserialize(data, v)
+		return nil
 	case *uint32:
-		return j.tn32.Deserialize(data, v)
+		j.tn32.Deserialize(data, v)
+		return nil
 	case *uint64:
-		return j.tn64.Deserialize(data, v)
+		j.tn64.Deserialize(data, v)
+		return nil
 	default:
 		return fmt.Errorf(unsupportedType, v)
 	}

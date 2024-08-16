@@ -18,13 +18,11 @@ func (j *TrivialNatural[T]) Serialize(x T, l uint8) []byte {
 }
 
 // Deserialize deserializes a byte slice into the provided unsigned integer type.
-func (j *TrivialNatural[T]) Deserialize(serialized []byte, u *T) error {
+func (j *TrivialNatural[T]) Deserialize(serialized []byte, u *T) {
 	*u = 0
 
 	// Iterate over each byte in the serialized array
 	for i := 0; i < len(serialized); i++ {
 		*u |= T(serialized[i]) << (8 * i)
 	}
-
-	return nil
 }
