@@ -4,7 +4,8 @@ import (
 	"math"
 )
 
-// TrivialNatural implements the formula 273 (subscripted by the number of octets of the final sequence)
+// TrivialNatural implements the trivial integer formula
+// (This is utilized for almost all integer encoding across the protocol)
 type TrivialNatural[T uint8 | uint16 | uint32 | uint64] struct{}
 
 // Serialize serializes any unsigned integer type into a byte slice.

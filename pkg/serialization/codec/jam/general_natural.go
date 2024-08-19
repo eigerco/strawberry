@@ -6,7 +6,7 @@ import (
 	"math/bits"
 )
 
-// GeneralNatural implements the formula (275: able to encode naturals of up to 2^64)
+// GeneralNatural implements the formula (able to encode naturals of up to 2^64)
 type GeneralNatural struct{}
 
 func (j *GeneralNatural) SerializeUint64(x uint64) []byte {
