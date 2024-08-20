@@ -9,97 +9,71 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestEncodeDecodeTrivialUint8(t *testing.T) {
-	tn := TrivialNatural[uint8]{}
+func TestSerializationTrivialNatural(t *testing.T) {
 	testCases := []struct {
-		x        uint8
+		x        any
 		l        uint8
 		expected []byte
 	}{
-		{0, 1, []byte{0}},
-		{1, 3, []byte{1, 0, 0}},
-		{math.MaxInt8, 4, []byte{127, 0, 0, 0}},
-		{math.MaxUint8, 2, []byte{255, 0}},
+		{uint8(0), 1, []byte{0}},
+		{uint8(1), 3, []byte{1, 0, 0}},
+		{uint8(math.MaxInt8), 4, []byte{127, 0, 0, 0}},
+		{uint8(math.MaxUint8), 2, []byte{255, 0}},
+		{uint16(0), 1, []byte{0}},
+		{uint16(math.MaxUint16), 2, []byte{255, 255}},
+		{uint32(0), 1, []byte{0}},
+		{uint32(1), 3, []byte{1, 0, 0}},
+		{uint32(math.MaxInt8), 4, []byte{127, 0, 0, 0}},
+		{uint32(128), 1, []byte{128}},
+		{uint32(math.MaxUint8), 3, []byte{255, 0, 0}},
+		{uint32(256), 2, []byte{0, 1}},
+		{uint32(1023), 3, []byte{255, 3, 0}},
+		{uint32(1024), 2, []byte{0, 4}},
+		{uint32(16383), 4, []byte{255, 63, 0, 0}},
+		{uint32(math.MaxUint16), 3, []byte{255, 255, 0}},
+		{uint32(math.MaxUint32), 4, []byte{255, 255, 255, 255}},
+		{uint64(0), 4, []byte{0, 0, 0, 0}},
+		{uint64(1), 3, []byte{1, 0, 0}},
+		{uint64(math.MaxUint16), 3, []byte{255, 255, 0}},
+		{uint64(math.MaxUint32), 6, []byte{255, 255, 255, 255, 0, 0}},
+		{uint64(math.MaxUint64), 8, []byte{255, 255, 255, 255, 255, 255, 255, 255}},
 	}
-
-	testEncodeDecodeTrivialUint(t, tn, testCases)
-}
-
-func TestEncodeDecodeTrivialUint16(t *testing.T) {
-	tn := TrivialNatural[uint16]{}
-	testCases := []struct {
-		x        uint16
-		l        uint8
-		expected []byte
-	}{
-		{0, 1, []byte{0}},
-		{math.MaxUint16, 2, []byte{255, 255}},
-	}
-
-	testEncodeDecodeTrivialUint(t, tn, testCases)
-}
-
-func TestEncodeDecodeTrivialUint32(t *testing.T) {
-	tn := TrivialNatural[uint32]{}
-	testCases := []struct {
-		x        uint32
-		l        uint8
-		expected []byte
-	}{
-		{0, 1, []byte{0}},
-		{1, 3, []byte{1, 0, 0}},
-		{math.MaxInt8, 4, []byte{127, 0, 0, 0}},
-		{128, 1, []byte{128}},
-		{math.MaxUint8, 3, []byte{255, 0, 0}},
-		{256, 2, []byte{0, 1}},
-		{1023, 3, []byte{255, 3, 0}},
-		{1024, 2, []byte{0, 4}},
-		{16383, 4, []byte{255, 63, 0, 0}},
-		{math.MaxUint16, 3, []byte{255, 255, 0}},
-		{math.MaxUint32, 4, []byte{255, 255, 255, 255}},
-	}
-
-	testEncodeDecodeTrivialUint(t, tn, testCases)
-}
-
-func TestEncodeDecodeTrivialUint64(t *testing.T) {
-	tn := TrivialNatural[uint64]{}
-	testCases := []struct {
-		x        uint64
-		l        uint8
-		expected []byte
-	}{
-		{0, 4, []byte{0, 0, 0, 0}},
-		{1, 3, []byte{1, 0, 0}},
-		{math.MaxUint16, 3, []byte{255, 255, 0}},
-		{math.MaxUint32, 6, []byte{255, 255, 255, 255, 0, 0}},
-		{math.MaxUint64, 8, []byte{255, 255, 255, 255, 255, 255, 255, 255}},
-	}
-
-	testEncodeDecodeTrivialUint(t, tn, testCases)
-}
-
-func testEncodeDecodeTrivialUint[T uint8 | uint16 | uint32 | uint64](t *testing.T, tn TrivialNatural[T], testCases []struct {
-	x        T
-	l        uint8
-	expected []byte
-}) {
-	typeName := reflect.TypeOf(*new(T)).Name()
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("%s(%v)", typeName, tc.x), func(t *testing.T) {
-			// Marshal the x value
-			serialized := tn.Serialize(tc.x, tc.l)
+		testName := fmt.Sprintf("%s_%v", reflect.TypeOf(tc.x).Name(), tc.x)
+		t.Run(testName, func(t *testing.T) {
+			var serialized []byte
+			switch v := tc.x.(type) {
+			case uint8:
+				serialized = SerializeTrivialNatural(v, tc.l)
+			case uint16:
+				serialized = SerializeTrivialNatural(v, tc.l)
+			case uint32:
+				serialized = SerializeTrivialNatural(v, tc.l)
+			case uint64:
+				serialized = SerializeTrivialNatural(v, tc.l)
+			}
 
-			// Check if the serialized output matches the expected output
-			assert.Equal(t, tc.expected, serialized, "serialized output mismatch for x %v", tc.x)
+			assert.Equal(t, tc.expected, serialized, "serialized output mismatch")
 
-			// Unmarshal the serialized data back into the type T
-			var deserialized T
-			tn.Deserialize(serialized, &deserialized)
-
-			// Check if the deserialized value matches the original x
-			assert.Equal(t, tc.x, deserialized, "deserialized value mismatch for x %v", tc.x)
+			switch v := tc.x.(type) {
+			case uint8:
+				var deserialized uint8
+				DeserializeTrivialNatural(serialized, &deserialized)
+				assert.Equal(t, v, deserialized, "deserialized value mismatch")
+			case uint16:
+				var deserialized uint16
+				DeserializeTrivialNatural(serialized, &deserialized)
+				assert.Equal(t, v, deserialized, "deserialized value mismatch")
+			case uint32:
+				var deserialized uint32
+				DeserializeTrivialNatural(serialized, &deserialized)
+				assert.Equal(t, v, deserialized, "deserialized value mismatch")
+			case uint64:
+				var deserialized uint64
+				DeserializeTrivialNatural(serialized, &deserialized)
+				assert.Equal(t, v, deserialized, "deserialized value mismatch")
+			}
 		})
 	}
 }

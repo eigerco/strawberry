@@ -45,7 +45,7 @@ func Test_HeaderEncodeDecode(t *testing.T) {
 		VRFSignature:       randomSignature(t),
 		BlockSealSignature: randomSignature(t),
 	}
-	serializer := serialization.NewSerializer(&codec.SCALECodec{})
+	serializer := serialization.NewSerializer[uint64](&codec.SCALECodec[uint64]{})
 	bb, err := serializer.Encode(h)
 	if err != nil {
 		t.Fatal(err)
