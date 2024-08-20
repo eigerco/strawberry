@@ -15,12 +15,15 @@ func TestSerializationTrivialNatural(t *testing.T) {
 		l        uint8
 		expected []byte
 	}{
+		{uint8(1), 0, []byte{}},
 		{uint8(0), 1, []byte{0}},
 		{uint8(1), 3, []byte{1, 0, 0}},
 		{uint8(math.MaxInt8), 4, []byte{127, 0, 0, 0}},
 		{uint8(math.MaxUint8), 2, []byte{255, 0}},
+		{uint16(0), 0, []byte{}},
 		{uint16(0), 1, []byte{0}},
 		{uint16(math.MaxUint16), 2, []byte{255, 255}},
+		{uint32(0), 0, []byte{}},
 		{uint32(0), 1, []byte{0}},
 		{uint32(1), 3, []byte{1, 0, 0}},
 		{uint32(math.MaxInt8), 4, []byte{127, 0, 0, 0}},
@@ -32,6 +35,7 @@ func TestSerializationTrivialNatural(t *testing.T) {
 		{uint32(16383), 4, []byte{255, 63, 0, 0}},
 		{uint32(math.MaxUint16), 3, []byte{255, 255, 0}},
 		{uint32(math.MaxUint32), 4, []byte{255, 255, 255, 255}},
+		{uint64(math.MaxUint64), 0, []byte{}},
 		{uint64(0), 4, []byte{0, 0, 0, 0}},
 		{uint64(1), 3, []byte{1, 0, 0}},
 		{uint64(math.MaxUint16), 3, []byte{255, 255, 0}},
@@ -55,6 +59,11 @@ func TestSerializationTrivialNatural(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.expected, serialized, "serialized output mismatch")
+
+			// Skip deserialization if l == 0
+			if tc.l == 0 {
+				return
+			}
 
 			switch v := tc.x.(type) {
 			case uint8:
