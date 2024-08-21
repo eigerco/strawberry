@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"math"
 	"testing"
 
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -48,6 +49,30 @@ func TestEncodeDecodeSlice(t *testing.T) {
 
 	// Check if the deserialized value matches the original input
 	assert.Equal(t, input, deserialized, "deserialized value mismatch for input %d", input)
+}
+
+func TestEncodeDecodeLargeSlice(t *testing.T) {
+	j := JAMCodec[uint64]{}
+	// Create a large input slice
+	input := make([]byte, math.MaxUint16) // 65536 elements, requires multiple bytes to encode the length
+	for i := 0; i < len(input); i++ {
+		input[i] = byte(i % 256)
+	}
+
+	serialized, err := j.Marshal(input)
+	require.NoError(t, err)
+
+	var deserialized []byte
+	err = j.Unmarshal(serialized, &deserialized)
+	require.NoError(t, err, "unmarshal(%v) returned an unexpected error", serialized)
+
+	assert.Equal(t, input, deserialized, "deserialized value mismatch for input %d", input)
+
+	var length uint64
+	err = j.gn.DeserializeUint64(serialized, &length)
+	require.NoError(t, err)
+
+	assert.Equal(t, uint64(len(input)), length, "deserialized length mismatch")
 }
 
 func TestEncodeDecodeArray(t *testing.T) {

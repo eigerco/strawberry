@@ -5,8 +5,7 @@ import (
 )
 
 var (
-	// errFirstByteNineByteSerialization is returned when the first byte has wrong value in 9-byte serialization
-	errFirstByteNineByteSerialization = errors.New("expected first byte to be 255 for 9-byte serialization")
+	errNotEnoughBytesToDeserializeNumber = errors.New("not enough bytes to deserialize the number")
 
 	ErrEmptyData       = errors.New("empty data")
 	ErrNonPointerOrNil = errors.New("value must be a not-nil pointer")

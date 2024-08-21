@@ -102,26 +102,40 @@ func (j *JAMCodec[T]) decodeBool(data []byte, elem reflect.Value) error {
 	return nil
 }
 
-// encodeByteSlice encodes a byte slice or array into a byte slice with a prefixed length.
+// encodeByteSlice encodes a byte slice or array into a byte slice with a serialized length.
 func (j *JAMCodec[T]) encodeByteSlice(val reflect.Value) ([]byte, error) {
 	byteSlice, err := j.toByteSlice(val)
 	if err != nil {
 		return nil, err
 	}
-	// Prepend the length to the byte slice
-	result := append([]byte{byte(len(byteSlice))}, byteSlice...)
+
+	// Serialize the length using SerializeUint64
+	lengthBytes := j.gn.SerializeUint64(uint64(len(byteSlice)))
+
+	// Prepend the serialized length to the byte slice
+	result := append(lengthBytes, byteSlice...)
 	return result, nil
 }
 
 // decodeByteSlice decodes a byte slice or array from the given byte slice.
 func (j *JAMCodec[T]) decodeByteSlice(data []byte, elem reflect.Value) error {
-	length := int(data[0])
-
-	if len(data)-1 < length {
-		return fmt.Errorf(jam.ErrDataLengthMismatch, length, len(data)-1)
+	// Deserialize the length using the first part of the data
+	var length uint64
+	err := j.gn.DeserializeUint64(data, &length)
+	if err != nil {
+		return err
 	}
 
-	extractedData := data[len(data)-length:]
+	// Calculate how many bytes were used to represent the length
+	lengthBytesCount := len(j.gn.SerializeUint64(length))
+
+	// Check if the remaining data has the expected length
+	if len(data)-lengthBytesCount < int(length) {
+		return fmt.Errorf(jam.ErrDataLengthMismatch, length, len(data)-lengthBytesCount)
+	}
+
+	// Extract the actual data based on the deserialized length
+	extractedData := data[lengthBytesCount : lengthBytesCount+int(length)]
 
 	if elem.Kind() == reflect.Slice {
 		elem.SetBytes(extractedData)

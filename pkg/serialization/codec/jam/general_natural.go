@@ -42,10 +42,7 @@ func (j *GeneralNatural) DeserializeUint64(serialized []byte, u *uint64) error {
 		return nil
 	}
 
-	if n > 8 {
-		if serialized[0] != math.MaxUint8 {
-			return errFirstByteNineByteSerialization
-		}
+	if serialized[0] == math.MaxUint8 && n > 8 {
 		*u = binary.LittleEndian.Uint64(serialized[1:9])
 		return nil
 	}
@@ -53,6 +50,9 @@ func (j *GeneralNatural) DeserializeUint64(serialized []byte, u *uint64) error {
 	prefix := serialized[0]
 	l := uint8(bits.LeadingZeros8(^prefix))
 
+	if int(l) > n-1 {
+		return errNotEnoughBytesToDeserializeNumber
+	}
 	// Deserialize the first `l` bytes
 	for i := uint8(0); i < l; i++ {
 		*u |= uint64(serialized[i+1]) << (8 * i)
