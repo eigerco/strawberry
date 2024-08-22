@@ -1,10 +1,12 @@
 package polkavm
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"math/bits"
 )
 
@@ -30,33 +32,44 @@ const (
 	VmMaximumJumpTableEntries uint32 = 16 * 1024 * 1024
 	VmMaximumImportCount      uint32 = 1024 // The maximum number of functions the program can import.
 	VmMaximumCodeSize         uint32 = 32 * 1024 * 1024
+	VmCodeAddressAlignment    uint32 = 2
+	BitmaskMax                       = 24
 )
 
-type ProgramParts struct {
+type Program struct {
 	RODataSize             uint32
 	RWDataSize             uint32
 	StackSize              uint32
 	ROData                 []byte
 	RWData                 []byte
-	JumpTableEntrySize     byte
-	JumpTable              []byte
-	Code                   []byte
-	Bitmask                []byte
-	ImportOffsets          []byte
-	ImportSymbols          []byte
-	Exports                []byte
+	JumpTable              []uint32
+	Instructions           []Instruction
+	Imports                []string
+	Exports                []ProgramExport
 	DebugStrings           []byte
 	DebugLineProgramRanges []byte
 	DebugLinePrograms      []byte
 }
 
-func ParseBlob(r *Reader) (pp *ProgramParts, err error) {
+type ProgramExport struct {
+	TargetCodeOffset uint32
+	Symbol           string
+}
+
+type Instruction struct {
+	Code   InstructionCode
+	Imm    []uint32
+	Reg    []Reg
+	Offset uint32
+	Length uint32
+}
+
+func ParseBlob(r *Reader) (pp *Program, err error) {
 	magic := make([]byte, len(BlobMagic))
-	_, err = r.Read(magic)
-	if err != nil {
+	if _, err = r.Read(magic); err != nil {
 		return nil, err
 	}
-	if [len(BlobMagic)]byte(magic) != BlobMagic {
+	if !bytes.Equal(magic, BlobMagic[:]) {
 		return pp, fmt.Errorf("blob doesn't start with the expected magic bytes")
 	}
 	blobVersion, err := r.ReadByte()
@@ -67,154 +80,69 @@ func ParseBlob(r *Reader) (pp *ProgramParts, err error) {
 		return pp, fmt.Errorf("unsupported version: %d", blobVersion)
 	}
 
-	pp = &ProgramParts{}
+	pp = &Program{}
 	section, err := r.ReadByte()
 	if err != nil {
 		return nil, err
 	}
 	if section == SectionMemoryConfig {
-		secLen, err := r.ReadVarint()
-		if err != nil {
-			return nil, err
-		}
-		pos := r.Position()
-
-		if pp.RODataSize, err = r.ReadVarint(); err != nil {
-			return nil, err
-		}
-		if pp.RWDataSize, err = r.ReadVarint(); err != nil {
-			return nil, err
-		}
-		if pp.StackSize, err = r.ReadVarint(); err != nil {
-			return nil, err
-		}
-		if pos+int64(secLen) != r.Position() {
-			return pp, fmt.Errorf("the memory config section contains more data than expected %v %v", pos+int64(secLen), r.Position())
-		}
-		section, err = r.ReadByte()
-		if err != nil {
+		if section, err = parseMemoryConfig(r, pp); err != nil {
 			return nil, err
 		}
 	}
 	if section == SectionROData {
-		if section, pp.ROData, err = r.ReadSection(); err != nil {
+		if pp.ROData, err = r.ReadWithLength(); err != nil {
 			return nil, err
-		}
-	}
-	if section == SectionRWData {
-		if section, pp.RWData, err = r.ReadSection(); err != nil {
-			return nil, err
-		}
-	}
-	if section == SectionImports {
-		secLen, err := r.ReadVarint()
-		if err != nil {
-			return nil, err
-		}
-		posStart := r.Position()
-		importCount, err := r.ReadVarint()
-		if err != nil {
-			return nil, err
-		}
-		if importCount > VmMaximumImportCount {
-			return pp, fmt.Errorf("too many imports")
-		}
-		//TODO check for underflow and overflow?
-		importOffsetsSize := importCount * 4
-		pp.ImportOffsets = make([]byte, importOffsetsSize)
-		_, err = r.Read(pp.ImportOffsets)
-		if err != nil {
-			return nil, err
-		}
-
-		//TODO check for underflow?
-		importSymbolsSize := secLen - uint32(r.Position()-posStart)
-		pp.ImportSymbols = make([]byte, importSymbolsSize)
-		_, err = r.Read(pp.ImportSymbols)
-		if err != nil {
-			return nil, err
-		}
-		section, err = r.ReadByte()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if section == SectionExports {
-		if section, pp.Exports, err = r.ReadSection(); err != nil {
-			return nil, err
-		}
-	}
-	if section == SectionCodeAndJumpTable {
-		secLen, err := r.ReadVarint()
-		if err != nil {
-			return nil, err
-		}
-		initialPosition := r.Position()
-		jumpTableEntryCount, err := r.ReadVarint()
-		if err != nil {
-			return nil, err
-		}
-		if jumpTableEntryCount > VmMaximumJumpTableEntries {
-			return nil, fmt.Errorf("the jump table section is too long")
-		}
-		jumpTableEntrySize, err := r.ReadByte()
-		if err != nil {
-			return nil, err
-		}
-		codeLength, err := r.ReadVarint()
-		if err != nil {
-			return nil, err
-		}
-		if codeLength > VmMaximumCodeSize {
-			return nil, fmt.Errorf("the code section is too long")
-		}
-		if jumpTableEntrySize > 4 {
-			return nil, fmt.Errorf("invalid jump table entry size")
-		}
-
-		//TODO check for underflow and overflow?
-		jumpTableLength := jumpTableEntryCount * uint32(jumpTableEntrySize)
-		pp.JumpTableEntrySize = jumpTableEntrySize
-
-		pp.JumpTable = make([]byte, jumpTableLength)
-		if _, err = r.Read(pp.JumpTable); err != nil {
-			return nil, err
-		}
-		pp.Code = make([]byte, codeLength)
-		if _, err = r.Read(pp.Code); err != nil {
-			return nil, err
-		}
-
-		bitmaskLength := secLen - uint32(r.Position()-initialPosition)
-		pp.Bitmask = make([]byte, bitmaskLength)
-		if _, err = r.Read(pp.Bitmask); err != nil {
-			return nil, err
-		}
-		expectedBitmaskLength := codeLength / 8
-		if codeLength%8 != 0 {
-			expectedBitmaskLength += 1
-		}
-
-		if bitmaskLength != expectedBitmaskLength {
-			return nil, fmt.Errorf("the bitmask length doesn't match the code length")
 		}
 		if section, err = r.ReadByte(); err != nil {
 			return nil, err
 		}
 	}
+	if section == SectionRWData {
+		if pp.RWData, err = r.ReadWithLength(); err != nil {
+			return nil, err
+		}
+		if section, err = r.ReadByte(); err != nil {
+			return nil, err
+		}
+	}
+	if section == SectionImports {
+		if section, err = parseImports(r, pp); err != nil {
+			return nil, err
+		}
+	}
+
+	if section == SectionExports {
+		if section, err = parseExports(r, pp); err != nil {
+			return nil, err
+		}
+	}
+	if section == SectionCodeAndJumpTable {
+		if section, err = parseCodeAndJumpTable(r, pp); err != nil {
+			return nil, err
+		}
+	}
 	if section == SectionOptDebugStrings {
-		if section, pp.DebugStrings, err = r.ReadSection(); err != nil {
+		if pp.DebugStrings, err = r.ReadWithLength(); err != nil {
+			return nil, err
+		}
+		if section, err = r.ReadByte(); err != nil {
 			return nil, err
 		}
 	}
 	if section == SectionOptDebugLinePrograms {
-		if section, pp.DebugLinePrograms, err = r.ReadSection(); err != nil {
+		if pp.DebugLinePrograms, err = r.ReadWithLength(); err != nil {
+			return nil, err
+		}
+		if section, err = r.ReadByte(); err != nil {
 			return nil, err
 		}
 	}
 	if section == SectionOptDebugLineProgramRanges {
-		if section, pp.DebugLineProgramRanges, err = r.ReadSection(); err != nil {
+		if pp.DebugLineProgramRanges, err = r.ReadWithLength(); err != nil {
+			return nil, err
+		}
+		if section, err = r.ReadByte(); err != nil {
 			return nil, err
 		}
 	}
@@ -242,31 +170,277 @@ func ParseBlob(r *Reader) (pp *ProgramParts, err error) {
 	return pp, nil
 }
 
+func parseMemoryConfig(r *Reader, p *Program) (byte, error) {
+	secLen, err := r.ReadVarint()
+	if err != nil {
+		return 0, err
+	}
+	pos := r.Position()
+
+	if p.RODataSize, err = r.ReadVarint(); err != nil {
+		return 0, err
+	}
+	if p.RWDataSize, err = r.ReadVarint(); err != nil {
+		return 0, err
+	}
+	if p.StackSize, err = r.ReadVarint(); err != nil {
+		return 0, err
+	}
+	if pos+int64(secLen) != r.Position() {
+		return 0, fmt.Errorf("the memory config section contains more data than expected %v %v", pos+int64(secLen), r.Position())
+	}
+
+	return r.ReadByte()
+}
+
+func parseImports(r *Reader, p *Program) (byte, error) {
+	secLen, err := r.ReadVarint()
+	if err != nil {
+		return 0, err
+	}
+	posStart := r.Position()
+	importCount, err := r.ReadVarint()
+	if err != nil {
+		return 0, err
+	}
+	if importCount > VmMaximumImportCount {
+		return 0, fmt.Errorf("too many imports")
+	}
+	//TODO check for underflow and overflow?
+	importOffsetsSize := importCount * 4
+	importOffsets := make([]byte, importOffsetsSize)
+	_, err = r.Read(importOffsets)
+	if err != nil {
+		return 0, err
+	}
+
+	//TODO check for underflow?
+	importSymbolsSize := secLen - uint32(r.Position()-posStart)
+	importSymbols := make([]byte, importSymbolsSize)
+	_, err = r.Read(importSymbols)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(importOffsets)%4 != 0 {
+		return 0, fmt.Errorf("invalid import offsets data: %d", len(importOffsets))
+	}
+	var offsets []uint32
+	for i := 0; i < len(importOffsets); i += 4 {
+		offsets = append(offsets, binary.BigEndian.Uint32(importOffsets[i:i+4]))
+	}
+	for i := 0; i < len(offsets); i += 2 {
+		if i+1 == len(offsets) {
+			p.Imports = append(p.Imports, string(importSymbols[offsets[i]:]))
+			continue
+		}
+		p.Imports = append(p.Imports, string(importSymbols[offsets[i]:offsets[i+1]]))
+	}
+
+	return r.ReadByte()
+}
+
+func parseCodeAndJumpTable(r *Reader, p *Program) (byte, error) {
+	secLen, err := r.ReadVarint()
+	if err != nil {
+		return 0, err
+	}
+	initialPosition := r.Position()
+	jumpTableEntryCount, err := r.ReadVarint()
+	if err != nil {
+		return 0, err
+	}
+	if jumpTableEntryCount > VmMaximumJumpTableEntries {
+		return 0, fmt.Errorf("the jump table section is too long")
+	}
+	jumpTableEntrySize, err := r.ReadByte()
+	if err != nil {
+		return 0, err
+	}
+	codeLength, err := r.ReadVarint()
+	if err != nil {
+		return 0, err
+	}
+	if codeLength > VmMaximumCodeSize {
+		return 0, fmt.Errorf("the code section is too long")
+	}
+	if jumpTableEntrySize > 4 {
+		return 0, fmt.Errorf("invalid jump table entry size")
+	}
+
+	//TODO check for underflow and overflow?
+	jumpTableLength := jumpTableEntryCount * uint32(jumpTableEntrySize)
+
+	jumpTable := make([]byte, jumpTableLength)
+	if _, err = r.Read(jumpTable); err != nil {
+		return 0, err
+	}
+	for i := 0; i < len(jumpTable); i += int(jumpTableEntrySize) {
+		switch jumpTableEntrySize {
+		case 1:
+			p.JumpTable = append(p.JumpTable, uint32(jumpTable[i]))
+		case 2:
+			p.JumpTable = append(p.JumpTable, uint32(binary.BigEndian.Uint16(jumpTable[i:i+2])))
+		case 3:
+			p.JumpTable = append(p.JumpTable, binary.BigEndian.Uint32(
+				[]byte{jumpTable[i], jumpTable[i+1], jumpTable[i+2], 0},
+			))
+		case 4:
+			p.JumpTable = append(p.JumpTable, binary.BigEndian.Uint32(jumpTable[i:i+int(jumpTableEntrySize)]))
+		default:
+			panic("unreachable")
+		}
+	}
+
+	code := make([]byte, codeLength)
+	if _, err = r.Read(code); err != nil {
+		return 0, err
+	}
+
+	bitmaskLength := secLen - uint32(r.Position()-initialPosition)
+	bitmask := make([]byte, bitmaskLength)
+	if _, err = r.Read(bitmask); err != nil {
+		return 0, err
+	}
+	expectedBitmaskLength := codeLength / 8
+	if codeLength%8 != 0 {
+		expectedBitmaskLength += 1
+	}
+
+	if bitmaskLength != expectedBitmaskLength {
+		return 0, fmt.Errorf("the bitmask Length doesn't match the code Length")
+	}
+
+	offset := 0
+	for offset < len(code) {
+		nextOffset, instr, err := parseInstruction(code, bitmask, offset)
+		if err != nil {
+			return 0, err
+		}
+		p.Instructions = append(p.Instructions, instr)
+		offset = nextOffset
+	}
+	return r.ReadByte()
+}
+
+func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruction, error) {
+	if len(bitmask) == 0 {
+		return 0, Instruction{}, io.EOF
+	}
+
+	if (instructionOffset+1>>3)+4 < len(bitmask) {
+		nextOffset, argsLength := parseBitmaskFast(bitmask, instructionOffset)
+		chunk := code[instructionOffset:min(instructionOffset+32, len(code))]
+		opcode := InstructionCode(chunk[0])
+		intChunk := big.NewInt(0).SetBytes(chunk[1:16])
+		return nextOffset, decodeTable[opcode](intChunk, uint32(instructionOffset), uint32(argsLength)), nil
+	}
+	nextOffset, argsLength := parseBitmaskSlow(bitmask, instructionOffset)
+	chunk := code[instructionOffset : instructionOffset+min(16, argsLength+1)]
+	opcode := InstructionCode(chunk[0])
+	intChunk := big.NewInt(0).SetBytes(chunk)
+	return nextOffset, decodeTable[opcode](intChunk, uint32(instructionOffset), uint32(argsLength)), nil
+}
+
+func parseBitmaskFast(bitmask []byte, offset int) (int, int) {
+	offset += 1
+	shift := offset & 7
+	fmt.Printf("bitmask: %v %v %v\n", offset, shift, bitmask)
+	mask := (binary.LittleEndian.Uint32(bitmask[offset>>3:(offset>>3)+4]) >> shift) | (1 << BitmaskMax)
+	argsLength := bits.TrailingZeros32(mask)
+	if argsLength > BitmaskMax {
+		panic("args Length too big")
+	}
+	offset += argsLength
+
+	return offset, argsLength
+}
+
+func parseBitmaskSlow(bitmask []byte, offset int) (int, int) {
+	offset += 1
+	argsLength := 0
+	for offset>>3 < len(bitmask) {
+		b := bitmask[offset>>3]
+		shift := offset & 7
+		mask := b >> shift
+		length := 0
+		if mask == 0 {
+			length = 8 - shift
+		} else {
+			length = bits.TrailingZeros(uint(mask))
+			if length == 0 {
+				break
+			}
+		}
+
+		newArgsLength := argsLength + length
+		if newArgsLength >= BitmaskMax {
+			offset += BitmaskMax - argsLength
+			argsLength = BitmaskMax
+			break
+		}
+
+		argsLength = newArgsLength
+		offset += length
+	}
+
+	return offset, argsLength
+}
+
+func parseExports(r *Reader, p *Program) (byte, error) {
+	var secLen uint32
+	secLen, err := r.ReadVarint()
+	if err != nil {
+		return 0, err
+	}
+	initialPosition := r.Position()
+	nr, err := r.ReadVarint()
+	if err != nil {
+		return 0, err
+	}
+	for i := 0; i < int(nr); i++ {
+		targetCodeOffset, err := r.ReadVarint()
+		if err != nil {
+			return 0, err
+		}
+		symbol, err := r.ReadWithLength()
+		if err != nil {
+			return 0, err
+		}
+
+		p.Exports = append(p.Exports, ProgramExport{
+			TargetCodeOffset: targetCodeOffset,
+			Symbol:           string(symbol),
+		})
+	}
+
+	if initialPosition+int64(secLen) != r.Position() {
+		return 0, fmt.Errorf("invalid exports section Length: %v", secLen)
+	}
+
+	return r.ReadByte()
+}
+
 func NewReader(r io.ReadSeeker) *Reader { return &Reader{r} }
 
 type Reader struct{ io.ReadSeeker }
 
-func (r *Reader) ReadSection() (section byte, bytes []byte, err error) {
-	var secLen uint32
-	secLen, err = r.ReadVarint()
+func (r *Reader) ReadWithLength() ([]byte, error) {
+	length, err := r.ReadVarint()
 	if err != nil {
-		return
+		return nil, err
 	}
-	bytes = make([]byte, secLen)
+	bytes := make([]byte, length)
 	if _, err = r.Read(bytes); err != nil {
-		return
+		return nil, err
 	}
-	section, err = r.ReadByte()
-	return
+	return bytes, nil
 }
 
 func (r *Reader) ReadByte() (byte, error) {
 	b := make([]byte, 1)
 	_, err := r.Read(b)
-	if err != nil {
-		return 0, err
-	}
-	return b[0], nil
+	return b[0], err
 }
 
 func (r *Reader) ReadVarint() (uint32, error) {
@@ -290,10 +464,12 @@ func (r *Reader) ReadVarint() (uint32, error) {
 		return upperBits | uint32(value[0]), nil
 	case 2:
 		return upperBits | uint32(binary.BigEndian.Uint16(value)), nil
-	case 3, 4:
+	case 3:
+		return upperBits | binary.BigEndian.Uint32([]byte{value[0], value[1], value[2], 0}), nil
+	case 4:
 		return upperBits | binary.BigEndian.Uint32(value), nil
 	default:
-		return 0, fmt.Errorf("invalid variant length: %d", n)
+		return 0, fmt.Errorf("invalid varint Length: %d", n)
 	}
 }
 
