@@ -6,10 +6,8 @@ import (
 	"math/bits"
 )
 
-// GeneralNatural implements the formula (able to encode naturals of up to 2^64)
-type GeneralNatural struct{}
-
-func (j *GeneralNatural) SerializeUint64(x uint64) []byte {
+// SerializeUint64 implements the general formula (able to encode naturals of up to 2^64)
+func SerializeUint64(x uint64) []byte {
 	var l uint8
 	// Determine the length needed to represent the value
 	for l = 0; l < 8; l++ {
@@ -34,7 +32,7 @@ func (j *GeneralNatural) SerializeUint64(x uint64) []byte {
 }
 
 // DeserializeUint64 deserializes a byte slice into a uint64 value.
-func (j *GeneralNatural) DeserializeUint64(serialized []byte, u *uint64) error {
+func DeserializeUint64(serialized []byte, u *uint64) error {
 	*u = 0
 
 	n := len(serialized)
