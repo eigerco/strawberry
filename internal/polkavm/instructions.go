@@ -1,8 +1,7 @@
 package polkavm
 
 import (
-	"fmt"
-	"math/big"
+	"encoding/binary"
 )
 
 type InstructionCode byte
@@ -162,9 +161,7 @@ const (
 	A5 Reg = 12
 )
 
-type RawReg uint32
-
-func (v RawReg) get() Reg {
+func parseReg(v byte) Reg {
 	value := v & 0b1111
 	if value > 12 {
 		value = 12
@@ -209,329 +206,186 @@ var (
 	// Instructions with args: reg, imm, offset
 	instrRegImmOffset = []InstructionCode{LoadImmAndJump, BranchEqImm, BranchNotEqImm, BranchLessUnsignedImm, BranchLessSignedImm, BranchGreaterOrEqualUnsignedImm, BranchGreaterOrEqualSignedImm, BranchLessOrEqualSignedImm, BranchLessOrEqualUnsignedImm, BranchGreaterSignedImm, BranchGreaterUnsignedImm}
 	// Instructions with args: reg, imm, imm
-	instrRegImmImm = []InstructionCode{StoreImmIndirectU8, StoreImmIndirectU16, StoreImmIndirectU32}
+	instrRegImm2 = []InstructionCode{StoreImmIndirectU8, StoreImmIndirectU16, StoreImmIndirectU32}
 	// Instructions with args: reg, reg, imm
-	instrRegRegImm = []InstructionCode{StoreIndirectU8, StoreIndirectU16, StoreIndirectU32, LoadIndirectU8, LoadIndirectI8, LoadIndirectU16, LoadIndirectI16, LoadIndirectU32, AddImm, AndImm, XorImm, OrImm, MulImm, MulUpperSignedSignedImm, MulUpperUnsignedUnsignedImm, SetLessThanUnsignedImm, SetLessThanSignedImm, ShiftLogicalLeftImm, ShiftLogicalRightImm, ShiftArithmeticRightImm, NegateAndAddImm, SetGreaterThanUnsignedImm, SetGreaterThanSignedImm, ShiftLogicalRightImmAlt, ShiftArithmeticRightImmAlt, ShiftLogicalLeftImmAlt, CmovIfZeroImm, CmovIfNotZeroImm}
+	instrReg2Imm = []InstructionCode{StoreIndirectU8, StoreIndirectU16, StoreIndirectU32, LoadIndirectU8, LoadIndirectI8, LoadIndirectU16, LoadIndirectI16, LoadIndirectU32, AddImm, AndImm, XorImm, OrImm, MulImm, MulUpperSignedSignedImm, MulUpperUnsignedUnsignedImm, SetLessThanUnsignedImm, SetLessThanSignedImm, ShiftLogicalLeftImm, ShiftLogicalRightImm, ShiftArithmeticRightImm, NegateAndAddImm, SetGreaterThanUnsignedImm, SetGreaterThanSignedImm, ShiftLogicalRightImmAlt, ShiftArithmeticRightImmAlt, ShiftLogicalLeftImmAlt, CmovIfZeroImm, CmovIfNotZeroImm}
 	// Instructions with args: reg, reg, offset
-	instrRegRegOffset = []InstructionCode{BranchEq, BranchNotEq, BranchLessUnsigned, BranchLessSigned, BranchGreaterOrEqualUnsigned, BranchGreaterOrEqualSigned}
+	instrReg2Offset = []InstructionCode{BranchEq, BranchNotEq, BranchLessUnsigned, BranchLessSigned, BranchGreaterOrEqualUnsigned, BranchGreaterOrEqualSigned}
 	// Instructions with args: reg, reg, reg
-	instrRegRegReg = []InstructionCode{Add, Sub, And, Xor, Or, Mul, MulUpperSignedSigned, MulUpperUnsignedUnsigned, MulUpperSignedUnsigned, SetLessThanUnsigned, SetLessThanSigned, ShiftLogicalLeft, ShiftLogicalRight, ShiftArithmeticRight, DivUnsigned, DivSigned, RemUnsigned, RemSigned, CmovIfZero, CmovIfNotZero}
+	instrReg3 = []InstructionCode{Add, Sub, And, Xor, Or, Mul, MulUpperSignedSigned, MulUpperUnsignedUnsigned, MulUpperSignedUnsigned, SetLessThanUnsigned, SetLessThanSigned, ShiftLogicalLeft, ShiftLogicalRight, ShiftArithmeticRight, DivUnsigned, DivSigned, RemUnsigned, RemSigned, CmovIfZero, CmovIfNotZero}
 	// Instructions with args: offset
 	instrOffset = []InstructionCode{Jump}
 	// Instructions with args: imm
 	instrImm = []InstructionCode{Ecalli}
 	// Instructions with args: imm, imm
-	instrImmImm = []InstructionCode{StoreImmU8, StoreImmU16, StoreImmU32}
+	instrImm2 = []InstructionCode{StoreImmU8, StoreImmU16, StoreImmU32}
 	// Instructions with args: reg, reg
 	instrRegReg = []InstructionCode{MoveReg, Sbrk}
 	// Instructions with args: reg, reg, imm, imm
-	instrRegRegImmImm = []InstructionCode{LoadImmAndJumpIndirect}
+	instrReg2Imm2 = []InstructionCode{LoadImmAndJumpIndirect}
 )
 
-type LookupTable [256]LookupEntry
+type InstrParseArgFunc func(chunk []byte, instructionOffset, argsLength uint32) ([]Reg, []uint32)
 
-type LookupEntry uint32
-
-func (t *LookupTable) get(skip uint32, aux uint32) (uint32, uint32, uint32) {
-	index := getLookupIndex(skip, aux)
-	return unpack(t[index])
-}
-
-func pack(imm1Bits uint32, imm1Skip uint32, imm2Bits uint32) LookupEntry {
-	if imm1Bits > 0b111111 || imm2Bits > 0b111111 || imm1Skip > 0b111111 {
-		panic("imm value too big")
-	}
-	return LookupEntry((imm1Bits) | ((imm1Skip) << 6) | ((imm2Bits) << 12))
-}
-
-func unpack(entry LookupEntry) (uint32, uint32, uint32) {
-	return uint32(entry) & 0b111111, (uint32(entry) >> 6) & 0b111111, (uint32(entry) >> 12) & 0b111111
-}
-
-func getLookupIndex(skip uint32, aux uint32) uint32 {
-	if skip > 0b11111 {
-		panic("skip value too big")
-	}
-	index := skip | ((aux & 0b111) << 5)
-	if index > 0xff {
-		panic("index value too big")
-	}
-	return index
-}
-
-func BuildLookupTable(offset uint32) LookupTable {
-	clamp := func(start, end, value uint32) uint32 {
-		if value < start {
-			return start
-		} else if value > end {
-			return end
-		} else {
-			return value
-		}
-	}
-	cutoffForLen := func(length uint32) uint32 {
-		switch length {
-		case 0:
-			return 32
-		case 1:
-			return 24
-		case 2:
-			return 16
-		case 3:
-			return 8
-		case 4:
-			return 0
-		default:
-			panic(fmt.Sprintf("unreachable: %v", length))
-		}
-	}
-
-	output := LookupTable{}
-	var skip uint32 = 0
-	for skip <= 0b11111 {
-		var aux uint32 = 0
-		for aux <= 0b111 {
-			imm1Length := min(4, aux)
-			imm2Length := clamp(0, 4, skip-imm1Length-offset)
-			imm1Bits := cutoffForLen(imm1Length)
-			imm2Bits := cutoffForLen(imm2Length)
-			imm1Skip := imm1Length * 8
-
-			index := getLookupIndex(skip, aux)
-			output[index] = pack(imm1Bits, imm1Skip, imm2Bits)
-			aux += 1
-		}
-		skip += 1
-	}
-	return output
-}
-
-type VisitFn func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction
-
-var (
-	table1        = BuildLookupTable(1)
-	table2        = BuildLookupTable(2)
-	lengthToShift = [256]uint32{32, 24, 16, 8}
-	decodeTable   = map[InstructionCode]VisitFn{}
-)
+var parseArgsTable = map[InstructionCode]InstrParseArgFunc{}
 
 func init() {
 	for _, code := range instrNone {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			return Instruction{
-				Code:   code,
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+		parseArgsTable[code] = parseArgsNone
 	}
 	for _, code := range instrRegImm {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			reg, imm := readArgsRegImm(chunk, argsLength)
-			return Instruction{
-				Code:   code,
-				Imm:    []uint32{imm},
-				Reg:    []Reg{reg.get()},
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+		parseArgsTable[code] = parseArgsRegImm
 	}
 	for _, code := range instrRegImmOffset {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			reg, imm1, imm2 := readArgsRegImmOffset(chunk, instructionOffset, argsLength)
-			return Instruction{
-				Code:   code,
-				Imm:    []uint32{imm1, imm2},
-				Reg:    []Reg{reg.get()},
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+		parseArgsTable[code] = parseArgsRegImmOffset
 	}
-	for _, code := range instrRegImmImm {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			reg, imm1, imm2 := readArgsRegImm2(chunk, argsLength)
-			return Instruction{
-				Code:   code,
-				Imm:    []uint32{imm1, imm2},
-				Reg:    []Reg{reg.get()},
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+	for _, code := range instrRegImm2 {
+		parseArgsTable[code] = parseArgsRegImm2
 	}
-	for _, code := range instrRegRegImm {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			reg1, reg2, imm := readArgsRegs2Imm(chunk, argsLength)
-			return Instruction{
-				Code:   code,
-				Imm:    []uint32{imm},
-				Reg:    []Reg{reg1.get(), reg2.get()},
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+	for _, code := range instrReg2Imm {
+		parseArgsTable[code] = parseArgsRegs2Imm
 	}
-	for _, code := range instrRegRegOffset {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			reg1, reg2, imm := readArgsRegs2Offset(chunk, instructionOffset, argsLength)
-			return Instruction{
-				Code:   code,
-				Imm:    []uint32{imm},
-				Reg:    []Reg{reg1.get(), reg2.get()},
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+	for _, code := range instrReg2Offset {
+		parseArgsTable[code] = parseArgsRegs2Offset
 	}
-	for _, code := range instrRegRegReg {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			reg1, reg2, reg3 := readArgsRegs3(chunk)
-			return Instruction{
-				Code:   code,
-				Reg:    []Reg{reg1.get(), reg2.get(), reg3.get()},
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+	for _, code := range instrReg3 {
+		parseArgsTable[code] = parseArgsRegs3
 	}
 	for _, code := range instrOffset {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			imm := readArgsOffset(chunk, instructionOffset, argsLength)
-			return Instruction{
-				Code:   code,
-				Imm:    []uint32{imm},
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+		parseArgsTable[code] = parseArgsImmOffset
 	}
 	for _, code := range instrImm {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			imm := readArgsImm(chunk, argsLength)
-			return Instruction{
-				Code:   code,
-				Imm:    []uint32{imm},
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+		parseArgsTable[code] = parseArgsImm
 	}
-	for _, code := range instrImmImm {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			imm1, imm2 := readArgsImm2(chunk, argsLength)
-			return Instruction{
-				Code:   code,
-				Imm:    []uint32{imm1, imm2},
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+	for _, code := range instrImm2 {
+		parseArgsTable[code] = parseArgsImm2
 	}
 	for _, code := range instrRegReg {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			reg1, reg2 := readArgsRegs2(chunk)
-			return Instruction{
-				Code:   code,
-				Reg:    []Reg{reg1.get(), reg2.get()},
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+		parseArgsTable[code] = parseArgsRegs2
 	}
-	for _, code := range instrRegRegImmImm {
-		decodeTable[code] = func(chunk *big.Int, instructionOffset, argsLength uint32) Instruction {
-			reg1, reg2, imm1, imm2 := readArgsRegs2Imm2(chunk, argsLength)
-			return Instruction{
-				Code:   code,
-				Imm:    []uint32{imm1, imm2},
-				Reg:    []Reg{reg1.get(), reg2.get()},
-				Offset: instructionOffset,
-				Length: argsLength + 1,
-			}
-		}
+	for _, code := range instrReg2Imm2 {
+		parseArgsTable[code] = parseArgsRegs2Imm2
 	}
 }
 
-func signExtendAt(value uint32, bitsToCut uint32) uint32 {
-	return uint32(int32(uint32(uint64(value))<<bitsToCut) >> bitsToCut)
+func clamp(start, end, value uint32) uint32 {
+	if value < start {
+		return start
+	} else if value > end {
+		return end
+	} else {
+		return value
+	}
 }
 
-func readSimpleVarint(chunk uint32, length uint32) uint32 {
-	shift := lengthToShift[length]
-	return signExtendAt(chunk, shift)
+func sext(value uint32, length uint32) uint32 {
+	switch length {
+	case 0:
+		return 0
+	case 1:
+		return uint32(int32(int8(uint8(value))))
+	case 2:
+		return uint32(int32(int16(uint16(value))))
+	case 3:
+		return uint32((int32(value << 8)) >> 8)
+	case 4:
+		return value
+	default:
+		panic("unreachable")
+	}
+}
+func read(slice []byte, offset, length uint32) uint32 {
+	slice = slice[offset : offset+length]
+	switch length {
+	case 0:
+		return 0
+	case 1:
+		return uint32(slice[0])
+	case 2:
+		return uint32(binary.LittleEndian.Uint16(slice[:1])) // u16::from_le_bytes([slice[0], slice[1]]) as u32
+	case 3:
+		return binary.LittleEndian.Uint32([]byte{slice[0], slice[1], slice[2], 0})
+	case 4:
+		return binary.LittleEndian.Uint32([]byte{slice[0], slice[1], slice[2], slice[3]})
+	default:
+		panic("unreachable")
+	}
 }
 
-func readArgsImm(chunk *big.Int, skip uint32) uint32 {
-	return readSimpleVarint(uint32(chunk.Uint64()), skip)
+func parseArgsImm(code []byte, _, skip uint32) ([]Reg, []uint32) {
+	immLength := min(4, skip)
+	return nil, []uint32{sext(read(code, 0, immLength), immLength)}
 }
 
-func readArgsOffset(chunk *big.Int, instructionOffset uint32, skip uint32) uint32 {
-	return instructionOffset + readArgsImm(chunk, skip)
+func parseArgsImmOffset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32) {
+	_, imm := parseArgsImm(code, instructionOffset, skip)
+	return nil, []uint32{instructionOffset + imm[0]}
 }
 
-func readArgsImm2(chunk *big.Int, skip uint32) (uint32, uint32) {
-	imm1Bits, imm1Skip, imm2Bits := table1.get(skip, uint32(chunk.Uint64()))
-	chunk = chunk.Rsh(chunk, 8)
-	imm1 := signExtendAt(uint32(chunk.Uint64()), imm1Bits)
-	chunk = chunk.Rsh(chunk, uint(imm1Skip))
-	imm2 := signExtendAt(uint32(chunk.Uint64()), imm2Bits)
-	return imm1, imm2
+func parseArgsImm2(code []byte, _, skip uint32) ([]Reg, []uint32) {
+	imm1Length := min(4, uint32(code[0])&0b111)
+	imm2Length := clamp(0, 4, skip-imm1Length-1)
+	imm1 := sext(read(code, 1, imm1Length), imm1Length)
+	imm2 := sext(read(code, 1+imm1Length, imm2Length), imm2Length)
+	return nil, []uint32{imm1, imm2}
 }
 
-func readArgsRegImm(chunk *big.Int, skip uint32) (RawReg, uint32) {
-	reg := RawReg(chunk.Uint64())
-	chunk = chunk.Rsh(chunk, 8)
-	_, _, immBits := table1.get(skip, 0)
-	imm := signExtendAt(uint32(chunk.Uint64()), immBits)
-	return reg, imm
+func parseArgsNone(_ []byte, _, _ uint32) ([]Reg, []uint32) {
+	return nil, nil
 }
 
-func readArgsRegImm2(chunk *big.Int, skip uint32) (RawReg, uint32, uint32) {
-	reg := RawReg(chunk.Uint64())
-	imm1Bits, imm1Skip, imm2Bits := table1.get(skip, uint32(chunk.Uint64())>>4)
-	chunk = chunk.Rsh(chunk, 8)
-	imm1 := signExtendAt(uint32(chunk.Uint64()), imm1Bits)
-	chunk = chunk.Rsh(chunk, uint(imm1Skip))
-	imm2 := signExtendAt(uint32(chunk.Uint64()), imm2Bits)
-	return reg, imm1, imm2
+func parseArgsRegImm(code []byte, _, skip uint32) ([]Reg, []uint32) {
+	reg := min(12, code[0]&0b1111)
+	immLength := clamp(0, 4, skip-1)
+	imm := sext(read(code, 1, immLength), immLength)
+	return []Reg{parseReg(reg)}, []uint32{imm}
 }
 
-func readArgsRegImmOffset(chunk *big.Int, instructionOffset uint32, skip uint32) (RawReg, uint32, uint32) {
-	reg, imm1, imm2 := readArgsRegImm2(chunk, skip)
-	return reg, imm1, instructionOffset + imm2
+func parseArgsRegImmOffset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32) {
+	regs, imm := parseArgsRegImm2(code, instructionOffset, skip)
+	return regs, []uint32{imm[0], instructionOffset + imm[1]}
 }
 
-func readArgsRegs2Imm2(chunk *big.Int, skip uint32) (RawReg, RawReg, uint32, uint32) {
-	value := chunk.Uint64()
-	reg1, reg2, imm1Aux := RawReg(value), RawReg(value>>4), value>>8
-
-	imm1Bits, imm1Skip, imm2Bits := table2.get(skip, uint32(imm1Aux))
-	chunk = chunk.Rsh(chunk, 16)
-	imm1 := signExtendAt(uint32(chunk.Uint64()), imm1Bits)
-	chunk = chunk.Rsh(chunk, uint(imm1Skip))
-	return reg1, reg2, imm1, signExtendAt(uint32(chunk.Uint64()), imm2Bits)
+func parseArgsRegImm2(code []byte, _, skip uint32) ([]Reg, []uint32) {
+	reg := min(12, code[0]&0b1111)
+	imm1Length := min(4, uint32(code[0]>>4)&0b111)
+	imm2Length := clamp(0, 4, skip-imm1Length-1)
+	imm1 := sext(read(code, 1, imm1Length), imm1Length)
+	imm2 := sext(read(code, 1+imm1Length, imm2Length), imm2Length)
+	return []Reg{parseReg(reg)}, []uint32{imm1, imm2}
 }
 
-func readArgsRegs2Imm(chunk *big.Int, skip uint32) (RawReg, RawReg, uint32) {
-	chunk64 := chunk.Uint64()
-	value := uint32(chunk64)
-	_, _, immBits := table1.get(skip, 0)
-	return RawReg(value), RawReg(value >> 4), signExtendAt(uint32(chunk64>>8), immBits)
+func parseArgsRegs2Imm2(code []byte, _, skip uint32) ([]Reg, []uint32) {
+	reg1 := min(12, code[0]&0b1111)
+	reg2 := min(12, code[0]>>4)
+	imm1Length := min(4, uint32(code[1])&0b111)
+	imm2Length := clamp(0, 4, skip-imm1Length-2)
+	imm1 := sext(read(code, 2, imm1Length), imm1Length)
+	imm2 := sext(read(code, 2+imm1Length, imm2Length), imm2Length)
+	return []Reg{parseReg(reg1), parseReg(reg2)}, []uint32{imm1, imm2}
+}
+func parseArgsRegs2Imm(code []byte, _, skip uint32) ([]Reg, []uint32) {
+	immLength := clamp(0, 4, uint32(skip)-1)
+	imm := sext(read(code, 1, immLength), immLength)
+	return []Reg{
+		parseReg(min(12, code[0]&0b1111)),
+		parseReg(min(12, code[0]>>4)),
+	}, []uint32{imm}
 }
 
-func readArgsRegs2Offset(chunk *big.Int, instructionOffset uint32, skip uint32) (RawReg, RawReg, uint32) {
-	reg1, reg2, imm := readArgsRegs2Imm(chunk, skip)
-	return reg1, reg2, instructionOffset + imm
+func parseArgsRegs3(code []byte, _, _ uint32) ([]Reg, []uint32) {
+	return []Reg{
+		parseReg(min(12, code[1]&0b1111)),
+		parseReg(min(12, code[0]&0b1111)),
+		parseReg(min(12, code[0]>>4)),
+	}, nil
 }
 
-func readArgsRegs3(chunk *big.Int) (RawReg, RawReg, RawReg) {
-	chunk32 := uint32(chunk.Uint64())
-	return RawReg(chunk32 >> 8), RawReg(chunk32), RawReg(chunk32 >> 4)
+func parseArgsRegs2(code []byte, _, _ uint32) ([]Reg, []uint32) {
+	return []Reg{parseReg(min(12, code[0]&0b1111)), parseReg(min(12, code[0]>>4))}, nil
 }
 
-func readArgsRegs2(chunk *big.Int) (RawReg, RawReg) {
-	chunk32 := uint32(chunk.Uint64())
-	return RawReg(chunk32), RawReg(chunk32 >> 4)
+func parseArgsRegs2Offset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32) {
+	regs, imm := parseArgsRegs2Imm(code, instructionOffset, skip)
+	return regs, []uint32{instructionOffset + imm[0]}
 }

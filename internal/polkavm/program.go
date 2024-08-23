@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/big"
 	"math/bits"
 )
 
@@ -328,24 +327,24 @@ func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruc
 		return 0, Instruction{}, io.EOF
 	}
 
-	if (instructionOffset+1>>3)+4 < len(bitmask) {
-		nextOffset, argsLength := parseBitmaskFast(bitmask, instructionOffset)
-		chunk := code[instructionOffset:min(instructionOffset+32, len(code))]
-		opcode := InstructionCode(chunk[0])
-		intChunk := big.NewInt(0).SetBytes(chunk[1:16])
-		return nextOffset, decodeTable[opcode](intChunk, uint32(instructionOffset), uint32(argsLength)), nil
-	}
 	nextOffset, argsLength := parseBitmaskSlow(bitmask, instructionOffset)
-	chunk := code[instructionOffset : instructionOffset+min(16, argsLength+1)]
+	chunkLength := min(16, argsLength+1)
+	chunk := code[instructionOffset : instructionOffset+chunkLength]
 	opcode := InstructionCode(chunk[0])
-	intChunk := big.NewInt(0).SetBytes(chunk)
-	return nextOffset, decodeTable[opcode](intChunk, uint32(instructionOffset), uint32(argsLength)), nil
+	regs, imm := parseArgsTable[opcode](chunk[1:], uint32(instructionOffset), uint32(argsLength))
+	return nextOffset, Instruction{
+		Code:   opcode,
+		Reg:    regs,
+		Imm:    imm,
+		Offset: uint32(instructionOffset),
+		Length: uint32(argsLength + 1),
+	}, nil
 }
 
+//lint:ignore U1000
 func parseBitmaskFast(bitmask []byte, offset int) (int, int) {
 	offset += 1
 	shift := offset & 7
-	fmt.Printf("bitmask: %v %v %v\n", offset, shift, bitmask)
 	mask := (binary.LittleEndian.Uint32(bitmask[offset>>3:(offset>>3)+4]) >> shift) | (1 << BitmaskMax)
 	argsLength := bits.TrailingZeros32(mask)
 	if argsLength > BitmaskMax {

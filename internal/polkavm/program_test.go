@@ -133,3 +133,5 @@ func Test_parseBitmaskFast(t *testing.T) {
 		assert.Equal(t, tc.argsLength, argsLength, "index: %d", i)
 	}
 }
+
+//JumpIndirect, LoadImm, LoadU8, LoadI8, LoadU16, LoadI16, LoadU32, StoreU8, StoreU16, StoreU32
