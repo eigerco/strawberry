@@ -242,9 +242,8 @@ func (br *byteReader) decodeUint(value reflect.Value) error {
 		return fmt.Errorf(ErrReadingBytes, err)
 	}
 
-	// Use DeserializeUint64 to decode the value
 	var v uint64
-	err = DeserializeUint64(serialized, &v)
+	err = DeserializeUint64WithLength(serialized, l, &v)
 	if err != nil {
 		return fmt.Errorf(ErrDecodingUint, err)
 	}
