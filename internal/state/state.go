@@ -23,6 +23,8 @@ type State struct {
 
 // UpdateState updates the state
 // TODO: all the calculations which are not dependent on intermediate / new state can be done in parallel
+//
+//	it might be worth making State immutable and make it so that UpdateState returns a new State with all the updated fields
 func (s *State) UpdateState(newBlock block.Block) {
 	// Calculate newSafroleState state values
 
