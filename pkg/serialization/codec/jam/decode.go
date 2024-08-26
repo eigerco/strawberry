@@ -234,21 +234,12 @@ func (br *byteReader) decodeUint(value reflect.Value) error {
 
 	// Determine the number of additional bytes using the prefix
 	l := uint8(bits.LeadingZeros8(^prefix))
-	if l == 8 {
-		// Special case for the maximum value encoding (l = 8, total 9 bytes)
-		serialized = make([]byte, 9)
-		serialized[0] = prefix
-		_, err := br.Read(serialized[1:])
-		if err != nil {
-			return fmt.Errorf(ErrReadingBytes, err)
-		}
-	} else {
-		serialized = make([]byte, l+1)
-		serialized[0] = prefix
-		_, err := br.Read(serialized[1:])
-		if err != nil {
-			return fmt.Errorf(ErrReadingBytes, err)
-		}
+
+	serialized = make([]byte, l+1)
+	serialized[0] = prefix
+	_, err = br.Read(serialized[1:])
+	if err != nil {
+		return fmt.Errorf(ErrReadingBytes, err)
 	}
 
 	// Use DeserializeUint64 to decode the value
@@ -259,9 +250,7 @@ func (br *byteReader) decodeUint(value reflect.Value) error {
 	}
 
 	// Set the decoded value into the destination
-	temp := reflect.New(reflect.TypeOf(value.Interface()))
-	temp.Elem().Set(reflect.ValueOf(v).Convert(reflect.TypeOf(value.Interface())))
-	value.Set(temp.Elem())
+	value.Set(reflect.ValueOf(v).Convert(value.Type()))
 
 	return nil
 }
