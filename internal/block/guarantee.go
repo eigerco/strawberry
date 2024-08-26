@@ -55,7 +55,7 @@ type RefinementContextAnchor struct {
 }
 
 type RefinementContextLookupAnchor struct {
-	HeaderHash crypto.Hash   // HeaderHash of the anchor (l)
+	HeaderHash crypto.Hash      // HeaderHash of the anchor (l)
 	Timeslot   jamtime.Timeslot // Timeslot (t)
 }
 
@@ -70,7 +70,7 @@ const (
 	CodeTooLarge                                 // The code was available but was beyond the maximum size allowed S.
 )
 
-type ServiceId [32]byte
+type ServiceId uint32
 
 // WorkResult is the data conduit by which services’ states may be altered through the computation done within a work-package.
 type WorkResult struct {
