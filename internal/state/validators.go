@@ -12,7 +12,7 @@ type ValidatorState struct {
 	SafroleState       safrole.State          // Safrole State (𝛾) (state of block-production algorithm)
 }
 
-// ValidatorStatisticsState represents the statistics related to validators. I decided to use a struct instead of an array of 2 elements.
+// ValidatorStatisticsState represents the statistics related to validators.
 type ValidatorStatisticsState [2]ValidatorStatistics // Completed statistics (π[0]) - The activity statistics for the validators which have completed their work. Present statistics (π[1]) - The activity statistics for the validators which are currently being accumulated.
 
 type ValidatorStatistics struct {
