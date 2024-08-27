@@ -3,13 +3,10 @@ package jam
 import (
 	"encoding/binary"
 	"math"
-	"math/bits"
 )
 
-// GeneralNatural implements the formula (able to encode naturals of up to 2^64)
-type GeneralNatural struct{}
-
-func (j *GeneralNatural) SerializeUint64(x uint64) []byte {
+// SerializeUint64 implements the general formula (able to encode naturals of up to 2^64)
+func SerializeUint64(x uint64) []byte {
 	var l uint8
 	// Determine the length needed to represent the value
 	for l = 0; l < 8; l++ {
@@ -33,8 +30,8 @@ func (j *GeneralNatural) SerializeUint64(x uint64) []byte {
 	return bytes
 }
 
-// DeserializeUint64 deserializes a byte slice into a uint64 value.
-func (j *GeneralNatural) DeserializeUint64(serialized []byte, u *uint64) error {
+// DeserializeUint64WithLength deserializes a byte slice into a uint64 value, with length `l`.
+func DeserializeUint64WithLength(serialized []byte, l uint8, u *uint64) error {
 	*u = 0
 
 	n := len(serialized)
@@ -50,16 +47,13 @@ func (j *GeneralNatural) DeserializeUint64(serialized []byte, u *uint64) error {
 		return nil
 	}
 
-	prefix := serialized[0]
-	l := uint8(bits.LeadingZeros8(^prefix))
-
 	// Deserialize the first `l` bytes
 	for i := uint8(0); i < l; i++ {
 		*u |= uint64(serialized[i+1]) << (8 * i)
 	}
 
 	// Combine the remaining part of the prefix
-	*u |= uint64(prefix&(math.MaxUint8>>l)) << (8 * l)
+	*u |= uint64(serialized[0]&(math.MaxUint8>>l)) << (8 * l)
 
 	return nil
 }
