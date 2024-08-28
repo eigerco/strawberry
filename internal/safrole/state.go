@@ -7,15 +7,10 @@ import (
 
 // State relevant to Safrole protocol
 type State struct {
-	MostRecentTimeslot uint32                // (τ) Most recent block's timeslot.
-	EntropyAccumulator [4]crypto.Hash        // (η) Entropy accumulator and epochal randomness.
-	PreviousValidators ValidatorsData        // (λ) Validator keys and metadata which were active in the prior epoch.
-	CurrentValidators  ValidatorsData        // (κ) Validator keys and metadata currently active.
-	NextValidators     ValidatorsData        // (γk) Validator keys for the following epoch.
-	FutureValidators   ValidatorsData        // (ι) Validator keys and metadata to be drawn from next.
-	TicketAccumulator  []block.Ticket        // (γa) Sealing-key contest ticket accumulator.
-	SealingKeySeries   TicketsOrKeys         // (γs) Sealing-key series of the current epoch.
-	RingCommitment     crypto.RingCommitment // (γz) Bandersnatch ring commitment.
+	NextValidators    ValidatorsData        // (γk) Validator keys for the following epoch.
+	TicketAccumulator []block.Ticket        // (γa) Sealing-key contest ticket accumulator.
+	SealingKeySeries  TicketsOrKeys         // (γs) Sealing-key series of the current epoch.
+	RingCommitment    crypto.RingCommitment // (γz) Bandersnatch ring commitment.
 }
 
 type ValidatorData struct {

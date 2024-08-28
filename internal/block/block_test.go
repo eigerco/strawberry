@@ -108,29 +108,26 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		Guarantees: []Guarantee{
 			{
 				WorkReport: WorkReport{
-					Specification: WorkPackageSpecification{
-						Hash:        randomHash(t),
-						Length:      uint32(100),
-						ErasureRoot: randomHash(t),
-						SegmentRoot: randomHash(t),
+					WorkPackageSpecification: WorkPackageSpecification{
+						WorkPackageHash:           randomHash(t),
+						AuditableWorkBundleLength: uint32(100),
+						ErasureRoot:               randomHash(t),
+						SegmentRoot:               randomHash(t),
 					},
-					Context: RefinementContext{
-						AnchorHeaderHash:         randomHash(t),
-						AnchorPosteriorStateRoot: randomHash(t),
-						AnchorPosteriorBeefyRoot: randomHash(t),
-						LookupAnchorHeaderHash:   randomHash(t),
-						LookupAnchorTimeslot:     125,
-						PrerequisiteHash:         nil,
+					RefinementContext: RefinementContext{
+						Anchor:                  RefinementContextAnchor{HeaderHash: randomHash(t)},
+						LookupAnchor:            RefinementContextLookupAnchor{HeaderHash: randomHash(t), Timeslot: 125},
+						PrerequisiteWorkPackage: nil,
 					},
 					CoreIndex:      uint16(1),
 					AuthorizerHash: randomHash(t),
 					Output:         []byte("output data"),
-					Results: []WorkResult{
+					WorkResults: []WorkResult{
 						{
-							ServiceIndex: uint32(1),
-							CodeHash:     randomHash(t),
-							PayloadHash:  randomHash(t),
-							GasRatio:     uint64(10),
+							ServiceId:              ServiceId(1),
+							ServiceHashCode:        randomHash(t),
+							PayloadHash:            randomHash(t),
+							GasPrioritizationRatio: uint64(10),
 							Output: WorkResultOutput{
 								Data:  []byte("work result data"),
 								Error: NoError,
