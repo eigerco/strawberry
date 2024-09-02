@@ -2,48 +2,48 @@ package block
 
 import (
 	"crypto/rand"
-	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/jamtime"
-	"github.com/stretchr/testify/assert"
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
 )
 
 func Test_BlockEncodeDecode(t *testing.T) {
 	h := Header{
-		ParentHash:     randomHash(t),
-		PriorStateRoot: randomHash(t),
-		ExtrinsicHash:  randomHash(t),
+		ParentHash:     testutils.RandomHash(t),
+		PriorStateRoot:  testutils.RandomHash(t),
+		ExtrinsicHash:   testutils.RandomHash(t),
 		TimeSlotIndex:  123,
 		EpochMarker: &EpochMarker{
 			Keys: [NumberOfValidators]crypto.BandersnatchPublicKey{
-				randomPublicKey(t),
-				randomPublicKey(t),
+				testutils.RandomBandersnatchPublicKey(t),
+				testutils.RandomBandersnatchPublicKey(t),
 			},
-			Entropy: randomHash(t),
+			Entropy: testutils.RandomHash(t),
 		},
 		WinningTicketsMarker: [jamtime.TimeslotsPerEpoch]*Ticket{{
-			Identifier: randomHash(t),
+			Identifier: testutils.RandomHash(t),
 			EntryIndex: 112,
 		},
 			{
-				Identifier: randomHash(t),
+				Identifier: testutils.RandomHash(t),
 				EntryIndex: 222,
 			}},
 		Verdicts: []crypto.Hash{
-			randomHash(t),
-			randomHash(t),
+			testutils.RandomHash(t),
+			testutils.RandomHash(t),
 		},
 		OffendersMarkers: []crypto.Ed25519PublicKey{
-			randomED25519PublicKey(t),
+			testutils.RandomED25519PublicKey(t),
 		},
 		BlockAuthorIndex:   1,
-		VRFSignature:       randomSignature(t),
-		BlockSealSignature: randomSignature(t),
+		VRFSignature:       testutils.RandomBandersnatchSignature(t),
+		BlockSealSignature: testutils.RandomBandersnatchSignature(t),
 	}
 
 	ticketProofs := []TicketProof{
@@ -65,13 +65,13 @@ func Test_BlockEncodeDecode(t *testing.T) {
 
 	verdicts := []Verdict{
 		{
-			ReportHash: randomHash(t),
+			ReportHash: testutils.RandomHash(t),
 			EpochIndex: uint32(1),
 			Judgments: []Judgment{
 				{
 					IsValid:        true,
 					ValidatorIndex: uint16(2),
-					Signature:      randomEd25519Signature(t),
+					Signature:      testutils.RandomEd25519Signature(t),
 				},
 			},
 		},
@@ -80,27 +80,27 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		Verdicts: verdicts,
 		Culprits: []Culprit{
 			{
-				ReportHash:                randomHash(t),
-				ValidatorEd25519PublicKey: randomED25519PublicKey(t),
-				Signature:                 randomEd25519Signature(t),
+				ReportHash:                testutils.RandomHash(t),
+				ValidatorEd25519PublicKey: testutils.RandomED25519PublicKey(t),
+				Signature:                 testutils.RandomEd25519Signature(t),
 			},
 		},
 		Faults: []Fault{
 			{
-				ReportHash:                randomHash(t),
+				ReportHash:                testutils.RandomHash(t),
 				IsValid:                   true,
-				ValidatorEd25519PublicKey: randomED25519PublicKey(t),
-				Signature:                 randomEd25519Signature(t),
+				ValidatorEd25519PublicKey: testutils.RandomED25519PublicKey(t),
+				Signature:                 testutils.RandomEd25519Signature(t),
 			},
 		},
 	}
 
 	assurancesExtrinsic := &AssurancesExtrinsic{
 		{
-			Anchor:         randomHash(t),
+			Anchor:         testutils.RandomHash(t),
 			Flag:           true,
 			ValidatorIndex: uint16(1),
-			Signature:      randomEd25519Signature(t),
+			Signature:      testutils.RandomEd25519Signature(t),
 		},
 	}
 
@@ -109,24 +109,24 @@ func Test_BlockEncodeDecode(t *testing.T) {
 			{
 				WorkReport: WorkReport{
 					WorkPackageSpecification: WorkPackageSpecification{
-						WorkPackageHash:           randomHash(t),
+						WorkPackageHash:           testutils.RandomHash(t),
 						AuditableWorkBundleLength: uint32(100),
-						ErasureRoot:               randomHash(t),
-						SegmentRoot:               randomHash(t),
+						ErasureRoot:               testutils.RandomHash(t),
+						SegmentRoot:               testutils.RandomHash(t),
 					},
 					RefinementContext: RefinementContext{
-						Anchor:                  RefinementContextAnchor{HeaderHash: randomHash(t)},
-						LookupAnchor:            RefinementContextLookupAnchor{HeaderHash: randomHash(t), Timeslot: 125},
+						Anchor:                  RefinementContextAnchor{HeaderHash: testutils.RandomHash(t)},
+						LookupAnchor:            RefinementContextLookupAnchor{HeaderHash: testutils.RandomHash(t), Timeslot: 125},
 						PrerequisiteWorkPackage: nil,
 					},
 					CoreIndex:      uint16(1),
-					AuthorizerHash: randomHash(t),
+					AuthorizerHash: testutils.RandomHash(t),
 					Output:         []byte("output data"),
 					WorkResults: []WorkResult{
 						{
 							ServiceId:              ServiceId(1),
-							ServiceHashCode:        randomHash(t),
-							PayloadHash:            randomHash(t),
+							ServiceHashCode:        testutils.RandomHash(t),
+							PayloadHash:            testutils.RandomHash(t),
 							GasPrioritizationRatio: uint64(10),
 							Output: WorkResultOutput{
 								Data:  []byte("work result data"),
@@ -138,7 +138,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 				Credentials: []CredentialSignature{
 					{
 						ValidatorIndex: uint32(1),
-						Signature:      randomEd25519Signature(t),
+						Signature:      testutils.RandomEd25519Signature(t),
 					},
 				},
 				Timeslot: 200,
@@ -172,14 +172,6 @@ func Test_BlockEncodeDecode(t *testing.T) {
 
 func randomTicketProof(t *testing.T) [ticketProofSize]byte {
 	var hash [ticketProofSize]byte
-	_, err := rand.Read(hash[:])
-	require.NoError(t, err)
-
-	return hash
-}
-
-func randomEd25519Signature(t *testing.T) [crypto.Ed25519SignatureSize]byte {
-	var hash [crypto.Ed25519SignatureSize]byte
 	_, err := rand.Read(hash[:])
 	require.NoError(t, err)
 
