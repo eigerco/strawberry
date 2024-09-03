@@ -50,9 +50,9 @@ func DetermineNewSealingKeys(currentTimeslot jamtime.Timeslot, ticketAccumulator
 // SelectFallbackKeys selects the fallback keys for the sealing key series. Implements the F function from the graypaper
 func SelectFallbackKeys(em *block.EpochMarker) (crypto.EpochKeys, error) {
 	var fallbackKeys crypto.EpochKeys
+	serializer := serialization.NewSerializer(&codec.JAMCodec{})
 	for i := uint32(0); i < jamtime.TimeslotsPerEpoch; i++ {
 		// E₄(i): Encode i as a 4-byte sequence
-		serializer := serialization.NewSerializer(&codec.JAMCodec{})
 		iBytes, err := serializer.Encode(i)
 		if err != nil {
 			return crypto.EpochKeys{}, err
