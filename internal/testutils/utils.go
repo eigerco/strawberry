@@ -1,7 +1,6 @@
 package testutils
 
 import (
-	"crypto/ed25519"
 	"crypto/rand"
 	"testing"
 
@@ -17,10 +16,10 @@ func RandomHash(t *testing.T) crypto.Hash {
 }
 
 func RandomED25519PublicKey(t *testing.T) crypto.Ed25519PublicKey {
-	hash := make([]byte, ed25519.PublicKeySize)
+	hash := make([]byte, crypto.Ed25519PublicSize)
 	_, err := rand.Read(hash)
 	require.NoError(t, err)
-	return hash
+	return crypto.Ed25519PublicKey{PublicKey: hash}
 }
 func RandomBandersnatchPublicKey(t *testing.T) crypto.BandersnatchPublicKey {
 	hash := make([]byte, crypto.BandersnatchSize)
@@ -29,11 +28,41 @@ func RandomBandersnatchPublicKey(t *testing.T) crypto.BandersnatchPublicKey {
 	return crypto.BandersnatchPublicKey(hash)
 }
 
+func RandomBlsKey(t *testing.T) crypto.BlsKey {
+	hash := make([]byte, crypto.BLSSize)
+	_, err := rand.Read(hash)
+	require.NoError(t, err)
+	return crypto.BlsKey(hash)
+}
+
+func RandomMetadataKey(t *testing.T) crypto.MetadataKey {
+	hash := make([]byte, crypto.MetadataSize)
+	_, err := rand.Read(hash)
+	require.NoError(t, err)
+	return crypto.MetadataKey(hash)
+}
+
+func RandomValidatorKey(t *testing.T) crypto.ValidatorKey {
+	return crypto.ValidatorKey{
+		Bandersnatch: RandomBandersnatchPublicKey(t),
+		Ed25519:      RandomED25519PublicKey(t),
+		Bls:          RandomBlsKey(t),
+		Metadata:     RandomMetadataKey(t),
+	}
+}
+
 func RandomBandersnatchSignature(t *testing.T) crypto.BandersnatchSignature {
 	hash := make([]byte, 96)
 	_, err := rand.Read(hash)
 	require.NoError(t, err)
 	return crypto.BandersnatchSignature(hash)
+}
+
+func RandomBandersnatchRingCommitment(t *testing.T) crypto.RingCommitment {
+	hash := make([]byte, crypto.BandersnatchRingSize)
+	_, err := rand.Read(hash)
+	require.NoError(t, err)
+	return crypto.RingCommitment(hash)
 }
 
 func RandomEd25519Signature(t *testing.T) [crypto.Ed25519SignatureSize]byte {
