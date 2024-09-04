@@ -10,8 +10,13 @@ type Ed25519PublicKey struct{
 }
 type Ed25519PrivateKey ed25519.PrivateKey
 type BlsKey [BLSSize]byte
+type BandersnatchSeedKey [BandersnatchSize]byte
+type BandersnatchSecretKey [BandersnatchSize]byte
 type BandersnatchPublicKey [BandersnatchSize]byte
 type BandersnatchSignature [96]byte
+type VrfProof [784]byte
+type VrfOutput [32]byte
+type RingVrfSignature [784]byte
 type MetadataKey [MetadataSize]byte
 type RingCommitment [BandersnatchRingSize]byte
 type EpochKeys [jamtime.TimeslotsPerEpoch]BandersnatchPublicKey
