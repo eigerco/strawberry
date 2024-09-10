@@ -22,7 +22,7 @@ func RandomED25519PublicKey(t *testing.T) crypto.Ed25519PublicKey {
 	return crypto.Ed25519PublicKey{PublicKey: hash}
 }
 func RandomBandersnatchPublicKey(t *testing.T) crypto.BandersnatchPublicKey {
-	hash := make([]byte, crypto.BandersnatchSize)
+	hash := make([]byte, crypto.BandersnatchSerializedSize)
 	_, err := rand.Read(hash)
 	require.NoError(t, err)
 	return crypto.BandersnatchPublicKey(hash)
