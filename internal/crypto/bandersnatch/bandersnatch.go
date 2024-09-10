@@ -185,7 +185,6 @@ func GenerateRingCommitment(pubKeys []crypto.BandersnatchPublicKey) (crypto.Ring
 	return crypto.RingCommitment{}, nil
 }
 
-// TODO make this env variable
 func getBandersnatchLibraryPath() string {
 	base := "../../../bandersnatch/target/release/libbandersnatch."
 	switch runtime.GOOS {
