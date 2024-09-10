@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 sp-core = { git="https://github.com/paritytech/polkadot-sdk", features = ["full_crypto", "bandersnatch-experimental"] }
-bandersnatch_vrfs = { git = "https://github.com/w3f/ring-vrf", default-features = false, features = ["substrate-curves"] }
 
 [lib]
 crate-type = ["cdylib"]
