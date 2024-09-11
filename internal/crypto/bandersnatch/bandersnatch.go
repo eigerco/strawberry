@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"unsafe"
 
@@ -23,7 +24,11 @@ var (
 
 func init() {
 	// Load the Rust shared library in the init function
-	libPath := getBandersnatchLibraryPath()
+	libPath, err := getBandersnatchLibraryPath()
+	if err != nil {
+		fmt.Println("Failed to load bandersnatch library path:", err)
+		os.Exit(1)
+	}
 
 	// Load the Rust shared library
 	lib, err := purego.Dlopen(libPath, purego.RTLD_NOW|purego.RTLD_GLOBAL)
@@ -185,7 +190,7 @@ func GenerateRingCommitment(pubKeys []crypto.BandersnatchPublicKey) (crypto.Ring
 	return crypto.RingCommitment{}, nil
 }
 
-func getBandersnatchLibraryPath() string {
+func getBandersnatchLibraryPath() (string, error) {
 	var ext string
 	switch runtime.GOOS {
 	case "darwin":
@@ -193,8 +198,16 @@ func getBandersnatchLibraryPath() string {
 	case "linux":
 		ext = "so"
 	default:
-		panic(fmt.Errorf("GOOS=%s is not supported", runtime.GOOS))
+		return "", fmt.Errorf("GOOS=%s is not supported", runtime.GOOS)
 	}
 
-	return fmt.Sprintf("../../../bandersnatch/target/release/libbandersnatch.%s", ext)
+	_, filePath, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("unable to retrieve the caller info")
+	}
+
+	baseDir := filepath.Dir(filePath)
+	libPath := filepath.Join(baseDir, fmt.Sprintf("../../../bandersnatch/target/release/libbandersnatch.%s", ext))
+
+	return libPath, nil
 }
