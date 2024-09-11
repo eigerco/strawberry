@@ -186,13 +186,15 @@ func GenerateRingCommitment(pubKeys []crypto.BandersnatchPublicKey) (crypto.Ring
 }
 
 func getBandersnatchLibraryPath() string {
-	base := "../../../bandersnatch/target/release/libbandersnatch."
+	var ext string
 	switch runtime.GOOS {
 	case "darwin":
-		return fmt.Sprintf("%s%s", base, "dylib")
+		ext = "dylib"
 	case "linux":
-		return fmt.Sprintf("%s%s", base, "so")
+		ext = "so"
 	default:
 		panic(fmt.Errorf("GOOS=%s is not supported", runtime.GOOS))
 	}
+
+	return fmt.Sprintf("../../../bandersnatch/target/release/libbandersnatch.%s", ext)
 }
