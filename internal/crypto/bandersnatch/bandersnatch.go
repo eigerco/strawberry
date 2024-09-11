@@ -14,11 +14,11 @@ import (
 
 var (
 	newPrivateKeyFromSeedFunc func(*C.uchar, C.size_t) unsafe.Pointer
-	GetPublicKeyFunc          func(unsafe.Pointer) unsafe.Pointer
-	SignDataFunc              func(unsafe.Pointer, unsafe.Pointer, uintptr) unsafe.Pointer
-	VerifySignatureFunc       func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uintptr) bool
-	GenerateVrfProofFunc      func(unsafe.Pointer, unsafe.Pointer, uintptr, unsafe.Pointer, uintptr) *crypto.VrfProof
-	VerifyVrfProofFunc        func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uintptr, unsafe.Pointer, uintptr) bool
+	getPublicKeyFunc          func(unsafe.Pointer) unsafe.Pointer
+	signDataFunc              func(unsafe.Pointer, unsafe.Pointer, uintptr) unsafe.Pointer
+	verifySignatureFunc       func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uintptr) bool
+	generateVrfProofFunc      func(unsafe.Pointer, unsafe.Pointer, uintptr, unsafe.Pointer, uintptr) *crypto.VrfProof
+	verifyVrfProofFunc        func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer, uintptr, unsafe.Pointer, uintptr) bool
 )
 
 func init() {
@@ -34,11 +34,11 @@ func init() {
 
 	// Register the Rust FFI functions with Go using purego
 	purego.RegisterLibFunc(&newPrivateKeyFromSeedFunc, lib, "new_private_key_from_seed")
-	purego.RegisterLibFunc(&GetPublicKeyFunc, lib, "get_public_key")
-	purego.RegisterLibFunc(&SignDataFunc, lib, "sign_data")
-	purego.RegisterLibFunc(&VerifySignatureFunc, lib, "verify_signature")
-	purego.RegisterLibFunc(&GenerateVrfProofFunc, lib, "generate_vrf_proof")
-	purego.RegisterLibFunc(&VerifyVrfProofFunc, lib, "verify_vrf_proof")
+	purego.RegisterLibFunc(&getPublicKeyFunc, lib, "get_public_key")
+	purego.RegisterLibFunc(&signDataFunc, lib, "sign_data")
+	purego.RegisterLibFunc(&verifySignatureFunc, lib, "verify_signature")
+	purego.RegisterLibFunc(&generateVrfProofFunc, lib, "generate_vrf_proof")
+	purego.RegisterLibFunc(&verifyVrfProofFunc, lib, "verify_vrf_proof")
 }
 
 // PrivateKey represents a Bandersnatch private key.
@@ -69,7 +69,7 @@ func (pk *PrivateKey) Public() (crypto.BandersnatchPublicKey, error) {
 		return crypto.BandersnatchPublicKey{}, errors.New("invalid private key")
 	}
 
-	publicKeyPtr := GetPublicKeyFunc(pk.ptr)
+	publicKeyPtr := getPublicKeyFunc(pk.ptr)
 
 	if publicKeyPtr == nil {
 		return crypto.BandersnatchPublicKey{}, errors.New("failed to retrieve public key")
@@ -94,7 +94,7 @@ func (pk *PrivateKey) Sign(data []byte) (crypto.BandersnatchSignature, error) {
 
 	// Call Rust FFI to sign the data
 	dataPtr := unsafe.Pointer(&data[0])
-	signaturePtr := SignDataFunc(pk.ptr, dataPtr, uintptr(len(data)))
+	signaturePtr := signDataFunc(pk.ptr, dataPtr, uintptr(len(data)))
 
 	if signaturePtr == nil {
 		return crypto.BandersnatchSignature{}, errors.New("failed to sign data")
@@ -115,7 +115,7 @@ func VerifySignature(signature crypto.BandersnatchSignature, data []byte, pubKey
 	publicKeyPtr := unsafe.Pointer(&pubKey[0])
 
 	// Call the Rust FFI function to verify the signature
-	return VerifySignatureFunc(publicKeyPtr, signaturePtr, dataPtr, uintptr(len(data)))
+	return verifySignatureFunc(publicKeyPtr, signaturePtr, dataPtr, uintptr(len(data)))
 }
 
 // GenerateVrfProof generates a VRF proof for the given data and context using the private key
@@ -127,7 +127,7 @@ func (pk *PrivateKey) GenerateVrfProof(data, context []byte) (crypto.VrfProof, e
 	// Call the Rust FFI function to generate the VRF proof
 	dataPtr := unsafe.Pointer(&data[0])
 	contextPtr := unsafe.Pointer(&context[0])
-	vrfProofPtr := GenerateVrfProofFunc(pk.ptr, dataPtr, uintptr(len(data)), contextPtr, uintptr(len(context)))
+	vrfProofPtr := generateVrfProofFunc(pk.ptr, dataPtr, uintptr(len(data)), contextPtr, uintptr(len(context)))
 
 	if vrfProofPtr == nil {
 		return crypto.VrfProof{}, errors.New("failed to generate VRF proof")
@@ -151,7 +151,7 @@ func VerifyVrfProof(proof crypto.VrfProof, data, context []byte, pubKey crypto.B
 	proofPtr := unsafe.Pointer(&proof[0])
 	publicKeyPtr := unsafe.Pointer(&pubKey[0])
 
-	return VerifyVrfProofFunc(publicKeyPtr, proofPtr, dataPtr, uintptr(len(data)), contextPtr, uintptr(len(context)))
+	return verifyVrfProofFunc(publicKeyPtr, proofPtr, dataPtr, uintptr(len(data)), contextPtr, uintptr(len(context)))
 }
 
 // RingVrfSign signs the data using ring VRF
