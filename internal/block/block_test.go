@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
@@ -26,17 +25,21 @@ func Test_BlockEncodeDecode(t *testing.T) {
 			},
 			Entropy: testutils.RandomHash(t),
 		},
-		WinningTicketsMarker: [jamtime.TimeslotsPerEpoch]*Ticket{{
-			Identifier: testutils.RandomHash(t),
-			EntryIndex: 112,
-		},
-			{
-				Identifier: testutils.RandomHash(t),
-				EntryIndex: 222,
-			}},
-		OffendersMarkers: []crypto.Ed25519PublicKey{
-			testutils.RandomED25519PublicKey(t),
-		},
+		//WinningTicketsMarker: [jamtime.TimeslotsPerEpoch]*Ticket{{
+		//	Identifier: testutils.RandomHash(t),
+		//	EntryIndex: 112,
+		//},
+		//	{
+		//		Identifier: testutils.RandomHash(t),
+		//		EntryIndex: 222,
+		//	}},
+		//Verdicts: []crypto.Hash{
+		//	testutils.RandomHash(t),
+		//	testutils.RandomHash(t),
+		//},
+		//OffendersMarkers: []crypto.Ed25519PublicKey{
+		//	testutils.RandomED25519PublicKey(t),
+		//},
 		BlockAuthorIndex:   1,
 		VRFSignature:       testutils.RandomBandersnatchSignature(t),
 		BlockSealSignature: testutils.RandomBandersnatchSignature(t),

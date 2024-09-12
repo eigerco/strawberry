@@ -83,7 +83,7 @@ func (vs *ValidatorState) UpdateSealingKeys(newBlock *block.Block) error {
 func (vs *ValidatorState) nullifyOffenders(newBlock *block.Block) {
 	for _, key := range newBlock.Header.OffendersMarkers {
 		for i, validator := range vs.QueuedValidators {
-			if validator.Ed25519.Equal(key.PublicKey) {
+			if validator.Ed25519.Equal(key) {
 				vs.QueuedValidators[i] = crypto.ValidatorKey{}
 			}
 		}

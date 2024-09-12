@@ -19,7 +19,7 @@ const (
 	// TimeslotsPerEpoch defines the number of timeslots in each epoch.
 	// In the JAM protocol, each epoch consists of exactly 600 timeslots,
 	// as specified in the JAM Graypaper.
-	TimeslotsPerEpoch = 600
+	TimeslotsPerEpoch = 12
 
 	// EpochDuration defines the total duration of each epoch.
 	// It is calculated by multiplying TimeslotsPerEpoch by TimeslotDuration,

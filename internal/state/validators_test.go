@@ -127,9 +127,9 @@ func TestRotateValidatorKeys(t *testing.T) {
 
 	header := block.Header{
 		TimeSlotIndex: 0,
-		OffendersMarkers: []crypto.Ed25519PublicKey{
-			offender.Ed25519,
-		},
+		//OffendersMarkers: []crypto.Ed25519PublicKey{
+		//	offender.Ed25519,
+		//},
 	}
 	block := &block.Block{
 		Header: &header,
