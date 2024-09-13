@@ -13,9 +13,14 @@ help: Makefile
 lint:
 	golangci-lint run
 
+.PHONY: build-bandersnatch
+## build-bandersnatch: Builds the bandersnatch library
+build-bandersnatch:
+	cargo build --release --lib --manifest-path=bandersnatch/Cargo.toml
+
 .PHONY: test
 ## test: Runs `go test` on project test files.
-test:
+test: build-bandersnatch
 	go test ./... -race
 
 ## install-hooks: Install git-hooks from .githooks directory.

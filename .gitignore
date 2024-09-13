@@ -11,3 +11,4 @@ go.work.sum
 .idea/
 .vscode/
 coverage.txt
+target
