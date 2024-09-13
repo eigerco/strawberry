@@ -7,17 +7,17 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/testutils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_BlockEncodeDecode(t *testing.T) {
 	h := Header{
 		ParentHash:     testutils.RandomHash(t),
-		PriorStateRoot:  testutils.RandomHash(t),
-		ExtrinsicHash:   testutils.RandomHash(t),
+		PriorStateRoot: testutils.RandomHash(t),
+		ExtrinsicHash:  testutils.RandomHash(t),
 		TimeSlotIndex:  123,
 		EpochMarker: &EpochMarker{
 			Keys: [NumberOfValidators]crypto.BandersnatchPublicKey{
@@ -34,10 +34,6 @@ func Test_BlockEncodeDecode(t *testing.T) {
 				Identifier: testutils.RandomHash(t),
 				EntryIndex: 222,
 			}},
-		Verdicts: []crypto.Hash{
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-		},
 		OffendersMarkers: []crypto.Ed25519PublicKey{
 			testutils.RandomED25519PublicKey(t),
 		},

@@ -34,10 +34,6 @@ func Test_HeaderEncodeDecode(t *testing.T) {
 			Identifier: testutils.RandomHash(t),
 			EntryIndex: 222,
 		}},
-		Verdicts: []crypto.Hash{
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-		},
 		OffendersMarkers: []crypto.Ed25519PublicKey{
 			testutils.RandomED25519PublicKey(t),
 		},
