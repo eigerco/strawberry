@@ -2,6 +2,7 @@ package jam
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"fmt"
 	"io"
 	"reflect"
@@ -67,6 +68,9 @@ func (bw *byteWriter) handleReflectTypes(in interface{}) error {
 	case reflect.Array:
 		return bw.encodeArray(in)
 	case reflect.Slice:
+		if pk, ok := in.(ed25519.PublicKey); ok {
+			return bw.encodeEd25519PublicKey(pk)
+		}
 		return bw.encodeSlice(in)
 	default:
 		return fmt.Errorf(ErrUnsupportedType, in)
@@ -127,6 +131,15 @@ func (bw *byteWriter) encodeArray(in interface{}) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (bw *byteWriter) encodeEd25519PublicKey(in ed25519.PublicKey) error {
+	_, err := bw.Writer.Write(in)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
