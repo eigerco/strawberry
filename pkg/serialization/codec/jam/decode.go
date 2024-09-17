@@ -2,12 +2,13 @@ package jam
 
 import (
 	"bytes"
-	"crypto/ed25519"
 	"fmt"
 	"io"
 	"math"
 	"math/bits"
 	"reflect"
+
+	"github.com/eigerco/strawberry/internal/crypto"
 )
 
 func Unmarshal(data []byte, dst interface{}) error {
@@ -55,7 +56,7 @@ func (br *byteReader) handleReflectTypes(value reflect.Value) error {
 	case reflect.Array:
 		return br.decodeArray(value)
 	case reflect.Slice:
-		if value.Type() == reflect.TypeOf(ed25519.PublicKey{}) {
+		if value.Type() == reflect.TypeOf(crypto.Ed25519PublicKey{}) {
 			return br.decodeEd25519PublicKey(value)
 		}
 		return br.decodeSlice(value)
@@ -187,15 +188,18 @@ func (br *byteReader) decodeArray(value reflect.Value) error {
 }
 
 func (br *byteReader) decodeEd25519PublicKey(value reflect.Value) error {
-	publicKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
-	if _, err := io.ReadFull(br.Reader, publicKey); err != nil {
+	publicKey := crypto.Ed25519PublicKey{
+		PublicKey: make([]byte, crypto.Ed25519PublicSize),
+	}
+	if _, err := io.ReadFull(br.Reader, publicKey.PublicKey); err != nil {
 		return err
 	}
-	
-	value.Set(reflect.ValueOf(publicKey))
+
+	value.Set(reflect.ValueOf(publicKey.PublicKey))
 
 	return nil
 }
+
 func (br *byteReader) decodeStruct(value reflect.Value) error {
 	t := value.Type()
 
