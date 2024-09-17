@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+
+	"github.com/eigerco/strawberry/internal/crypto"
 )
 
 func Marshal(v interface{}) ([]byte, error) {
@@ -67,6 +69,9 @@ func (bw *byteWriter) handleReflectTypes(in interface{}) error {
 	case reflect.Array:
 		return bw.encodeArray(in)
 	case reflect.Slice:
+		if pk, ok := in.(crypto.Ed25519PublicKey); ok {
+			return bw.encodeEd25519PublicKey(pk)
+		}
 		return bw.encodeSlice(in)
 	default:
 		return fmt.Errorf(ErrUnsupportedType, in)
@@ -127,6 +132,15 @@ func (bw *byteWriter) encodeArray(in interface{}) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (bw *byteWriter) encodeEd25519PublicKey(in crypto.Ed25519PublicKey) error {
+	_, err := bw.Writer.Write(in.PublicKey)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

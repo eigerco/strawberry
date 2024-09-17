@@ -7,6 +7,8 @@ import (
 	"math"
 	"math/bits"
 	"reflect"
+
+	"github.com/eigerco/strawberry/internal/crypto"
 )
 
 func Unmarshal(data []byte, dst interface{}) error {
@@ -54,6 +56,9 @@ func (br *byteReader) handleReflectTypes(value reflect.Value) error {
 	case reflect.Array:
 		return br.decodeArray(value)
 	case reflect.Slice:
+		if value.Type() == reflect.TypeOf(crypto.Ed25519PublicKey{}) {
+			return br.decodeEd25519PublicKey(value)
+		}
 		return br.decodeSlice(value)
 	default:
 		return fmt.Errorf(ErrUnsupportedType, value.Interface())
@@ -178,6 +183,19 @@ func (br *byteReader) decodeArray(value reflect.Value) error {
 		}
 	}
 	value.Set(temp.Elem())
+
+	return nil
+}
+
+func (br *byteReader) decodeEd25519PublicKey(value reflect.Value) error {
+	publicKey := crypto.Ed25519PublicKey{
+		PublicKey: make([]byte, crypto.Ed25519PublicSize),
+	}
+	if _, err := io.ReadFull(br.Reader, publicKey.PublicKey); err != nil {
+		return err
+	}
+
+	value.Set(reflect.ValueOf(publicKey.PublicKey))
 
 	return nil
 }
