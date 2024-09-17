@@ -18,6 +18,7 @@ type BlsKey [BLSSize]byte
 type BandersnatchSeedKey [BandersnatchSize]byte
 type BandersnatchSecretKey [BandersnatchSize]byte
 type BandersnatchPublicKey [BandersnatchSize]byte
+type Ed25519Signature [Ed25519SignatureSize]byte
 type BandersnatchSignature [96]byte
 type VrfProof [VrfProofSize]byte
 type VrfOutput [32]byte
@@ -50,5 +51,9 @@ func (h BandersnatchSignature) MarshalJSON() ([]byte, error) {
 }
 
 func (h BandersnatchPublicKey) MarshalJSON() ([]byte, error) {
+	return json.Marshal(fmt.Sprintf("0x%s", hex.EncodeToString(h[:])))
+}
+
+func (h Ed25519Signature) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fmt.Sprintf("0x%s", hex.EncodeToString(h[:])))
 }

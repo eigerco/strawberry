@@ -70,6 +70,14 @@ const (
 	CodeTooLarge                                 // The code was available but was beyond the maximum size allowed S.
 )
 
+type WorkExecResult struct {
+	Ok           *[]byte // Represents the [0] ByteSequence option
+	OutOfGas     bool    // Represents the [1] NULL option
+	Panic        bool    // Represents the [2] NULL option
+	BadCode      bool    // Represents the [3] NULL option
+	CodeOversize bool    // Represents the [4] NULL option
+}
+
 type ServiceId uint32
 
 // WorkResult is the data conduit by which services’ states may be altered through the computation done within a work-package.
@@ -88,28 +96,28 @@ type WorkResultOutput struct {
 }
 
 // IsSuccessful checks if the work result is successful
-func (wr WorkResult) IsSuccessful() bool {
-	return wr.Output.Error == NoError
-}
+//func (wr WorkResult) IsSuccessful() bool {
+//	return wr.Output.Error == NoError
+//}
 
-// NewSuccessfulWorkResult creates a new successful WorkResult
-func NewSuccessfulWorkResult(serviceId ServiceId, serviceHashCode, payloadHash crypto.Hash, gasPrioritizationRatio uint64, output []byte) WorkResult {
-	return WorkResult{
-		ServiceId:              serviceId,
-		ServiceHashCode:        serviceHashCode,
-		PayloadHash:            payloadHash,
-		GasPrioritizationRatio: gasPrioritizationRatio,
-		Output:                 WorkResultOutput{Data: output, Error: NoError},
-	}
-}
-
-// NewErrorWorkResult creates a new error WorkResult
-func NewErrorWorkResult(serviceId ServiceId, serviceHashCode, payloadHash crypto.Hash, gasPrioritizationRatio uint64, errorResult WorkResultError) WorkResult {
-	return WorkResult{
-		ServiceId:              serviceId,
-		ServiceHashCode:        serviceHashCode,
-		PayloadHash:            payloadHash,
-		GasPrioritizationRatio: gasPrioritizationRatio,
-		Output:                 WorkResultOutput{Data: nil, Error: errorResult},
-	}
-}
+//// NewSuccessfulWorkResult creates a new successful WorkResult
+//func NewSuccessfulWorkResult(serviceId ServiceId, serviceHashCode, payloadHash crypto.Hash, gasPrioritizationRatio uint64, output []byte) WorkResult {
+//	return WorkResult{
+//		ServiceId:              serviceId,
+//		ServiceHashCode:        serviceHashCode,
+//		PayloadHash:            payloadHash,
+//		GasPrioritizationRatio: gasPrioritizationRatio,
+//		Output:                 WorkResultOutput{Data: output, Error: NoError},
+//	}
+//}
+//
+//// NewErrorWorkResult creates a new error WorkResult
+//func NewErrorWorkResult(serviceId ServiceId, serviceHashCode, payloadHash crypto.Hash, gasPrioritizationRatio uint64, errorResult WorkResultError) WorkResult {
+//	return WorkResult{
+//		ServiceId:              serviceId,
+//		ServiceHashCode:        serviceHashCode,
+//		PayloadHash:            payloadHash,
+//		GasPrioritizationRatio: gasPrioritizationRatio,
+//		Output:                 WorkResultOutput{Data: nil, Error: errorResult},
+//	}
+//}

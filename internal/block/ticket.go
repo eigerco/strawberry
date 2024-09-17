@@ -1,6 +1,11 @@
 package block
 
-import "github.com/eigerco/strawberry/internal/crypto"
+import (
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"github.com/eigerco/strawberry/internal/crypto"
+)
 
 const (
 	maxTicketsPerBlock = 16  // `K` in the paper. The maximum number of tickets which may be submitted in a single extrinsic.
@@ -15,11 +20,17 @@ type Ticket struct {
 
 // TicketProof represents a proof of a valid ticket
 type TicketProof struct {
-	EntryIndex uint8                 // r ∈ Nn (0, 1)
-	Proof      [ticketProofSize]byte // RingVRF proof
+	EntryIndex uint8       // r ∈ Nn (0, 1)
+	Proof      ticketProof // RingVRF proof
 }
 
 // TicketExtrinsic represents the E_T extrinsic
 type TicketExtrinsic struct {
 	TicketProofs []TicketProof
+}
+
+type ticketProof [ticketProofSize]byte
+
+func (h ticketProof) MarshalJSON() ([]byte, error) {
+	return json.Marshal(fmt.Sprintf("0x%s", hex.EncodeToString(h[:])))
 }

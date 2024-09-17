@@ -28,17 +28,17 @@ type State struct {
 func (s *State) UpdateState(newBlock block.Block) {
 	// Calculate newSafroleState state values
 
-	newTimeState := calculateNewTimeState(*newBlock.Header)
+	newTimeState := calculateNewTimeState(newBlock.Header)
 
-	newValidatorStatistics := calculateNewValidatorStatistics(*newBlock.Extrinsic, s.TimeslotIndex, newTimeState, s.ValidatorStatistics)
+	newValidatorStatistics := calculateNewValidatorStatistics(newBlock.Extrinsic, s.TimeslotIndex, newTimeState, s.ValidatorStatistics)
 
-	intermediateCoreAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(*newBlock.Extrinsic.ED, s.CoreAssignments)
-	intermediateCoreAssignments = calculateIntermediateCoreAssignmentsFromAvailability(*newBlock.Extrinsic.EA, intermediateCoreAssignments)
-	newCoreAssignments := calculateNewCoreAssignments(*newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState.Validators, newTimeState)
+	intermediateCoreAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
+	intermediateCoreAssignments = calculateIntermediateCoreAssignmentsFromAvailability(newBlock.Extrinsic.EA, intermediateCoreAssignments)
+	newCoreAssignments := calculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState.Validators, newTimeState)
 
-	intermediateServiceState := calculateIntermediateServiceState(*newBlock.Extrinsic.EP, s.Services, newTimeState)
+	intermediateServiceState := calculateIntermediateServiceState(newBlock.Extrinsic.EP, s.Services, newTimeState)
 	newServices, newPrivilegedServices, newQueuedValidators, newPendingCoreAuthorizations, context := calculateServiceState(
-		*newBlock.Extrinsic.EA,
+		newBlock.Extrinsic.EA,
 		newCoreAssignments,
 		intermediateServiceState,
 		s.PrivilegedServices,
@@ -46,20 +46,20 @@ func (s *State) UpdateState(newBlock block.Block) {
 		s.PendingAuthorizersQueues,
 	)
 
-	intermediateRecentBlocks := calculateIntermediateBlockState(*newBlock.Header, s.RecentBlocks)
-	newRecentBlocks := calculateNewRecentBlocks(*newBlock.Header, *newBlock.Extrinsic.EG, intermediateRecentBlocks, context)
+	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
+	newRecentBlocks := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, context)
 
-	newEntropyPool := calculateNewEntropyPool(*newBlock.Header, s.TimeslotIndex, s.EntropyPool)
+	newEntropyPool := calculateNewEntropyPool(newBlock.Header, s.TimeslotIndex, s.EntropyPool)
 
-	newJudgements := calculateNewJudgements(*newBlock.Extrinsic.ED, s.PastJudgements)
+	newJudgements := calculateNewJudgements(newBlock.Extrinsic.ED, s.PastJudgements)
 
-	newCoreAuthorizations := calculateNewCoreAuthorizations(*newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
+	newCoreAuthorizations := calculateNewCoreAuthorizations(newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
 
-	newValidators := calculateNewValidators(*newBlock.Header, s.TimeslotIndex, s.ValidatorState.Validators, s.ValidatorState.SafroleState.NextValidators, newJudgements)
+	newValidators := calculateNewValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.Validators, s.ValidatorState.SafroleState.NextValidators, newJudgements)
 
-	newSafroleState := calculateNewSafroleState(*newBlock.Header, s.TimeslotIndex, *newBlock.Extrinsic.ET, s.ValidatorState.SafroleState.NextValidators, s.ValidatorState.QueuedValidators, newEntropyPool, newValidators)
+	newSafroleState := calculateNewSafroleState(newBlock.Header, s.TimeslotIndex, newBlock.Extrinsic.ET, s.ValidatorState.SafroleState.NextValidators, s.ValidatorState.QueuedValidators, newEntropyPool, newValidators)
 
-	newArchivedValidators := calculateNewArchivedValidators(*newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.Validators)
+	newArchivedValidators := calculateNewArchivedValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.Validators)
 
 	// Update the state with newSafroleState values
 
