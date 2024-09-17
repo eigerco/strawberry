@@ -187,17 +187,15 @@ func (br *byteReader) decodeArray(value reflect.Value) error {
 }
 
 func (br *byteReader) decodeEd25519PublicKey(value reflect.Value) error {
-	newPublicKey := make([]byte, 32)
-	_, err := io.ReadFull(br.Reader, newPublicKey)
-	if err != nil {
+	publicKey := make(ed25519.PublicKey, ed25519.PublicKeySize)
+	if _, err := io.ReadFull(br.Reader, publicKey); err != nil {
 		return err
 	}
-
-	value.Set(reflect.ValueOf(ed25519.PublicKey(newPublicKey)))
+	
+	value.Set(reflect.ValueOf(publicKey))
 
 	return nil
 }
-
 func (br *byteReader) decodeStruct(value reflect.Value) error {
 	t := value.Type()
 
