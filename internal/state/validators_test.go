@@ -176,8 +176,8 @@ func setupValidatorState(t *testing.T) *ValidatorState {
 	for i := 0; i < jamtime.TimeslotsPerEpoch; i++ {
 		epochKeys[i] = testutils.RandomBandersnatchPublicKey(t)
 	}
-	validatorState.SafroleState = safroleState
 	err := safroleState.SealingKeySeries.SetValue(epochKeys)
+	validatorState.SafroleState = safroleState
 	require.NoError(t, err)
 	return &validatorState
 }

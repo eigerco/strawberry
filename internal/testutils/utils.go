@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,6 +27,15 @@ func RandomBandersnatchPublicKey(t *testing.T) crypto.BandersnatchPublicKey {
 	_, err := rand.Read(hash)
 	require.NoError(t, err)
 	return crypto.BandersnatchPublicKey(hash)
+}
+
+func RandomBandersnatchPrivateKey(t *testing.T) *bandersnatch.PrivateKey {
+	hash := make([]byte, crypto.BandersnatchSize)
+	_, err := rand.Read(hash)
+	require.NoError(t, err)
+	key, err := bandersnatch.NewPrivateKeyFromSeed(crypto.BandersnatchSeedKey(hash))
+	require.NoError(t, err)
+	return key
 }
 
 func RandomBlsKey(t *testing.T) crypto.BlsKey {
@@ -70,6 +80,14 @@ func RandomEd25519Signature(t *testing.T) [crypto.Ed25519SignatureSize]byte {
 	_, err := rand.Read(hash[:])
 	require.NoError(t, err)
 	return hash
+}
+
+func RandomEpochKeys(t *testing.T) crypto.EpochKeys {
+	var epochKeys crypto.EpochKeys
+	for i := 0; i < 600; i++ {
+		epochKeys[i] = RandomBandersnatchPublicKey(t)
+	}
+	return epochKeys
 }
 
 func RandomTicketProof(t *testing.T) [784]byte {
