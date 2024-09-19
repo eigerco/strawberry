@@ -50,17 +50,18 @@ type Program struct {
 	DebugLinePrograms      []byte
 }
 
+func (p *Program) JumpTableGetByAddress(address uint32) *uint32 {
+	if address&(VmCodeAddressAlignment-1) != 0 || address == 0 {
+		return nil
+	}
+
+	instructionOffset := p.JumpTable[((address - VmCodeAddressAlignment) / VmCodeAddressAlignment)]
+	return &instructionOffset
+}
+
 type ProgramExport struct {
 	TargetCodeOffset uint32
 	Symbol           string
-}
-
-type Instruction struct {
-	Code   InstructionCode
-	Imm    []uint32
-	Reg    []Reg
-	Offset uint32
-	Length uint32
 }
 
 func ParseBlob(r *Reader) (pp *Program, err error) {
@@ -330,10 +331,10 @@ func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruc
 	nextOffset, argsLength := parseBitmaskSlow(bitmask, instructionOffset)
 	chunkLength := min(16, argsLength+1)
 	chunk := code[instructionOffset : instructionOffset+chunkLength]
-	opcode := InstructionCode(chunk[0])
+	opcode := Opcode(chunk[0])
 	regs, imm := parseArgsTable[opcode](chunk[1:], uint32(instructionOffset), uint32(argsLength))
 	return nextOffset, Instruction{
-		Code:   opcode,
+		Opcode: opcode,
 		Reg:    regs,
 		Imm:    imm,
 		Offset: uint32(instructionOffset),
@@ -341,7 +342,6 @@ func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruc
 	}, nil
 }
 
-//lint:ignore U1000
 func parseBitmaskFast(bitmask []byte, offset int) (int, int) {
 	offset += 1
 	shift := offset & 7
