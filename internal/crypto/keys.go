@@ -11,7 +11,7 @@ import (
 type Ed25519PublicKey struct {
 	ed25519.PublicKey
 }
-type C [][32]byte
+type Ed25519PublicKeys []Ed25519PublicKey
 
 type Ed25519PrivateKey ed25519.PrivateKey
 type BlsKey [BLSSize]byte
@@ -37,10 +37,10 @@ func (h Ed25519PublicKey) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fmt.Sprintf("0x%s", hex.EncodeToString(h.PublicKey[:])))
 }
 
-func (c C) MarshalJSON() ([]byte, error) {
+func (c Ed25519PublicKeys) MarshalJSON() ([]byte, error) {
 	var encoded []string
 	for _, b := range c {
-		encoded = append(encoded, fmt.Sprintf("0x%s", hex.EncodeToString(b[:])))
+		encoded = append(encoded, fmt.Sprintf("0x%s", hex.EncodeToString(b.PublicKey[:])))
 	}
 
 	return json.Marshal(encoded)

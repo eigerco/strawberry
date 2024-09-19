@@ -12,7 +12,7 @@ import "github.com/eigerco/strawberry/internal/crypto"
 // Assurances must be ordered by validator index in the extrinsic.
 type Assurance struct {
 	Anchor         crypto.Hash             // Parent block hash (a ∈ H)
-	Flag           [1]byte                 // Bitstring of assurances, one bit per core (f ∈ B_C)
+	Flag           bool                    // Bitstring of assurances, one bit per core (f ∈ B_C)
 	ValidatorIndex uint16                  // Index of the attesting validator (v ∈ N_V)
 	Signature      crypto.Ed25519Signature // Ed25519 signature (s ∈ E)
 }

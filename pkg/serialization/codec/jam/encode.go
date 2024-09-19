@@ -65,13 +65,13 @@ func (bw *byteWriter) handleReflectTypes(in interface{}) error {
 			return bw.marshal(elem.Interface())
 		}
 	case reflect.Struct:
+		if pk, ok := in.(crypto.Ed25519PublicKey); ok {
+			return bw.encodeEd25519PublicKey(pk)
+		}
 		return bw.encodeStruct(in)
 	case reflect.Array:
 		return bw.encodeArray(in)
 	case reflect.Slice:
-		if pk, ok := in.(crypto.Ed25519PublicKey); ok {
-			return bw.encodeEd25519PublicKey(pk)
-		}
 		return bw.encodeSlice(in)
 	default:
 		return fmt.Errorf(ErrUnsupportedType, in)

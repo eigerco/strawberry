@@ -70,6 +70,10 @@ func TestJamDecodeBlock(t *testing.T) {
 				t.Errorf("Failed to unmarshal binary file: %v", err)
 			}
 
+			//fmt.Println(unmarshaled.Extrinsic.EG.Guarantees[0].WorkReport.WorkResults[0].Output.inner)
+			//fmt.Println(fmt.Sprintf("0x%x", unmarshaled.Extrinsic.EG.Guarantees[0].WorkReport.Output))
+			//fmt.Println(fmt.Sprintf("0x%x", unmarshaled.Extrinsic.EP[0].Data))
+
 			jsonData, err := json.MarshalIndent(unmarshaled, "", "  ")
 			if err != nil {
 				t.Errorf("Failed to json marshal the unmarshalled jam file: %v", err)

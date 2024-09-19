@@ -20,14 +20,14 @@ type Verdict struct {
 
 type Culprit struct {
 	ReportHash                crypto.Hash             // H, hash of the work report
-	ValidatorEd25519PublicKey crypto.Hash             //crypto.Ed25519PublicKey // He
+	ValidatorEd25519PublicKey crypto.Ed25519PublicKey // He
 	Signature                 crypto.Ed25519Signature // E
 }
 
 type Fault struct {
 	ReportHash                crypto.Hash             // H, hash of the work report
 	IsValid                   bool                    // {⊺,⊥}
-	ValidatorEd25519PublicKey crypto.Hash             //crypto.Ed25519PublicKey // He
+	ValidatorEd25519PublicKey crypto.Ed25519PublicKey // He
 	Signature                 crypto.Ed25519Signature // E
 }
 
