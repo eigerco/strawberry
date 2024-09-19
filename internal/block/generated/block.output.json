@@ -200,7 +200,17 @@
               }
             ]
           },
-          "Timeslot": 42
+          "Timeslot": 42,
+          "Credentials": [
+            {
+              "ValidatorIndex": 0,
+              "Signature": "0x5f6e74d204c2490e71be4451963d7d7da797d4fd37d6e0bda56927d02a3302ca3b3a0e08c961e7580e97a0f08c269f549728f52d9c7de3affe850a0371380012"
+            },
+            {
+              "ValidatorIndex": 1,
+              "Signature": "0x3a6813f7691895a444d72cad60e3d54d64266fbaf567d7a5816a6623edcdbafed304517e4de88a399ed4d3faa2fc86e38243acbf480a652a236c27e515939032"
+            }
+          ]
         }
       ]
     }

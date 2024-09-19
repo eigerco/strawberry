@@ -16,9 +16,9 @@ type GuaranteesExtrinsic struct {
 
 // Guarantee represents a single guarantee within the E_G extrinsic
 type Guarantee struct {
-	WorkReport WorkReport       // The work report being guaranteed
-	Timeslot   jamtime.Timeslot // The timeslot when this guarantee was made
-	//Credentials []CredentialSignature // The credentials proving the guarantee's validity
+	WorkReport  WorkReport            // The work report being guaranteed
+	Timeslot    jamtime.Timeslot      // The timeslot when this guarantee was made
+	Credentials []CredentialSignature // The credentials proving the guarantee's validity
 }
 
 // CredentialSignature represents a single signature within the credential
