@@ -9,6 +9,7 @@ type Ed25519PublicKey struct {
 	ed25519.PublicKey
 }
 type Ed25519PrivateKey ed25519.PrivateKey
+type Ed25519Signature [Ed25519SignatureSize]byte
 type BlsKey [BLSSize]byte
 type BandersnatchSeedKey [BandersnatchSize]byte
 type BandersnatchSecretKey [BandersnatchSize]byte

@@ -26,7 +26,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 			},
 			Entropy: testutils.RandomHash(t),
 		},
-		WinningTicketsMarker: [jamtime.TimeslotsPerEpoch]*Ticket{{
+		WinningTicketsMarker: &[jamtime.TimeslotsPerEpoch]Ticket{{
 			Identifier: testutils.RandomHash(t),
 			EntryIndex: 112,
 		},
@@ -133,7 +133,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 				},
 				Credentials: []CredentialSignature{
 					{
-						ValidatorIndex: uint32(1),
+						ValidatorIndex: uint16(1),
 						Signature:      testutils.RandomEd25519Signature(t),
 					},
 				},
