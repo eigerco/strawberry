@@ -4,6 +4,8 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 )
 
+const validatorsSuperMajority = (2 * NumberOfValidators / 3) + 1 // 2/3V + 1
+
 type DisputeExtrinsic struct {
 	Verdicts []Verdict
 	Culprits []Culprit
@@ -11,9 +13,9 @@ type DisputeExtrinsic struct {
 }
 
 type Verdict struct {
-	ReportHash crypto.Hash // H, hash of the work report
-	EpochIndex uint32      // ⌊τ/E⌋ - N2, epoch index
-	Judgments  []Judgment  // ⟦{⊺,⊥},NV,E⟧⌊2/3V⌋+1
+	ReportHash crypto.Hash                       // H, hash of the work report
+	EpochIndex uint32                            // ⌊τ/E⌋ - N2, epoch index
+	Judgments  [validatorsSuperMajority]Judgment // ⟦{⊺,⊥},NV,E⟧⌊2/3V⌋+1
 }
 
 type Culprit struct {
