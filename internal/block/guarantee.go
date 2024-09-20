@@ -13,13 +13,13 @@ type GuaranteesExtrinsic struct {
 // Guarantee represents a single guarantee within the E_G extrinsic
 type Guarantee struct {
 	WorkReport  WorkReport            // The work report being guaranteed
-	Credentials []CredentialSignature // The credentials proving the guarantee's validity
 	Timeslot    jamtime.Timeslot      // The timeslot when this guarantee was made
+	Credentials []CredentialSignature // The credentials proving the guarantee's validity
 }
 
 // CredentialSignature represents a single signature within the credential
 type CredentialSignature struct {
-	ValidatorIndex uint32                            // Index of the validator providing this signature
+	ValidatorIndex uint16                            // Index of the validator providing this signature
 	Signature      [crypto.Ed25519SignatureSize]byte // The Ed25519 signature
 }
 

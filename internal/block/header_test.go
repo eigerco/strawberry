@@ -27,7 +27,7 @@ func Test_HeaderEncodeDecode(t *testing.T) {
 			},
 			Entropy: testutils.RandomHash(t),
 		},
-		WinningTicketsMarker: [jamtime.TimeslotsPerEpoch]*Ticket{{
+		WinningTicketsMarker: &[jamtime.TimeslotsPerEpoch]Ticket{{
 			Identifier: testutils.RandomHash(t),
 			EntryIndex: 111,
 		}, {

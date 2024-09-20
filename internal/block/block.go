@@ -9,8 +9,8 @@ type Block struct {
 // Extrinsic represents the block extrinsic data
 type Extrinsic struct {
 	ET TicketExtrinsic
-	EP PreimageExtrinsic
 	ED DisputeExtrinsic
+	EP PreimageExtrinsic
 	EA AssurancesExtrinsic
 	EG GuaranteesExtrinsic
 }
