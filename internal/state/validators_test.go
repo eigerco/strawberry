@@ -26,7 +26,7 @@ func TestDetermineNewSealingKeysWhenNotFirstTimeslot(t *testing.T) {
 		EpochMarker:   &epochMarker,
 	}
 	block := &block.Block{
-		Header: &header,
+		Header: header,
 	}
 	err := vs.UpdateSealingKeys(block)
 	require.NoError(t, err)
@@ -47,7 +47,7 @@ func TestDetermineNewSealingKeysWhenNotEnoughTickets(t *testing.T) {
 		EpochMarker:   &epochMarker,
 	}
 	block := &block.Block{
-		Header: &header,
+		Header: header,
 	}
 	err := vs.UpdateSealingKeys(block)
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestDetermineNewSealingKeys(t *testing.T) {
 		EpochMarker:   &epochMarker,
 	}
 	block := &block.Block{
-		Header: &header,
+		Header: header,
 	}
 	err := vs.UpdateSealingKeys(block)
 	require.NoError(t, err)
@@ -104,7 +104,7 @@ func TestRotateValidatorKeysWhenNotNewEpoch(t *testing.T) {
 		TimeSlotIndex: 2,
 	}
 	block := &block.Block{
-		Header: &header,
+		Header: header,
 	}
 
 	initialValidators := vs.Validators
@@ -132,7 +132,7 @@ func TestRotateValidatorKeys(t *testing.T) {
 		},
 	}
 	block := &block.Block{
-		Header: &header,
+		Header: header,
 	}
 	// Store initial state for comparison
 	initialValidators := vs.Validators

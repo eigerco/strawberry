@@ -48,11 +48,11 @@ func Test_BlockEncodeDecode(t *testing.T) {
 			Proof:      randomTicketProof(t),
 		},
 	}
-	ticketExtrinsic := &TicketExtrinsic{
+	ticketExtrinsic := TicketExtrinsic{
 		TicketProofs: ticketProofs,
 	}
 
-	preimageExtrinsic := &PreimageExtrinsic{
+	preimageExtrinsic := PreimageExtrinsic{
 		{
 			ServiceIndex: uint32(1),
 			Data:         []byte("preimage data"),
@@ -72,7 +72,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 			},
 		},
 	}
-	disputeExtrinsic := &DisputeExtrinsic{
+	disputeExtrinsic := DisputeExtrinsic{
 		Verdicts: verdicts,
 		Culprits: []Culprit{
 			{
@@ -91,7 +91,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		},
 	}
 
-	assurancesExtrinsic := &AssurancesExtrinsic{
+	assurancesExtrinsic := AssurancesExtrinsic{
 		{
 			Anchor:         testutils.RandomHash(t),
 			Flag:           true,
@@ -100,7 +100,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		},
 	}
 
-	guaranteesExtrinsic := &GuaranteesExtrinsic{
+	guaranteesExtrinsic := GuaranteesExtrinsic{
 		Guarantees: []Guarantee{
 			{
 				WorkReport: WorkReport{
@@ -151,8 +151,8 @@ func Test_BlockEncodeDecode(t *testing.T) {
 	}
 
 	originalBlock := Block{
-		Header:    &h,
-		Extrinsic: &e,
+		Header:    h,
+		Extrinsic: e,
 	}
 
 	serializer := serialization.NewSerializer(&codec.JAMCodec{})
