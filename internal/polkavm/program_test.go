@@ -26,68 +26,68 @@ func Test_ParseBlob(t *testing.T) {
 	assert.Equal(t, uint32(4096), pp.StackSize)
 	if assert.Equal(t, 10, len(pp.Instructions)) {
 		assert.Equal(t, Instruction{
-			Code:   AddImm,
+			Opcode: AddImm,
 			Imm:    []uint32{4294967288},
 			Reg:    []Reg{SP, SP},
 			Offset: 0, Length: 3,
 		}, pp.Instructions[0])
 
 		assert.Equal(t, Instruction{
-			Code:   StoreIndirectU32,
+			Opcode: StoreIndirectU32,
 			Imm:    []uint32{4},
 			Reg:    []Reg{RA, SP},
 			Offset: 3,
 			Length: 3,
 		}, pp.Instructions[1])
 		assert.Equal(t, Instruction{
-			Code:   StoreIndirectU32,
+			Opcode: StoreIndirectU32,
 			Imm:    []uint32{0},
 			Reg:    []Reg{S0, SP},
 			Offset: 6,
 			Length: 2,
 		}, pp.Instructions[2])
 		assert.Equal(t, Instruction{
-			Code:   Add,
+			Opcode: Add,
 			Reg:    []Reg{S0, A1, A0},
 			Offset: 8,
 			Length: 3,
 		}, pp.Instructions[3])
 		assert.Equal(t, Instruction{
-			Code:   Ecalli,
+			Opcode: Ecalli,
 			Imm:    []uint32{0},
 			Offset: 11,
 			Length: 1,
 		}, pp.Instructions[4])
 		assert.Equal(t, Instruction{
-			Code:   Add,
+			Opcode: Add,
 			Imm:    nil,
 			Reg:    []Reg{A0, A0, S0},
 			Offset: 12,
 			Length: 3,
 		}, pp.Instructions[5])
 		assert.Equal(t, Instruction{
-			Code:   LoadIndirectU32,
+			Opcode: LoadIndirectU32,
 			Imm:    []uint32{4},
 			Reg:    []Reg{RA, SP},
 			Offset: 15,
 			Length: 3,
 		}, pp.Instructions[6])
 		assert.Equal(t, Instruction{
-			Code:   LoadIndirectU32,
+			Opcode: LoadIndirectU32,
 			Imm:    []uint32{0},
 			Reg:    []Reg{S0, SP},
 			Offset: 18,
 			Length: 2,
 		}, pp.Instructions[7])
 		assert.Equal(t, Instruction{
-			Code:   AddImm,
+			Opcode: AddImm,
 			Imm:    []uint32{8},
 			Reg:    []Reg{SP, SP},
 			Offset: 20,
 			Length: 3,
 		}, pp.Instructions[8])
 		assert.Equal(t, Instruction{
-			Code:   JumpIndirect,
+			Opcode: JumpIndirect,
 			Imm:    []uint32{0},
 			Reg:    []Reg{RA},
 			Offset: 23,
@@ -133,5 +133,3 @@ func Test_parseBitmaskFast(t *testing.T) {
 		assert.Equal(t, tc.argsLength, argsLength, "index: %d", i)
 	}
 }
-
-//JumpIndirect, LoadImm, LoadU8, LoadI8, LoadU16, LoadI16, LoadU32, StoreU8, StoreU16, StoreU32
