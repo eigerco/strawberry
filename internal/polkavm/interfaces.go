@@ -68,7 +68,7 @@ type Mutator interface {
 	CmovIfZeroImm(d Reg, c Reg, s uint32)
 	CmovIfNotZero(d Reg, s, c Reg)
 	CmovIfNotZeroImm(d Reg, c Reg, s uint32)
-	Ecalli(imm uint32) error
+	Ecalli(imm uint32) HostCallResult
 	StoreU8(src Reg, offset uint32) error
 	StoreU16(src Reg, offset uint32) error
 	StoreU32(src Reg, offset uint32) error
@@ -96,4 +96,48 @@ type Mutator interface {
 	LoadImmAndJumpIndirect(ra Reg, base Reg, value, offset uint32) error
 	Jump(target uint32)
 	JumpIndirect(base Reg, offset uint32) error
+}
+
+type HostCallResult int
+
+const (
+	HostCallResultNone HostCallResult = 2<<32 - 1
+	HostCallResultWhat HostCallResult = 2<<32 - 2
+	HostCallResultOob  HostCallResult = 2<<32 - 3
+	HostCallResultWho  HostCallResult = 2<<32 - 4
+	HostCallResultFull HostCallResult = 2<<32 - 5
+	HostCallResultCore HostCallResult = 2<<32 - 6
+	HostCallResultCash HostCallResult = 2<<32 - 7
+	HostCallResultLow  HostCallResult = 2<<32 - 8
+	HostCallResultHigh HostCallResult = 2<<32 - 9
+	HostCallResultHuh  HostCallResult = 2<<32 - 10
+	HostCallResultOk   HostCallResult = 0
+)
+
+func (r HostCallResult) String() string {
+	switch r {
+	case HostCallResultNone:
+		return "item does not exist"
+	case HostCallResultWhat:
+		return "name unknown"
+	case HostCallResultOob:
+		return "the return value for memory index provided is not accessible"
+	case HostCallResultWho:
+		return "index unknown"
+	case HostCallResultFull:
+		return "storage full"
+	case HostCallResultCore:
+		return "core index unknown"
+	case HostCallResultCash:
+		return "insufficient funds"
+	case HostCallResultLow:
+		return "gas limit too low"
+	case HostCallResultHigh:
+		return "gas limit too high"
+	case HostCallResultHuh:
+		return "the item is already solicited or cannot be forgotten"
+	case HostCallResultOk:
+		return "success"
+	}
+	return "unknown"
 }

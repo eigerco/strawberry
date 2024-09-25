@@ -2,6 +2,7 @@ package polkavm
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
 type Opcode byte
@@ -563,7 +564,9 @@ func (i *Instruction) StepOnce(mutator Mutator) error {
 	case Jump:
 		mutator.Jump(i.Imm[0])
 	case Ecalli:
-		return mutator.Ecalli(i.Imm[0])
+		if result := mutator.Ecalli(i.Imm[0]); result != HostCallResultOk {
+			return fmt.Errorf("host call terminated with code: %d - %s", result, result.String())
+		}
 	case StoreImmU8:
 		return mutator.StoreImmU8(i.Imm[0], i.Imm[1])
 	case StoreImmU16:
