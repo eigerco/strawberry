@@ -60,6 +60,8 @@ func (br *byteReader) handleReflectTypes(value reflect.Value) error {
 			return br.decodeEd25519PublicKey(value)
 		}
 		return br.decodeSlice(value)
+	case reflect.Map:
+		return br.decodeMap(value)
 	default:
 		return fmt.Errorf(ErrUnsupportedType, value.Interface())
 	}
@@ -183,6 +185,45 @@ func (br *byteReader) decodeArray(value reflect.Value) error {
 		}
 	}
 	value.Set(temp.Elem())
+
+	return nil
+}
+
+func (br *byteReader) decodeMap(value reflect.Value) error {
+	// Get the type of the map's key and value
+	mapType := value.Type()
+	keyType := mapType.Key()
+	elemType := mapType.Elem()
+
+	// Decode the length of the map (i.e., the number of key-value pairs)
+	length, err := br.decodeLength()
+	if err != nil {
+		return fmt.Errorf(ErrDecodingMapLength, err)
+	}
+
+	// Create a new map of the appropriate type and capacity
+	tempMap := reflect.MakeMapWithSize(mapType, int(length))
+
+	// Loop over the number of key-value pairs
+	for i := uint(0); i < length; i++ {
+		// Decode the key
+		key := reflect.New(keyType).Elem() // Create a new key of the map's key type
+		if err := br.unmarshal(key); err != nil {
+			return fmt.Errorf(ErrDecodingMapKey, err)
+		}
+
+		// Decode the value
+		value := reflect.New(elemType).Elem() // Create a new value of the map's element type
+		if err := br.unmarshal(value); err != nil {
+			return fmt.Errorf(ErrDecodingMapValue, err)
+		}
+
+		// Insert the key-value pair into the temporary map
+		tempMap.SetMapIndex(key, value)
+	}
+
+	// Set the decoded map into the destination value
+	value.Set(tempMap)
 
 	return nil
 }
