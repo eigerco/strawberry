@@ -69,19 +69,19 @@ func NewPrivateKeyFromSeed(seed crypto.BandersnatchSeedKey) (*PrivateKey, error)
 }
 
 // Public returns the public key associated with the private key
-func (pk *PrivateKey) Public() (crypto.BandersnatchPublicKey, error) {
+func (pk *PrivateKey) Public() (crypto.BandersnatchSerializedPublicKey, error) {
 	if pk.ptr == nil {
-		return crypto.BandersnatchPublicKey{}, errors.New("invalid private key")
+		return crypto.BandersnatchSerializedPublicKey{}, errors.New("invalid private key")
 	}
 
 	publicKeyPtr := getPublicKeyFunc(pk.ptr)
 
 	if publicKeyPtr == nil {
-		return crypto.BandersnatchPublicKey{}, errors.New("failed to retrieve public key")
+		return crypto.BandersnatchSerializedPublicKey{}, errors.New("failed to retrieve public key")
 	}
 
 	// Convert the pointer to a Bandersnatch PublicKey array
-	var publicKey crypto.BandersnatchPublicKey
+	var publicKey crypto.BandersnatchSerializedPublicKey
 	copy(publicKey[:], C.GoBytes(publicKeyPtr, C.int(len(publicKey))))
 
 	return publicKey, nil
@@ -114,7 +114,7 @@ func (pk *PrivateKey) Sign(data []byte) (crypto.BandersnatchSignature, error) {
 }
 
 // VerifySignature verifies a bandersnatch signature against the given data and public key
-func VerifySignature(signature crypto.BandersnatchSignature, data []byte, pubKey crypto.BandersnatchPublicKey) bool {
+func VerifySignature(signature crypto.BandersnatchSignature, data []byte, pubKey crypto.BandersnatchSerializedPublicKey) bool {
 	signaturePtr := unsafe.Pointer(&signature[0])
 	dataPtr := unsafe.Pointer(&data[0])
 	publicKeyPtr := unsafe.Pointer(&pubKey[0])
@@ -146,7 +146,7 @@ func (pk *PrivateKey) GenerateVrfProof(data, context []byte) (crypto.VrfProof, e
 }
 
 // VerifyVrfProof verifies a VRF proof against the given data, context, and public key
-func VerifyVrfProof(proof crypto.VrfProof, data, context []byte, pubKey crypto.BandersnatchPublicKey) bool {
+func VerifyVrfProof(proof crypto.VrfProof, data, context []byte, pubKey crypto.BandersnatchSerializedPublicKey) bool {
 	if len(data) == 0 || len(context) == 0 {
 		return false
 	}
@@ -185,7 +185,7 @@ func GenerateVrfOutput(proof crypto.VrfProof) (crypto.VrfOutput, error) {
 }
 
 // GenerateRingCommitment generates a KZG commitment for a set of public keys.
-func GenerateRingCommitment(pubKeys []crypto.BandersnatchPublicKey) (crypto.RingCommitment, error) {
+func GenerateRingCommitment(pubKeys []crypto.BandersnatchSerializedPublicKey) (crypto.RingCommitment, error) {
 	// FFI call to Rust code to generate the KZG commitment
 	return crypto.RingCommitment{}, nil
 }

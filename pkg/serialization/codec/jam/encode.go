@@ -30,6 +30,10 @@ type byteWriter struct {
 }
 
 func (bw *byteWriter) marshal(in interface{}) error {
+	if v, ok := in.(EncodeEnum); ok {
+		return bw.encodeEnumType(v)
+	}
+
 	switch in := in.(type) {
 	case int:
 		return bw.encodeUint(uint(in))
@@ -66,13 +70,13 @@ func (bw *byteWriter) handleReflectTypes(in interface{}) error {
 			return bw.marshal(elem.Interface())
 		}
 	case reflect.Struct:
+		if pk, ok := in.(crypto.Ed25519PublicKey); ok {
+			return bw.encodeEd25519PublicKey(pk)
+		}
 		return bw.encodeStruct(in)
 	case reflect.Array:
 		return bw.encodeArray(in)
 	case reflect.Slice:
-		if pk, ok := in.(crypto.Ed25519PublicKey); ok {
-			return bw.encodeEd25519PublicKey(pk)
-		}
 		return bw.encodeSlice(in)
 	case reflect.Map:
 		return bw.encodeMap(in)
@@ -110,6 +114,24 @@ func (bw *byteWriter) encodeCustomPrimitive(in interface{}) error {
 	}
 
 	return bw.marshal(in)
+}
+
+func (bw *byteWriter) encodeEnumType(enum EncodeEnum) error {
+	index, value, err := enum.IndexValue()
+	if err != nil {
+		return err
+	}
+
+	_, err = bw.Write([]byte{byte(index)})
+	if err != nil {
+		return err
+	}
+
+	if value == nil {
+		return nil
+	}
+
+	return bw.marshal(value)
 }
 
 func (bw *byteWriter) encodeSlice(in interface{}) error {

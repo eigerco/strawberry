@@ -28,6 +28,13 @@ type byteReader struct {
 }
 
 func (br *byteReader) unmarshal(value reflect.Value) error {
+	if value.CanAddr() {
+		addr := value.Addr()
+		if vdt, ok := addr.Interface().(EnumType); ok {
+			return br.decodeEnum(vdt)
+		}
+	}
+
 	in := value.Interface()
 	switch in.(type) {
 
@@ -52,13 +59,13 @@ func (br *byteReader) handleReflectTypes(value reflect.Value) error {
 	case reflect.Ptr:
 		return br.decodePointer(value)
 	case reflect.Struct:
+		if value.Type() == reflect.TypeOf(crypto.Ed25519PublicKey{}) {
+			return br.decodeEd25519PublicKey(value)
+		}
 		return br.decodeStruct(value)
 	case reflect.Array:
 		return br.decodeArray(value)
 	case reflect.Slice:
-		if value.Type() == reflect.TypeOf(crypto.Ed25519PublicKey{}) {
-			return br.decodeEd25519PublicKey(value)
-		}
 		return br.decodeSlice(value)
 	case reflect.Map:
 		return br.decodeMap(value)
@@ -70,6 +77,7 @@ func (br *byteReader) handleReflectTypes(value reflect.Value) error {
 func (br *byteReader) decodeCustomPrimitive(value reflect.Value) error {
 	in := value.Interface()
 	inType := reflect.TypeOf(in)
+
 	var temp reflect.Value
 
 	switch inType.Kind() {
@@ -115,6 +123,34 @@ func (br *byteReader) ReadOctet() (byte, error) {
 		return 0, err
 	}
 	return b[0], nil
+}
+
+func (br *byteReader) decodeEnum(enum EnumType) error {
+	b, err := br.ReadOctet()
+	if err != nil {
+		return err
+	}
+
+	val, err := enum.ValueAt(uint(b))
+	if err != nil {
+		return err
+	}
+
+	if val == nil {
+
+		return enum.SetValue(b)
+	}
+
+	tempVal := reflect.New(reflect.TypeOf(val))
+	tempVal.Elem().Set(reflect.ValueOf(val))
+
+	err = br.unmarshal(tempVal.Elem())
+
+	if err != nil {
+		return err
+	}
+
+	return enum.SetValue(tempVal.Elem().Interface())
 }
 
 func (br *byteReader) decodePointer(value reflect.Value) error {
@@ -236,7 +272,7 @@ func (br *byteReader) decodeEd25519PublicKey(value reflect.Value) error {
 		return err
 	}
 
-	value.Set(reflect.ValueOf(publicKey.PublicKey))
+	value.Set(reflect.ValueOf(publicKey))
 
 	return nil
 }

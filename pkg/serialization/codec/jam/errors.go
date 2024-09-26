@@ -10,8 +10,10 @@ var (
 	ErrInvalidPointer                 = errors.New("invalid pointer")
 	ErrDecodingBool                   = errors.New("error decoding boolean")
 	ErrExceedingByteArrayLimit        = errors.New("byte array length exceeds max value of uint32")
+	ErrUnsupportedEnumTypeValue       = errors.New("unsupported enum type value")
+	ErrUnknownEnumTypeValue           = errors.New("cannot find enum type value")
 
-	ErrUnsupportedType         = "unsupported type: %v"
+	ErrUnsupportedType         = "unsupported type: %T"
 	ErrReadingBytes            = "error reading bytes: %w"
 	ErrReadingByte             = "error reading byte: %w"
 	ErrDecodingUint            = "error decoding uint: : %w"
