@@ -5,8 +5,6 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
-const NumberOfValidators uint16 = 1023
-
 // Header as defined in the section 5 in the paper
 type Header struct {
 	ParentHash           crypto.Hash                        // Hp

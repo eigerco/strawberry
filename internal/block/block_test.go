@@ -94,7 +94,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 	assurancesExtrinsic := AssurancesExtrinsic{
 		{
 			Anchor:         testutils.RandomHash(t),
-			Flag:           true,
+			Bitfield:       [availBitfieldBytes]byte{1},
 			ValidatorIndex: uint16(1),
 			Signature:      testutils.RandomEd25519Signature(t),
 		},
