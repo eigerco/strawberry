@@ -76,19 +76,19 @@ type ServiceId uint32
 
 // WorkResult is the data conduit by which services’ states may be altered through the computation done within a work-package.
 type WorkResult struct {
-	ServiceId              ServiceId      // Service ID (s) - The index of the service whose state is to be altered and thus whose refine code was already executed.
-	ServiceHashCode        crypto.Hash    // Hash of the service code (c) - The hash of the code of the service at the time of being reported.
-	PayloadHash            crypto.Hash    // Hash of the payload (l) - The hash of the payload within the work item which was executed in the refine stage to give this result. Provided to the accumulation logic of the service later on.
-	GasPrioritizationRatio uint64         // Gas prioritization ratio (g) - used when determining how much gas should be allocated to execute of this item’s accumulate.
-	Output                 WorkExecResult // Output of the work result (o) ∈ Y ∪ J: Output or error (Y is the set of octet strings, J is the set of work execution errors)
+	ServiceId              ServiceId               // Service ID (s) - The index of the service whose state is to be altered and thus whose refine code was already executed.
+	ServiceHashCode        crypto.Hash             // Hash of the service code (c) - The hash of the code of the service at the time of being reported.
+	PayloadHash            crypto.Hash             // Hash of the payload (l) - The hash of the payload within the work item which was executed in the refine stage to give this result. Provided to the accumulation logic of the service later on.
+	GasPrioritizationRatio uint64                  // Gas prioritization ratio (g) - used when determining how much gas should be allocated to execute of this item’s accumulate.
+	Output                 WorkResultOutputOrError // Output of the work result (o) ∈ Y ∪ J: Output or error (Y is the set of octet strings, J is the set of work execution errors)
 }
 
-// WorkExecResult represents either the successful output or an error from a work result
-type WorkExecResult struct {
+// WorkResultOutputOrError represents either the successful output or an error from a work result
+type WorkResultOutputOrError struct {
 	inner any
 }
 
-func (wer *WorkExecResult) SetValue(value any) error {
+func (wer *WorkResultOutputOrError) SetValue(value any) error {
 	switch v := value.(type) {
 	case []byte:
 		wer.inner = v
@@ -101,7 +101,7 @@ func (wer *WorkExecResult) SetValue(value any) error {
 	}
 }
 
-func (wer WorkExecResult) IndexValue() (uint, any, error) {
+func (wer WorkResultOutputOrError) IndexValue() (uint, any, error) {
 	switch wer.inner.(type) {
 	case []byte:
 		return 0, wer.inner, nil
@@ -112,7 +112,7 @@ func (wer WorkExecResult) IndexValue() (uint, any, error) {
 	return 0, nil, jam.ErrUnsupportedEnumTypeValue
 }
 
-func (wer WorkExecResult) ValueAt(index uint) (any, error) {
+func (wer WorkResultOutputOrError) ValueAt(index uint) (any, error) {
 	switch index {
 	case uint(NoError):
 		return []byte{}, nil
@@ -139,7 +139,7 @@ func NewSuccessfulWorkResult(serviceId ServiceId, serviceHashCode, payloadHash c
 		ServiceHashCode:        serviceHashCode,
 		PayloadHash:            payloadHash,
 		GasPrioritizationRatio: gasPrioritizationRatio,
-		Output:                 WorkExecResult{output},
+		Output:                 WorkResultOutputOrError{output},
 	}
 }
 
@@ -150,6 +150,6 @@ func NewErrorWorkResult(serviceId ServiceId, serviceHashCode, payloadHash crypto
 		ServiceHashCode:        serviceHashCode,
 		PayloadHash:            payloadHash,
 		GasPrioritizationRatio: gasPrioritizationRatio,
-		Output:                 WorkExecResult{errorResult},
+		Output:                 WorkResultOutputOrError{errorResult},
 	}
 }
