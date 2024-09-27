@@ -85,16 +85,16 @@ type WorkResult struct {
 
 // WorkResultOutputOrError represents either the successful output or an error from a work result
 type WorkResultOutputOrError struct {
-	inner any
+	Inner any
 }
 
 func (wer *WorkResultOutputOrError) SetValue(value any) error {
 	switch v := value.(type) {
 	case []byte:
-		wer.inner = v
+		wer.Inner = v
 		return nil
 	case uint8:
-		wer.inner = WorkResultError(v)
+		wer.Inner = WorkResultError(v)
 		return nil
 	default:
 		return fmt.Errorf(jam.ErrUnsupportedType, v)
@@ -102,11 +102,11 @@ func (wer *WorkResultOutputOrError) SetValue(value any) error {
 }
 
 func (wer WorkResultOutputOrError) IndexValue() (uint, any, error) {
-	switch wer.inner.(type) {
+	switch wer.Inner.(type) {
 	case []byte:
-		return 0, wer.inner, nil
+		return 0, wer.Inner, nil
 	case WorkResultError:
-		return uint(wer.inner.(WorkResultError)), nil, nil
+		return uint(wer.Inner.(WorkResultError)), nil, nil
 	}
 
 	return 0, nil, jam.ErrUnsupportedEnumTypeValue
@@ -125,7 +125,7 @@ func (wer WorkResultOutputOrError) ValueAt(index uint) (any, error) {
 
 // IsSuccessful checks if the work result is successful
 func (wer WorkResult) IsSuccessful() bool {
-	if _, ok := wer.Output.inner.([]byte); ok {
+	if _, ok := wer.Output.Inner.([]byte); ok {
 		return true
 	}
 

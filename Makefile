@@ -19,9 +19,14 @@ build-bandersnatch:
 	cargo build --release --lib --manifest-path=bandersnatch/Cargo.toml
 
 .PHONY: test
-## test: Runs `go test` on project test files.
+## test: Runs unit tests.
 test: build-bandersnatch
-	go test ./... -race
+	go test ./... -race -v
+
+.PHONY: integration
+## integration: Runs integration tests.
+integration:
+	go test ./... -race -v --tags=integration
 
 ## install-hooks: Install git-hooks from .githooks directory.
 .PHONY: install-hooks

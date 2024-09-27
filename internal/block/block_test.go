@@ -2,6 +2,7 @@ package block
 
 import (
 	"crypto/rand"
+	"github.com/eigerco/strawberry/internal/common"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -20,7 +21,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		ExtrinsicHash:  testutils.RandomHash(t),
 		TimeSlotIndex:  123,
 		EpochMarker: &EpochMarker{
-			Keys: [NumberOfValidators]crypto.BandersnatchPublicKey{
+			Keys: [common.NumberOfValidators]crypto.BandersnatchPublicKey{
 				testutils.RandomBandersnatchPublicKey(t),
 				testutils.RandomBandersnatchPublicKey(t),
 			},
@@ -94,7 +95,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 	assurancesExtrinsic := AssurancesExtrinsic{
 		{
 			Anchor:         testutils.RandomHash(t),
-			Flag:           true,
+			Bitfield:       [availBitfieldBytes]byte{1},
 			ValidatorIndex: uint16(1),
 			Signature:      testutils.RandomEd25519Signature(t),
 		},
