@@ -39,7 +39,7 @@ func getWinningTicketOrKey(header *block.Header, state *State) (interface{}, err
 	}
 }
 
-// TODO: implement this function. This is just a mock.
+// TODO: Bandersnatch implement this function. This is just a mock.
 func isWinningKey(key crypto.BandersnatchSerializedPublicKey, header *block.Header, state *State) bool {
 	winningTicketOrKey, err := getWinningTicketOrKey(header, state)
 	if err != nil {
@@ -133,6 +133,11 @@ func createVRFSignature(header *block.Header, privateKey *bandersnatch.PrivateKe
 	header.VRFSignature = signature
 
 	return nil
+}
+
+// Mock implementation of verifying the VRF proof
+func verifyBlockVRF(header block.Header) bool {
+	return true
 }
 
 // Implements equations 66 and 67

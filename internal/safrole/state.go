@@ -29,7 +29,7 @@ func DetermineNewSealingKeys(currentTimeslot jamtime.Timeslot, ticketAccumulator
 	var ticketsOrKeys TicketsOrKeys
 	// If we don't have the correct number of tickets, proceed with the F function
 	if len(ticketAccumulator) != int(jamtime.TimeslotsPerEpoch) {
-		fallbackKeys, err := SelectFallbackKeys(epochMarker)
+		fallbackKeys, err := selectFallbackKeys(epochMarker)
 		if err != nil {
 			return TicketsOrKeys{}, err
 		}
@@ -39,7 +39,7 @@ func DetermineNewSealingKeys(currentTimeslot jamtime.Timeslot, ticketAccumulator
 		}
 	} else {
 		// Everything is in order, proceed with the outside-in sequencer function Z
-		orderedTickets := OutsideInSequence(ticketAccumulator)
+		orderedTickets := outsideInSequence(ticketAccumulator)
 		err := ticketsOrKeys.SetValue(TicketsBodies(orderedTickets))
 		if err != nil {
 			return TicketsOrKeys{}, err
@@ -48,8 +48,8 @@ func DetermineNewSealingKeys(currentTimeslot jamtime.Timeslot, ticketAccumulator
 	return ticketsOrKeys, nil
 }
 
-// SelectFallbackKeys selects the fallback keys for the sealing key series. Implements the F function from the graypaper
-func SelectFallbackKeys(em *block.EpochMarker) (crypto.EpochKeys, error) {
+// selectFallbackKeys selects the fallback keys for the sealing key series. Implements the F function from the graypaper
+func selectFallbackKeys(em *block.EpochMarker) (crypto.EpochKeys, error) {
 	var fallbackKeys crypto.EpochKeys
 	serializer := serialization.NewSerializer(&codec.JAMCodec{})
 	for i := uint32(0); i < jamtime.TimeslotsPerEpoch; i++ {
@@ -74,8 +74,8 @@ func SelectFallbackKeys(em *block.EpochMarker) (crypto.EpochKeys, error) {
 	return fallbackKeys, nil
 }
 
-// OutsideInSequence implements the Z function from the graypaper
-func OutsideInSequence(tickets []block.Ticket) []block.Ticket {
+// outsideInSequence implements the Z function from the graypaper
+func outsideInSequence(tickets []block.Ticket) []block.Ticket {
 	n := len(tickets)
 	result := make([]block.Ticket, n)
 	left, right := 0, n-1

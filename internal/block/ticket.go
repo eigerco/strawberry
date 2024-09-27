@@ -23,3 +23,15 @@ type TicketProof struct {
 type TicketExtrinsic struct {
 	TicketProofs []TicketProof
 }
+
+// TODO: Bandersnatch. This is just a mock.
+func ExtractTicketFromProof(proofs []TicketProof) []Ticket {
+	result:= make([]Ticket, len(proofs))
+	for i, proof := range proofs {
+		result[i] = Ticket{
+			EntryIndex: proof.EntryIndex, 
+			Identifier: crypto.Hash(proof.Proof[:32]),
+			}
+	}
+	return result
+}
