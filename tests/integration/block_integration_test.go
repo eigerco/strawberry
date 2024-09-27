@@ -1,35 +1,36 @@
 //go:build integration
 
-package block
+package integration_test
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/jamtime"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
 )
 
-var toWorkResultErrorMap = map[string]WorkResultError{
-	"out-of-gas":    OutOfGas,
-	"panic":         UnexpectedTermination,
-	"bad-code":      CodeNotAvailable,
-	"code-oversize": CodeTooLarge,
+var toWorkResultErrorMap = map[string]block.WorkResultError{
+	"out-of-gas":    block.OutOfGas,
+	"panic":         block.UnexpectedTermination,
+	"bad-code":      block.CodeNotAvailable,
+	"code-oversize": block.CodeTooLarge,
 }
 
-func TestDecodeBlock(t *testing.T) {
+func TestDecodeBlockWithJamCodec(t *testing.T) {
 	b, err := os.ReadFile("vectors/block.bin")
 	require.NoError(t, err)
 
 	s := serialization.NewSerializer(codec.NewJamCodec())
 
-	var unmarshaled Block
+	var unmarshaled block.Block
 	err = s.Decode(b, &unmarshaled)
 	require.NoError(t, err)
 
@@ -119,12 +120,12 @@ func TestDecodeBlock(t *testing.T) {
 			require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Results[j].PayloadHash, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].PayloadHash))
 			require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Results[j].GasRatio, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].GasPrioritizationRatio)
 			if expected.Extrinsic.Guarantees[i].Report.Results[j].Result.Ok != nil {
-				require.Equal(t, *expected.Extrinsic.Guarantees[i].Report.Results[j].Result.Ok, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].Output.inner))
+				require.Equal(t, *expected.Extrinsic.Guarantees[i].Report.Results[j].Result.Ok, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].Output.Inner))
 			}
 			if expected.Extrinsic.Guarantees[i].Report.Results[j].Result.Error != nil {
 				expectedWorkResult, found := toWorkResultErrorMap[*expected.Extrinsic.Guarantees[i].Report.Results[j].Result.Error]
 				require.True(t, found)
-				require.Equal(t, expectedWorkResult, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].Output.inner)
+				require.Equal(t, expectedWorkResult, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].Output.Inner)
 			}
 		}
 
@@ -188,11 +189,11 @@ type expectedBlock struct {
 			Entropy    string   `json:"entropy"`
 			Validators []string `json:"validators"`
 		} `json:"epoch_mark"`
-		TicketsMark   *[jamtime.TimeslotsPerEpoch]Ticket `json:"tickets_mark"`
-		OffendersMark []string                           `json:"offenders_mark"`
-		AuthorIndex   uint16                             `json:"author_index"`
-		EntropySource string                             `json:"entropy_source"`
-		Seal          string                             `json:"seal"`
+		TicketsMark   *[jamtime.TimeslotsPerEpoch]block.Ticket `json:"tickets_mark"`
+		OffendersMark []string                                 `json:"offenders_mark"`
+		AuthorIndex   uint16                                   `json:"author_index"`
+		EntropySource string                                   `json:"entropy_source"`
+		Seal          string                                   `json:"seal"`
 	} `json:"header"`
 	Extrinsic struct {
 		Tickets []struct {
@@ -251,11 +252,11 @@ type expectedBlock struct {
 				AuthorizerHash string `json:"authorizer_hash"`
 				AuthOutput     string `json:"auth_output"`
 				Results        []struct {
-					Service     ServiceId `json:"service"`
-					CodeHash    string    `json:"code_hash"`
-					PayloadHash string    `json:"payload_hash"`
-					GasRatio    uint64    `json:"gas_ratio"`
-					Result      Result    `json:"result"`
+					Service     block.ServiceId `json:"service"`
+					CodeHash    string          `json:"code_hash"`
+					PayloadHash string          `json:"payload_hash"`
+					GasRatio    uint64          `json:"gas_ratio"`
+					Result      Result          `json:"result"`
 				} `json:"results"`
 			} `json:"report"`
 			Slot       jamtime.Timeslot `json:"slot"`
