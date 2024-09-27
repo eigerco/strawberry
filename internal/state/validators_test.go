@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"github.com/eigerco/strawberry/internal/common"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -18,7 +19,7 @@ func TestDetermineNewSealingKeysWhenNotFirstTimeslot(t *testing.T) {
 	beforeSealingKeys := vs.SafroleState.SealingKeySeries
 	epochMarker := block.EpochMarker{}
 	epochMarker.Entropy = testutils.RandomHash(t)
-	for i := uint16(0); i < block.NumberOfValidators; i++ {
+	for i := uint16(0); i < common.NumberOfValidators; i++ {
 		epochMarker.Keys[i] = testutils.RandomBandersnatchPublicKey(t)
 	}
 	header := block.Header{
@@ -39,7 +40,7 @@ func TestDetermineNewSealingKeysWhenNotEnoughTickets(t *testing.T) {
 	vs.SafroleState.TicketAccumulator = vs.SafroleState.TicketAccumulator[:len(vs.SafroleState.TicketAccumulator)/2]
 	epochMarker := block.EpochMarker{}
 	epochMarker.Entropy = testutils.RandomHash(t)
-	for i := uint16(0); i < block.NumberOfValidators; i++ {
+	for i := uint16(0); i < common.NumberOfValidators; i++ {
 		epochMarker.Keys[i] = testutils.RandomBandersnatchPublicKey(t)
 	}
 	header := block.Header{
@@ -65,7 +66,7 @@ func TestDetermineNewSealingKeys(t *testing.T) {
 	vs := setupValidatorState(t)
 	epochMarker := block.EpochMarker{}
 	epochMarker.Entropy = testutils.RandomHash(t)
-	for i := uint16(0); i < block.NumberOfValidators; i++ {
+	for i := uint16(0); i < common.NumberOfValidators; i++ {
 		epochMarker.Keys[i] = testutils.RandomBandersnatchPublicKey(t)
 	}
 	header := block.Header{
