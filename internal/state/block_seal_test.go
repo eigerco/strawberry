@@ -129,11 +129,8 @@ func TestRotateEntropyPool(t *testing.T) {
 		testutils.RandomHash(t),
 		testutils.RandomHash(t),
 	}
-	state := &State{
-		EntropyPool: initialEntropyPool,
-	}
-	rotateEntropyPool(state)
-	assert.Equal(t, initialEntropyPool[2], state.EntropyPool[3])
-	assert.Equal(t, initialEntropyPool[1], state.EntropyPool[2])
-	assert.Equal(t, initialEntropyPool[0], state.EntropyPool[1])
+	result:= rotateEntropyPool(initialEntropyPool)
+	assert.Equal(t, initialEntropyPool[2], result[3])
+	assert.Equal(t, initialEntropyPool[1], result[2])
+	assert.Equal(t, initialEntropyPool[0], result[1])
 }

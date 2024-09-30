@@ -67,16 +67,15 @@ func calculateNewSafroleState(header block.Header, timeslot jamtime.Timeslot, ti
 // calculateNewEntropyPool Equation 20: η′ ≺ (H, τ, η)
 func calculateNewEntropyPool(header block.Header, timeslot jamtime.Timeslot, entropyPool EntropyPool) (EntropyPool, error) {
 	newEntropyPool := entropyPool
-	if !verifyBlockVRF(header) {
-		return EntropyPool{}, errors.New("block VRF verification failed")
+	vrfOutput, err:= extractVRFOutput(header)
+	if err != nil {
+		return EntropyPool{}, err
 	}
-	newEntropy := append(entropyPool[0][:], header.VRFSignature[:]...)
-	newEntropyPool[0] = crypto.Hash(newEntropy)
+	newEntropy := crypto.Hash(append(entropyPool[0][:], vrfOutput[:]...))
 	if header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
-		newEntropyPool[3] = newEntropyPool[2]
-		newEntropyPool[2] = newEntropyPool[1]
-		newEntropyPool[1] = newEntropyPool[0]
+		newEntropyPool = rotateEntropyPool(entropyPool)
 	}
+	newEntropyPool[0] = newEntropy
 	return newEntropyPool, nil
 }
 
