@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"crypto/rand"
+	"github.com/eigerco/strawberry/internal/jamtime"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -84,7 +85,7 @@ func RandomEd25519Signature(t *testing.T) [crypto.Ed25519SignatureSize]byte {
 
 func RandomEpochKeys(t *testing.T) crypto.EpochKeys {
 	var epochKeys crypto.EpochKeys
-	for i := 0; i < 600; i++ {
+	for i := 0; i < jamtime.TimeslotsPerEpoch; i++ {
 		epochKeys[i] = RandomBandersnatchPublicKey(t)
 	}
 	return epochKeys

@@ -1,11 +1,10 @@
 package block
 
 import (
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
-
-const NumberOfValidators uint16 = 1023
 
 // Header as defined in the section 5 in the paper
 type Header struct {
@@ -25,5 +24,5 @@ type Header struct {
 // Bandersnatch keys defining the Bandersnatch validator keys (kb) beginning in the next epoch.
 type EpochMarker struct {
 	Entropy crypto.Hash
-	Keys    [NumberOfValidators]crypto.BandersnatchPublicKey
+	Keys    [common.NumberOfValidators]crypto.BandersnatchPublicKey
 }

@@ -2,6 +2,7 @@ package safrole
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/serialization"
@@ -17,7 +18,7 @@ type State struct {
 	RingCommitment    crypto.RingCommitment // (γz) Bandersnatch ring commitment.
 }
 
-type ValidatorsData [block.NumberOfValidators]crypto.ValidatorKey
+type ValidatorsData [common.NumberOfValidators]crypto.ValidatorKey
 
 // DetermineNewSealingKeys determines the new sealing keys for an epoch
 func DetermineNewSealingKeys(currentTimeslot jamtime.Timeslot, ticketAccumulator []block.Ticket, currentSealingKeys TicketsOrKeys, epochMarker *block.EpochMarker) (TicketsOrKeys, error) {

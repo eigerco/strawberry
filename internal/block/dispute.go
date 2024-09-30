@@ -1,10 +1,11 @@
 package block
 
 import (
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 )
 
-const validatorsSuperMajority = (2 * NumberOfValidators / 3) + 1 // 2/3V + 1
+const validatorsSuperMajority = (2 * common.NumberOfValidators / 3) + 1 // 2/3V + 1
 
 type DisputeExtrinsic struct {
 	Verdicts []Verdict
