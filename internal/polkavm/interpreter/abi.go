@@ -7,6 +7,7 @@
 package interpreter
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
@@ -21,6 +22,11 @@ const (
 	VmAddrUserStackHigh uint32 = uint32(AddressSpaceSize - uint64(VmMaxPageSize)) // The address at which the program's stack starts inside of the VM.
 )
 
+var (
+	ErrPageValueTooLarge     = errors.New("page value too large")
+	ErrPageSizeNotPowerOfTwo = errors.New("page size is not a power of two")
+)
+
 func newMemoryMap(pageSize uint32, p *polkavm.Program) (*memoryMap, error) {
 	if pageSize < VmMinPageSize {
 		return nil, fmt.Errorf("invalid page size: page size is too small")
@@ -29,35 +35,35 @@ func newMemoryMap(pageSize uint32, p *polkavm.Program) (*memoryMap, error) {
 	if pageSize > VmMaxPageSize {
 		return nil, fmt.Errorf("invalid page size: page size is too big")
 	}
-	roDataAddressSpace, ok := alignToNextPageUint64(uint64(VmMaxPageSize), uint64(p.RODataSize))
-	if !ok {
-		return nil, fmt.Errorf("the size of read-only data is too big")
+	roDataAddressSpace, err := alignToNextPageUint64(uint64(VmMaxPageSize), uint64(p.RODataSize))
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate memory map ro data address space: %w", err)
 	}
 
-	roDataSize, ok := alignToNextPageUint32(pageSize, p.RODataSize)
-	if !ok {
-		return nil, fmt.Errorf("the size of read-only data is too big")
+	roDataSize, err := alignToNextPageUint32(pageSize, p.RODataSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate memory map ro data size: %w", err)
 	}
 
-	rwDataAddressSpace, ok := alignToNextPageUint64(uint64(VmMaxPageSize), uint64(p.RWDataSize))
-	if !ok {
-		return nil, fmt.Errorf("the size of read-write data is too big")
+	rwDataAddressSpace, err := alignToNextPageUint64(uint64(VmMaxPageSize), uint64(p.RWDataSize))
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate memory map rw data address space: %w", err)
 	}
 
 	originalRwDataSize := p.RWDataSize
-	rwDataSize, ok := alignToNextPageUint32(pageSize, p.RWDataSize)
-	if !ok {
-		return nil, fmt.Errorf("the size of read-write data is too big")
+	rwDataSize, err := alignToNextPageUint32(pageSize, p.RWDataSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate memory map rw data size: %w", err)
 	}
 
-	stackAddressSpace, ok := alignToNextPageUint64(uint64(VmMaxPageSize), uint64(p.StackSize))
-	if !ok {
-		return nil, fmt.Errorf("the size of the stack is too big")
+	stackAddressSpace, err := alignToNextPageUint64(uint64(VmMaxPageSize), uint64(p.StackSize))
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate memory map stack address space: %w", err)
 	}
 
-	stackSize, ok := alignToNextPageUint32(pageSize, p.StackSize)
-	if !ok {
-		return nil, fmt.Errorf("the size of the stack is too big")
+	stackSize, err := alignToNextPageUint32(pageSize, p.StackSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate memory map stack size: %w", err)
 	}
 	var addressLow uint64
 	addressLow += uint64(VmMaxPageSize)
@@ -77,73 +83,73 @@ func newMemoryMap(pageSize uint32, p *polkavm.Program) (*memoryMap, error) {
 	}
 
 	maxHeapSize := addressHigh - addressLow + heapSlack
-
+	rwDataAddressOffset, err := alignToNextPageUint32(VmMaxPageSize, VmMaxPageSize+roDataSize)
+	if err != nil {
+		return nil, err
+	}
 	return &memoryMap{
-		pageSize:    pageSize,
-		roDataSize:  roDataSize,
-		rwDataSize:  rwDataSize,
-		stackSize:   stackSize,
-		heapBase:    uint32(heapBase),
-		maxHeapSize: uint32(maxHeapSize),
+		pageSize:         pageSize,
+		roDataSize:       roDataSize,
+		rwDataSize:       rwDataSize,
+		stackSize:        stackSize,
+		heapBase:         uint32(heapBase),
+		maxHeapSize:      uint32(maxHeapSize),
+		stackAddressHigh: VmAddrUserStackHigh,
+		roDataAddress:    VmMaxPageSize,
+		stackAddressLow:  VmAddrUserStackHigh - stackSize,
+		rwDataAddress:    rwDataAddressOffset + VmMaxPageSize,
 	}, nil
 }
 
 type memoryMap struct {
-	pageSize    uint32
-	roDataSize  uint32
-	rwDataSize  uint32
-	stackSize   uint32
-	heapBase    uint32
-	maxHeapSize uint32
+	pageSize         uint32
+	roDataSize       uint32
+	rwDataSize       uint32
+	stackSize        uint32
+	heapBase         uint32
+	maxHeapSize      uint32
+	stackAddressHigh uint32
+	roDataAddress    uint32
+	stackAddressLow  uint32
+	rwDataAddress    uint32
 }
 
-func (m *memoryMap) stackAddressHigh() uint32 { return VmAddrUserStackHigh }
-func (m *memoryMap) roDataAddress() uint32    { return VmMaxPageSize }
-func (m *memoryMap) stackAddressLow() uint32  { return m.stackAddressHigh() - m.stackSize }
-func (m *memoryMap) rwDataAddress() uint32 {
-	offset, ok := alignToNextPageUint32(VmMaxPageSize, m.roDataAddress()+m.roDataSize)
-	if !ok {
-		panic("unreachable")
-	}
-	return offset + VmMaxPageSize
-}
-
-func alignToNextPageInt(pageSize int, value int) (int, bool) {
+func alignToNextPageInt(pageSize int, value int) (int, error) {
 	if !(pageSize != 0 && (pageSize&(pageSize-1)) == 0) {
-		panic("page size is not a power of two")
+		return 0, ErrPageSizeNotPowerOfTwo
 	}
 	if value&(pageSize-1) == 0 {
-		return value, true
+		return value, nil
 	} else {
 		if value <= math.MaxInt-pageSize {
-			return (value + pageSize) & ^(pageSize - 1), true
+			return (value + pageSize) & ^(pageSize - 1), nil
 		}
 	}
-	return 0, false
+	return 0, ErrPageValueTooLarge
 }
 
-func alignToNextPageUint32(pageSize uint32, value uint32) (uint32, bool) {
+func alignToNextPageUint32(pageSize uint32, value uint32) (uint32, error) {
 	if !(pageSize != 0 && (pageSize&(pageSize-1)) == 0) {
-		panic("page size is not a power of two")
+		return 0, ErrPageSizeNotPowerOfTwo
 	}
 	if value&(pageSize-1) == 0 {
-		return value, true
+		return value, nil
 	} else {
 		if value <= math.MaxUint32-pageSize {
-			return (value + pageSize) & ^(pageSize - 1), true
+			return (value + pageSize) & ^(pageSize - 1), nil
 		}
 	}
-	return 0, false
+	return 0, ErrPageValueTooLarge
 }
 
-func alignToNextPageUint64(pageSize uint64, value uint64) (uint64, bool) {
+func alignToNextPageUint64(pageSize uint64, value uint64) (uint64, error) {
 	if !(pageSize != 0 && (pageSize&(pageSize-1)) == 0) {
-		panic("page size is not a power of two")
+		return 0, ErrPageSizeNotPowerOfTwo
 	}
 	if value&(pageSize-1) == 0 {
-		return value, true
+		return value, nil
 	} else if value <= math.MaxUint64-pageSize {
-		return (value + pageSize) & ^(pageSize - 1), true
+		return (value + pageSize) & ^(pageSize - 1), nil
 	}
-	return 0, false
+	return 0, ErrPageValueTooLarge
 }

@@ -54,59 +54,65 @@ func newBasicMemory(memoryMap *memoryMap, rwData []byte) *memory {
 }
 
 //lint:ignore U1000
-func (m *memory) getMemorySlice(program polkavm.Program, memoryMap memoryMap, address uint32, length int) []byte {
+func (m *memory) getMemorySlice(program polkavm.Program, memoryMap memoryMap, address uint32, length int) ([]byte, error) {
 	var start uint32
 	var memorySlice []byte
-	if address >= memoryMap.stackAddressLow() {
-		start, memorySlice = memoryMap.stackAddressLow(), m.stack
-	} else if address >= memoryMap.rwDataAddress() {
-		start, memorySlice = memoryMap.rwDataAddress(), m.rwData
-	} else if address >= memoryMap.roDataAddress() {
-		start, memorySlice = memoryMap.roDataAddress(), program.ROData
+	if address >= memoryMap.stackAddressLow {
+		start, memorySlice = memoryMap.stackAddressLow, m.stack
+	} else if address >= memoryMap.rwDataAddress {
+		start, memorySlice = memoryMap.rwDataAddress, m.rwData
+	} else if address >= memoryMap.roDataAddress {
+		start, memorySlice = memoryMap.roDataAddress, program.ROData
 	} else {
-		return nil
+		return nil, nil
 	}
 
 	offset := int(address - start)
-	return memorySlice[offset : offset+length]
+	if offset+length > len(memorySlice) {
+		return nil, fmt.Errorf("memory slice out of range, address %d, length: %d", address, length)
+	}
+	return memorySlice[offset : offset+length], nil
 }
 
 //lint:ignore U1000
-func (m *memory) getMemorySlicePointer(memoryMap memoryMap, address uint32, length int) *[]byte {
+func (m *memory) getMemorySlicePointer(memoryMap memoryMap, address uint32, length int) (*[]byte, error) {
 	var start uint32
 	var memorySlice []byte
-	if address >= memoryMap.stackAddressLow() {
-		start, memorySlice = memoryMap.stackAddressLow(), m.stack
-	} else if address >= memoryMap.rwDataAddress() {
-		start, memorySlice = memoryMap.rwDataAddress(), m.rwData
+	if address >= memoryMap.stackAddressLow {
+		start, memorySlice = memoryMap.stackAddressLow, m.stack
+	} else if address >= memoryMap.rwDataAddress {
+		start, memorySlice = memoryMap.rwDataAddress, m.rwData
 	} else {
-		return nil
+		return nil, nil
 	}
 
 	offset := int(address - start)
+	if offset+length > len(memorySlice) {
+		return nil, fmt.Errorf("memory slice out of range, address %d, length: %d", address, length)
+	}
 	slice := memorySlice[offset : offset+length]
-	return &slice
+	return &slice, nil
 }
 
 //lint:ignore U1000
-func (m *memory) sbrk(memoryMap memoryMap, size uint32) (uint32, bool) {
+func (m *memory) sbrk(memoryMap memoryMap, size uint32) (uint32, error) {
 	newHeapSize := m.heapSize + size
 	if newHeapSize > memoryMap.maxHeapSize {
-		return 0, false
+		return 0, fmt.Errorf("max heap size exceeded")
 	}
 
 	m.heapSize = newHeapSize
 	heapTop := memoryMap.heapBase + newHeapSize
-	if heapTop > memoryMap.rwDataAddress()+uint32(len(m.rwData)) {
-		nextPage, ok := alignToNextPageInt(int(memoryMap.pageSize), int(heapTop))
-		if !ok {
-			return 0, ok
+	if heapTop > memoryMap.rwDataAddress+uint32(len(m.rwData)) {
+		nextPage, err := alignToNextPageInt(int(memoryMap.pageSize), int(heapTop))
+		if err != nil {
+			return 0, err
 		}
-		newSize := nextPage - int(memoryMap.rwDataAddress())
+		newSize := nextPage - int(memoryMap.rwDataAddress)
 		rwData := m.rwData
 		m.rwData = make([]byte, newSize)
 		copy(m.rwData, rwData)
 	}
 
-	return heapTop, true
+	return heapTop, nil
 }

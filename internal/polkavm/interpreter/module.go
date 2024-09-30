@@ -6,8 +6,6 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
-const PageSize = 0x1000
-
 type module struct {
 	program                  *polkavm.Program
 	memoryMap                *memoryMap
@@ -30,7 +28,7 @@ func NewModule(program *polkavm.Program) (polkavm.Module, error) {
 		instructionOffsetToIndex[inst.Offset] = index
 	}
 
-	memoryMap, err := newMemoryMap(PageSize, program)
+	memoryMap, err := newMemoryMap(VmMinPageSize, program)
 	if err != nil {
 		return nil, err
 	}
