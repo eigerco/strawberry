@@ -1,8 +1,10 @@
 package block
 
 import (
+	"fmt"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 // GuaranteesExtrinsic represents the E_G extrinsic
@@ -13,13 +15,13 @@ type GuaranteesExtrinsic struct {
 // Guarantee represents a single guarantee within the E_G extrinsic
 type Guarantee struct {
 	WorkReport  WorkReport            // The work report being guaranteed
-	Credentials []CredentialSignature // The credentials proving the guarantee's validity
 	Timeslot    jamtime.Timeslot      // The timeslot when this guarantee was made
+	Credentials []CredentialSignature // The credentials proving the guarantee's validity
 }
 
 // CredentialSignature represents a single signature within the credential
 type CredentialSignature struct {
-	ValidatorIndex uint32                            // Index of the validator providing this signature
+	ValidatorIndex uint16                            // Index of the validator providing this signature
 	Signature      [crypto.Ed25519SignatureSize]byte // The Ed25519 signature
 }
 
@@ -60,7 +62,7 @@ type RefinementContextLookupAnchor struct {
 }
 
 // WorkResultError represents the type of error that occurred during work execution
-type WorkResultError int
+type WorkResultError uint8
 
 const (
 	NoError               WorkResultError = iota // Represents no error, successful execution
@@ -74,22 +76,60 @@ type ServiceId uint32
 
 // WorkResult is the data conduit by which services’ states may be altered through the computation done within a work-package.
 type WorkResult struct {
-	ServiceId              ServiceId        // Service ID (s) - The index of the service whose state is to be altered and thus whose refine code was already executed.
-	ServiceHashCode        crypto.Hash      // Hash of the service code (c) - The hash of the code of the service at the time of being reported.
-	PayloadHash            crypto.Hash      // Hash of the payload (l) - The hash of the payload within the work item which was executed in the refine stage to give this result. Provided to the accumulation logic of the service later on.
-	GasPrioritizationRatio uint64           // Gas prioritization ratio (g) - used when determining how much gas should be allocated to execute of this item’s accumulate.
-	Output                 WorkResultOutput // Output of the work result (o) ∈ Y ∪ J: Output or error (Y is the set of octet strings, J is the set of work execution errors)
+	ServiceId              ServiceId               // Service ID (s) - The index of the service whose state is to be altered and thus whose refine code was already executed.
+	ServiceHashCode        crypto.Hash             // Hash of the service code (c) - The hash of the code of the service at the time of being reported.
+	PayloadHash            crypto.Hash             // Hash of the payload (l) - The hash of the payload within the work item which was executed in the refine stage to give this result. Provided to the accumulation logic of the service later on.
+	GasPrioritizationRatio uint64                  // Gas prioritization ratio (g) - used when determining how much gas should be allocated to execute of this item’s accumulate.
+	Output                 WorkResultOutputOrError // Output of the work result (o) ∈ Y ∪ J: Output or error (Y is the set of octet strings, J is the set of work execution errors)
 }
 
-// WorkResultOutput represents either the successful output or an error from a work result
-type WorkResultOutput struct {
-	Data  []byte          // Represents successful output (Y)
-	Error WorkResultError // Represents error output (J)
+// WorkResultOutputOrError represents either the successful output or an error from a work result
+type WorkResultOutputOrError struct {
+	Inner any
+}
+
+func (wer *WorkResultOutputOrError) SetValue(value any) error {
+	switch v := value.(type) {
+	case []byte:
+		wer.Inner = v
+		return nil
+	case uint8:
+		wer.Inner = WorkResultError(v)
+		return nil
+	default:
+		return fmt.Errorf(jam.ErrUnsupportedType, v)
+	}
+}
+
+func (wer WorkResultOutputOrError) IndexValue() (uint, any, error) {
+	switch wer.Inner.(type) {
+	case []byte:
+		return 0, wer.Inner, nil
+	case WorkResultError:
+		return uint(wer.Inner.(WorkResultError)), nil, nil
+	}
+
+	return 0, nil, jam.ErrUnsupportedEnumTypeValue
+}
+
+func (wer WorkResultOutputOrError) ValueAt(index uint) (any, error) {
+	switch index {
+	case uint(NoError):
+		return []byte{}, nil
+	case uint(OutOfGas), uint(UnexpectedTermination), uint(CodeNotAvailable), uint(CodeTooLarge):
+		return nil, nil
+	}
+
+	return nil, jam.ErrUnknownEnumTypeValue
 }
 
 // IsSuccessful checks if the work result is successful
-func (wr WorkResult) IsSuccessful() bool {
-	return wr.Output.Error == NoError
+func (wer WorkResult) IsSuccessful() bool {
+	if _, ok := wer.Output.Inner.([]byte); ok {
+		return true
+	}
+
+	return false
 }
 
 // NewSuccessfulWorkResult creates a new successful WorkResult
@@ -99,7 +139,7 @@ func NewSuccessfulWorkResult(serviceId ServiceId, serviceHashCode, payloadHash c
 		ServiceHashCode:        serviceHashCode,
 		PayloadHash:            payloadHash,
 		GasPrioritizationRatio: gasPrioritizationRatio,
-		Output:                 WorkResultOutput{Data: output, Error: NoError},
+		Output:                 WorkResultOutputOrError{output},
 	}
 }
 
@@ -110,6 +150,6 @@ func NewErrorWorkResult(serviceId ServiceId, serviceHashCode, payloadHash crypto
 		ServiceHashCode:        serviceHashCode,
 		PayloadHash:            payloadHash,
 		GasPrioritizationRatio: gasPrioritizationRatio,
-		Output:                 WorkResultOutput{Data: nil, Error: errorResult},
+		Output:                 WorkResultOutputOrError{errorResult},
 	}
 }

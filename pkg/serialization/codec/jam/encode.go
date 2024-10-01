@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 
 	"github.com/eigerco/strawberry/internal/crypto"
 )
@@ -29,6 +30,10 @@ type byteWriter struct {
 }
 
 func (bw *byteWriter) marshal(in interface{}) error {
+	if v, ok := in.(EncodeEnum); ok {
+		return bw.encodeEnumType(v)
+	}
+
 	switch in := in.(type) {
 	case int:
 		return bw.encodeUint(uint(in))
@@ -65,14 +70,16 @@ func (bw *byteWriter) handleReflectTypes(in interface{}) error {
 			return bw.marshal(elem.Interface())
 		}
 	case reflect.Struct:
+		if pk, ok := in.(crypto.Ed25519PublicKey); ok {
+			return bw.encodeEd25519PublicKey(pk)
+		}
 		return bw.encodeStruct(in)
 	case reflect.Array:
 		return bw.encodeArray(in)
 	case reflect.Slice:
-		if pk, ok := in.(crypto.Ed25519PublicKey); ok {
-			return bw.encodeEd25519PublicKey(pk)
-		}
 		return bw.encodeSlice(in)
+	case reflect.Map:
+		return bw.encodeMap(in)
 	default:
 		return fmt.Errorf(ErrUnsupportedType, in)
 	}
@@ -109,6 +116,24 @@ func (bw *byteWriter) encodeCustomPrimitive(in interface{}) error {
 	return bw.marshal(in)
 }
 
+func (bw *byteWriter) encodeEnumType(enum EncodeEnum) error {
+	index, value, err := enum.IndexValue()
+	if err != nil {
+		return err
+	}
+
+	_, err = bw.Write([]byte{byte(index)})
+	if err != nil {
+		return err
+	}
+
+	if value == nil {
+		return nil
+	}
+
+	return bw.marshal(value)
+}
+
 func (bw *byteWriter) encodeSlice(in interface{}) error {
 	v := reflect.ValueOf(in)
 	err := bw.encodeLength(v.Len())
@@ -139,6 +164,77 @@ func (bw *byteWriter) encodeEd25519PublicKey(in crypto.Ed25519PublicKey) error {
 	_, err := bw.Writer.Write(in.PublicKey)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// encodeMap encodes a map, sorting the keys based on their type
+func (bw *byteWriter) encodeMap(in interface{}) error {
+	// Ensure that input is a map
+	v := reflect.ValueOf(in)
+	if v.Kind() != reflect.Map {
+		return fmt.Errorf(ErrUnsupportedType, in)
+	}
+
+	// Get the map keys
+	keys := v.MapKeys()
+
+	// If the map is empty, just encode the length (0)
+	if len(keys) == 0 {
+		return bw.encodeLength(0)
+	}
+
+	// Sort keys based on their type
+	if err := bw.sortMapKeys(keys); err != nil {
+		return err
+	}
+
+	// Encode the number of key-value pairs
+	if err := bw.encodeLength(len(keys)); err != nil {
+		return err
+	}
+
+	// Encode each key and corresponding value
+	for _, key := range keys {
+		// Marshal the key
+		if err := bw.marshal(key.Interface()); err != nil {
+			return err
+		}
+
+		// Marshal the value associated with the key
+		value := v.MapIndex(key)
+		if err := bw.marshal(value.Interface()); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// sortMapKeys sorts map keys based on their type
+func (bw *byteWriter) sortMapKeys(keys []reflect.Value) error {
+	// Sort based on the key type
+	switch keys[0].Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i].Int() < keys[j].Int()
+		})
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i].Uint() < keys[j].Uint()
+		})
+	case reflect.Float32, reflect.Float64:
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i].Float() < keys[j].Float()
+		})
+	case reflect.Bool:
+		// Sort bools: false comes before true
+		sort.Slice(keys, func(i, j int) bool {
+			return !keys[i].Bool() && keys[j].Bool()
+		})
+	default:
+		return fmt.Errorf(ErrEncodingMapFieldKeyType, keys[0].Kind())
 	}
 
 	return nil

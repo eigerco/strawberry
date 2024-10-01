@@ -40,7 +40,7 @@ func getWinningTicketOrKey(header *block.Header, state *State) (interface{}, err
 }
 
 // TODO: implement this function. This is just a mock.
-func isWinningKey(key crypto.BandersnatchPublicKey, header *block.Header, state *State) bool {
+func isWinningKey(key crypto.BandersnatchSerializedPublicKey, header *block.Header, state *State) bool {
 	winningTicketOrKey, err := getWinningTicketOrKey(header, state)
 	if err != nil {
 		return false

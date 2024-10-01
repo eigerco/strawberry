@@ -1,6 +1,7 @@
 package block
 
 import (
+	"github.com/eigerco/strawberry/internal/common"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -21,13 +22,13 @@ func Test_HeaderEncodeDecode(t *testing.T) {
 		ExtrinsicHash:  testutils.RandomHash(t),
 		TimeSlotIndex:  123,
 		EpochMarker: &EpochMarker{
-			Keys: [NumberOfValidators]crypto.BandersnatchPublicKey{
+			Keys: [common.NumberOfValidators]crypto.BandersnatchPublicKey{
 				testutils.RandomBandersnatchPublicKey(t),
 				testutils.RandomBandersnatchPublicKey(t),
 			},
 			Entropy: testutils.RandomHash(t),
 		},
-		WinningTicketsMarker: [jamtime.TimeslotsPerEpoch]*Ticket{{
+		WinningTicketsMarker: &[jamtime.TimeslotsPerEpoch]Ticket{{
 			Identifier: testutils.RandomHash(t),
 			EntryIndex: 111,
 		}, {

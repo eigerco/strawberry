@@ -2,6 +2,7 @@ package state
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
@@ -18,12 +19,12 @@ type Judgements struct {
 	OffendingValidators []crypto.Ed25519PublicKey //  Offending validators (ψp) - Validators who made a judgement found to be incorrect.
 }
 
-type CoreAssignments [TotalNumberOfCores]Assignment
+type CoreAssignments [common.TotalNumberOfCores]Assignment
 
-type PendingAuthorizersQueues [TotalNumberOfCores][PendingAuthorizersQueueSize]crypto.Hash
+type PendingAuthorizersQueues [common.TotalNumberOfCores][PendingAuthorizersQueueSize]crypto.Hash
 
 type EntropyPool [EntropyPoolSize]crypto.Hash
-type CoreAuthorizersPool [TotalNumberOfCores][]crypto.Hash // TODO: Maximum length per core: MaxAuthorizersPerCore
+type CoreAuthorizersPool [common.TotalNumberOfCores][]crypto.Hash // TODO: Maximum length per core: MaxAuthorizersPerCore
 
 // Context is an intermediate value for state transition calculations
 // TODO: Add relevant fields when state transitions are implemented

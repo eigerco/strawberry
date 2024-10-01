@@ -1,11 +1,10 @@
 package block
 
 import (
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
-
-const NumberOfValidators uint16 = 1023
 
 // Header as defined in the section 5 in the paper
 type Header struct {
@@ -14,7 +13,7 @@ type Header struct {
 	ExtrinsicHash        crypto.Hash                        // Hx
 	TimeSlotIndex        jamtime.Timeslot                   // Ht
 	EpochMarker          *EpochMarker                       // He
-	WinningTicketsMarker [jamtime.TimeslotsPerEpoch]*Ticket // Hw
+	WinningTicketsMarker *[jamtime.TimeslotsPerEpoch]Ticket // Hw
 	OffendersMarkers     []crypto.Ed25519PublicKey          // Ho, the culprit's and fault's public keys
 	BlockAuthorIndex     uint16                             // Hi
 	VRFSignature         crypto.BandersnatchSignature       // Hv
@@ -24,6 +23,6 @@ type Header struct {
 // EpochMarker consists of epoch randomness and a sequence of
 // Bandersnatch keys defining the Bandersnatch validator keys (kb) beginning in the next epoch.
 type EpochMarker struct {
-	Keys    [NumberOfValidators]crypto.BandersnatchPublicKey
 	Entropy crypto.Hash
+	Keys    [common.NumberOfValidators]crypto.BandersnatchPublicKey
 }

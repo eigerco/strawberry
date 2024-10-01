@@ -2,6 +2,7 @@ package block
 
 import (
 	"crypto/rand"
+	"github.com/eigerco/strawberry/internal/common"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -20,13 +21,13 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		ExtrinsicHash:  testutils.RandomHash(t),
 		TimeSlotIndex:  123,
 		EpochMarker: &EpochMarker{
-			Keys: [NumberOfValidators]crypto.BandersnatchPublicKey{
+			Keys: [common.NumberOfValidators]crypto.BandersnatchPublicKey{
 				testutils.RandomBandersnatchPublicKey(t),
 				testutils.RandomBandersnatchPublicKey(t),
 			},
 			Entropy: testutils.RandomHash(t),
 		},
-		WinningTicketsMarker: [jamtime.TimeslotsPerEpoch]*Ticket{{
+		WinningTicketsMarker: &[jamtime.TimeslotsPerEpoch]Ticket{{
 			Identifier: testutils.RandomHash(t),
 			EntryIndex: 112,
 		},
@@ -48,11 +49,11 @@ func Test_BlockEncodeDecode(t *testing.T) {
 			Proof:      randomTicketProof(t),
 		},
 	}
-	ticketExtrinsic := &TicketExtrinsic{
+	ticketExtrinsic := TicketExtrinsic{
 		TicketProofs: ticketProofs,
 	}
 
-	preimageExtrinsic := &PreimageExtrinsic{
+	preimageExtrinsic := PreimageExtrinsic{
 		{
 			ServiceIndex: uint32(1),
 			Data:         []byte("preimage data"),
@@ -63,7 +64,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		{
 			ReportHash: testutils.RandomHash(t),
 			EpochIndex: uint32(1),
-			Judgments: []Judgment{
+			Judgments: [validatorsSuperMajority]Judgment{
 				{
 					IsValid:        true,
 					ValidatorIndex: uint16(2),
@@ -72,7 +73,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 			},
 		},
 	}
-	disputeExtrinsic := &DisputeExtrinsic{
+	disputeExtrinsic := DisputeExtrinsic{
 		Verdicts: verdicts,
 		Culprits: []Culprit{
 			{
@@ -91,16 +92,16 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		},
 	}
 
-	assurancesExtrinsic := &AssurancesExtrinsic{
+	assurancesExtrinsic := AssurancesExtrinsic{
 		{
 			Anchor:         testutils.RandomHash(t),
-			Flag:           true,
+			Bitfield:       [availBitfieldBytes]byte{1},
 			ValidatorIndex: uint16(1),
 			Signature:      testutils.RandomEd25519Signature(t),
 		},
 	}
 
-	guaranteesExtrinsic := &GuaranteesExtrinsic{
+	guaranteesExtrinsic := GuaranteesExtrinsic{
 		Guarantees: []Guarantee{
 			{
 				WorkReport: WorkReport{
@@ -124,16 +125,41 @@ func Test_BlockEncodeDecode(t *testing.T) {
 							ServiceHashCode:        testutils.RandomHash(t),
 							PayloadHash:            testutils.RandomHash(t),
 							GasPrioritizationRatio: uint64(10),
-							Output: WorkResultOutput{
-								Data:  []byte("work result data"),
-								Error: NoError,
-							},
+							Output:                 WorkResultOutputOrError{[]byte{0x7, 0x8}},
+						},
+						{
+							ServiceId:              ServiceId(2),
+							ServiceHashCode:        testutils.RandomHash(t),
+							PayloadHash:            testutils.RandomHash(t),
+							GasPrioritizationRatio: uint64(20),
+							Output:                 WorkResultOutputOrError{OutOfGas},
+						},
+						{
+							ServiceId:              ServiceId(3),
+							ServiceHashCode:        testutils.RandomHash(t),
+							PayloadHash:            testutils.RandomHash(t),
+							GasPrioritizationRatio: uint64(30),
+							Output:                 WorkResultOutputOrError{UnexpectedTermination},
+						},
+						{
+							ServiceId:              ServiceId(4),
+							ServiceHashCode:        testutils.RandomHash(t),
+							PayloadHash:            testutils.RandomHash(t),
+							GasPrioritizationRatio: uint64(20),
+							Output:                 WorkResultOutputOrError{CodeNotAvailable},
+						},
+						{
+							ServiceId:              ServiceId(5),
+							ServiceHashCode:        testutils.RandomHash(t),
+							PayloadHash:            testutils.RandomHash(t),
+							GasPrioritizationRatio: uint64(10),
+							Output:                 WorkResultOutputOrError{CodeTooLarge},
 						},
 					},
 				},
 				Credentials: []CredentialSignature{
 					{
-						ValidatorIndex: uint32(1),
+						ValidatorIndex: uint16(1),
 						Signature:      testutils.RandomEd25519Signature(t),
 					},
 				},
@@ -151,8 +177,8 @@ func Test_BlockEncodeDecode(t *testing.T) {
 	}
 
 	originalBlock := Block{
-		Header:    &h,
-		Extrinsic: &e,
+		Header:    h,
+		Extrinsic: e,
 	}
 
 	serializer := serialization.NewSerializer(&codec.JAMCodec{})

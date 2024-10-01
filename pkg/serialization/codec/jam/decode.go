@@ -28,6 +28,13 @@ type byteReader struct {
 }
 
 func (br *byteReader) unmarshal(value reflect.Value) error {
+	if value.CanAddr() {
+		addr := value.Addr()
+		if vdt, ok := addr.Interface().(EnumType); ok {
+			return br.decodeEnum(vdt)
+		}
+	}
+
 	in := value.Interface()
 	switch in.(type) {
 
@@ -52,14 +59,16 @@ func (br *byteReader) handleReflectTypes(value reflect.Value) error {
 	case reflect.Ptr:
 		return br.decodePointer(value)
 	case reflect.Struct:
+		if value.Type() == reflect.TypeOf(crypto.Ed25519PublicKey{}) {
+			return br.decodeEd25519PublicKey(value)
+		}
 		return br.decodeStruct(value)
 	case reflect.Array:
 		return br.decodeArray(value)
 	case reflect.Slice:
-		if value.Type() == reflect.TypeOf(crypto.Ed25519PublicKey{}) {
-			return br.decodeEd25519PublicKey(value)
-		}
 		return br.decodeSlice(value)
+	case reflect.Map:
+		return br.decodeMap(value)
 	default:
 		return fmt.Errorf(ErrUnsupportedType, value.Interface())
 	}
@@ -68,6 +77,7 @@ func (br *byteReader) handleReflectTypes(value reflect.Value) error {
 func (br *byteReader) decodeCustomPrimitive(value reflect.Value) error {
 	in := value.Interface()
 	inType := reflect.TypeOf(in)
+
 	var temp reflect.Value
 
 	switch inType.Kind() {
@@ -113,6 +123,34 @@ func (br *byteReader) ReadOctet() (byte, error) {
 		return 0, err
 	}
 	return b[0], nil
+}
+
+func (br *byteReader) decodeEnum(enum EnumType) error {
+	b, err := br.ReadOctet()
+	if err != nil {
+		return err
+	}
+
+	val, err := enum.ValueAt(uint(b))
+	if err != nil {
+		return err
+	}
+
+	if val == nil {
+
+		return enum.SetValue(b)
+	}
+
+	tempVal := reflect.New(reflect.TypeOf(val))
+	tempVal.Elem().Set(reflect.ValueOf(val))
+
+	err = br.unmarshal(tempVal.Elem())
+
+	if err != nil {
+		return err
+	}
+
+	return enum.SetValue(tempVal.Elem().Interface())
 }
 
 func (br *byteReader) decodePointer(value reflect.Value) error {
@@ -187,6 +225,45 @@ func (br *byteReader) decodeArray(value reflect.Value) error {
 	return nil
 }
 
+func (br *byteReader) decodeMap(value reflect.Value) error {
+	// Get the type of the map's key and value
+	mapType := value.Type()
+	keyType := mapType.Key()
+	elemType := mapType.Elem()
+
+	// Decode the length of the map (i.e., the number of key-value pairs)
+	length, err := br.decodeLength()
+	if err != nil {
+		return fmt.Errorf(ErrDecodingMapLength, err)
+	}
+
+	// Create a new map of the appropriate type and capacity
+	tempMap := reflect.MakeMapWithSize(mapType, int(length))
+
+	// Loop over the number of key-value pairs
+	for i := uint(0); i < length; i++ {
+		// Decode the key
+		key := reflect.New(keyType).Elem() // Create a new key of the map's key type
+		if err := br.unmarshal(key); err != nil {
+			return fmt.Errorf(ErrDecodingMapKey, err)
+		}
+
+		// Decode the value
+		value := reflect.New(elemType).Elem() // Create a new value of the map's element type
+		if err := br.unmarshal(value); err != nil {
+			return fmt.Errorf(ErrDecodingMapValue, err)
+		}
+
+		// Insert the key-value pair into the temporary map
+		tempMap.SetMapIndex(key, value)
+	}
+
+	// Set the decoded map into the destination value
+	value.Set(tempMap)
+
+	return nil
+}
+
 func (br *byteReader) decodeEd25519PublicKey(value reflect.Value) error {
 	publicKey := crypto.Ed25519PublicKey{
 		PublicKey: make([]byte, crypto.Ed25519PublicSize),
@@ -195,7 +272,7 @@ func (br *byteReader) decodeEd25519PublicKey(value reflect.Value) error {
 		return err
 	}
 
-	value.Set(reflect.ValueOf(publicKey.PublicKey))
+	value.Set(reflect.ValueOf(publicKey))
 
 	return nil
 }
