@@ -62,15 +62,15 @@ func (m *module) Run(symbol string, args ...uint32) (result uint32, err error) {
 	for n, arg := range args {
 		i.regs[polkavm.A0+polkavm.Reg(n)] = arg
 	}
-	//mutator := newMutator(i, m)
-	//mutator.startBasicBlock()
+	mutator := newMutator(i, m)
+	mutator.startBasicBlock()
 	for {
 		i.cycleCounter += 1
 		instruction := i.instructions[i.instructionCounter]
 
 		i.instructionOffset = instruction.Offset
 		i.instructionLength = instruction.Length
-		if err := instruction.StepOnce(nil); err != nil {
+		if err := instruction.StepOnce(mutator); err != nil {
 			return 0, err
 		}
 

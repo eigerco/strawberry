@@ -98,23 +98,38 @@ type Mutator interface {
 	JumpIndirect(base Reg, offset uint32) error
 }
 
-type HostCallResult int
+type HostCallResult struct {
+	Code      HostCallCode
+	InnerCode HostCallInnerCode
+	Msg       string
+}
+
+type HostCallCode int
 
 const (
-	HostCallResultNone HostCallResult = 2<<32 - 1
-	HostCallResultWhat HostCallResult = 2<<32 - 2
-	HostCallResultOob  HostCallResult = 2<<32 - 3
-	HostCallResultWho  HostCallResult = 2<<32 - 4
-	HostCallResultFull HostCallResult = 2<<32 - 5
-	HostCallResultCore HostCallResult = 2<<32 - 6
-	HostCallResultCash HostCallResult = 2<<32 - 7
-	HostCallResultLow  HostCallResult = 2<<32 - 8
-	HostCallResultHigh HostCallResult = 2<<32 - 9
-	HostCallResultHuh  HostCallResult = 2<<32 - 10
-	HostCallResultOk   HostCallResult = 0
+	HostCallResultNone HostCallCode = 2<<32 - 1
+	HostCallResultWhat HostCallCode = 2<<32 - 2
+	HostCallResultOob  HostCallCode = 2<<32 - 3
+	HostCallResultWho  HostCallCode = 2<<32 - 4
+	HostCallResultFull HostCallCode = 2<<32 - 5
+	HostCallResultCore HostCallCode = 2<<32 - 6
+	HostCallResultCash HostCallCode = 2<<32 - 7
+	HostCallResultLow  HostCallCode = 2<<32 - 8
+	HostCallResultHigh HostCallCode = 2<<32 - 9
+	HostCallResultHuh  HostCallCode = 2<<32 - 10
+	HostCallResultOk   HostCallCode = 0
 )
 
-func (r HostCallResult) String() string {
+type HostCallInnerCode int
+
+const (
+	HostCallInnerCodeHalt  HostCallInnerCode = 0
+	HostCallInnerCodePanic HostCallInnerCode = 1
+	HostCallInnerCodeFault HostCallInnerCode = 2
+	HostCallInnerCodeHost  HostCallInnerCode = 3
+)
+
+func (r HostCallCode) String() string {
 	switch r {
 	case HostCallResultNone:
 		return "item does not exist"

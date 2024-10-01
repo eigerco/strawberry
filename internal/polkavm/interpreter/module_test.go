@@ -7,8 +7,6 @@ import (
 )
 
 func TestInstance_Execute(t *testing.T) {
-	t.Skip("requires the mutator to work")
-
 	pp := &Program{
 		RODataSize: 0,
 		RWDataSize: 0,
