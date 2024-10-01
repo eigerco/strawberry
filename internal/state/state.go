@@ -2,6 +2,8 @@ package state
 
 // Import necessary packages
 import (
+	"log"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
@@ -49,30 +51,49 @@ func (s *State) UpdateState(newBlock block.Block) {
 	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
 	newRecentBlocks := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, context)
 
-	newEntropyPool := calculateNewEntropyPool(newBlock.Header, s.TimeslotIndex, s.EntropyPool)
+	newEntropyPool, err := calculateNewEntropyPool(newBlock.Header, s.TimeslotIndex, s.EntropyPool)
+	if err != nil {
+		// TODO handle error
+		log.Printf("Error calculating new Entropy pool: %v", err)
+	} else {
+		s.EntropyPool = newEntropyPool
+	}
 
 	newJudgements := calculateNewJudgements(newBlock.Extrinsic.ED, s.PastJudgements)
 
 	newCoreAuthorizations := calculateNewCoreAuthorizations(newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
 
-	newValidators := calculateNewValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.Validators, s.ValidatorState.SafroleState.NextValidators, newJudgements)
+	newValidators, err := calculateNewValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.Validators, s.ValidatorState.SafroleState.NextValidators)
+	if err != nil {
+		// TODO handle error
+		log.Printf("Error calculating new Validators: %v", err)
+	} else {
+		s.ValidatorState.Validators = newValidators
+	}
 
-	newSafroleState := calculateNewSafroleState(newBlock.Header, s.TimeslotIndex, newBlock.Extrinsic.ET, s.ValidatorState.SafroleState.NextValidators, s.ValidatorState.QueuedValidators, newEntropyPool, newValidators)
+	newArchivedValidators, err:= calculateNewArchivedValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.Validators)
+	if err != nil {
+		// TODO handle error
+		log.Printf("Error calculating new Archived Validators: %v", err)
+	} else {
+		s.ValidatorState.ArchivedValidators = newArchivedValidators
+	}
 
-	newArchivedValidators := calculateNewArchivedValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.Validators)
+	newSafroleState, err := calculateNewSafroleState(newBlock.Header, s.TimeslotIndex, newBlock.Extrinsic.ET, s.ValidatorState.QueuedValidators)
+	if err != nil {
+		// TODO handle error
+		log.Printf("Error calculating new Safrole state: %v", err)
+	} else {
+		s.ValidatorState.SafroleState = newSafroleState
+	}
 
 	// Update the state with newSafroleState values
-
 	s.TimeslotIndex = newTimeState
 	s.ValidatorStatistics = newValidatorStatistics
 	s.RecentBlocks = newRecentBlocks
 	s.CoreAssignments = newCoreAssignments
-	s.EntropyPool = newEntropyPool
 	s.PastJudgements = newJudgements
 	s.CoreAuthorizersPool = newCoreAuthorizations
-	s.ValidatorState.SafroleState = newSafroleState
-	s.ValidatorState.ArchivedValidators = newArchivedValidators
-	s.ValidatorState.Validators = newValidators
 	s.ValidatorState.QueuedValidators = newQueuedValidators
 	s.Services = newServices
 	s.PrivilegedServices = newPrivilegedServices

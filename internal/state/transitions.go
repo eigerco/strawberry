@@ -1,7 +1,10 @@
 package state
 
 import (
+	"errors"
+
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 )
@@ -43,13 +46,37 @@ func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesEx
 }
 
 // calculateNewSafroleState Equation 19: γ′ ≺ (H, τ, ET , γ, ι, η′, κ′)
-func calculateNewSafroleState(header block.Header, timeslot jamtime.Timeslot, tickets block.TicketExtrinsic, nextValidators safrole.ValidatorsData, queuedValidators safrole.ValidatorsData, newEntropyPool EntropyPool, newValidators safrole.ValidatorsData) safrole.State {
-	return safrole.State{}
+func calculateNewSafroleState(header block.Header, timeslot jamtime.Timeslot, tickets block.TicketExtrinsic, queuedValidators safrole.ValidatorsData) (safrole.State, error) {
+	if !header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
+		return safrole.State{}, errors.New("not first timeslot in epoch")
+	}
+	validTickets := block.ExtractTicketFromProof(tickets.TicketProofs)
+	newSafrole := safrole.State{}
+	newNextValidators := nullifyOffenders(queuedValidators, header.OffendersMarkers)
+	ringCommitment := CalculateRingCommitment(newNextValidators)
+	newSealingKeySeries, err := safrole.DetermineNewSealingKeys(timeslot, validTickets, safrole.TicketsOrKeys{}, header.EpochMarker)
+	if err != nil {
+		return safrole.State{}, err
+	}
+	newSafrole.NextValidators = newNextValidators
+	newSafrole.RingCommitment = ringCommitment
+	newSafrole.SealingKeySeries = newSealingKeySeries
+	return newSafrole, nil
 }
 
 // calculateNewEntropyPool Equation 20: η′ ≺ (H, τ, η)
-func calculateNewEntropyPool(header block.Header, timeslot jamtime.Timeslot, entropyPool EntropyPool) EntropyPool {
-	return EntropyPool{}
+func calculateNewEntropyPool(header block.Header, timeslot jamtime.Timeslot, entropyPool EntropyPool) (EntropyPool, error) {
+	newEntropyPool := entropyPool
+	vrfOutput, err:= extractVRFOutput(header)
+	if err != nil {
+		return EntropyPool{}, err
+	}
+	newEntropy := crypto.Hash(append(entropyPool[0][:], vrfOutput[:]...))
+	if header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
+		newEntropyPool = rotateEntropyPool(entropyPool)
+	}
+	newEntropyPool[0] = newEntropy
+	return newEntropyPool, nil
 }
 
 // calculateNewCoreAuthorizations Equation 29: α' ≺ (EG, φ', α)
@@ -58,8 +85,11 @@ func calculateNewCoreAuthorizations(guarantees block.GuaranteesExtrinsic, pendin
 }
 
 // calculateNewValidators Equation 21: κ′ ≺ (H, τ, κ, γ, ψ′)
-func calculateNewValidators(header block.Header, timeslot jamtime.Timeslot, validators safrole.ValidatorsData, nextValidators safrole.ValidatorsData, judgements Judgements) safrole.ValidatorsData {
-	return safrole.ValidatorsData{}
+func calculateNewValidators(header block.Header, timeslot jamtime.Timeslot, validators safrole.ValidatorsData, nextValidators safrole.ValidatorsData) (safrole.ValidatorsData, error) {
+	if !header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
+		return validators, errors.New("not first timeslot in epoch")
+	}
+	return nextValidators, nil
 }
 
 // calculateNewJudgements Equation 23: ψ′ ≺ (ED, ψ)
@@ -73,8 +103,11 @@ func calculateNewCoreAssignments(guarantees block.GuaranteesExtrinsic, coreAssig
 }
 
 // calculateNewArchivedValidators Equation 22: λ′ ≺ (H, τ, λ, κ)
-func calculateNewArchivedValidators(header block.Header, timeslot jamtime.Timeslot, archivedValidators safrole.ValidatorsData, validators safrole.ValidatorsData) safrole.ValidatorsData {
-	return safrole.ValidatorsData{}
+func calculateNewArchivedValidators(header block.Header, timeslot jamtime.Timeslot, archivedValidators safrole.ValidatorsData, validators safrole.ValidatorsData) (safrole.ValidatorsData, error) {
+	if !header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
+		return archivedValidators, errors.New("not first timeslot in epoch")
+	}
+	return validators, nil
 }
 
 // calculateServiceState Equation 28: δ′, 𝝌′, ι′, φ′, C ≺ (EA, ρ′, δ†, 𝝌, ι, φ)
