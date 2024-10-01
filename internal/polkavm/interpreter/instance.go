@@ -22,7 +22,6 @@ func (e ExecutionError) Error() string {
 	return fmt.Sprintf("execution error: %s", e.Err)
 }
 
-//lint:ignore U1000
 type callFunc func(instance *instance) error
 
 type instance struct {
@@ -38,9 +37,8 @@ type instance struct {
 }
 
 type memory struct {
-	rwData []byte
-	stack  []byte
-	//lint:ignore U1000
+	rwData   []byte
+	stack    []byte
 	heapSize uint32
 }
 
@@ -53,7 +51,6 @@ func newBasicMemory(memoryMap *memoryMap, rwData []byte) *memory {
 	return m
 }
 
-//lint:ignore U1000
 func (m *memory) getMemorySlice(program polkavm.Program, memoryMap memoryMap, address uint32, length int) ([]byte, error) {
 	var start uint32
 	var memorySlice []byte
@@ -74,7 +71,6 @@ func (m *memory) getMemorySlice(program polkavm.Program, memoryMap memoryMap, ad
 	return memorySlice[offset : offset+length], nil
 }
 
-//lint:ignore U1000
 func (m *memory) getMemorySlicePointer(memoryMap memoryMap, address uint32, length int) (*[]byte, error) {
 	var start uint32
 	var memorySlice []byte
@@ -94,7 +90,6 @@ func (m *memory) getMemorySlicePointer(memoryMap memoryMap, address uint32, leng
 	return &slice, nil
 }
 
-//lint:ignore U1000
 func (m *memory) sbrk(memoryMap memoryMap, size uint32) (uint32, error) {
 	newHeapSize := m.heapSize + size
 	if newHeapSize > memoryMap.maxHeapSize {

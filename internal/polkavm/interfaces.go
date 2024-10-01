@@ -104,7 +104,7 @@ type HostCallResult struct {
 	Msg       string
 }
 
-type HostCallCode int
+type HostCallCode uint
 
 const (
 	HostCallResultNone HostCallCode = 2<<32 - 1
@@ -120,7 +120,7 @@ const (
 	HostCallResultOk   HostCallCode = 0
 )
 
-type HostCallInnerCode int
+type HostCallInnerCode uint
 
 const (
 	HostCallInnerCodeHalt  HostCallInnerCode = 0
