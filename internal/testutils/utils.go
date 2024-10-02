@@ -1,14 +1,28 @@
 package testutils
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"github.com/eigerco/strawberry/internal/jamtime"
+	mathRand "math/rand"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/stretchr/testify/require"
 )
+
+func RandomTimeslot() jamtime.Timeslot {
+	return jamtime.Timeslot(RandomUint32())
+}
+
+func RandomUint32() uint32 {
+	return mathRand.Uint32()
+}
+
+func RandomUint64() uint64 {
+	return mathRand.Uint64()
+}
 
 func RandomHash(t *testing.T) crypto.Hash {
 	hash := make([]byte, crypto.HashSize)
@@ -17,12 +31,13 @@ func RandomHash(t *testing.T) crypto.Hash {
 	return crypto.Hash(hash)
 }
 
-func RandomED25519PublicKey(t *testing.T) crypto.Ed25519PublicKey {
-	hash := make([]byte, crypto.Ed25519PublicSize)
-	_, err := rand.Read(hash)
+func RandomED25519PublicKey(t *testing.T) ed25519.PublicKey {
+	key := ed25519.PublicKey(make([]byte, crypto.Ed25519PublicSize))
+	_, err := rand.Read(key)
 	require.NoError(t, err)
-	return crypto.Ed25519PublicKey{PublicKey: hash}
+	return key
 }
+
 func RandomBandersnatchPublicKey(t *testing.T) crypto.BandersnatchPublicKey {
 	hash := make([]byte, crypto.BandersnatchSerializedSize)
 	_, err := rand.Read(hash)

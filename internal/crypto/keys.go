@@ -5,10 +5,6 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
-type Ed25519PublicKey struct {
-	ed25519.PublicKey
-}
-type Ed25519PrivateKey ed25519.PrivateKey
 type Ed25519Signature [Ed25519SignatureSize]byte
 type BlsKey [BLSSize]byte
 type BandersnatchSeedKey [BandersnatchSize]byte
@@ -27,7 +23,7 @@ type RingCommitment [BandersnatchRingSize]byte
 type EpochKeys [jamtime.TimeslotsPerEpoch]BandersnatchPublicKey
 type ValidatorKey struct {
 	Bandersnatch BandersnatchPublicKey
-	Ed25519      Ed25519PublicKey
+	Ed25519      ed25519.PublicKey
 	Bls          BlsKey
 	Metadata     MetadataKey
 }

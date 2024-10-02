@@ -1,6 +1,7 @@
 package block
 
 import (
+	"crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 )
@@ -21,14 +22,14 @@ type Verdict struct {
 
 type Culprit struct {
 	ReportHash                crypto.Hash             // H, hash of the work report
-	ValidatorEd25519PublicKey crypto.Ed25519PublicKey // He
+	ValidatorEd25519PublicKey ed25519.PublicKey       // He
 	Signature                 crypto.Ed25519Signature // E
 }
 
 type Fault struct {
 	ReportHash                crypto.Hash             // H, hash of the work report
 	IsValid                   bool                    // {⊺,⊥}
-	ValidatorEd25519PublicKey crypto.Ed25519PublicKey // He
+	ValidatorEd25519PublicKey ed25519.PublicKey       // He
 	Signature                 crypto.Ed25519Signature // E
 }
 

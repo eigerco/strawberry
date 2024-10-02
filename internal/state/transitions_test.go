@@ -29,7 +29,7 @@ func TestCalculateNewEntropyPoolWhenNewEpoch(t *testing.T) {
 	header := block.Header{
 		TimeSlotIndex: 600,
 	}
-	newEntropyPool, err:= calculateNewEntropyPool(header, jamtime.Timeslot(599), entropyPool)
+	newEntropyPool, err := calculateNewEntropyPool(header, jamtime.Timeslot(599), entropyPool)
 	require.NoError(t, err)
 	assert.Equal(t, entropyPool[2], newEntropyPool[3])
 	assert.Equal(t, entropyPool[1], newEntropyPool[2])
@@ -59,29 +59,29 @@ func TestCalculateNewValidatorsWhenNewEpoch(t *testing.T) {
 	header := block.Header{
 		TimeSlotIndex: 600,
 	}
-	newValidators, err := calculateNewValidators(header, jamtime.Timeslot(599), vs.Validators, vs.SafroleState.NextValidators)
+	newValidators, err := calculateNewValidators(header, jamtime.Timeslot(599), vs.CurrentValidators, vs.SafroleState.NextValidators)
 	require.NoError(t, err)
 	require.Equal(t, prevNextValidators, newValidators)
 }
 
 func TestCalculateNewValidatorsWhenNotNewEpoch(t *testing.T) {
 	vs := setupValidatorState(t)
-	prevValidators := vs.Validators
+	prevValidators := vs.CurrentValidators
 	header := block.Header{
 		TimeSlotIndex: 2,
 	}
-	newValidators, err:= calculateNewValidators(header, jamtime.Timeslot(1), vs.Validators, vs.SafroleState.NextValidators)
+	newValidators, err := calculateNewValidators(header, jamtime.Timeslot(1), vs.CurrentValidators, vs.SafroleState.NextValidators)
 	require.Error(t, err)
 	require.Equal(t, prevValidators, newValidators)
 }
 
 func TestCalcualteNewArchivedValidatorsWhenNewEpoch(t *testing.T) {
 	vs := setupValidatorState(t)
-	prevValidators := vs.Validators
+	prevValidators := vs.CurrentValidators
 	header := block.Header{
 		TimeSlotIndex: 600,
 	}
-	newArchivedValidators, err := calculateNewArchivedValidators(header, jamtime.Timeslot(599), vs.ArchivedValidators, vs.Validators)
+	newArchivedValidators, err := calculateNewArchivedValidators(header, jamtime.Timeslot(599), vs.ArchivedValidators, vs.CurrentValidators)
 	require.NoError(t, err)
 	require.Equal(t, prevValidators, newArchivedValidators)
 }
@@ -92,11 +92,10 @@ func TestCalcualteNewArchivedValidatorsWhenNotNewEpoch(t *testing.T) {
 	header := block.Header{
 		TimeSlotIndex: 2,
 	}
-	newArchivedValidators, err:= calculateNewArchivedValidators(header, jamtime.Timeslot(1), vs.ArchivedValidators, vs.Validators)
+	newArchivedValidators, err := calculateNewArchivedValidators(header, jamtime.Timeslot(1), vs.ArchivedValidators, vs.CurrentValidators)
 	require.Error(t, err)
 	require.Equal(t, prevArchivedValidators, newArchivedValidators)
 }
-
 
 func TestCaculateNewSafroleStateWhenNewEpoch(t *testing.T) {
 	vs := setupValidatorState(t)

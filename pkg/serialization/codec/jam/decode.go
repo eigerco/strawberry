@@ -2,6 +2,7 @@ package jam
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"fmt"
 	"io"
 	"math"
@@ -59,13 +60,13 @@ func (br *byteReader) handleReflectTypes(value reflect.Value) error {
 	case reflect.Ptr:
 		return br.decodePointer(value)
 	case reflect.Struct:
-		if value.Type() == reflect.TypeOf(crypto.Ed25519PublicKey{}) {
-			return br.decodeEd25519PublicKey(value)
-		}
 		return br.decodeStruct(value)
 	case reflect.Array:
 		return br.decodeArray(value)
 	case reflect.Slice:
+		if value.Type() == reflect.TypeOf(ed25519.PublicKey{}) {
+			return br.decodeEd25519PublicKey(value)
+		}
 		return br.decodeSlice(value)
 	case reflect.Map:
 		return br.decodeMap(value)
@@ -137,7 +138,6 @@ func (br *byteReader) decodeEnum(enum EnumType) error {
 	}
 
 	if val == nil {
-
 		return enum.SetValue(b)
 	}
 
@@ -265,10 +265,8 @@ func (br *byteReader) decodeMap(value reflect.Value) error {
 }
 
 func (br *byteReader) decodeEd25519PublicKey(value reflect.Value) error {
-	publicKey := crypto.Ed25519PublicKey{
-		PublicKey: make([]byte, crypto.Ed25519PublicSize),
-	}
-	if _, err := io.ReadFull(br.Reader, publicKey.PublicKey); err != nil {
+	publicKey := ed25519.PublicKey(make([]byte, crypto.Ed25519PublicSize))
+	if _, err := io.ReadFull(br.Reader, publicKey); err != nil {
 		return err
 	}
 

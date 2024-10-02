@@ -1,6 +1,7 @@
 package block
 
 import (
+	"crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/common"
 	"testing"
 
@@ -35,7 +36,7 @@ func Test_HeaderEncodeDecode(t *testing.T) {
 			Identifier: testutils.RandomHash(t),
 			EntryIndex: 222,
 		}},
-		OffendersMarkers: []crypto.Ed25519PublicKey{
+		OffendersMarkers: []ed25519.PublicKey{
 			testutils.RandomED25519PublicKey(t),
 		},
 		BlockAuthorIndex:   1,

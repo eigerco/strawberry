@@ -1,6 +1,7 @@
 package block
 
 import (
+	"crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -14,7 +15,7 @@ type Header struct {
 	TimeSlotIndex        jamtime.Timeslot                   // Ht
 	EpochMarker          *EpochMarker                       // He
 	WinningTicketsMarker *[jamtime.TimeslotsPerEpoch]Ticket // Hw
-	OffendersMarkers     []crypto.Ed25519PublicKey          // Ho, the culprit's and fault's public keys
+	OffendersMarkers     []ed25519.PublicKey                // Ho, the culprit's and fault's public keys
 	BlockAuthorIndex     uint16                             // Hi
 	VRFSignature         crypto.BandersnatchSignature       // Hv
 	BlockSealSignature   crypto.BandersnatchSignature       // Hs

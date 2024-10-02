@@ -13,7 +13,7 @@ import (
 
 func setupValidatorState(t *testing.T) *ValidatorState {
 	validatorState := ValidatorState{}
-	validatorState.Validators = randomListOfValidators(t)
+	validatorState.CurrentValidators = randomListOfValidators(t)
 	validatorState.QueuedValidators = randomListOfValidators(t)
 	validatorState.ArchivedValidators = randomListOfValidators(t)
 	safroleState := safrole.State{}
