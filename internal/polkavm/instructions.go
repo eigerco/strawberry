@@ -111,7 +111,7 @@ const (
 	LoadImmAndJumpIndirect Opcode = 42
 )
 
-type Reg byte
+type Reg uint
 
 func (r Reg) String() string {
 	switch r {
@@ -142,7 +142,7 @@ func (r Reg) String() string {
 	case A5:
 		return "a5"
 	default:
-		panic("unreachable")
+		return "UNKNOWN"
 	}
 }
 
@@ -564,8 +564,10 @@ func (i *Instruction) StepOnce(mutator Mutator) error {
 	case Jump:
 		mutator.Jump(i.Imm[0])
 	case Ecalli:
-		if result := mutator.Ecalli(i.Imm[0]); result != HostCallResultOk {
-			return fmt.Errorf("host call terminated with code: %d - %s", result, result.String())
+		if result := mutator.Ecalli(i.Imm[0]); result.Code != HostCallResultOk {
+			return fmt.Errorf("host call terminated with code: %d - %s", result.Code, result.Code.String())
+		} else if result.InnerCode != HostCallInnerCodeHalt {
+			return fmt.Errorf("host call terminated with inner code: %d message: %s", result.InnerCode, result.Msg)
 		}
 	case StoreImmU8:
 		return mutator.StoreImmU8(i.Imm[0], i.Imm[1])
