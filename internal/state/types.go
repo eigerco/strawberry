@@ -1,6 +1,7 @@
 package state
 
 import (
+	"crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -13,10 +14,10 @@ type Assignment struct {
 }
 
 type Judgements struct {
-	BadWorkReports      []crypto.Hash             //  Bad work-reports (ψb) - Work-reports judged to be incorrect.
-	GoodWorkReports     []crypto.Hash             //  Good work-reports (ψg) - Work-reports judged to be correct.
-	WonkyWorkReports    []crypto.Hash             //  Wonky work-reports (ψw) - Work-reports whose validity is judged to be unknowable.
-	OffendingValidators []crypto.Ed25519PublicKey //  Offending validators (ψp) - Validators who made a judgement found to be incorrect.
+	BadWorkReports      []crypto.Hash       //  Bad work-reports (ψb) - Work-reports judged to be incorrect.
+	GoodWorkReports     []crypto.Hash       //  Good work-reports (ψg) - Work-reports judged to be correct.
+	WonkyWorkReports    []crypto.Hash       //  Wonky work-reports (ψw) - Work-reports whose validity is judged to be unknowable.
+	OffendingValidators []ed25519.PublicKey //  Offending validators (ψp) - CurrentValidators who made a judgement found to be incorrect.
 }
 
 type CoreAssignments [common.TotalNumberOfCores]Assignment

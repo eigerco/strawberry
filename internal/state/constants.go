@@ -10,4 +10,5 @@ const (
 	MaxWorkPackageSizeBytes               = 96 * 1024 // (WR) Maximum size of a serialized work-package in bytes
 	EntropyPoolSize                       = 4         // () Size of the entropy pool
 	PendingAuthorizersQueueSize           = 80        // (Q) The maximum number of items in the authorizers queue.
+	TransferMemoSizeBytes                 = 128       // (M) Size of the transfer memo in bytes.
 )

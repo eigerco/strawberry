@@ -20,9 +20,10 @@ type ServiceAccount struct {
 }
 
 type PrivilegedServices struct {
-	ManagerServiceId   block.ServiceId // Manager service ID (m) - the service able to effect an alteration of PrivilegedServices from block to block. Also called Empower service.
-	AssignServiceId    block.ServiceId // Assign service ID (a) - the service able to effect an alteration of the PendingAuthorizersQueues.
-	DesignateServiceId block.ServiceId // Designate service ID (v) - the service able to effect an alteration of the NextValidators in ValidatorState.
+	ManagerServiceId        block.ServiceId            // Manager service ID (m) - the service able to effect an alteration of PrivilegedServices from block to block. Also called Empower service.
+	AssignServiceId         block.ServiceId            // Assign service ID (a) - the service able to effect an alteration of the PendingAuthorizersQueues.
+	DesignateServiceId      block.ServiceId            // Designate service ID (v) - the service able to effect an alteration of the NextValidators in ValidatorState.
+	AmountOfGasPerServiceId map[block.ServiceId]uint64 // Amount of gas per service ID (g) - small dictionary containing the indices of services which automatically accumulate in each block together with a basic amount of gas with which each accumulates.
 }
 
 type PreimageLength uint32

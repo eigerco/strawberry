@@ -51,7 +51,7 @@ func TestDecodeBlockWithJamCodec(t *testing.T) {
 	require.Equal(t, expected.Header.TicketsMark, unmarshaled.Header.WinningTicketsMarker)
 
 	for i := range expected.Header.OffendersMark {
-		require.Equal(t, expected.Header.OffendersMark[i], toHex(unmarshaled.Header.OffendersMarkers[i].PublicKey))
+		require.Equal(t, expected.Header.OffendersMark[i], toHex(unmarshaled.Header.OffendersMarkers[i]))
 	}
 
 	require.Equal(t, expected.Header.AuthorIndex, unmarshaled.Header.BlockAuthorIndex)
@@ -76,14 +76,14 @@ func TestDecodeBlockWithJamCodec(t *testing.T) {
 
 	for i := range expected.Extrinsic.Disputes.Culprits {
 		require.Equal(t, expected.Extrinsic.Disputes.Culprits[i].Target, toHex(unmarshaled.Extrinsic.ED.Culprits[i].ReportHash))
-		require.Equal(t, expected.Extrinsic.Disputes.Culprits[i].Key, toHex(unmarshaled.Extrinsic.ED.Culprits[i].ValidatorEd25519PublicKey.PublicKey))
+		require.Equal(t, expected.Extrinsic.Disputes.Culprits[i].Key, toHex(unmarshaled.Extrinsic.ED.Culprits[i].ValidatorEd25519PublicKey))
 		require.Equal(t, expected.Extrinsic.Disputes.Culprits[i].Signature, toHex(unmarshaled.Extrinsic.ED.Culprits[i].Signature))
 	}
 
 	for i := range expected.Extrinsic.Disputes.Faults {
 		require.Equal(t, expected.Extrinsic.Disputes.Faults[i].Target, toHex(unmarshaled.Extrinsic.ED.Faults[i].ReportHash))
 		require.Equal(t, expected.Extrinsic.Disputes.Faults[i].Vote, unmarshaled.Extrinsic.ED.Faults[i].IsValid)
-		require.Equal(t, expected.Extrinsic.Disputes.Faults[i].Key, toHex(unmarshaled.Extrinsic.ED.Faults[i].ValidatorEd25519PublicKey.PublicKey))
+		require.Equal(t, expected.Extrinsic.Disputes.Faults[i].Key, toHex(unmarshaled.Extrinsic.ED.Faults[i].ValidatorEd25519PublicKey))
 		require.Equal(t, expected.Extrinsic.Disputes.Faults[i].Signature, toHex(unmarshaled.Extrinsic.ED.Faults[i].Signature))
 	}
 
