@@ -36,7 +36,7 @@ func (s *State) UpdateState(newBlock block.Block) {
 
 	intermediateCoreAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
 	intermediateCoreAssignments = calculateIntermediateCoreAssignmentsFromAvailability(newBlock.Extrinsic.EA, intermediateCoreAssignments)
-	newCoreAssignments := calculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState.Validators, newTimeState)
+	newCoreAssignments := calculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState.CurrentValidators, newTimeState)
 
 	intermediateServiceState := calculateIntermediateServiceState(newBlock.Extrinsic.EP, s.Services, newTimeState)
 	newServices, newPrivilegedServices, newQueuedValidators, newPendingCoreAuthorizations, context := calculateServiceState(
@@ -63,15 +63,15 @@ func (s *State) UpdateState(newBlock block.Block) {
 
 	newCoreAuthorizations := calculateNewCoreAuthorizations(newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
 
-	newValidators, err := calculateNewValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.Validators, s.ValidatorState.SafroleState.NextValidators)
+	newValidators, err := calculateNewValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.CurrentValidators, s.ValidatorState.SafroleState.NextValidators)
 	if err != nil {
 		// TODO handle error
 		log.Printf("Error calculating new Validators: %v", err)
 	} else {
-		s.ValidatorState.Validators = newValidators
+		s.ValidatorState.CurrentValidators = newValidators
 	}
 
-	newArchivedValidators, err:= calculateNewArchivedValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.Validators)
+	newArchivedValidators, err := calculateNewArchivedValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.CurrentValidators)
 	if err != nil {
 		// TODO handle error
 		log.Printf("Error calculating new Archived Validators: %v", err)

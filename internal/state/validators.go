@@ -1,15 +1,16 @@
 package state
 
 import (
+	"crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
 )
 
 // ValidatorState represents the state related to validators
 type ValidatorState struct {
-	Validators         safrole.ValidatorsData // Validators mapping (κ) (identified)
-	ArchivedValidators safrole.ValidatorsData // Archived validators (λ) (archived)
-	QueuedValidators   safrole.ValidatorsData // Queue of validators to be added (ι) (enqueued)
+	CurrentValidators  safrole.ValidatorsData // CurrentValidators mapping (κ) Validator keys and metadata currently active.
+	ArchivedValidators safrole.ValidatorsData // Archived validators (λ) Validator keys and metadata which were active in the prior epoch.
+	QueuedValidators   safrole.ValidatorsData // Enqueued validators (ι) Validator keys and metadata to be drawn from next.
 	SafroleState       safrole.State          // Safrole State (𝛾) (state of block-production algorithm)
 }
 
@@ -31,13 +32,13 @@ func CalculateRingCommitment(safrole.ValidatorsData) crypto.RingCommitment {
 	return crypto.RingCommitment{}
 }
 
-func nullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []crypto.Ed25519PublicKey) safrole.ValidatorsData {
+func nullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed25519.PublicKey) safrole.ValidatorsData {
 	offenderMap := make(map[string]struct{})
 	for _, key := range offenders {
-		offenderMap[string(key.PublicKey)] = struct{}{}
+		offenderMap[string(key)] = struct{}{}
 	}
 	for i, validator := range queuedValidators {
-		if _, found := offenderMap[string(validator.Ed25519.PublicKey)]; found {
+		if _, found := offenderMap[string(validator.Ed25519)]; found {
 			queuedValidators[i] = crypto.ValidatorKey{} // Nullify the validator
 		}
 	}

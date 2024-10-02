@@ -111,7 +111,7 @@ const (
 	LoadImmAndJumpIndirect Opcode = 42
 )
 
-type Reg byte
+type Reg uint
 
 func (r Reg) String() string {
 	switch r {
@@ -142,7 +142,7 @@ func (r Reg) String() string {
 	case A5:
 		return "a5"
 	default:
-		panic("unreachable")
+		return "UNKNOWN"
 	}
 }
 
