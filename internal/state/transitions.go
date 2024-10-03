@@ -1,9 +1,13 @@
 package state
 
 import (
+	"bytes"
+	"crypto/ed25519"
 	"errors"
+	"fmt"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
@@ -67,7 +71,7 @@ func calculateNewSafroleState(header block.Header, timeslot jamtime.Timeslot, ti
 // calculateNewEntropyPool Equation 20: η′ ≺ (H, τ, η)
 func calculateNewEntropyPool(header block.Header, timeslot jamtime.Timeslot, entropyPool EntropyPool) (EntropyPool, error) {
 	newEntropyPool := entropyPool
-	vrfOutput, err:= extractVRFOutput(header)
+	vrfOutput, err := extractVRFOutput(header)
 	if err != nil {
 		return EntropyPool{}, err
 	}
@@ -92,9 +96,84 @@ func calculateNewValidators(header block.Header, timeslot jamtime.Timeslot, vali
 	return nextValidators, nil
 }
 
+// addUniqueHash adds a hash to a slice if it's not already present
+func addUniqueHash(slice []crypto.Hash, hash crypto.Hash) []crypto.Hash {
+	for _, v := range slice {
+		if v == hash {
+			return slice
+		}
+	}
+	return append(slice, hash)
+}
+
+// addUniqueEdPubKey adds a public key to a slice if it's not already present
+func addUniqueEdPubKey(slice []ed25519.PublicKey, key ed25519.PublicKey) []ed25519.PublicKey {
+	for _, v := range slice {
+		if bytes.Equal(v, key) {
+			return slice
+		}
+	}
+	return append(slice, key)
+}
+
+// processVerdict categorizes a verdict based on positive judgments. Equations 111, 112, 113.
+func processVerdict(judgements *Judgements, verdict block.Verdict) {
+	positiveJudgments := 0
+	for _, judgment := range verdict.Judgements {
+		if judgment.IsValid {
+			positiveJudgments++
+		}
+	}
+
+	switch positiveJudgments {
+	// Equation 111: ψ'g ≡ ψg ∪ {r | {r, ⌊2/3V⌋ + 1} ∈ V}
+	case block.ValidatorsSuperMajority:
+		judgements.GoodWorkReports = addUniqueHash(judgements.GoodWorkReports, verdict.ReportHash)
+		// Equation 112: ψ'b ≡ ψb ∪ {r | {r, 0} ∈ V}
+	case 0:
+		judgements.BadWorkReports = addUniqueHash(judgements.BadWorkReports, verdict.ReportHash)
+		// Equation 113: ψ'w ≡ ψw ∪ {r | {r, ⌊1/3V⌋} ∈ V}
+	case common.NumberOfValidators / 3:
+		judgements.WonkyWorkReports = addUniqueHash(judgements.WonkyWorkReports, verdict.ReportHash)
+		// TODO: The GP gives only the above 3 cases. Check back later how can we be sure only the above 3 cases are possible.
+	default:
+		panic(fmt.Sprintf("Unexpected number of positive judgments: %d", positiveJudgments))
+	}
+}
+
+// processOffender adds an offending validator to the list
+func processOffender(judgements *Judgements, key ed25519.PublicKey) {
+	judgements.OffendingValidators = addUniqueEdPubKey(judgements.OffendingValidators, key)
+}
+
 // calculateNewJudgements Equation 23: ψ′ ≺ (ED, ψ)
 func calculateNewJudgements(disputes block.DisputeExtrinsic, stateJudgements Judgements) Judgements {
-	return Judgements{}
+	newJudgements := Judgements{
+		BadWorkReports:      make([]crypto.Hash, len(stateJudgements.BadWorkReports)),
+		GoodWorkReports:     make([]crypto.Hash, len(stateJudgements.GoodWorkReports)),
+		WonkyWorkReports:    make([]crypto.Hash, len(stateJudgements.WonkyWorkReports)),
+		OffendingValidators: make([]ed25519.PublicKey, len(stateJudgements.OffendingValidators)),
+	}
+
+	copy(newJudgements.BadWorkReports, stateJudgements.BadWorkReports)
+	copy(newJudgements.GoodWorkReports, stateJudgements.GoodWorkReports)
+	copy(newJudgements.WonkyWorkReports, stateJudgements.WonkyWorkReports)
+	copy(newJudgements.OffendingValidators, stateJudgements.OffendingValidators)
+
+	// Process verdicts (Equations 111, 112, 113)
+	for _, verdict := range disputes.Verdicts {
+		processVerdict(&newJudgements, verdict)
+	}
+
+	// Process culprits and faults (Equation 114)
+	for _, culprit := range disputes.Culprits {
+		processOffender(&newJudgements, culprit.ValidatorEd25519PublicKey)
+	}
+	for _, fault := range disputes.Faults {
+		processOffender(&newJudgements, fault.ValidatorEd25519PublicKey)
+	}
+
+	return newJudgements
 }
 
 // calculateNewCoreAssignments Equation 27: ρ′ ≺ (EG, ρ‡, κ, τ′)
