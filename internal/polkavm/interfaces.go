@@ -2,7 +2,7 @@ package polkavm
 
 type Module interface {
 	AddHostFunc(string, HostFunc)
-	Run(symbol string, args ...uint32) (result uint32, err error)
+	Run(symbol string, gasLimit int64, args ...uint32) (result uint32, gasRemaining int64, err error)
 }
 
 type HostFunc func(args ...uint32) (uint32, error)
@@ -96,6 +96,8 @@ type Mutator interface {
 	LoadImmAndJumpIndirect(ra Reg, base Reg, value, offset uint32) error
 	Jump(target uint32)
 	JumpIndirect(base Reg, offset uint32) error
+	GetGasRemaining() int64
+	DeductGas(cost int64)
 }
 
 type HostCallResult struct {

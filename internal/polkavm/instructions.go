@@ -111,6 +111,97 @@ const (
 	LoadImmAndJumpIndirect Opcode = 42
 )
 
+var gasCosts = map[Opcode]int64{
+	Trap:                            1,
+	Fallthrough:                     1,
+	JumpIndirect:                    1,
+	LoadImm:                         1,
+	LoadU8:                          1,
+	LoadI8:                          1,
+	LoadU16:                         1,
+	LoadI16:                         1,
+	LoadU32:                         1,
+	StoreU8:                         1,
+	StoreU16:                        1,
+	StoreU32:                        1,
+	LoadImmAndJump:                  1,
+	BranchEqImm:                     1,
+	BranchNotEqImm:                  1,
+	BranchLessUnsignedImm:           1,
+	BranchLessSignedImm:             1,
+	BranchGreaterOrEqualUnsignedImm: 1,
+	BranchGreaterOrEqualSignedImm:   1,
+	BranchLessOrEqualSignedImm:      1,
+	BranchLessOrEqualUnsignedImm:    1,
+	BranchGreaterSignedImm:          1,
+	BranchGreaterUnsignedImm:        1,
+	StoreImmIndirectU8:              1,
+	StoreImmIndirectU16:             1,
+	StoreImmIndirectU32:             1,
+	StoreIndirectU8:                 1,
+	StoreIndirectU16:                1,
+	StoreIndirectU32:                1,
+	LoadIndirectU8:                  1,
+	LoadIndirectI8:                  1,
+	LoadIndirectU16:                 1,
+	LoadIndirectI16:                 1,
+	LoadIndirectU32:                 1,
+	AddImm:                          1,
+	AndImm:                          1,
+	XorImm:                          1,
+	OrImm:                           1,
+	MulImm:                          1,
+	MulUpperSignedSignedImm:         1,
+	MulUpperUnsignedUnsignedImm:     1,
+	SetLessThanUnsignedImm:          1,
+	SetLessThanSignedImm:            1,
+	ShiftLogicalLeftImm:             1,
+	ShiftLogicalRightImm:            1,
+	ShiftArithmeticRightImm:         1,
+	NegateAndAddImm:                 1,
+	SetGreaterThanUnsignedImm:       1,
+	SetGreaterThanSignedImm:         1,
+	ShiftLogicalRightImmAlt:         1,
+	ShiftArithmeticRightImmAlt:      1,
+	ShiftLogicalLeftImmAlt:          1,
+	CmovIfZeroImm:                   1,
+	CmovIfNotZeroImm:                1,
+	BranchEq:                        1,
+	BranchNotEq:                     1,
+	BranchLessUnsigned:              1,
+	BranchLessSigned:                1,
+	BranchGreaterOrEqualUnsigned:    1,
+	BranchGreaterOrEqualSigned:      1,
+	Add:                             1,
+	Sub:                             1,
+	And:                             1,
+	Xor:                             1,
+	Or:                              1,
+	Mul:                             1,
+	MulUpperSignedSigned:            1,
+	MulUpperUnsignedUnsigned:        1,
+	MulUpperSignedUnsigned:          1,
+	SetLessThanUnsigned:             1,
+	SetLessThanSigned:               1,
+	ShiftLogicalLeft:                1,
+	ShiftLogicalRight:               1,
+	ShiftArithmeticRight:            1,
+	DivUnsigned:                     1,
+	DivSigned:                       1,
+	RemUnsigned:                     1,
+	RemSigned:                       1,
+	CmovIfZero:                      1,
+	CmovIfNotZero:                   1,
+	Jump:                            1,
+	Ecalli:                          1,
+	StoreImmU8:                      1,
+	StoreImmU16:                     1,
+	StoreImmU32:                     1,
+	MoveReg:                         1,
+	Sbrk:                            1,
+	LoadImmAndJumpIndirect:          1,
+}
+
 type Reg uint
 
 func (r Reg) String() string {
@@ -400,6 +491,17 @@ type Instruction struct {
 }
 
 func (i *Instruction) StepOnce(mutator Mutator) error {
+	gasCost, ok := gasCosts[i.Opcode]
+	if !ok {
+		return fmt.Errorf("unknown opcode: %v", i.Opcode)
+	}
+
+	if mutator.GetGasRemaining() < gasCost {
+		return fmt.Errorf("out of gas")
+	}
+
+	mutator.DeductGas(gasCost)
+
 	switch i.Opcode {
 	case Trap:
 		return mutator.Trap()

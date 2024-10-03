@@ -41,13 +41,13 @@ func NewModule(program *polkavm.Program) (polkavm.Module, error) {
 	}, nil
 }
 
-func (m *module) Run(symbol string, args ...uint32) (result uint32, err error) {
+func (m *module) Run(symbol string, gasLimit int64, args ...uint32) (result uint32, gasRemaining int64, err error) {
 	if len(args) > 6 {
-		return 0, fmt.Errorf("too many arguments, max allowed arguments: 6")
+		return 0, gasLimit, fmt.Errorf("too many arguments, max allowed arguments: 6")
 	}
 	instructionOffset, ok := m.codeOffsetBySymbol[symbol]
 	if !ok {
-		return 0, fmt.Errorf("symbol %q not found", symbol)
+		return 0, gasLimit, fmt.Errorf("symbol %q not found", symbol)
 	}
 
 	i := &instance{
@@ -62,7 +62,7 @@ func (m *module) Run(symbol string, args ...uint32) (result uint32, err error) {
 	for n, arg := range args {
 		i.regs[polkavm.A0+polkavm.Reg(n)] = arg
 	}
-	mutator := newMutator(i, m)
+	mutator := newMutator(i, m, gasLimit)
 	mutator.startBasicBlock()
 	for {
 		i.cycleCounter += 1
@@ -71,7 +71,7 @@ func (m *module) Run(symbol string, args ...uint32) (result uint32, err error) {
 		i.instructionOffset = instruction.Offset
 		i.instructionLength = instruction.Length
 		if err := instruction.StepOnce(mutator); err != nil {
-			return 0, err
+			return 0, mutator.GetGasRemaining(), err
 		}
 
 		if i.returnToHost {
@@ -79,5 +79,5 @@ func (m *module) Run(symbol string, args ...uint32) (result uint32, err error) {
 		}
 	}
 
-	return i.regs[polkavm.A0], nil
+	return i.regs[polkavm.A0], mutator.GetGasRemaining(), nil
 }
