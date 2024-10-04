@@ -19,14 +19,13 @@ const (
 
 var _ polkavm.Mutator = &mutator{}
 
-func newMutator(i *instance, m *module, gasLimit int64) *mutator {
+func newMutator(i *instance, m *module) *mutator {
 	v := &mutator{
 		instance:                 i,
 		hostFunctions:            []callFunc{},
 		memoryMap:                *m.memoryMap,
 		program:                  *m.program,
 		instructionOffsetToIndex: m.instructionOffsetToIndex,
-		gasRemaining:             gasLimit,
 	}
 	for _, imp := range m.program.Imports {
 		hostFn, ok := m.hostFunctions[imp]
@@ -53,19 +52,6 @@ type mutator struct {
 	instructionOffsetToIndex map[uint32]int
 	memoryMap                memoryMap
 	hostFunctions            []callFunc
-	gasRemaining             int64
-}
-
-func (v *mutator) GetGasRemaining() int64 {
-	return v.gasRemaining
-}
-
-func (v *mutator) DeductGas(cost int64) {
-	if cost > v.gasRemaining {
-		v.gasRemaining = 0
-	} else {
-		v.gasRemaining -= cost
-	}
 }
 
 func (v *mutator) startBasicBlock() {

@@ -58,11 +58,12 @@ func (m *module) Run(symbol string, gasLimit int64, args ...uint32) (result uint
 		},
 		instructionOffset:   instructionOffset,
 		offsetForBasicBlock: make(map[uint32]int),
+		gasRemaining:        gasLimit,
 	}
 	for n, arg := range args {
 		i.regs[polkavm.A0+polkavm.Reg(n)] = arg
 	}
-	mutator := newMutator(i, m, gasLimit)
+	mutator := newMutator(i, m)
 	mutator.startBasicBlock()
 	for {
 		i.cycleCounter += 1
@@ -70,8 +71,18 @@ func (m *module) Run(symbol string, gasLimit int64, args ...uint32) (result uint
 
 		i.instructionOffset = instruction.Offset
 		i.instructionLength = instruction.Length
+		gasCost, ok := polkavm.GasCosts[instruction.Opcode]
+		if !ok {
+			return 0, i.gasRemaining, fmt.Errorf("unknown opcode: %v", instruction.Opcode)
+		}
+		if i.gasRemaining < gasCost {
+			return 0, i.gasRemaining, fmt.Errorf("out of gas")
+		}
+
+		i.deductGas(gasCost)
+
 		if err := instruction.StepOnce(mutator); err != nil {
-			return 0, mutator.GetGasRemaining(), err
+			return 0, i.gasRemaining, err
 		}
 
 		if i.returnToHost {
@@ -79,5 +90,5 @@ func (m *module) Run(symbol string, gasLimit int64, args ...uint32) (result uint
 		}
 	}
 
-	return i.regs[polkavm.A0], mutator.GetGasRemaining(), nil
+	return i.regs[polkavm.A0], i.gasRemaining, nil
 }

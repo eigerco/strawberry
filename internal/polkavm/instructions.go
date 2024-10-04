@@ -111,7 +111,7 @@ const (
 	LoadImmAndJumpIndirect Opcode = 42
 )
 
-var gasCosts = map[Opcode]int64{
+var GasCosts = map[Opcode]int64{
 	Trap:                            1,
 	Fallthrough:                     1,
 	JumpIndirect:                    1,
@@ -491,17 +491,6 @@ type Instruction struct {
 }
 
 func (i *Instruction) StepOnce(mutator Mutator) error {
-	gasCost, ok := gasCosts[i.Opcode]
-	if !ok {
-		return fmt.Errorf("unknown opcode: %v", i.Opcode)
-	}
-
-	if mutator.GetGasRemaining() < gasCost {
-		return fmt.Errorf("out of gas")
-	}
-
-	mutator.DeductGas(gasCost)
-
 	switch i.Opcode {
 	case Trap:
 		return mutator.Trap()

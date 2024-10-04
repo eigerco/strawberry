@@ -96,8 +96,6 @@ type Mutator interface {
 	LoadImmAndJumpIndirect(ra Reg, base Reg, value, offset uint32) error
 	Jump(target uint32)
 	JumpIndirect(base Reg, offset uint32) error
-	GetGasRemaining() int64
-	DeductGas(cost int64)
 }
 
 type HostCallResult struct {

@@ -34,6 +34,15 @@ type instance struct {
 	offsetForBasicBlock map[uint32]int
 	instructions        []polkavm.Instruction
 	instructionCounter  int
+	gasRemaining        int64
+}
+
+func (v *instance) deductGas(cost int64) {
+	if cost > v.gasRemaining {
+		v.gasRemaining = 0
+	} else {
+		v.gasRemaining -= cost
+	}
 }
 
 type memory struct {
