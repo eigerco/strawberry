@@ -76,7 +76,7 @@ func (m *module) Run(symbol string, gasLimit int64, args ...uint32) (result uint
 			return 0, i.gasRemaining, fmt.Errorf("unknown opcode: %v", instruction.Opcode)
 		}
 		if i.gasRemaining < gasCost {
-			return 0, i.gasRemaining, fmt.Errorf("out of gas")
+			return 0, i.gasRemaining, errOutOfGas
 		}
 
 		i.deductGas(gasCost)
