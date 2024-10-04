@@ -2,7 +2,7 @@ package polkavm
 
 type Module interface {
 	AddHostFunc(string, HostFunc)
-	Run(symbol string, args ...uint32) (result uint32, err error)
+	Run(symbol string, gasLimit int64, args ...uint32) (result uint32, gasRemaining int64, err error)
 }
 
 type HostFunc func(args ...uint32) (uint32, error)

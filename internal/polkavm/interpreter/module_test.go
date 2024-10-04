@@ -3,6 +3,7 @@ package interpreter
 import (
 	. "github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -28,16 +29,22 @@ func TestInstance_Execute(t *testing.T) {
 	}
 
 	m, err := NewModule(pp)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
+	gasLimit := int64(1000)
+
 	m.AddHostFunc("get_third_number", getThirdNumber)
-	res, err := m.Run("add_numbers", 1, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
+	res, gasRemaining, err := m.Run("add_numbers", gasLimit, 1, 10)
+	require.NoError(t, err)
+
+	assert.Equal(t, gasLimit-int64(len(pp.Instructions)), gasRemaining)
+
+	// 1 + 10 + 100 = 111
 	assert.Equal(t, uint32(111), res)
-	println("1 + 10 + 100 =", res)
+
+	// not enough gas
+	_, _, err = m.Run("add_numbers", 9, 1, 10)
+	require.ErrorIs(t, err, errOutOfGas)
 }
 
 func getThirdNumber(args ...uint32) (uint32, error) {

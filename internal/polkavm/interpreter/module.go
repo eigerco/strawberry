@@ -41,13 +41,13 @@ func NewModule(program *polkavm.Program) (polkavm.Module, error) {
 	}, nil
 }
 
-func (m *module) Run(symbol string, args ...uint32) (result uint32, err error) {
+func (m *module) Run(symbol string, gasLimit int64, args ...uint32) (result uint32, gasRemaining int64, err error) {
 	if len(args) > 6 {
-		return 0, fmt.Errorf("too many arguments, max allowed arguments: 6")
+		return 0, gasLimit, fmt.Errorf("too many arguments, max allowed arguments: 6")
 	}
 	instructionOffset, ok := m.codeOffsetBySymbol[symbol]
 	if !ok {
-		return 0, fmt.Errorf("symbol %q not found", symbol)
+		return 0, gasLimit, fmt.Errorf("symbol %q not found", symbol)
 	}
 
 	i := &instance{
@@ -58,6 +58,7 @@ func (m *module) Run(symbol string, args ...uint32) (result uint32, err error) {
 		},
 		instructionOffset:   instructionOffset,
 		offsetForBasicBlock: make(map[uint32]int),
+		gasRemaining:        gasLimit,
 	}
 	for n, arg := range args {
 		i.regs[polkavm.A0+polkavm.Reg(n)] = arg
@@ -70,8 +71,18 @@ func (m *module) Run(symbol string, args ...uint32) (result uint32, err error) {
 
 		i.instructionOffset = instruction.Offset
 		i.instructionLength = instruction.Length
+		gasCost, ok := polkavm.GasCosts[instruction.Opcode]
+		if !ok {
+			return 0, i.gasRemaining, fmt.Errorf("unknown opcode: %v", instruction.Opcode)
+		}
+		if i.gasRemaining < gasCost {
+			return 0, i.gasRemaining, errOutOfGas
+		}
+
+		i.deductGas(gasCost)
+
 		if err := instruction.StepOnce(mutator); err != nil {
-			return 0, err
+			return 0, i.gasRemaining, err
 		}
 
 		if i.returnToHost {
@@ -79,5 +90,5 @@ func (m *module) Run(symbol string, args ...uint32) (result uint32, err error) {
 		}
 	}
 
-	return i.regs[polkavm.A0], nil
+	return i.regs[polkavm.A0], i.gasRemaining, nil
 }
