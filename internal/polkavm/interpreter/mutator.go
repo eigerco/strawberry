@@ -323,16 +323,20 @@ func (v *mutator) SetLessThanSigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	v.setNext(d, bool2uint32(int32(v.get(s1)) < int32(v.get(s2))))
 }
 func (v *mutator) ShiftLogicalLeft(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, v.get(s1)<<v.get(s2))
+	shiftAmount := v.get(s2) % 32
+	shiftedValue := v.get(s1) << shiftAmount
+	v.setNext(d, shiftedValue)
 }
 func (v *mutator) ShiftLogicalRight(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, v.get(s1)>>v.get(s2))
+	v.setNext(d, v.get(s1)>>(v.get(s2)%32))
 }
 func (v *mutator) ShiftLogicalRightImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
 	v.setNext(d, v.get(s1)>>s2)
 }
 func (v *mutator) ShiftArithmeticRight(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, uint32(int32(v.get(s1))>>v.get(s2)))
+	shiftAmount := v.get(s2) % 32
+	shiftedValue := int32(v.get(s1)) >> shiftAmount
+	v.setNext(d, uint32(shiftedValue))
 }
 func (v *mutator) DivUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	v.setNext(d, divUnsigned(v.get(s1), v.get(s2)))

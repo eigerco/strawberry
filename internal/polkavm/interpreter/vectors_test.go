@@ -103,7 +103,7 @@ func Test_Vectors(t *testing.T) {
 				}
 				assert.Equal(t, mem.Contents, data)
 			}
-			//assert.Equal(t, tc.ExpectedGas, i.remainingGas) TODO uncomment when gas is implemented
+			//assert.Equal(t, tc.ExpectedGas, i.gasRemaining)
 		})
 	}
 }
