@@ -51,7 +51,7 @@ type memory struct {
 	heapSize uint32
 }
 
-func newBasicMemory(memoryMap *memoryMap, rwData []byte) *memory {
+func newBasicMemory(memoryMap memoryMap, rwData []byte) *memory {
 	m := &memory{
 		rwData: make([]byte, memoryMap.rwDataSize),
 		stack:  make([]byte, memoryMap.stackSize),
@@ -60,7 +60,7 @@ func newBasicMemory(memoryMap *memoryMap, rwData []byte) *memory {
 	return m
 }
 
-func (m *memory) getMemorySlice(program polkavm.Program, memoryMap memoryMap, address uint32, length int) ([]byte, error) {
+func (m *memory) getMemorySlice(roData []byte, memoryMap memoryMap, address uint32, length int) ([]byte, error) {
 	var start uint32
 	var memorySlice []byte
 	if address >= memoryMap.stackAddressLow {
@@ -68,9 +68,9 @@ func (m *memory) getMemorySlice(program polkavm.Program, memoryMap memoryMap, ad
 	} else if address >= memoryMap.rwDataAddress {
 		start, memorySlice = memoryMap.rwDataAddress, m.rwData
 	} else if address >= memoryMap.roDataAddress {
-		start, memorySlice = memoryMap.roDataAddress, program.ROData
+		start, memorySlice = memoryMap.roDataAddress, roData
 	} else {
-		return nil, nil
+		return nil, fmt.Errorf("memory access error")
 	}
 
 	offset := int(address - start)
@@ -88,7 +88,7 @@ func (m *memory) getMemorySlicePointer(memoryMap memoryMap, address uint32, leng
 	} else if address >= memoryMap.rwDataAddress {
 		start, memorySlice = memoryMap.rwDataAddress, m.rwData
 	} else {
-		return nil, nil
+		return nil, fmt.Errorf("memory access error")
 	}
 
 	offset := int(address - start)

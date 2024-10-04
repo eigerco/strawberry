@@ -394,7 +394,7 @@ func read(slice []byte, offset, length uint32) uint32 {
 	case 1:
 		return uint32(slice[0])
 	case 2:
-		return uint32(binary.LittleEndian.Uint16(slice[:1])) // u16::from_le_bytes([slice[0], slice[1]]) as u32
+		return uint32(binary.LittleEndian.Uint16([]byte{slice[0], slice[1]}))
 	case 3:
 		return binary.LittleEndian.Uint32([]byte{slice[0], slice[1], slice[2], 0})
 	case 4:

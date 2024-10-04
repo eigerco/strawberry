@@ -1,31 +1,31 @@
 package interpreter
 
 import (
-	. "github.com/eigerco/strawberry/internal/polkavm"
+	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
 func TestInstance_Execute(t *testing.T) {
-	pp := &Program{
+	pp := &polkavm.Program{
 		RODataSize: 0,
 		RWDataSize: 0,
 		StackSize:  4096,
-		Instructions: []Instruction{
-			{Opcode: AddImm, Imm: []uint32{4294967288}, Reg: []Reg{SP, SP}, Offset: 0, Length: 3},
-			{Opcode: StoreIndirectU32, Imm: []uint32{4}, Reg: []Reg{RA, SP}, Offset: 3, Length: 3},
-			{Opcode: StoreIndirectU32, Imm: []uint32{0}, Reg: []Reg{S0, SP}, Offset: 6, Length: 2},
-			{Opcode: Add, Reg: []Reg{S0, A1, A0}, Offset: 8, Length: 3},
-			{Opcode: Ecalli, Imm: []uint32{0}, Offset: 11, Length: 1},
-			{Opcode: Add, Imm: nil, Reg: []Reg{A0, A0, S0}, Offset: 12, Length: 3},
-			{Opcode: LoadIndirectU32, Imm: []uint32{4}, Reg: []Reg{RA, SP}, Offset: 15, Length: 3},
-			{Opcode: LoadIndirectU32, Imm: []uint32{0}, Reg: []Reg{S0, SP}, Offset: 18, Length: 2},
-			{Opcode: AddImm, Imm: []uint32{8}, Reg: []Reg{SP, SP}, Offset: 20, Length: 3},
-			{Opcode: JumpIndirect, Imm: []uint32{0}, Reg: []Reg{RA}, Offset: 23, Length: 2},
+		Instructions: []polkavm.Instruction{
+			{Opcode: polkavm.AddImm, Imm: []uint32{4294967288}, Reg: []polkavm.Reg{polkavm.SP, polkavm.SP}, Offset: 0, Length: 3},
+			{Opcode: polkavm.StoreIndirectU32, Imm: []uint32{4}, Reg: []polkavm.Reg{polkavm.RA, polkavm.SP}, Offset: 3, Length: 3},
+			{Opcode: polkavm.StoreIndirectU32, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.S0, polkavm.SP}, Offset: 6, Length: 2},
+			{Opcode: polkavm.Add, Reg: []polkavm.Reg{polkavm.S0, polkavm.A1, polkavm.A0}, Offset: 8, Length: 3},
+			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 11, Length: 1},
+			{Opcode: polkavm.Add, Imm: nil, Reg: []polkavm.Reg{polkavm.A0, polkavm.A0, polkavm.S0}, Offset: 12, Length: 3},
+			{Opcode: polkavm.LoadIndirectU32, Imm: []uint32{4}, Reg: []polkavm.Reg{polkavm.RA, polkavm.SP}, Offset: 15, Length: 3},
+			{Opcode: polkavm.LoadIndirectU32, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.S0, polkavm.SP}, Offset: 18, Length: 2},
+			{Opcode: polkavm.AddImm, Imm: []uint32{8}, Reg: []polkavm.Reg{polkavm.SP, polkavm.SP}, Offset: 20, Length: 3},
+			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 23, Length: 2},
 		},
 		Imports: []string{"get_third_number"},
-		Exports: []ProgramExport{{TargetCodeOffset: 0, Symbol: "add_numbers"}},
+		Exports: []polkavm.ProgramExport{{TargetCodeOffset: 0, Symbol: "add_numbers"}},
 	}
 
 	m, err := NewModule(pp)

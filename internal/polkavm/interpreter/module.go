@@ -6,19 +6,19 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
-type module struct {
+type Module struct {
 	program                  *polkavm.Program
-	memoryMap                *memoryMap
+	memoryMap                memoryMap
 	codeOffsetBySymbol       map[string]uint32
 	instructionOffsetToIndex map[uint32]int
 	hostFunctions            map[string]polkavm.HostFunc
 }
 
-func (m *module) AddHostFunc(s string, hostFunc polkavm.HostFunc) {
+func (m *Module) AddHostFunc(s string, hostFunc polkavm.HostFunc) {
 	m.hostFunctions[s] = hostFunc
 }
 
-func NewModule(program *polkavm.Program) (polkavm.Module, error) {
+func NewModule(program *polkavm.Program) (*Module, error) {
 	codeOffsetBySymbol := map[string]uint32{}
 	for _, e := range program.Exports {
 		codeOffsetBySymbol[e.Symbol] = e.TargetCodeOffset
@@ -28,20 +28,20 @@ func NewModule(program *polkavm.Program) (polkavm.Module, error) {
 		instructionOffsetToIndex[inst.Offset] = index
 	}
 
-	memoryMap, err := newMemoryMap(VmMinPageSize, program)
+	memoryMap, err := newMemoryMap(VmMinPageSize, program.RODataSize, program.RWDataSize, program.StackSize)
 	if err != nil {
 		return nil, err
 	}
-	return &module{
+	return &Module{
 		program:                  program,
-		memoryMap:                memoryMap,
+		memoryMap:                *memoryMap,
 		codeOffsetBySymbol:       codeOffsetBySymbol,
 		instructionOffsetToIndex: instructionOffsetToIndex,
 		hostFunctions:            make(map[string]polkavm.HostFunc),
 	}, nil
 }
 
-func (m *module) Run(symbol string, gasLimit int64, args ...uint32) (result uint32, gasRemaining int64, err error) {
+func (m *Module) Run(symbol string, gasLimit int64, args ...uint32) (result uint32, gasRemaining int64, err error) {
 	if len(args) > 6 {
 		return 0, gasLimit, fmt.Errorf("too many arguments, max allowed arguments: 6")
 	}
@@ -63,32 +63,10 @@ func (m *module) Run(symbol string, gasLimit int64, args ...uint32) (result uint
 	for n, arg := range args {
 		i.regs[polkavm.A0+polkavm.Reg(n)] = arg
 	}
-	mutator := newMutator(i, m)
-	mutator.startBasicBlock()
-	for {
-		i.cycleCounter += 1
-		instruction := i.instructions[i.instructionCounter]
+	mutator := newMutator(i, m, m.memoryMap)
 
-		i.instructionOffset = instruction.Offset
-		i.instructionLength = instruction.Length
-		gasCost, ok := polkavm.GasCosts[instruction.Opcode]
-		if !ok {
-			return 0, i.gasRemaining, fmt.Errorf("unknown opcode: %v", instruction.Opcode)
-		}
-		if i.gasRemaining < gasCost {
-			return 0, i.gasRemaining, errOutOfGas
-		}
-
-		i.deductGas(gasCost)
-
-		if err := instruction.StepOnce(mutator); err != nil {
-			return 0, i.gasRemaining, err
-		}
-
-		if i.returnToHost {
-			break
-		}
+	if err := mutator.execute(); err != nil {
+		return 0, i.gasRemaining, err
 	}
-
 	return i.regs[polkavm.A0], i.gasRemaining, nil
 }

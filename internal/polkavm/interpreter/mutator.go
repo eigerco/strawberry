@@ -3,10 +3,9 @@ package interpreter
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/eigerco/strawberry/internal/polkavm"
 	"log"
 	"math"
-
-	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
 const (
@@ -19,11 +18,11 @@ const (
 
 var _ polkavm.Mutator = &mutator{}
 
-func newMutator(i *instance, m *module) *mutator {
+func newMutator(i *instance, m *Module, memoryMap memoryMap) *mutator {
 	v := &mutator{
 		instance:                 i,
 		hostFunctions:            []callFunc{},
-		memoryMap:                *m.memoryMap,
+		memoryMap:                memoryMap,
 		program:                  *m.program,
 		instructionOffsetToIndex: m.instructionOffsetToIndex,
 	}
@@ -37,7 +36,7 @@ func newMutator(i *instance, m *module) *mutator {
 		v.hostFunctions = append(v.hostFunctions, func(instance *instance) error {
 			ret, err := hostFn(instance.regs[polkavm.A0], instance.regs[polkavm.A1], instance.regs[polkavm.A2], instance.regs[polkavm.A3], instance.regs[polkavm.A4], instance.regs[polkavm.A5])
 			if err != nil {
-				return TrapError{fmt.Errorf("external function error: %w", err)}
+				return &TrapError{fmt.Errorf("external function error: %w", err)}
 			}
 			instance.regs[polkavm.A0] = ret
 			return err
@@ -65,7 +64,11 @@ func (v *mutator) startBasicBlock() {
 
 func (v *mutator) addInstructionsForBlock() {
 	startingOffset := len(v.instance.instructions)
-	for _, instruction := range v.program.Instructions[v.instructionOffsetToIndex[v.instance.instructionOffset]:] {
+	instrIndex, ok := v.instructionOffsetToIndex[v.instance.instructionOffset]
+	if !ok {
+		return
+	}
+	for _, instruction := range v.program.Instructions[instrIndex:] {
 		v.instance.instructions = append(v.instance.instructions, instruction)
 		if instruction.IsBasicBlockTermination() {
 			break
@@ -87,13 +90,17 @@ func (v *mutator) branch(condition bool, target uint32) {
 }
 
 func (v *mutator) load(memLen int, dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	address := v.get(base) + offset
-	slice, err := v.instance.memory.getMemorySlice(v.program, v.memoryMap, address, memLen)
+	var address uint32 = 0
+	if base != 0 {
+		address = v.get(base)
+	}
+	address += offset
+	slice, err := v.instance.memory.getMemorySlice(v.program.ROData, v.memoryMap, address, memLen)
 	if err != nil {
-		return err
+		return &TrapError{Err: err}
 	}
 	if slice == nil {
-		return TrapError{fmt.Errorf("unable to load memory slice")}
+		return &TrapError{fmt.Errorf("unable to load memory slice")}
 	}
 
 	var value uint32
@@ -112,10 +119,14 @@ func (v *mutator) load(memLen int, dst polkavm.Reg, base polkavm.Reg, offset uin
 }
 
 func (v *mutator) store(memLen int, src uint32, base polkavm.Reg, offset uint32) error {
-	address := v.get(base) + offset
+	var address uint32 = 0
+	if base != 0 {
+		address = v.get(base)
+	}
+	address += offset
 	slice, err := v.instance.memory.getMemorySlicePointer(v.memoryMap, address, memLen)
 	if err != nil {
-		return err
+		return &TrapError{Err: err}
 	}
 	switch memLen {
 	case Uint8Len:
@@ -139,7 +150,7 @@ func (v *mutator) jumpIndirectImpl(target uint32) error {
 	}
 	instructionOffset := v.program.JumpTableGetByAddress(target)
 	if instructionOffset == nil {
-		return TrapError{fmt.Errorf("indirect jump to address %v: INVALID", target)}
+		return &TrapError{fmt.Errorf("indirect jump to address %v: INVALID", target)}
 	}
 	v.instance.instructionOffset = *instructionOffset
 	v.startBasicBlock()
@@ -165,7 +176,7 @@ func (v *mutator) nextOffsets() {
 }
 func (v *mutator) Trap() error {
 	log.Printf("Trap at %v: explicit trap", v.instance.instructionOffset)
-	return TrapError{fmt.Errorf("trap at %v: explicit trap", v.instance.instructionOffset)}
+	return &TrapError{fmt.Errorf("trap at %v: explicit trap", v.instance.instructionOffset)}
 }
 func (v *mutator) Fallthrough() {
 	v.nextOffsets()
@@ -239,8 +250,8 @@ func (v *mutator) ShiftLogicalLeftImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) 
 func (v *mutator) ShiftArithmeticRightImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
 	v.setNext(d, uint32(int32(v.get(s1))>>s2))
 }
-func (v *mutator) ShiftArithmeticRightImmAlt(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, uint32(int32(v.get(s1))>>s2))
+func (v *mutator) ShiftArithmeticRightImmAlt(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
+	v.setNext(d, uint32(int32(s1)>>v.get(s2)))
 }
 func (v *mutator) NegateAndAddImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
 	v.setNext(d, s2-v.get(s1))
@@ -251,11 +262,11 @@ func (v *mutator) SetGreaterThanUnsignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 ui
 func (v *mutator) SetGreaterThanSignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
 	v.setNext(d, bool2uint32(int32(v.get(s1)) > int32(s2)))
 }
-func (v *mutator) ShiftLogicalRightImmAlt(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, v.get(s1)>>s2)
+func (v *mutator) ShiftLogicalRightImmAlt(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
+	v.setNext(d, s1>>v.get(s2))
 }
-func (v *mutator) ShiftLogicalLeftImmAlt(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, v.get(s1)<<s2)
+func (v *mutator) ShiftLogicalLeftImmAlt(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
+	v.setNext(d, s1<<v.get(s2))
 }
 func (v *mutator) Add(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	v.setNext(d, v.get(s1)+v.get(s2))
@@ -309,7 +320,7 @@ func (v *mutator) SetLessThanUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	v.setNext(d, bool2uint32(v.get(s1) < v.get(s2)))
 }
 func (v *mutator) SetLessThanSigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, bool2uint32(v.get(s1) < v.get(s2)))
+	v.setNext(d, bool2uint32(int32(v.get(s1)) < int32(v.get(s2))))
 }
 func (v *mutator) ShiftLogicalLeft(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	v.setNext(d, v.get(s1)<<v.get(s2))
@@ -321,7 +332,7 @@ func (v *mutator) ShiftLogicalRightImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32)
 	v.setNext(d, v.get(s1)>>s2)
 }
 func (v *mutator) ShiftArithmeticRight(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, uint32(int32(v.get(s1))>>s2))
+	v.setNext(d, uint32(int32(v.get(s1))>>v.get(s2)))
 }
 func (v *mutator) DivUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	v.setNext(d, divUnsigned(v.get(s1), v.get(s2)))
@@ -482,6 +493,38 @@ func (v *mutator) Jump(target uint32) {
 }
 func (v *mutator) JumpIndirect(base polkavm.Reg, offset uint32) error {
 	return v.jumpIndirectImpl(v.get(base) + offset)
+}
+
+func (v *mutator) execute() error {
+	v.startBasicBlock()
+	for {
+		v.instance.cycleCounter += 1
+		if len(v.instance.instructions) == v.instance.instructionCounter {
+			return &TrapError{fmt.Errorf("unexpected program termination")}
+		}
+		instruction := v.instance.instructions[v.instance.instructionCounter]
+		v.instance.instructionOffset = instruction.Offset
+		v.instance.instructionLength = instruction.Length
+
+		gasCost, ok := polkavm.GasCosts[instruction.Opcode]
+		if !ok {
+			return fmt.Errorf("unknown opcode: %v", instruction.Opcode)
+		}
+		if v.instance.gasRemaining < gasCost {
+			return errOutOfGas
+		}
+
+		v.instance.deductGas(gasCost)
+
+		if err := instruction.StepOnce(v); err != nil {
+			return err
+		}
+
+		if v.instance.returnToHost {
+			break
+		}
+	}
+	return nil
 }
 
 func divUnsigned(lhs uint32, rhs uint32) uint32 {

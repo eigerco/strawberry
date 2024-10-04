@@ -4,7 +4,6 @@ import (
 	"math"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -72,11 +71,7 @@ func Test_memoryMap(t *testing.T) {
 	}}
 	for _, tc := range tests {
 		t.Run("", func(t *testing.T) {
-			m, err := newMemoryMap(tc.pageSize, &polkavm.Program{
-				RODataSize: tc.roDataSize,
-				RWDataSize: tc.rwDataSize,
-				StackSize:  tc.stackSize,
-			})
+			m, err := newMemoryMap(tc.pageSize, tc.roDataSize, tc.rwDataSize, tc.stackSize)
 			if err != nil {
 				if tc.expectError {
 					return

@@ -313,7 +313,7 @@ func parseCodeAndJumpTable(r *Reader, p *Program) (byte, error) {
 
 	offset := 0
 	for offset < len(code) {
-		nextOffset, instr, err := parseInstruction(code, bitmask, offset)
+		nextOffset, instr, err := ParseInstruction(code, bitmask, offset)
 		if err != nil {
 			return 0, err
 		}
@@ -323,7 +323,7 @@ func parseCodeAndJumpTable(r *Reader, p *Program) (byte, error) {
 	return r.ReadByte()
 }
 
-func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruction, error) {
+func ParseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruction, error) {
 	if len(bitmask) == 0 {
 		return 0, Instruction{}, io.EOF
 	}
