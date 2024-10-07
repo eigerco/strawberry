@@ -68,9 +68,9 @@ func TestDecodeBlockWithJamCodec(t *testing.T) {
 		require.Equal(t, expected.Extrinsic.Disputes.Verdicts[i].Target, toHex(unmarshaled.Extrinsic.ED.Verdicts[i].ReportHash))
 		require.Equal(t, expected.Extrinsic.Disputes.Verdicts[i].Age, unmarshaled.Extrinsic.ED.Verdicts[i].EpochIndex)
 		for j := range expected.Extrinsic.Disputes.Verdicts[i].Votes {
-			require.Equal(t, expected.Extrinsic.Disputes.Verdicts[i].Votes[j].Vote, unmarshaled.Extrinsic.ED.Verdicts[i].Judgments[j].IsValid)
-			require.Equal(t, expected.Extrinsic.Disputes.Verdicts[i].Votes[j].Index, unmarshaled.Extrinsic.ED.Verdicts[i].Judgments[j].ValidatorIndex)
-			require.Equal(t, expected.Extrinsic.Disputes.Verdicts[i].Votes[j].Signature, toHex(unmarshaled.Extrinsic.ED.Verdicts[i].Judgments[j].Signature))
+			require.Equal(t, expected.Extrinsic.Disputes.Verdicts[i].Votes[j].Vote, unmarshaled.Extrinsic.ED.Verdicts[i].Judgements[j].IsValid)
+			require.Equal(t, expected.Extrinsic.Disputes.Verdicts[i].Votes[j].Index, unmarshaled.Extrinsic.ED.Verdicts[i].Judgements[j].ValidatorIndex)
+			require.Equal(t, expected.Extrinsic.Disputes.Verdicts[i].Votes[j].Signature, toHex(unmarshaled.Extrinsic.ED.Verdicts[i].Judgements[j].Signature))
 		}
 	}
 
