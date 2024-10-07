@@ -48,6 +48,9 @@ type Program struct {
 	DebugStrings           []byte
 	DebugLineProgramRanges []byte
 	DebugLinePrograms      []byte
+
+	instructionOffsetToIndex map[uint32]int
+	codeOffsetBySymbol       map[string]uint32
 }
 
 func (p *Program) JumpTableGetByAddress(address uint32) *uint32 {
@@ -57,6 +60,31 @@ func (p *Program) JumpTableGetByAddress(address uint32) *uint32 {
 
 	instructionOffset := p.JumpTable[((address - VmCodeAddressAlignment) / VmCodeAddressAlignment)]
 	return &instructionOffset
+}
+
+func (p *Program) GetInstructionsForOffset(instructionOffset uint32) ([]Instruction, bool) {
+	if p.instructionOffsetToIndex == nil {
+		p.instructionOffsetToIndex = make(map[uint32]int)
+		for index, inst := range p.Instructions {
+			p.instructionOffsetToIndex[inst.Offset] = index
+		}
+	}
+	instrIndex, ok := p.instructionOffsetToIndex[instructionOffset]
+	if !ok {
+		return nil, false
+	}
+	return p.Instructions[instrIndex:], true
+}
+
+func (p *Program) LookupExport(symbol string) (uint32, bool) {
+	if p.codeOffsetBySymbol == nil {
+		p.codeOffsetBySymbol = make(map[string]uint32)
+		for _, e := range p.Exports {
+			p.codeOffsetBySymbol[e.Symbol] = e.TargetCodeOffset
+		}
+	}
+	instructionOffset, ok := p.codeOffsetBySymbol[symbol]
+	return instructionOffset, ok
 }
 
 type ProgramExport struct {
@@ -416,7 +444,6 @@ func parseExports(r *Reader, p *Program) (byte, error) {
 	if initialPosition+int64(secLen) != r.Position() {
 		return 0, fmt.Errorf("invalid exports section Length: %v", secLen)
 	}
-
 	return r.ReadByte()
 }
 

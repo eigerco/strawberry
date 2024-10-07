@@ -4,7 +4,7 @@
 // run and test the programs designed specifically for koute's PVM implementation.
 // However, this is the only thing that these two PVMs have in common.
 
-package interpreter
+package polkavm
 
 import (
 	"errors"
@@ -25,7 +25,7 @@ var (
 	ErrPageSizeNotPowerOfTwo = errors.New("page size is not a power of two")
 )
 
-func newMemoryMap(pageSize, roDataSize, rwDataSize, stackSize uint32) (*memoryMap, error) {
+func NewMemoryMap(pageSize, roDataSize, rwDataSize, stackSize uint32, roData []byte) (*MemoryMap, error) {
 	if pageSize < VmMinPageSize {
 		return nil, fmt.Errorf("invalid page size: page size is too small")
 	}
@@ -33,33 +33,33 @@ func newMemoryMap(pageSize, roDataSize, rwDataSize, stackSize uint32) (*memoryMa
 	if pageSize > VmMaxPageSize {
 		return nil, fmt.Errorf("invalid page size: page size is too big")
 	}
-	roDataAddressSpace, err := alignToNextPageUint64(uint64(VmMaxPageSize), uint64(roDataSize))
+	roDataAddressSpace, err := AlignToNextPageUint64(uint64(VmMaxPageSize), uint64(roDataSize))
 	if err != nil {
 		return nil, fmt.Errorf("failed to instantiate memory map ro data address space: %w", err)
 	}
 
-	roDataSize, err = alignToNextPageUint32(pageSize, roDataSize)
+	roDataSize, err = AlignToNextPageUint32(pageSize, roDataSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to instantiate memory map ro data size: %w", err)
 	}
 
-	rwDataAddressSpace, err := alignToNextPageUint64(uint64(VmMaxPageSize), uint64(rwDataSize))
+	rwDataAddressSpace, err := AlignToNextPageUint64(uint64(VmMaxPageSize), uint64(rwDataSize))
 	if err != nil {
 		return nil, fmt.Errorf("failed to instantiate memory map rw data address space: %w", err)
 	}
 
 	originalRwDataSize := rwDataSize
-	rwDataSize, err = alignToNextPageUint32(pageSize, rwDataSize)
+	rwDataSize, err = AlignToNextPageUint32(pageSize, rwDataSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to instantiate memory map rw data size: %w", err)
 	}
 
-	stackAddressSpace, err := alignToNextPageUint64(uint64(VmMaxPageSize), uint64(stackSize))
+	stackAddressSpace, err := AlignToNextPageUint64(uint64(VmMaxPageSize), uint64(stackSize))
 	if err != nil {
 		return nil, fmt.Errorf("failed to instantiate memory map stack address space: %w", err)
 	}
 
-	stackSize, err = alignToNextPageUint32(pageSize, stackSize)
+	stackSize, err = AlignToNextPageUint32(pageSize, stackSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to instantiate memory map stack size: %w", err)
 	}
@@ -81,38 +81,40 @@ func newMemoryMap(pageSize, roDataSize, rwDataSize, stackSize uint32) (*memoryMa
 	}
 
 	maxHeapSize := addressHigh - addressLow + heapSlack
-	rwDataAddressOffset, err := alignToNextPageUint32(VmMaxPageSize, VmMaxPageSize+roDataSize)
+	rwDataAddressOffset, err := AlignToNextPageUint32(VmMaxPageSize, VmMaxPageSize+roDataSize)
 	if err != nil {
 		return nil, err
 	}
-	return &memoryMap{
-		pageSize:         pageSize,
-		roDataSize:       roDataSize,
-		rwDataSize:       rwDataSize,
-		stackSize:        stackSize,
-		heapBase:         uint32(heapBase),
-		maxHeapSize:      uint32(maxHeapSize),
-		stackAddressHigh: VmAddrUserStackHigh,
-		roDataAddress:    VmMaxPageSize,
-		stackAddressLow:  VmAddrUserStackHigh - stackSize,
-		rwDataAddress:    rwDataAddressOffset + VmMaxPageSize,
+	return &MemoryMap{
+		PageSize:         pageSize,
+		RODataSize:       roDataSize,
+		RWDataSize:       rwDataSize,
+		StackSize:        stackSize,
+		HeapBase:         uint32(heapBase),
+		MaxHeapSize:      uint32(maxHeapSize),
+		StackAddressHigh: VmAddrUserStackHigh,
+		RODataAddress:    VmMaxPageSize,
+		StackAddressLow:  VmAddrUserStackHigh - stackSize,
+		RWDataAddress:    rwDataAddressOffset + VmMaxPageSize,
+		ROData:           roData,
 	}, nil
 }
 
-type memoryMap struct {
-	pageSize         uint32
-	roDataSize       uint32
-	rwDataSize       uint32
-	stackSize        uint32
-	heapBase         uint32
-	maxHeapSize      uint32
-	stackAddressHigh uint32
-	roDataAddress    uint32
-	stackAddressLow  uint32
-	rwDataAddress    uint32
+type MemoryMap struct {
+	PageSize         uint32
+	RODataSize       uint32
+	RWDataSize       uint32
+	StackSize        uint32
+	HeapBase         uint32
+	MaxHeapSize      uint32
+	StackAddressHigh uint32
+	RODataAddress    uint32
+	StackAddressLow  uint32
+	RWDataAddress    uint32
+	ROData           []byte
 }
 
-func alignToNextPageInt(pageSize int, value int) (int, error) {
+func AlignToNextPageInt(pageSize int, value int) (int, error) {
 	if !(pageSize != 0 && (pageSize&(pageSize-1)) == 0) {
 		return 0, ErrPageSizeNotPowerOfTwo
 	}
@@ -126,7 +128,7 @@ func alignToNextPageInt(pageSize int, value int) (int, error) {
 	return 0, ErrPageValueTooLarge
 }
 
-func alignToNextPageUint32(pageSize uint32, value uint32) (uint32, error) {
+func AlignToNextPageUint32(pageSize uint32, value uint32) (uint32, error) {
 	if !(pageSize != 0 && (pageSize&(pageSize-1)) == 0) {
 		return 0, ErrPageSizeNotPowerOfTwo
 	}
@@ -140,7 +142,7 @@ func alignToNextPageUint32(pageSize uint32, value uint32) (uint32, error) {
 	return 0, ErrPageValueTooLarge
 }
 
-func alignToNextPageUint64(pageSize uint64, value uint64) (uint64, error) {
+func AlignToNextPageUint64(pageSize uint64, value uint64) (uint64, error) {
 	if !(pageSize != 0 && (pageSize&(pageSize-1)) == 0) {
 		return 0, ErrPageSizeNotPowerOfTwo
 	}

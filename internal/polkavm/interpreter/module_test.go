@@ -28,7 +28,14 @@ func TestInstance_Execute(t *testing.T) {
 		Exports: []polkavm.ProgramExport{{TargetCodeOffset: 0, Symbol: "add_numbers"}},
 	}
 
-	m, err := NewModule(pp)
+	memoryMap, err := polkavm.NewMemoryMap(polkavm.VmMaxPageSize, pp.RODataSize, pp.RWDataSize, pp.StackSize, pp.ROData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewModule(pp, memoryMap)
+	if err != nil {
+		t.Fatal(err)
+	}
 	require.NoError(t, err)
 
 	gasLimit := int64(1000)
