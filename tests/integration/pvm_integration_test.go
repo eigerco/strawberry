@@ -86,7 +86,7 @@ func Test_Vectors(t *testing.T) {
 				i.SetReg(polkavm.Reg(reg), val)
 			}
 			mutator := interpreter.NewMutator(i, m, mm)
-			err = mutator.Execute(i)
+			err = mutator.Execute()
 			assert.Equal(t, int(tc.ExpectedPc), int(i.GetInstructionOffset()))
 			assert.Equal(t, tc.ExpectedRegs, getRegs(i))
 			assert.Equal(t, tc.ExpectedStatus, error2status(err))

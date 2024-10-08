@@ -492,10 +492,10 @@ func (m *Mutator) JumpIndirect(base polkavm.Reg, offset uint32) error {
 	return m.jumpIndirectImpl(m.get(base) + offset)
 }
 
-func (m *Mutator) Execute(instance polkavm.Instance) error {
-	instance.StartBasicBlock(m.program)
+func (m *Mutator) Execute() error {
+	m.instance.StartBasicBlock(m.program)
 	for {
-		instruction, err := instance.NextInstruction()
+		instruction, err := m.instance.NextInstruction()
 		if err != nil {
 			if err == io.EOF {
 				return nil
