@@ -2,8 +2,8 @@ package interpreter
 
 import (
 	"fmt"
+
 	"github.com/eigerco/strawberry/internal/polkavm"
-	"log"
 )
 
 type TrapError struct {
@@ -90,7 +90,6 @@ func (i *instance) SetMemory(memoryMap *polkavm.MemoryMap, address uint32, data 
 
 	offset := int(address - start)
 	if offset+length > len(memorySlice) {
-		log.Println(len(i.memory.rwData), len(i.memory.stack))
 		return fmt.Errorf("memory slice out of range, address %d, length: %d %d %d", address, length, offset, len(memorySlice))
 	}
 	copy(memorySlice[offset:offset+length], data)

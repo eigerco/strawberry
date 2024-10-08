@@ -8,13 +8,13 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/eigerco/strawberry/internal/polkavm"
+	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 )
 
 //go:embed vectors/pvm
@@ -87,7 +87,7 @@ func Test_Vectors(t *testing.T) {
 			}
 			mutator := interpreter.NewMutator(i, m, mm)
 			err = mutator.Execute(i)
-			assert.Equal(t, tc.ExpectedPc, i.GetInstructionOffset())
+			assert.Equal(t, int(tc.ExpectedPc), int(i.GetInstructionOffset()))
 			assert.Equal(t, tc.ExpectedRegs, getRegs(i))
 			assert.Equal(t, tc.ExpectedStatus, error2status(err))
 			for _, mem := range tc.ExpectedMemory {

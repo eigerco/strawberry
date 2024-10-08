@@ -341,7 +341,7 @@ func parseCodeAndJumpTable(r *Reader, p *Program) (byte, error) {
 
 	offset := 0
 	for offset < len(code) {
-		nextOffset, instr, err := ParseInstruction(code, bitmask, offset)
+		nextOffset, instr, err := parseInstruction(code, bitmask, offset)
 		if err != nil {
 			return 0, err
 		}
@@ -351,39 +351,26 @@ func parseCodeAndJumpTable(r *Reader, p *Program) (byte, error) {
 	return r.ReadByte()
 }
 
-func ParseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruction, error) {
+func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruction, error) {
 	if len(bitmask) == 0 {
 		return 0, Instruction{}, io.EOF
 	}
 
-	nextOffset, argsLength := parseBitmaskSlow(bitmask, instructionOffset)
-	chunkLength := min(16, argsLength+1)
-	chunk := code[instructionOffset : instructionOffset+chunkLength]
+	nextOffset, skip := parseBitmask(bitmask, instructionOffset)
+	chunkLength := min(16, skip+1)
+	chunk := code[instructionOffset:min(instructionOffset+chunkLength, len(code))]
 	opcode := Opcode(chunk[0])
-	regs, imm := parseArgsTable[opcode](chunk[1:], uint32(instructionOffset), uint32(argsLength))
+	regs, imm := parseArgsTable[opcode](chunk[1:], uint32(instructionOffset), uint32(len(chunk[1:])))
 	return nextOffset, Instruction{
 		Opcode: opcode,
 		Reg:    regs,
 		Imm:    imm,
 		Offset: uint32(instructionOffset),
-		Length: uint32(argsLength + 1),
+		Length: uint32(len(chunk[1:]) + 1),
 	}, nil
 }
 
-func parseBitmaskFast(bitmask []byte, offset int) (int, int) {
-	offset += 1
-	shift := offset & 7
-	mask := (binary.LittleEndian.Uint32(bitmask[offset>>3:(offset>>3)+4]) >> shift) | (1 << BitmaskMax)
-	argsLength := bits.TrailingZeros32(mask)
-	if argsLength > BitmaskMax {
-		panic("args Length too big")
-	}
-	offset += argsLength
-
-	return offset, argsLength
-}
-
-func parseBitmaskSlow(bitmask []byte, offset int) (int, int) {
+func parseBitmask(bitmask []byte, offset int) (int, int) {
 	offset += 1
 	argsLength := 0
 	for offset>>3 < len(bitmask) {

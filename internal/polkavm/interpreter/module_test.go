@@ -1,10 +1,11 @@
 package interpreter
 
 import (
+	"testing"
+
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestInstance_Execute(t *testing.T) {
