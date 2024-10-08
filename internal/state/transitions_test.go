@@ -238,6 +238,55 @@ func TestCalculateNewJudgements(t *testing.T) {
     assert.Len(t, newJudgements.OffendingValidators, 2, "Should have 2 offending validators")
 }
 
+func TestCalculateIntermediateBlockState(t *testing.T) {
+	header := block.Header{
+		PriorStateRoot: crypto.Hash{1, 2, 3},
+	}
+
+	previousRecentBlocks := []BlockState{
+		{StateRoot: crypto.Hash{4, 5, 6}},
+		{StateRoot: crypto.Hash{7, 8, 9}},
+	}
+
+	expectedIntermediateBlocks := []BlockState{
+		{StateRoot: crypto.Hash{4, 5, 6}},
+		{StateRoot: crypto.Hash{1, 2, 3}},
+	}
+
+	intermediateBlocks := calculateIntermediateBlockState(header, previousRecentBlocks)
+	require.Equal(t, expectedIntermediateBlocks, intermediateBlocks)
+}
+
+func TestCalculateIntermediateBlockStateEmpty(t *testing.T) {
+	header := block.Header{
+		PriorStateRoot: crypto.Hash{1, 2, 3},
+	}
+
+	previousRecentBlocks := []BlockState{}
+
+	expectedIntermediateBlocks := []BlockState{}
+
+	intermediateBlocks := calculateIntermediateBlockState(header, previousRecentBlocks)
+	require.Equal(t, expectedIntermediateBlocks, intermediateBlocks)
+}
+
+func TestCalculateIntermediateBlockStateSingleElement(t *testing.T) {
+	header := block.Header{
+		PriorStateRoot: crypto.Hash{1, 2, 3},
+	}
+
+	previousRecentBlocks := []BlockState{
+		{StateRoot: crypto.Hash{4, 5, 6}},
+	}
+
+	expectedIntermediateBlocks := []BlockState{
+		{StateRoot: crypto.Hash{1, 2, 3}},
+	}
+
+	intermediateBlocks := calculateIntermediateBlockState(header, previousRecentBlocks)
+	require.Equal(t, expectedIntermediateBlocks, intermediateBlocks)
+}
+
 func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments int) block.Verdict {
     verdict := block.Verdict{
         ReportHash: reportHash,

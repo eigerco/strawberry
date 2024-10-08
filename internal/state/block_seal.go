@@ -158,7 +158,7 @@ func updateEntropyAccumulator(header *block.Header, state *State, privateKey *ba
 	}
 
 	// Equation 66: η'0 ≡ H(η0 ⌢ Y(Hv))
-	newEntropy := crypto.Hash(append(state.EntropyPool[0][:], vrfOutput[:]...))
+	newEntropy := crypto.HashData(append(state.EntropyPool[0][:], vrfOutput[:]...))
 	entropyPool:= EntropyPool{}
 
 	// Equation 67: Rotate entropy accumulators on epoch change
