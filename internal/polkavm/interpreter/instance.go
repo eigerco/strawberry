@@ -148,6 +148,12 @@ func (i *instance) addInstructionsForBlock(instructions []polkavm.Instruction) {
 func (i *instance) NextInstruction() (instruction polkavm.Instruction, err error) {
 	i.cycleCounter += 1
 	if len(i.instructions) == i.instructionCounter {
+		gasCost, ok := polkavm.GasCosts[polkavm.Trap]
+		if !ok {
+			return instruction, fmt.Errorf("trap opcode not defined in GasCosts map")
+		}
+		i.DeductGas(gasCost)
+
 		return instruction, &TrapError{fmt.Errorf("unexpected program termination")}
 	}
 	instruction = i.instructions[i.instructionCounter]
@@ -162,7 +168,7 @@ func (i *instance) NextInstruction() (instruction polkavm.Instruction, err error
 		return instruction, errOutOfGas
 	}
 
-	i.deductGas(gasCost)
+	i.DeductGas(gasCost)
 	return instruction, nil
 }
 
@@ -170,7 +176,7 @@ func (i *instance) NextOffsets() {
 	i.instructionOffset += i.instructionLength
 	i.instructionCounter += 1
 }
-func (i *instance) deductGas(cost int64) {
+func (i *instance) DeductGas(cost int64) {
 	if cost > i.gasRemaining {
 		i.gasRemaining = 0
 	} else {

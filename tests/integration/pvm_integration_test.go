@@ -97,7 +97,7 @@ func Test_Vectors(t *testing.T) {
 				}
 				assert.Equal(t, mem.Contents, data)
 			}
-			//assert.Equal(t, tc.ExpectedGas, i.gasRemaining)
+			assert.Equal(t, tc.ExpectedGas, i.GasRemaining())
 		})
 	}
 }

@@ -75,11 +75,9 @@ func (m *Mutator) load(memLen int, signed bool, dst polkavm.Reg, base polkavm.Re
 	address += offset
 	slice, err := m.instance.GetMemory(m.memoryMap, address, memLen)
 	if err != nil {
-		return &TrapError{Err: err}
+		return m.deductGasAndTrap(err)
 	}
-	if slice == nil {
-		return &TrapError{fmt.Errorf("unable to load memory slice")}
-	}
+
 	value, err := leDecode(memLen, slice)
 	if err != nil {
 		return &TrapError{Err: err}
@@ -98,8 +96,8 @@ func (m *Mutator) store(memLen int, signed bool, src uint32, base polkavm.Reg, o
 	if err != nil {
 		return &TrapError{Err: err}
 	}
-	if err := m.instance.SetMemory(m.memoryMap, address, data); err != nil {
-		return &TrapError{Err: err}
+	if err = m.instance.SetMemory(m.memoryMap, address, data); err != nil {
+		return m.deductGasAndTrap(err)
 	}
 
 	m.instance.NextOffsets()
@@ -511,6 +509,16 @@ func (m *Mutator) Execute(instance polkavm.Instance) error {
 			return err
 		}
 	}
+}
+
+func (m *Mutator) deductGasAndTrap(err error) error {
+	gasCost, ok := polkavm.GasCosts[polkavm.Trap]
+	if !ok {
+		return fmt.Errorf("trap opcode not defined in GasCosts map")
+	}
+	m.instance.DeductGas(gasCost)
+
+	return &TrapError{err}
 }
 
 func divUnsigned(lhs uint32, rhs uint32) uint32 {
