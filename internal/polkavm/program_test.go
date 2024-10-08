@@ -100,8 +100,8 @@ func Test_ParseBlob(t *testing.T) {
 
 func Test_parseBitmaskFast(t *testing.T) {
 	table := []struct {
-		bitmask                        []byte
-		offset, nextOffset, argsLength int
+		bitmask                  []byte
+		offset, nextOffset, skip int
 	}{
 		{[]byte{0b00000011, 0, 0, 0}, 0, 1, 0},
 		{[]byte{0b00000101, 0, 0, 0}, 0, 2, 1},
@@ -123,13 +123,8 @@ func Test_parseBitmaskFast(t *testing.T) {
 		{[]byte{0, 0, 0, 0, 0b00000001}, 7, 32, 24},
 	}
 	for i, tc := range table {
-		nextOffset, argsLength := parseBitmaskFast(tc.bitmask, tc.offset)
-		nextOffsetSlow, argsLengthSlow := parseBitmaskSlow(tc.bitmask, tc.offset)
-
-		assert.Equal(t, nextOffset, nextOffsetSlow, "index: %d", i)
-		assert.Equal(t, argsLength, argsLengthSlow, "index: %d", i)
-
+		nextOffset, skip := parseBitmask(tc.bitmask, tc.offset)
 		assert.Equal(t, tc.nextOffset, nextOffset, "index: %d", i)
-		assert.Equal(t, tc.argsLength, argsLength, "index: %d", i)
+		assert.Equal(t, tc.skip, skip, "index: %d", i)
 	}
 }

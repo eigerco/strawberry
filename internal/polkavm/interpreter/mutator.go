@@ -3,6 +3,7 @@ package interpreter
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"math"
 
@@ -10,22 +11,24 @@ import (
 )
 
 const (
-	Int8Len = iota
-	Uint8Len
-	Uint16Len
-	Int16Len
-	Uint32Len
+	x8  = 1
+	x16 = 2
+	x32 = 4
 )
 
-var _ polkavm.Mutator = &mutator{}
+const (
+	signed   = true
+	unsigned = false
+)
 
-func newMutator(i *instance, m *module) *mutator {
-	v := &mutator{
-		instance:                 i,
-		hostFunctions:            []callFunc{},
-		memoryMap:                *m.memoryMap,
-		program:                  *m.program,
-		instructionOffsetToIndex: m.instructionOffsetToIndex,
+var _ polkavm.Mutator = &Mutator{}
+
+func NewMutator(i polkavm.Instance, m *Module, memoryMap *polkavm.MemoryMap) *Mutator {
+	v := &Mutator{
+		instance:      i,
+		hostFunctions: []callFunc{},
+		memoryMap:     memoryMap,
+		program:       m.program,
 	}
 	for _, imp := range m.program.Imports {
 		hostFn, ok := m.hostFunctions[imp]
@@ -34,334 +37,341 @@ func newMutator(i *instance, m *module) *mutator {
 			continue
 		}
 
-		v.hostFunctions = append(v.hostFunctions, func(instance *instance) error {
-			ret, err := hostFn(instance.regs[polkavm.A0], instance.regs[polkavm.A1], instance.regs[polkavm.A2], instance.regs[polkavm.A3], instance.regs[polkavm.A4], instance.regs[polkavm.A5])
+		v.hostFunctions = append(v.hostFunctions, func(instance polkavm.Instance) error {
+			ret, err := hostFn(instance.GetReg(polkavm.A0), instance.GetReg(polkavm.A1),
+				instance.GetReg(polkavm.A2), instance.GetReg(polkavm.A3),
+				instance.GetReg(polkavm.A4), instance.GetReg(polkavm.A5))
 			if err != nil {
-				return TrapError{fmt.Errorf("external function error: %w", err)}
+				return &TrapError{fmt.Errorf("external function error: %w", err)}
 			}
-			instance.regs[polkavm.A0] = ret
+			instance.SetReg(polkavm.A0, ret)
 			return err
 		})
 	}
 	return v
 }
 
-type mutator struct {
-	instance                 *instance
-	program                  polkavm.Program
-	instructionOffsetToIndex map[uint32]int
-	memoryMap                memoryMap
-	hostFunctions            []callFunc
+type Mutator struct {
+	instance      polkavm.Instance
+	program       *polkavm.Program
+	memoryMap     *polkavm.MemoryMap
+	hostFunctions []callFunc
 }
 
-func (v *mutator) startBasicBlock() {
-	if compiledOffset, ok := v.instance.offsetForBasicBlock[v.instance.instructionOffset]; ok {
-		v.instance.instructionCounter = compiledOffset
-	} else {
-		v.instance.instructionCounter = len(v.instance.instructions)
-		v.addInstructionsForBlock()
-	}
-}
-
-func (v *mutator) addInstructionsForBlock() {
-	startingOffset := len(v.instance.instructions)
-	for _, instruction := range v.program.Instructions[v.instructionOffsetToIndex[v.instance.instructionOffset]:] {
-		v.instance.instructions = append(v.instance.instructions, instruction)
-		if instruction.IsBasicBlockTermination() {
-			break
-		}
-	}
-	if len(v.instance.instructions) == startingOffset {
-		return
-	}
-	v.instance.offsetForBasicBlock[v.instance.instructionOffset] = startingOffset
-}
-
-func (v *mutator) branch(condition bool, target uint32) {
+func (m *Mutator) branch(condition bool, target uint32) {
 	if condition {
-		v.instance.instructionOffset = target
+		m.instance.SetInstructionOffset(target)
 	} else {
-		v.nextOffsets()
+		m.instance.NextOffsets()
 	}
-	v.startBasicBlock()
+	m.instance.StartBasicBlock(m.program)
 }
 
-func (v *mutator) load(memLen int, dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	address := v.get(base) + offset
-	slice, err := v.instance.memory.getMemorySlice(v.program, v.memoryMap, address, memLen)
+func (m *Mutator) load(memLen int, signed bool, dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
+	var address uint32 = 0
+	if base != 0 {
+		address = m.get(base)
+	}
+	address += offset
+	slice, err := m.instance.GetMemory(m.memoryMap, address, memLen)
 	if err != nil {
-		return err
+		return &TrapError{Err: err}
 	}
 	if slice == nil {
-		return TrapError{fmt.Errorf("unable to load memory slice")}
+		return &TrapError{fmt.Errorf("unable to load memory slice")}
 	}
-
-	var value uint32
-	switch memLen {
-	case Uint8Len:
-		value = uint32(slice[0])
-	case Uint16Len:
-		value = uint32(binary.LittleEndian.Uint16(slice))
-	case Uint32Len:
-		value = binary.LittleEndian.Uint32(slice)
-	default:
-		return fmt.Errorf("invalid memory slice length: %d", memLen)
-	}
-	v.setNext(dst, value)
-	return nil
-}
-
-func (v *mutator) store(memLen int, src uint32, base polkavm.Reg, offset uint32) error {
-	address := v.get(base) + offset
-	slice, err := v.instance.memory.getMemorySlicePointer(v.memoryMap, address, memLen)
+	value, err := leDecode(memLen, slice)
 	if err != nil {
-		return err
+		return &TrapError{Err: err}
 	}
+	m.setNext(dst, toSigned(value, memLen, signed))
+	return nil
+}
+
+func (m *Mutator) store(memLen int, signed bool, src uint32, base polkavm.Reg, offset uint32) error {
+	var address uint32 = 0
+	if base != 0 {
+		address = m.get(base)
+	}
+	address += offset
+	data, err := leEncode(memLen, toSigned(src, memLen, signed))
+	if err != nil {
+		return &TrapError{Err: err}
+	}
+	if err := m.instance.SetMemory(m.memoryMap, address, data); err != nil {
+		return &TrapError{Err: err}
+	}
+
+	m.instance.NextOffsets()
+	return nil
+}
+func toSigned(v uint32, memLen int, signed bool) uint32 {
+	if signed {
+		switch memLen {
+		case x8:
+			return uint32(int8(v))
+		case x16:
+			return uint32(int16(v))
+		case x32:
+			return uint32(int32(v))
+		}
+	}
+	return v
+}
+func leEncode(memLen int, src uint32) ([]byte, error) {
+	slice := make([]byte, memLen)
 	switch memLen {
-	case Uint8Len:
-		(*slice)[0] = byte(src)
-	case Uint16Len:
-		binary.LittleEndian.PutUint16(*slice, uint16(src))
-	case Uint32Len:
-		binary.LittleEndian.PutUint32(*slice, src)
+	case x8:
+		slice[0] = byte(src)
+	case x16:
+		binary.LittleEndian.PutUint16(slice, uint16(src))
+	case x32:
+		binary.LittleEndian.PutUint32(slice, src)
 	default:
-		return fmt.Errorf("invalid memory slice length: %d", memLen)
+		return nil, fmt.Errorf("invalid memory slice length: %d", memLen)
 	}
-
-	v.nextOffsets()
-	return nil
+	return slice, nil
+}
+func leDecode(memLen int, src []byte) (uint32, error) {
+	switch memLen {
+	case x8:
+		return uint32(src[0]), nil
+	case x16:
+		return uint32(binary.LittleEndian.Uint16(src)), nil
+	case x32:
+		return binary.LittleEndian.Uint32(src), nil
+	default:
+		return 0, fmt.Errorf("invalid memory slice length: %d", memLen)
+	}
 }
 
-func (v *mutator) jumpIndirectImpl(target uint32) error {
-	if target == VmAddrReturnToHost {
-		v.instance.returnToHost = true
-		return nil
+func (m *Mutator) jumpIndirectImpl(target uint32) error {
+	if target == polkavm.VmAddrReturnToHost {
+		return io.EOF
 	}
-	instructionOffset := v.program.JumpTableGetByAddress(target)
+	instructionOffset := m.program.JumpTableGetByAddress(target)
 	if instructionOffset == nil {
-		return TrapError{fmt.Errorf("indirect jump to address %v: INVALID", target)}
+		return &TrapError{Err: fmt.Errorf("indirect jump to address %v: INVALID", target)}
 	}
-	v.instance.instructionOffset = *instructionOffset
-	v.startBasicBlock()
+	m.instance.SetInstructionOffset(*instructionOffset)
+	m.instance.StartBasicBlock(m.program)
 	return nil
 }
 
-func (v *mutator) get(vv polkavm.Reg) uint32 {
-	return v.instance.regs[vv]
+func (m *Mutator) get(vv polkavm.Reg) uint32 {
+	return m.instance.GetReg(vv)
 }
 
-func (v *mutator) set(dst polkavm.Reg, value uint32) {
-	v.instance.regs[dst] = value
+func (m *Mutator) set(dst polkavm.Reg, value uint32) {
+	m.instance.SetReg(dst, value)
 }
 
-func (v *mutator) setNext(dst polkavm.Reg, value uint32) {
-	v.set(dst, value)
-	v.nextOffsets()
+func (m *Mutator) setNext(dst polkavm.Reg, value uint32) {
+	m.set(dst, value)
+	m.instance.NextOffsets()
 }
-
-func (v *mutator) nextOffsets() {
-	v.instance.instructionOffset += v.instance.instructionLength
-	v.instance.instructionCounter += 1
+func (m *Mutator) Trap() error {
+	return &TrapError{fmt.Errorf("explicit trap")}
 }
-func (v *mutator) Trap() error {
-	log.Printf("Trap at %v: explicit trap", v.instance.instructionOffset)
-	return TrapError{fmt.Errorf("trap at %v: explicit trap", v.instance.instructionOffset)}
+func (m *Mutator) Fallthrough() {
+	m.instance.NextOffsets()
+	m.instance.StartBasicBlock(m.program)
 }
-func (v *mutator) Fallthrough() {
-	v.nextOffsets()
-	v.startBasicBlock()
+func (m *Mutator) Sbrk(dst polkavm.Reg, size polkavm.Reg) {
+	s := m.get(size)
+	result, _ := m.instance.Sbrk(m.memoryMap, s)
+	m.setNext(dst, result)
 }
-func (v *mutator) Sbrk(dst polkavm.Reg, size polkavm.Reg) {
-	s := v.get(size)
-	result, _ := v.instance.memory.sbrk(v.memoryMap, s)
-	v.setNext(dst, result)
+func (m *Mutator) MoveReg(d polkavm.Reg, s polkavm.Reg) {
+	m.setNext(d, m.get(s))
 }
-func (v *mutator) MoveReg(d polkavm.Reg, s polkavm.Reg) {
-	v.setNext(d, v.get(s))
+func (m *Mutator) BranchEq(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
+	m.branch(m.get(s1) == m.get(s2), target)
 }
-func (v *mutator) BranchEq(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
-	v.branch(v.get(s1) == v.get(s2), target)
+func (m *Mutator) BranchEqImm(s1 polkavm.Reg, s2 uint32, target uint32) {
+	m.branch(m.get(s1) == s2, target)
 }
-func (v *mutator) BranchEqImm(s1 polkavm.Reg, s2 uint32, target uint32) {
-	v.branch(v.get(s1) == s2, target)
+func (m *Mutator) BranchNotEq(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
+	m.branch(m.get(s1) != m.get(s2), target)
 }
-func (v *mutator) BranchNotEq(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
-	v.branch(v.get(s1) != v.get(s2), target)
+func (m *Mutator) BranchNotEqImm(s1 polkavm.Reg, s2 uint32, target uint32) {
+	m.branch(m.get(s1) != s2, target)
 }
-func (v *mutator) BranchNotEqImm(s1 polkavm.Reg, s2 uint32, target uint32) {
-	v.branch(v.get(s1) != s2, target)
+func (m *Mutator) BranchLessUnsigned(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
+	m.branch(m.get(s1) < m.get(s2), target)
 }
-func (v *mutator) BranchLessUnsigned(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
-	v.branch(v.get(s1) < v.get(s2), target)
+func (m *Mutator) BranchLessUnsignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
+	m.branch(m.get(s1) < s2, target)
 }
-func (v *mutator) BranchLessUnsignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
-	v.branch(v.get(s1) < s2, target)
+func (m *Mutator) BranchLessSigned(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
+	m.branch(int32(m.get(s1)) < int32(m.get(s2)), target)
 }
-func (v *mutator) BranchLessSigned(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
-	v.branch(int32(v.get(s1)) < int32(v.get(s2)), target)
+func (m *Mutator) BranchLessSignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
+	m.branch(int32(m.get(s1)) < int32(s2), target)
 }
-func (v *mutator) BranchLessSignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
-	v.branch(int32(v.get(s1)) < int32(s2), target)
+func (m *Mutator) BranchGreaterOrEqualUnsigned(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
+	m.branch(m.get(s1) >= m.get(s2), target)
 }
-func (v *mutator) BranchGreaterOrEqualUnsigned(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
-	v.branch(v.get(s1) >= v.get(s2), target)
+func (m *Mutator) BranchGreaterOrEqualUnsignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
+	m.branch(m.get(s1) >= s2, target)
 }
-func (v *mutator) BranchGreaterOrEqualUnsignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
-	v.branch(v.get(s1) >= s2, target)
+func (m *Mutator) BranchGreaterOrEqualSigned(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
+	m.branch(int32(m.get(s1)) >= int32(m.get(s2)), target)
 }
-func (v *mutator) BranchGreaterOrEqualSigned(s1 polkavm.Reg, s2 polkavm.Reg, target uint32) {
-	v.branch(int32(v.get(s1)) >= int32(v.get(s2)), target)
+func (m *Mutator) BranchGreaterOrEqualSignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
+	m.branch(int32(m.get(s1)) >= int32(s2), target)
 }
-func (v *mutator) BranchGreaterOrEqualSignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
-	v.branch(int32(v.get(s1)) >= int32(s2), target)
+func (m *Mutator) BranchLessOrEqualUnsignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
+	m.branch(m.get(s1) <= s2, target)
 }
-func (v *mutator) BranchLessOrEqualUnsignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
-	v.branch(v.get(s1) <= s2, target)
+func (m *Mutator) BranchLessOrEqualSignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
+	m.branch(int32(m.get(s1)) <= int32(s2), target)
 }
-func (v *mutator) BranchLessOrEqualSignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
-	v.branch(int32(v.get(s1)) <= int32(s2), target)
+func (m *Mutator) BranchGreaterUnsignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
+	m.branch(m.get(s1) > s2, target)
 }
-func (v *mutator) BranchGreaterUnsignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
-	v.branch(v.get(s1) > s2, target)
+func (m *Mutator) BranchGreaterSignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
+	m.branch(int32(m.get(s1)) > int32(s2), target)
 }
-func (v *mutator) BranchGreaterSignedImm(s1 polkavm.Reg, s2 uint32, target uint32) {
-	v.branch(int32(v.get(s1)) > int32(s2), target)
+func (m *Mutator) SetLessThanUnsignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, bool2uint32(m.get(s1) < s2))
 }
-func (v *mutator) SetLessThanUnsignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, bool2uint32(v.get(s1) < s2))
+func (m *Mutator) SetLessThanSignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, bool2uint32(int32(m.get(s1)) < int32(s2)))
 }
-func (v *mutator) SetLessThanSignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, bool2uint32(int32(v.get(s1)) < int32(s2)))
+func (m *Mutator) ShiftLogicalLeftImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, m.get(s1)<<s2)
 }
-func (v *mutator) ShiftLogicalLeftImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, v.get(s1)<<s2)
+func (m *Mutator) ShiftArithmeticRightImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, uint32(int32(m.get(s1))>>s2))
 }
-func (v *mutator) ShiftArithmeticRightImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, uint32(int32(v.get(s1))>>s2))
+func (m *Mutator) ShiftArithmeticRightImmAlt(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
+	m.setNext(d, uint32(int32(s1)>>m.get(s2)))
 }
-func (v *mutator) ShiftArithmeticRightImmAlt(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, uint32(int32(v.get(s1))>>s2))
+func (m *Mutator) NegateAndAddImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, s2-m.get(s1))
 }
-func (v *mutator) NegateAndAddImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, s2-v.get(s1))
+func (m *Mutator) SetGreaterThanUnsignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, bool2uint32(m.get(s1) > s2))
 }
-func (v *mutator) SetGreaterThanUnsignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, bool2uint32(v.get(s1) > s2))
+func (m *Mutator) SetGreaterThanSignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, bool2uint32(int32(m.get(s1)) > int32(s2)))
 }
-func (v *mutator) SetGreaterThanSignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, bool2uint32(int32(v.get(s1)) > int32(s2)))
+func (m *Mutator) ShiftLogicalRightImmAlt(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
+	m.setNext(d, s1>>m.get(s2))
 }
-func (v *mutator) ShiftLogicalRightImmAlt(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, v.get(s1)>>s2)
+func (m *Mutator) ShiftLogicalLeftImmAlt(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
+	m.setNext(d, s1<<m.get(s2))
 }
-func (v *mutator) ShiftLogicalLeftImmAlt(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, v.get(s1)<<s2)
+func (m *Mutator) Add(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, m.get(s1)+m.get(s2))
 }
-func (v *mutator) Add(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, v.get(s1)+v.get(s2))
+func (m *Mutator) AddImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, m.get(s1)+s2)
 }
-func (v *mutator) AddImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, v.get(s1)+s2)
+func (m *Mutator) Sub(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, m.get(s1)-m.get(s2))
 }
-func (v *mutator) Sub(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, v.get(s1)-v.get(s2))
+func (m *Mutator) And(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, m.get(s1)&m.get(s2))
 }
-func (v *mutator) And(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, v.get(s1)&v.get(s2))
+func (m *Mutator) AndImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, m.get(s1)&s2)
 }
-func (v *mutator) AndImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, v.get(s1)&s2)
+func (m *Mutator) Xor(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, m.get(s1)^m.get(s2))
 }
-func (v *mutator) Xor(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, v.get(s1)^v.get(s2))
+func (m *Mutator) XorImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, m.get(s1)^s2)
 }
-func (v *mutator) XorImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, v.get(s1)^s2)
+func (m *Mutator) Or(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, m.get(s1)|m.get(s2))
 }
-func (v *mutator) Or(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, v.get(s1)|v.get(s2))
+func (m *Mutator) OrImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, m.get(s1)|s2)
 }
-func (v *mutator) OrImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, v.get(s1)|s2)
+func (m *Mutator) Mul(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, m.get(s1)*m.get(s2))
 }
-func (v *mutator) Mul(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, v.get(s1)*v.get(s2))
+func (m *Mutator) MulImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, m.get(s1)*s2)
 }
-func (v *mutator) MulImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, v.get(s1)*s2)
+func (m *Mutator) MulUpperSignedSigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, uint32(int32((int64(m.get(s1))*int64(m.get(s2)))>>32)))
 }
-func (v *mutator) MulUpperSignedSigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, uint32(int32((int64(v.get(s1))*int64(v.get(s2)))>>32)))
+func (m *Mutator) MulUpperSignedSignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, uint32(int32((int64(m.get(s1))*int64(s2))>>32)))
 }
-func (v *mutator) MulUpperSignedSignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, uint32(int32((int64(v.get(s1))*int64(s2))>>32)))
+func (m *Mutator) MulUpperUnsignedUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, uint32(int32((int64(m.get(s1))*int64(m.get(s2)))>>32)))
 }
-func (v *mutator) MulUpperUnsignedUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, uint32(int32((int64(v.get(s1))*int64(v.get(s2)))>>32)))
+func (m *Mutator) MulUpperUnsignedUnsignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, uint32(int32((int64(m.get(s1))*int64(s2))>>32)))
 }
-func (v *mutator) MulUpperUnsignedUnsignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, uint32(int32((int64(v.get(s1))*int64(s2))>>32)))
+func (m *Mutator) MulUpperSignedUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, uint32((int64(m.get(s1))*int64(m.get(s2)))>>32))
 }
-func (v *mutator) MulUpperSignedUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, uint32((int64(v.get(s1))*int64(v.get(s2)))>>32))
+func (m *Mutator) SetLessThanUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, bool2uint32(m.get(s1) < m.get(s2)))
 }
-func (v *mutator) SetLessThanUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, bool2uint32(v.get(s1) < v.get(s2)))
+func (m *Mutator) SetLessThanSigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, bool2uint32(int32(m.get(s1)) < int32(m.get(s2))))
 }
-func (v *mutator) SetLessThanSigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, bool2uint32(v.get(s1) < v.get(s2)))
+func (m *Mutator) ShiftLogicalLeft(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	shiftAmount := m.get(s2) % 32
+	shiftedValue := m.get(s1) << shiftAmount
+	m.setNext(d, shiftedValue)
 }
-func (v *mutator) ShiftLogicalLeft(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, v.get(s1)<<v.get(s2))
+func (m *Mutator) ShiftLogicalRight(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, m.get(s1)>>(m.get(s2)%32))
 }
-func (v *mutator) ShiftLogicalRight(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, v.get(s1)>>v.get(s2))
+func (m *Mutator) ShiftLogicalRightImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.setNext(d, m.get(s1)>>s2)
 }
-func (v *mutator) ShiftLogicalRightImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
-	v.setNext(d, v.get(s1)>>s2)
+func (m *Mutator) ShiftArithmeticRight(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	shiftAmount := m.get(s2) % 32
+	shiftedValue := int32(m.get(s1)) >> shiftAmount
+	m.setNext(d, uint32(shiftedValue))
 }
-func (v *mutator) ShiftArithmeticRight(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, uint32(int32(v.get(s1))>>s2))
+func (m *Mutator) DivUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, divUnsigned(m.get(s1), m.get(s2)))
 }
-func (v *mutator) DivUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, divUnsigned(v.get(s1), v.get(s2)))
+func (m *Mutator) DivSigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, uint32(div(int32(m.get(s1)), int32(m.get(s2)))))
 }
-func (v *mutator) DivSigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, uint32(div(int32(v.get(s1)), int32(v.get(s2)))))
+func (m *Mutator) RemUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, remUnsigned(m.get(s1), m.get(s2)))
 }
-func (v *mutator) RemUnsigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, remUnsigned(v.get(s1), v.get(s2)))
+func (m *Mutator) RemSigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.setNext(d, uint32(rem(int32(m.get(s1)), int32(m.get(s2)))))
 }
-func (v *mutator) RemSigned(d polkavm.Reg, s1, s2 polkavm.Reg) {
-	v.setNext(d, uint32(rem(int32(v.get(s1)), int32(v.get(s2)))))
-}
-func (v *mutator) CmovIfZero(d polkavm.Reg, s, c polkavm.Reg) {
-	if v.get(c) == 0 {
-		v.set(d, v.get(s))
+func (m *Mutator) CmovIfZero(d polkavm.Reg, s, c polkavm.Reg) {
+	if m.get(c) == 0 {
+		m.set(d, m.get(s))
 	}
-	v.nextOffsets()
+	m.instance.NextOffsets()
 }
-func (v *mutator) CmovIfZeroImm(d polkavm.Reg, c polkavm.Reg, s uint32) {
-	if v.get(c) == 0 {
-		v.set(d, s)
+func (m *Mutator) CmovIfZeroImm(d polkavm.Reg, c polkavm.Reg, s uint32) {
+	if m.get(c) == 0 {
+		m.set(d, s)
 	}
-	v.nextOffsets()
+	m.instance.NextOffsets()
 }
-func (v *mutator) CmovIfNotZero(d polkavm.Reg, s, c polkavm.Reg) {
-	if v.get(c) != 0 {
-		v.set(d, v.get(s))
+func (m *Mutator) CmovIfNotZero(d polkavm.Reg, s, c polkavm.Reg) {
+	if m.get(c) != 0 {
+		m.set(d, m.get(s))
 	}
-	v.nextOffsets()
+	m.instance.NextOffsets()
 }
-func (v *mutator) CmovIfNotZeroImm(d polkavm.Reg, c polkavm.Reg, s uint32) {
-	if v.get(c) != 0 {
-		v.set(d, s)
+func (m *Mutator) CmovIfNotZeroImm(d polkavm.Reg, c polkavm.Reg, s uint32) {
+	if m.get(c) != 0 {
+		m.set(d, s)
 	}
 
-	v.nextOffsets()
+	m.instance.NextOffsets()
 }
-func (v *mutator) Ecalli(imm uint32) polkavm.HostCallResult {
-	callFn := v.hostFunctions[imm]
+func (m *Mutator) Ecalli(imm uint32) polkavm.HostCallResult {
+	callFn := m.hostFunctions[imm]
 	if callFn == nil {
 		return polkavm.HostCallResult{Code: polkavm.HostCallResultWho}
 	}
@@ -382,7 +392,7 @@ func (v *mutator) Ecalli(imm uint32) polkavm.HostCallResult {
 				}
 			}
 		}()
-		if err := callFn(v.instance); err != nil {
+		if err := callFn(m.instance); err != nil {
 			return polkavm.HostCallResult{
 				Code:      polkavm.HostCallResultOk,
 				InnerCode: polkavm.HostCallInnerCodeFault,
@@ -395,93 +405,112 @@ func (v *mutator) Ecalli(imm uint32) polkavm.HostCallResult {
 			InnerCode: polkavm.HostCallInnerCodeHalt,
 		}
 	}()
-	v.nextOffsets()
+	m.instance.NextOffsets()
 	return result
 }
-func (v *mutator) StoreU8(src polkavm.Reg, offset uint32) error {
-	return v.store(Uint8Len, v.get(src), 0, offset)
+func (m *Mutator) StoreU8(src polkavm.Reg, offset uint32) error {
+	return m.store(x8, unsigned, m.get(src), 0, offset)
 }
-func (v *mutator) StoreU16(src polkavm.Reg, offset uint32) error {
-	return v.store(Uint16Len, v.get(src), 0, offset)
+func (m *Mutator) StoreU16(src polkavm.Reg, offset uint32) error {
+	return m.store(x16, unsigned, m.get(src), 0, offset)
 }
-func (v *mutator) StoreU32(src polkavm.Reg, offset uint32) error {
-	return v.store(Uint32Len, v.get(src), 0, offset)
+func (m *Mutator) StoreU32(src polkavm.Reg, offset uint32) error {
+	return m.store(x32, unsigned, m.get(src), 0, offset)
 }
-func (v *mutator) StoreImmU8(offset uint32, value uint32) error {
-	return v.store(Uint8Len, value, 0, offset)
+func (m *Mutator) StoreImmU8(offset uint32, value uint32) error {
+	return m.store(x8, unsigned, value, 0, offset)
 }
-func (v *mutator) StoreImmU16(offset uint32, value uint32) error {
-	return v.store(Uint16Len, value, 0, offset)
+func (m *Mutator) StoreImmU16(offset uint32, value uint32) error {
+	return m.store(x16, unsigned, value, 0, offset)
 }
-func (v *mutator) StoreImmU32(offset uint32, value uint32) error {
-	return v.store(Uint32Len, value, 0, offset)
+func (m *Mutator) StoreImmU32(offset uint32, value uint32) error {
+	return m.store(x32, unsigned, value, 0, offset)
 }
-func (v *mutator) StoreImmIndirectU8(base polkavm.Reg, offset uint32, value uint32) error {
-	return v.store(Uint8Len, value, base, offset)
+func (m *Mutator) StoreImmIndirectU8(base polkavm.Reg, offset uint32, value uint32) error {
+	return m.store(x8, unsigned, value, base, offset)
 }
-func (v *mutator) StoreImmIndirectU16(base polkavm.Reg, offset uint32, value uint32) error {
-	return v.store(Uint16Len, value, base, offset)
+func (m *Mutator) StoreImmIndirectU16(base polkavm.Reg, offset uint32, value uint32) error {
+	return m.store(x16, unsigned, value, base, offset)
 }
-func (v *mutator) StoreImmIndirectU32(base polkavm.Reg, offset uint32, value uint32) error {
-	return v.store(Uint32Len, value, base, offset)
+func (m *Mutator) StoreImmIndirectU32(base polkavm.Reg, offset uint32, value uint32) error {
+	return m.store(x32, unsigned, value, base, offset)
 }
-func (v *mutator) StoreIndirectU8(src polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return v.store(Uint8Len, v.get(src), base, offset)
+func (m *Mutator) StoreIndirectU8(src polkavm.Reg, base polkavm.Reg, offset uint32) error {
+	return m.store(x8, unsigned, m.get(src), base, offset)
 }
-func (v *mutator) StoreIndirectU16(src polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return v.store(Uint16Len, v.get(src), base, offset)
+func (m *Mutator) StoreIndirectU16(src polkavm.Reg, base polkavm.Reg, offset uint32) error {
+	return m.store(x16, unsigned, m.get(src), base, offset)
 }
-func (v *mutator) StoreIndirectU32(src polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return v.store(Uint32Len, v.get(src), base, offset)
+func (m *Mutator) StoreIndirectU32(src polkavm.Reg, base polkavm.Reg, offset uint32) error {
+	return m.store(x32, unsigned, m.get(src), base, offset)
 }
-func (v *mutator) LoadU8(dst polkavm.Reg, offset uint32) error {
-	return v.load(Uint8Len, dst, 0, offset)
+func (m *Mutator) LoadU8(dst polkavm.Reg, offset uint32) error {
+	return m.load(x8, unsigned, dst, 0, offset)
 }
-func (v *mutator) LoadI8(dst polkavm.Reg, offset uint32) error {
-	return v.load(Int8Len, dst, 0, offset)
+func (m *Mutator) LoadI8(dst polkavm.Reg, offset uint32) error {
+	return m.load(x8, signed, dst, 0, offset)
 }
-func (v *mutator) LoadU16(dst polkavm.Reg, offset uint32) error {
-	return v.load(Uint16Len, dst, 0, offset)
+func (m *Mutator) LoadU16(dst polkavm.Reg, offset uint32) error {
+	return m.load(x16, unsigned, dst, 0, offset)
 }
-func (v *mutator) LoadI16(dst polkavm.Reg, offset uint32) error {
-	return v.load(Int16Len, dst, 0, offset)
+func (m *Mutator) LoadI16(dst polkavm.Reg, offset uint32) error {
+	return m.load(x16, signed, dst, 0, offset)
 }
-func (v *mutator) LoadU32(dst polkavm.Reg, offset uint32) error {
-	return v.load(Uint32Len, dst, 0, offset)
+func (m *Mutator) LoadU32(dst polkavm.Reg, offset uint32) error {
+	return m.load(x32, unsigned, dst, 0, offset)
 }
-func (v *mutator) LoadIndirectU8(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return v.load(Uint8Len, dst, base, offset)
+func (m *Mutator) LoadIndirectU8(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
+	return m.load(x8, unsigned, dst, base, offset)
 }
-func (v *mutator) LoadIndirectI8(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return v.load(Int8Len, dst, base, offset)
+func (m *Mutator) LoadIndirectI8(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
+	return m.load(x8, signed, dst, base, offset)
 }
-func (v *mutator) LoadIndirectU16(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return v.load(Uint16Len, dst, base, offset)
+func (m *Mutator) LoadIndirectU16(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
+	return m.load(x16, unsigned, dst, base, offset)
 }
-func (v *mutator) LoadIndirectI16(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return v.load(Int16Len, dst, base, offset)
+func (m *Mutator) LoadIndirectI16(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
+	return m.load(x16, signed, dst, base, offset)
 }
-func (v *mutator) LoadIndirectU32(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return v.load(Uint32Len, dst, base, offset)
+func (m *Mutator) LoadIndirectU32(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
+	return m.load(x32, unsigned, dst, base, offset)
 }
-func (v *mutator) LoadImm(dst polkavm.Reg, imm uint32) {
-	v.setNext(dst, imm)
+func (m *Mutator) LoadImm(dst polkavm.Reg, imm uint32) {
+	m.setNext(dst, imm)
 }
-func (v *mutator) LoadImmAndJump(ra polkavm.Reg, value uint32, target uint32) {
-	v.LoadImm(ra, value)
-	v.Jump(target)
+func (m *Mutator) LoadImmAndJump(ra polkavm.Reg, value uint32, target uint32) {
+	m.LoadImm(ra, value)
+	m.Jump(target)
 }
-func (v *mutator) LoadImmAndJumpIndirect(ra polkavm.Reg, base polkavm.Reg, value, offset uint32) error {
-	target := v.get(base) + offset
-	v.set(ra, value)
-	return v.jumpIndirectImpl(target)
+func (m *Mutator) LoadImmAndJumpIndirect(ra polkavm.Reg, base polkavm.Reg, value, offset uint32) error {
+	target := m.get(base) + offset
+	m.set(ra, value)
+	return m.jumpIndirectImpl(target)
 }
-func (v *mutator) Jump(target uint32) {
-	v.instance.instructionOffset = target
-	v.startBasicBlock()
+func (m *Mutator) Jump(target uint32) {
+	m.instance.SetInstructionOffset(target)
+	m.instance.StartBasicBlock(m.program)
 }
-func (v *mutator) JumpIndirect(base polkavm.Reg, offset uint32) error {
-	return v.jumpIndirectImpl(v.get(base) + offset)
+func (m *Mutator) JumpIndirect(base polkavm.Reg, offset uint32) error {
+	return m.jumpIndirectImpl(m.get(base) + offset)
+}
+
+func (m *Mutator) Execute(instance polkavm.Instance) error {
+	instance.StartBasicBlock(m.program)
+	for {
+		instruction, err := instance.NextInstruction()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		if err := instruction.StepOnce(m); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
 }
 
 func divUnsigned(lhs uint32, rhs uint32) uint32 {

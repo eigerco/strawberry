@@ -1,10 +1,9 @@
-package interpreter
+package polkavm
 
 import (
 	"math"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -72,79 +71,75 @@ func Test_memoryMap(t *testing.T) {
 	}}
 	for _, tc := range tests {
 		t.Run("", func(t *testing.T) {
-			m, err := newMemoryMap(tc.pageSize, &polkavm.Program{
-				RODataSize: tc.roDataSize,
-				RWDataSize: tc.rwDataSize,
-				StackSize:  tc.stackSize,
-			})
+			m, err := NewMemoryMap(tc.pageSize, tc.roDataSize, tc.rwDataSize, tc.stackSize, []byte{})
 			if err != nil {
 				if tc.expectError {
 					return
 				}
 				t.Fatal(err)
 			}
-			assert.Equal(t, tc.expectedRODataAddress, m.roDataAddress)
-			assert.Equal(t, tc.expectedRODataSize, m.roDataSize)
-			assert.Equal(t, tc.expectedRWDataAddress, m.rwDataAddress)
-			assert.Equal(t, tc.expectedStackSize, m.stackSize)
-			assert.Equal(t, tc.expectedStackAddressHigh, m.stackAddressHigh)
-			assert.Equal(t, tc.expectedStackAddressLow, m.stackAddressLow)
-			assert.Equal(t, tc.expectedHeapBase, m.heapBase)
-			assert.Equal(t, tc.expectedMaxHeapSize, uint64(m.maxHeapSize))
+			assert.Equal(t, tc.expectedRODataAddress, m.RODataAddress)
+			assert.Equal(t, tc.expectedRODataSize, m.RODataSize)
+			assert.Equal(t, tc.expectedRWDataAddress, m.RWDataAddress)
+			assert.Equal(t, tc.expectedStackSize, m.StackSize)
+			assert.Equal(t, tc.expectedStackAddressHigh, m.StackAddressHigh)
+			assert.Equal(t, tc.expectedStackAddressLow, m.StackAddressLow)
+			assert.Equal(t, tc.expectedHeapBase, m.HeapBase)
+			assert.Equal(t, tc.expectedMaxHeapSize, uint64(m.MaxHeapSize))
 		})
 	}
 }
 
 func Test_alignToNextPageUint64(t *testing.T) {
-	v, _ := alignToNextPageUint64(4096, 0)
+	v, _ := AlignToNextPageUint64(4096, 0)
 	assert.Equal(t, uint64(0), v)
-	v, _ = alignToNextPageUint64(4096, 1)
+	v, _ = AlignToNextPageUint64(4096, 1)
 	assert.Equal(t, uint64(4096), v)
-	v, _ = alignToNextPageUint64(4096, 4095)
+	v, _ = AlignToNextPageUint64(4096, 4095)
 	assert.Equal(t, uint64(4096), v)
-	v, _ = alignToNextPageUint64(4096, 4096)
+	v, _ = AlignToNextPageUint64(4096, 4096)
 	assert.Equal(t, uint64(4096), v)
-	v, _ = alignToNextPageUint64(4096, 4097)
+	v, _ = AlignToNextPageUint64(4096, 4097)
 	assert.Equal(t, uint64(8192), v)
 	var maxVal uint64 = math.MaxUint64 + 1 - 4096
-	v, _ = alignToNextPageUint64(4096, maxVal)
+	v, _ = AlignToNextPageUint64(4096, maxVal)
 	assert.Equal(t, maxVal, v)
-	_, err := alignToNextPageUint64(4096, maxVal+1)
+	_, err := AlignToNextPageUint64(4096, maxVal+1)
 	assert.Error(t, err)
 }
 
 func Test_alignToNextPageUint32(t *testing.T) {
-	v, _ := alignToNextPageUint32(4096, 0)
+	v, _ := AlignToNextPageUint32(4096, 0)
 	assert.Equal(t, uint32(0), v)
-	v, _ = alignToNextPageUint32(4096, 1)
+	v, _ = AlignToNextPageUint32(4096, 1)
 	assert.Equal(t, uint32(4096), v)
-	v, _ = alignToNextPageUint32(4096, 4095)
+	v, _ = AlignToNextPageUint32(4096, 4095)
 	assert.Equal(t, uint32(4096), v)
-	v, _ = alignToNextPageUint32(4096, 4096)
+	v, _ = AlignToNextPageUint32(4096, 4096)
 	assert.Equal(t, uint32(4096), v)
-	v, _ = alignToNextPageUint32(4096, 4097)
+	v, _ = AlignToNextPageUint32(4096, 4097)
 	assert.Equal(t, uint32(8192), v)
 	var maxVal uint32 = math.MaxUint32 + 1 - 4096
-	v, _ = alignToNextPageUint32(4096, maxVal)
+	v, _ = AlignToNextPageUint32(4096, maxVal)
 	assert.Equal(t, maxVal, v)
-	_, err := alignToNextPageUint32(4096, maxVal+1)
+	_, err := AlignToNextPageUint32(4096, maxVal+1)
 	assert.Error(t, err)
 }
 
 func Test_alignToNextPageInt(t *testing.T) {
-	v, _ := alignToNextPageInt(4096, 0)
+	v, _ := AlignToNextPageInt(4096, 0)
 	assert.Equal(t, 0, v)
-	v, _ = alignToNextPageInt(4096, 1)
+	v, _ = AlignToNextPageInt(4096, 1)
 	assert.Equal(t, 4096, v)
-	v, _ = alignToNextPageInt(4096, 4095)
+	v, _ = AlignToNextPageInt(4096, 4095)
 	assert.Equal(t, 4096, v)
-	v, _ = alignToNextPageInt(4096, 4096)
+	v, _ = AlignToNextPageInt(4096, 4096)
 	assert.Equal(t, 4096, v)
-	v, _ = alignToNextPageInt(4096, 4097)
+	v, _ = AlignToNextPageInt(4096, 4097)
 	assert.Equal(t, 8192, v)
 	var maxVal = math.MaxInt + 1 - 4096
-	v, _ = alignToNextPageInt(4096, maxVal)
+	v, _ = AlignToNextPageInt(4096, maxVal)
 	assert.Equal(t, maxVal, v)
-	_, err := alignToNextPageInt(4096, maxVal+1)
+	_, err := AlignToNextPageInt(4096, maxVal+1)
 	assert.Error(t, err)
 }

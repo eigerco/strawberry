@@ -3,6 +3,24 @@ package polkavm
 type Module interface {
 	AddHostFunc(string, HostFunc)
 	Run(symbol string, gasLimit int64, args ...uint32) (result uint32, gasRemaining int64, err error)
+	Instantiate(instructionOffset uint32, gasLimit int64) Instance
+}
+
+type Instance interface {
+	GetReg(Reg) uint32
+	SetReg(Reg, uint32)
+
+	NextInstruction() (Instruction, error)
+	NextOffsets()
+	GetInstructionOffset() uint32
+	SetInstructionOffset(target uint32)
+	StartBasicBlock(program *Program)
+
+	GasRemaining() int64
+
+	GetMemory(mm *MemoryMap, address uint32, length int) ([]byte, error)
+	SetMemory(mm *MemoryMap, address uint32, data []byte) error
+	Sbrk(mm *MemoryMap, size uint32) (uint32, error)
 }
 
 type HostFunc func(args ...uint32) (uint32, error)

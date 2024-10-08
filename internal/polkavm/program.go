@@ -48,6 +48,9 @@ type Program struct {
 	DebugStrings           []byte
 	DebugLineProgramRanges []byte
 	DebugLinePrograms      []byte
+
+	instructionOffsetToIndex map[uint32]int
+	codeOffsetBySymbol       map[string]uint32
 }
 
 func (p *Program) JumpTableGetByAddress(address uint32) *uint32 {
@@ -57,6 +60,31 @@ func (p *Program) JumpTableGetByAddress(address uint32) *uint32 {
 
 	instructionOffset := p.JumpTable[((address - VmCodeAddressAlignment) / VmCodeAddressAlignment)]
 	return &instructionOffset
+}
+
+func (p *Program) GetInstructionsForOffset(instructionOffset uint32) ([]Instruction, bool) {
+	if p.instructionOffsetToIndex == nil {
+		p.instructionOffsetToIndex = make(map[uint32]int)
+		for index, inst := range p.Instructions {
+			p.instructionOffsetToIndex[inst.Offset] = index
+		}
+	}
+	instrIndex, ok := p.instructionOffsetToIndex[instructionOffset]
+	if !ok {
+		return nil, false
+	}
+	return p.Instructions[instrIndex:], true
+}
+
+func (p *Program) LookupExport(symbol string) (uint32, bool) {
+	if p.codeOffsetBySymbol == nil {
+		p.codeOffsetBySymbol = make(map[string]uint32)
+		for _, e := range p.Exports {
+			p.codeOffsetBySymbol[e.Symbol] = e.TargetCodeOffset
+		}
+	}
+	instructionOffset, ok := p.codeOffsetBySymbol[symbol]
+	return instructionOffset, ok
 }
 
 type ProgramExport struct {
@@ -328,34 +356,21 @@ func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruc
 		return 0, Instruction{}, io.EOF
 	}
 
-	nextOffset, argsLength := parseBitmaskSlow(bitmask, instructionOffset)
-	chunkLength := min(16, argsLength+1)
-	chunk := code[instructionOffset : instructionOffset+chunkLength]
+	nextOffset, skip := parseBitmask(bitmask, instructionOffset)
+	chunkLength := min(16, skip+1)
+	chunk := code[instructionOffset:min(instructionOffset+chunkLength, len(code))]
 	opcode := Opcode(chunk[0])
-	regs, imm := parseArgsTable[opcode](chunk[1:], uint32(instructionOffset), uint32(argsLength))
+	regs, imm := parseArgsTable[opcode](chunk[1:], uint32(instructionOffset), uint32(len(chunk[1:])))
 	return nextOffset, Instruction{
 		Opcode: opcode,
 		Reg:    regs,
 		Imm:    imm,
 		Offset: uint32(instructionOffset),
-		Length: uint32(argsLength + 1),
+		Length: uint32(len(chunk[1:]) + 1),
 	}, nil
 }
 
-func parseBitmaskFast(bitmask []byte, offset int) (int, int) {
-	offset += 1
-	shift := offset & 7
-	mask := (binary.LittleEndian.Uint32(bitmask[offset>>3:(offset>>3)+4]) >> shift) | (1 << BitmaskMax)
-	argsLength := bits.TrailingZeros32(mask)
-	if argsLength > BitmaskMax {
-		panic("args Length too big")
-	}
-	offset += argsLength
-
-	return offset, argsLength
-}
-
-func parseBitmaskSlow(bitmask []byte, offset int) (int, int) {
+func parseBitmask(bitmask []byte, offset int) (int, int) {
 	offset += 1
 	argsLength := 0
 	for offset>>3 < len(bitmask) {
@@ -416,7 +431,6 @@ func parseExports(r *Reader, p *Program) (byte, error) {
 	if initialPosition+int64(secLen) != r.Position() {
 		return 0, fmt.Errorf("invalid exports section Length: %v", secLen)
 	}
-
 	return r.ReadByte()
 }
 
