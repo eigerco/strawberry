@@ -3,6 +3,7 @@ package state
 import (
 	"bytes"
 	"crypto/ed25519"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -19,7 +20,18 @@ import (
 
 // calculateIntermediateBlockState Equation 17: β† ≺ (H, β)
 func calculateIntermediateBlockState(header block.Header, previousRecentBlocks []BlockState) []BlockState {
-	return []BlockState{}
+	intermediateBlocks := make([]BlockState, len(previousRecentBlocks))
+
+	// Copy all elements from previousRecentBlocks to intermediateBlocks
+	copy(intermediateBlocks, previousRecentBlocks)
+
+	// Update the state root of the most recent block
+	if len(intermediateBlocks) > 0 {
+		lastIndex := len(intermediateBlocks) - 1
+		intermediateBlocks[lastIndex].StateRoot = header.PriorStateRoot
+	}
+
+	return intermediateBlocks
 }
 
 // calculateIntermediateServiceState Equation 24: δ† ≺ (EP, δ, τ′)
@@ -45,8 +57,68 @@ func calculateNewTimeState(header block.Header) jamtime.Timeslot {
 }
 
 // calculateNewRecentBlocks Equation 18: β′ ≺ (H, EG, β†, C)
-func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentBlocks []BlockState, context Context) []BlockState {
-	return []BlockState{}
+func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentBlocks []BlockState, context Context) ([]BlockState, error) {
+	// Calculate accumulation-result Merkle tree root (r)
+	accumulationRoot := calculateAccumulationRoot(context.Accumulations)
+
+	// Append to the previous block's Merkle mountain range (b)
+	var lastBlockMMR crypto.Hash
+	if len(intermediateRecentBlocks) > 0 {
+		lastBlockMMR = intermediateRecentBlocks[len(intermediateRecentBlocks)-1].AccumulationResultMMR
+	}
+	newMMR := AppendToMMR(lastBlockMMR, accumulationRoot)
+	headerBytes, err := json.Marshal(header)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create new block state (n)
+	reportHashes, err := calculateWorkReportHashes(guarantees)
+	if err != nil {
+		return nil, err
+	}
+
+	newBlockState := BlockState{
+		HeaderHash:            crypto.HashData(headerBytes),
+		StateRoot:             header.PriorStateRoot,
+		AccumulationResultMMR: newMMR,
+		WorkReportHashes:      reportHashes,
+	}
+
+	// Update β† with the new block state (Equation 83)
+	newRecentBlocks := append(intermediateRecentBlocks, newBlockState)
+
+	// Ensure we only keep the most recent H blocks
+	if len(newRecentBlocks) > MaxRecentBlocks {
+		newRecentBlocks = newRecentBlocks[len(newRecentBlocks)-MaxRecentBlocks:]
+	}
+
+	return newRecentBlocks, nil
+}
+
+// TODO: this is just a mock implementation
+func AppendToMMR(lastBlockMMR crypto.Hash, accumulationRoot crypto.Hash) crypto.Hash {
+	return crypto.Hash{}
+}
+
+// TODO: this is just a mock implementation
+// This should create a Merkle tree from the accumulations and return the root
+func calculateAccumulationRoot(accumulations map[uint32]crypto.Hash) crypto.Hash {
+	return crypto.Hash{}
+}
+
+func calculateWorkReportHashes(guarantees block.GuaranteesExtrinsic) ([common.TotalNumberOfCores]crypto.Hash, error) {
+	var hashes [common.TotalNumberOfCores]crypto.Hash
+	for _, guarantee := range guarantees.Guarantees {
+		// Assuming CoreIndex is part of the WorkReport struct
+		coreIndex := guarantee.WorkReport.CoreIndex
+		reportBytes, err := json.Marshal(guarantee.WorkReport)
+		if err != nil {
+			return [common.TotalNumberOfCores]crypto.Hash{}, err
+		}
+		hashes[coreIndex] = crypto.HashData(reportBytes)
+	}
+	return hashes, nil
 }
 
 // calculateNewSafroleState Equation 19: γ′ ≺ (H, τ, ET , γ, ι, η′, κ′)

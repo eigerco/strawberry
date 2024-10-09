@@ -31,4 +31,5 @@ type CoreAuthorizersPool [common.TotalNumberOfCores][]crypto.Hash // TODO: Maxim
 // TODO: Add relevant fields when state transitions are implemented
 type Context struct {
 	// Add relevant fields
+	Accumulations map[uint32]crypto.Hash
 }

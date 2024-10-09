@@ -49,7 +49,11 @@ func (s *State) UpdateState(newBlock block.Block) {
 	)
 
 	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
-	newRecentBlocks := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, context)
+	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, context)
+	if err != nil {
+		// TODO handle error
+		log.Printf("Error calculating new Recent Blocks: %v", err)
+	}
 
 	newEntropyPool, err := calculateNewEntropyPool(newBlock.Header, s.TimeslotIndex, s.EntropyPool)
 	if err != nil {

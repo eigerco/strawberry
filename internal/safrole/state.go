@@ -7,7 +7,6 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
-	"golang.org/x/crypto/blake2b"
 )
 
 // State relevant to Safrole protocol
@@ -61,7 +60,7 @@ func selectFallbackKeys(em *block.EpochMarker) (crypto.EpochKeys, error) {
 		// r ⌢ E₄(i): Concatenate entropy with encoded i
 		data := append(em.Entropy[:], iBytes...)
 		// H₄(r ⌢ E₄(i)): Take first 4 bytes of Blake2 hash
-		hash := blake2b.Sum256(data)
+		hash := crypto.HashData(data)
 		// E⁻¹(...): Decode back to a number
 		var index uint32
 		err = serializer.Decode(hash[:], &index)

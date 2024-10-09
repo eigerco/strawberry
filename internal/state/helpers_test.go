@@ -141,7 +141,7 @@ func RandomWorkResult(t *testing.T) block.WorkResult {
 func RandomBlockState(t *testing.T) BlockState {
 	var state BlockState
 	state.HeaderHash = testutils.RandomHash(t)
-	state.StateRoot = append(state.StateRoot, testutils.RandomHash(t))
+	state.StateRoot = testutils.RandomHash(t)
 	state.AccumulationResultMMR = testutils.RandomHash(t)
 	for i := range state.WorkReportHashes {
 		state.WorkReportHashes[i] = testutils.RandomHash(t)
