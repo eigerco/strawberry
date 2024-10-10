@@ -17,7 +17,6 @@ type Instance interface {
 	StartBasicBlock(program *Program)
 
 	GasRemaining() int64
-	DeductGas(cost int64)
 
 	GetMemory(mm *MemoryMap, address uint32, length int) ([]byte, error)
 	SetMemory(mm *MemoryMap, address uint32, data []byte) error

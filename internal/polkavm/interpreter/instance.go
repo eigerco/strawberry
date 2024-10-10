@@ -56,6 +56,21 @@ func (i *instance) GasRemaining() int64 {
 	return i.gasRemaining
 }
 
+func (i *instance) deductGasForOutOfBoundsError() error {
+	gasCost, exists := polkavm.GasCosts[polkavm.Trap]
+	if !exists {
+		return fmt.Errorf("trap opcode not defined in GasCosts map")
+	}
+
+	if i.GasRemaining() < gasCost {
+		return errOutOfGas
+	}
+
+	i.deductGas(gasCost)
+
+	return nil
+}
+
 func (i *instance) GetMemory(memoryMap *polkavm.MemoryMap, address uint32, length int) ([]byte, error) {
 	var start uint32
 	var memorySlice []byte
@@ -71,6 +86,10 @@ func (i *instance) GetMemory(memoryMap *polkavm.MemoryMap, address uint32, lengt
 
 	offset := int(address - start)
 	if offset+length > len(memorySlice) {
+		err := i.deductGasForOutOfBoundsError()
+		if err != nil {
+			return nil, err
+		}
 		return nil, fmt.Errorf("memory slice out of range, address %d, length: %d", address, length)
 	}
 	return memorySlice[offset : offset+length], nil
@@ -90,6 +109,10 @@ func (i *instance) SetMemory(memoryMap *polkavm.MemoryMap, address uint32, data 
 
 	offset := int(address - start)
 	if offset+length > len(memorySlice) {
+		err := i.deductGasForOutOfBoundsError()
+		if err != nil {
+			return err
+		}
 		return fmt.Errorf("memory slice out of range, address %d, length: %d %d %d", address, length, offset, len(memorySlice))
 	}
 	copy(memorySlice[offset:offset+length], data)
@@ -152,7 +175,7 @@ func (i *instance) NextInstruction() (instruction polkavm.Instruction, err error
 		if !ok {
 			return instruction, fmt.Errorf("trap opcode not defined in GasCosts map")
 		}
-		i.DeductGas(gasCost)
+		i.deductGas(gasCost)
 
 		return instruction, &TrapError{fmt.Errorf("unexpected program termination")}
 	}
@@ -168,7 +191,7 @@ func (i *instance) NextInstruction() (instruction polkavm.Instruction, err error
 		return instruction, errOutOfGas
 	}
 
-	i.DeductGas(gasCost)
+	i.deductGas(gasCost)
 	return instruction, nil
 }
 
@@ -176,12 +199,8 @@ func (i *instance) NextOffsets() {
 	i.instructionOffset += i.instructionLength
 	i.instructionCounter += 1
 }
-func (i *instance) DeductGas(cost int64) {
-	if cost > i.gasRemaining {
-		i.gasRemaining = 0
-	} else {
-		i.gasRemaining -= cost
-	}
+func (i *instance) deductGas(cost int64) {
+	i.gasRemaining -= cost
 }
 
 func newBasicMemory(memoryMap *polkavm.MemoryMap, rwData []byte) *memory {
