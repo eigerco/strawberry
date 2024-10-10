@@ -38,7 +38,7 @@ func (m *Module) Run(symbol string, gasLimit int64, args ...uint32) (result uint
 	}
 	mutator := NewMutator(i, m, m.memoryMap)
 
-	if err := mutator.Execute(i); err != nil {
+	if err := mutator.Execute(); err != nil {
 		return 0, i.GasRemaining(), err
 	}
 	return i.GetReg(polkavm.A0), i.GasRemaining(), nil

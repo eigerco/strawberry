@@ -75,11 +75,9 @@ func (m *Mutator) load(memLen int, signed bool, dst polkavm.Reg, base polkavm.Re
 	address += offset
 	slice, err := m.instance.GetMemory(m.memoryMap, address, memLen)
 	if err != nil {
-		return &TrapError{Err: err}
+		return &TrapError{err}
 	}
-	if slice == nil {
-		return &TrapError{fmt.Errorf("unable to load memory slice")}
-	}
+
 	value, err := leDecode(memLen, slice)
 	if err != nil {
 		return &TrapError{Err: err}
@@ -98,7 +96,7 @@ func (m *Mutator) store(memLen int, signed bool, src uint32, base polkavm.Reg, o
 	if err != nil {
 		return &TrapError{Err: err}
 	}
-	if err := m.instance.SetMemory(m.memoryMap, address, data); err != nil {
+	if err = m.instance.SetMemory(m.memoryMap, address, data); err != nil {
 		return &TrapError{Err: err}
 	}
 
@@ -494,17 +492,17 @@ func (m *Mutator) JumpIndirect(base polkavm.Reg, offset uint32) error {
 	return m.jumpIndirectImpl(m.get(base) + offset)
 }
 
-func (m *Mutator) Execute(instance polkavm.Instance) error {
-	instance.StartBasicBlock(m.program)
+func (m *Mutator) Execute() error {
+	m.instance.StartBasicBlock(m.program)
 	for {
-		instruction, err := instance.NextInstruction()
+		instruction, err := m.instance.NextInstruction()
 		if err != nil {
 			if err == io.EOF {
 				return nil
 			}
 			return err
 		}
-		if err := instruction.StepOnce(m); err != nil {
+		if err = instruction.StepOnce(m); err != nil {
 			if err == io.EOF {
 				return nil
 			}
