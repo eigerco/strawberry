@@ -35,8 +35,65 @@ func calculateIntermediateBlockState(header block.Header, previousRecentBlocks [
 }
 
 // calculateIntermediateServiceState Equation 24: δ† ≺ (EP, δ, τ′)
-func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, serviceState ServiceState, timeslot jamtime.Timeslot) ServiceState {
-	return make(ServiceState)
+// This function calculates the intermediate service state δ† based on:
+// - The current service state δ (serviceState)
+// - The preimage extrinsic EP (preimages)
+// - The new timeslot τ′ (newTimeslot)
+//
+// For each preimage in EP:
+//  1. It adds the preimage p to the PreimageLookup of service s, keyed by its hash H(p)
+//  2. It adds a new entry to the PreimageMeta of service s, keyed by the hash H(p) and
+//     length |p|, with the value being the new timeslot τ′
+//
+// The function returns a new ServiceState without modifying the input state.
+func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, serviceState ServiceState, newTimeslot jamtime.Timeslot) ServiceState {
+	// Equation 156:
+	// δ† = δ ex. ∀⎧⎩s, p⎫⎭ ∈ EP:
+	// ⎧ δ†[s]p[H(p)] = p
+	// ⎩ δ†[s]l[H(p), |p|] = [τ′]
+
+	// Shallow copy of the entire state
+    newState := make(ServiceState, len(serviceState))
+    for k, v := range serviceState {
+        newState[k] = v
+    }
+
+    for _, preimage := range preimages {
+        serviceId := block.ServiceId(preimage.ServiceIndex)
+        account, exists := newState[serviceId]
+        if !exists {
+            continue
+        }
+
+        preimageHash := crypto.HashData(preimage.Data)
+        preimageLength := PreimageLength(len(preimage.Data))
+
+        // Check conditions from equation 155
+		// Eq. 155: ∀⎧⎩s, p⎫⎭ ∈ EP : K(δ[s]p) ∌ H(p) ∧ δ[s]l[⎧⎩H(p), |p|⎫⎭] = []
+		// For all preimages: hash not in lookup and no existing metadata
+        if _, exists := account.PreimageLookup[preimageHash]; exists {
+            continue // Skip if preimage already exists
+        }
+        metaKey := PreImageMetaKey{Hash: preimageHash, Length: preimageLength}
+        if existingMeta, exists := account.PreimageMeta[metaKey]; exists && len(existingMeta) > 0 {
+            continue // Skip if metadata already exists and is not empty
+        }
+
+        // If checks pass, add the new preimage
+        if account.PreimageLookup == nil {
+            account.PreimageLookup = make(map[crypto.Hash][]byte)
+        }
+        account.PreimageLookup[preimageHash] = preimage.Data
+
+        if account.PreimageMeta == nil {
+            account.PreimageMeta = make(map[PreImageMetaKey]PreimageHistoricalTimeslots)
+        }
+        account.PreimageMeta[metaKey] = []jamtime.Timeslot{newTimeslot}
+
+        newState[serviceId] = account
+    }
+
+    return newState
 }
 
 // calculateIntermediateCoreAssignmentsFromExtrinsics Equation 25: ρ† ≺ (ED , ρ)
