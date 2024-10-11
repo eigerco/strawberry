@@ -287,6 +287,209 @@ func TestCalculateIntermediateBlockStateSingleElement(t *testing.T) {
 	require.Equal(t, expectedIntermediateBlocks, intermediateBlocks)
 }
 
+func TestCalculateIntermediateServiceState(t *testing.T) {
+	preimageData := []byte{1, 2, 3}
+	preimageHash := crypto.HashData(preimageData)
+	preimageLength := PreimageLength(len(preimageData))
+	newTimeslot := jamtime.Timeslot(100)
+
+	preimages := block.PreimageExtrinsic{
+		{
+			ServiceIndex: 0,
+			Data:         preimageData,
+		},
+	}
+
+	serviceState := ServiceState{
+		block.ServiceId(0): {
+			PreimageLookup: map[crypto.Hash][]byte{
+				{4, 5, 6}:{7, 8, 9},
+			},
+			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
+				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
+			},
+		},
+	}
+
+	expectedServiceState := ServiceState{
+		block.ServiceId(0): {
+			PreimageLookup: map[crypto.Hash][]byte{
+				{4, 5, 6}: {7, 8, 9},
+				preimageHash:         preimageData,
+			},
+			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
+				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
+				{Hash: preimageHash, Length: preimageLength}:             {newTimeslot},
+			},
+		},
+	}
+
+	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	require.Equal(t, expectedServiceState, newServiceState)
+}
+
+func TestCalculateIntermediateServiceStateEmptyPreimages(t *testing.T) {
+	serviceState := ServiceState{
+		block.ServiceId(0): {
+			PreimageLookup: map[crypto.Hash][]byte{
+				{4, 5, 6}:{7, 8, 9},
+			},
+			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
+				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
+			},
+		},
+	}
+
+	expectedServiceState := serviceState
+
+	newServiceState := calculateIntermediateServiceState(block.PreimageExtrinsic{}, serviceState, jamtime.Timeslot(100))
+	require.Equal(t, expectedServiceState, newServiceState)
+}
+
+func TestCalculateIntermediateServiceStateNonExistentService(t *testing.T) {
+	preimageData := []byte{1, 2, 3}
+	newTimeslot := jamtime.Timeslot(100)
+
+	preimages := block.PreimageExtrinsic{
+		{
+			ServiceIndex: 1, // Non-existent service
+			Data:         preimageData,
+		},
+	}
+
+	serviceState := ServiceState{
+		block.ServiceId(0): {
+			PreimageLookup: map[crypto.Hash][]byte{
+				{4, 5, 6}:{7, 8, 9},
+			},
+			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
+				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
+			},
+		},
+	}
+
+	expectedServiceState := serviceState
+
+	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	require.Equal(t, expectedServiceState, newServiceState)
+}
+
+func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
+	preimageData1 := []byte{1, 2, 3}
+	preimageData2 := []byte{4, 5, 6}
+	preimageHash1 := crypto.HashData(preimageData1)
+	preimageHash2 := crypto.HashData(preimageData2)
+	preimageLength1 := PreimageLength(len(preimageData1))
+	preimageLength2 := PreimageLength(len(preimageData2))
+	newTimeslot := jamtime.Timeslot(100)
+
+	preimages := block.PreimageExtrinsic{
+		{
+			ServiceIndex: 0,
+			Data:         preimageData1,
+		},
+		{
+			ServiceIndex: 0,
+			Data:         preimageData2,
+		},
+	}
+
+	serviceState := ServiceState{
+		block.ServiceId(0): {
+			PreimageLookup: map[crypto.Hash][]byte{},
+			PreimageMeta:   map[PreImageMetaKey]PreimageHistoricalTimeslots{},
+		},
+	}
+
+	expectedServiceState := ServiceState{
+		block.ServiceId(0): {
+			PreimageLookup: map[crypto.Hash][]byte{
+				preimageHash1: preimageData1,
+				preimageHash2: preimageData2,
+			},
+			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
+				{Hash: preimageHash1, Length: preimageLength1}: {newTimeslot},
+				{Hash: preimageHash2, Length: preimageLength2}: {newTimeslot},
+			},
+		},
+	}
+
+	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	require.Equal(t, expectedServiceState, newServiceState)
+}
+
+func TestCalculateIntermediateServiceStateExistingPreimage(t *testing.T) {
+	existingPreimageData := []byte{1, 2, 3}
+	existingPreimageHash := crypto.HashData(existingPreimageData)
+	newPreimageData := []byte{4, 5, 6}
+	newTimeslot := jamtime.Timeslot(100)
+
+	preimages := block.PreimageExtrinsic{
+		{
+			ServiceIndex: 0,
+			Data:         existingPreimageData,
+		},
+		{
+			ServiceIndex: 0,
+			Data:         newPreimageData,
+		},
+	}
+
+	serviceState := ServiceState{
+		block.ServiceId(0): {
+			PreimageLookup: map[crypto.Hash][]byte{
+				existingPreimageHash: existingPreimageData,
+			},
+			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
+				{Hash: existingPreimageHash, Length: PreimageLength(len(existingPreimageData))}: {jamtime.Timeslot(50)},
+			},
+		},
+	}
+
+	expectedServiceState := ServiceState{
+		block.ServiceId(0): {
+			PreimageLookup: map[crypto.Hash][]byte{
+				existingPreimageHash:         existingPreimageData,
+				crypto.HashData(newPreimageData): newPreimageData,
+			},
+			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
+				{Hash: existingPreimageHash, Length: PreimageLength(len(existingPreimageData))}: {jamtime.Timeslot(50)},
+				{Hash: crypto.HashData(newPreimageData), Length: PreimageLength(len(newPreimageData))}: {newTimeslot},
+			},
+		},
+	}
+
+	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	require.Equal(t, expectedServiceState, newServiceState)
+}
+
+func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
+	preimageData := []byte{1, 2, 3}
+	preimageHash := crypto.HashData(preimageData)
+	newTimeslot := jamtime.Timeslot(100)
+
+	preimages := block.PreimageExtrinsic{
+		{
+			ServiceIndex: 0,
+			Data:         preimageData,
+		},
+	}
+
+	serviceState := ServiceState{
+		block.ServiceId(0): {
+			PreimageLookup: map[crypto.Hash][]byte{},
+			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
+				{Hash: preimageHash, Length: PreimageLength(len(preimageData))}: {jamtime.Timeslot(50)},
+			},
+		},
+	}
+
+	expectedServiceState := serviceState // Should remain unchanged
+
+	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	require.Equal(t, expectedServiceState, newServiceState)
+}
+
 func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments int) block.Verdict {
     verdict := block.Verdict{
         ReportHash: reportHash,
