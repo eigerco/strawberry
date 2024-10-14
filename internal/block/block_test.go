@@ -65,7 +65,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		{
 			ReportHash: testutils.RandomHash(t),
 			EpochIndex: uint32(1),
-			Judgements: [ValidatorsSuperMajority]Judgement{
+			Judgements: [common.ValidatorsSuperMajority]Judgement{
 				{
 					IsValid:        true,
 					ValidatorIndex: uint16(2),

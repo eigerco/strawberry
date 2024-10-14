@@ -98,7 +98,26 @@ func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, servic
 
 // calculateIntermediateCoreAssignmentsFromExtrinsics Equation 25: ρ† ≺ (ED , ρ)
 func calculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeExtrinsic, coreAssignments CoreAssignments) CoreAssignments {
-	return CoreAssignments{}
+	newAssignments := coreAssignments // Create a copy of the current assignments
+
+	// Process each verdict in the disputes
+	for _, verdict := range disputes.Verdicts {
+		reportHash := verdict.ReportHash
+		positiveJudgments := block.CountPositiveJudgments(verdict.Judgements)
+
+		// If less than 2/3 majority of positive judgments, clear the assignment for matching cores
+		if positiveJudgments < common.ValidatorsSuperMajority {
+			for c := uint32(0); c < common.TotalNumberOfCores; c++ {
+				if newAssignments[c].WorkReport != nil {
+					if hash, err := newAssignments[c].WorkReport.Hash(); err == nil && hash == reportHash {
+						newAssignments[c] = Assignment{} // Clear the assignment
+					}
+				}
+			}
+		}
+	}
+
+	return newAssignments
 }
 
 // calculateIntermediateCoreAssignmentsFromAvailability Equation 26: ρ‡ ≺ (EA, ρ†)
@@ -256,7 +275,7 @@ func processVerdict(judgements *Judgements, verdict block.Verdict) {
 
 	switch positiveJudgments {
 	// Equation 111: ψ'g ≡ ψg ∪ {r | {r, ⌊2/3V⌋ + 1} ∈ V}
-	case block.ValidatorsSuperMajority:
+	case common.ValidatorsSuperMajority:
 		judgements.GoodWorkReports = addUniqueHash(judgements.GoodWorkReports, verdict.ReportHash)
 		// Equation 112: ψ'b ≡ ψb ∪ {r | {r, 0} ∈ V}
 	case 0:

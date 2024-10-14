@@ -6,8 +6,6 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 )
 
-const ValidatorsSuperMajority = (2 * common.NumberOfValidators / 3) + 1 // 2/3V + 1
-
 type DisputeExtrinsic struct {
 	Verdicts []Verdict
 	Culprits []Culprit
@@ -17,7 +15,7 @@ type DisputeExtrinsic struct {
 type Verdict struct {
 	ReportHash crypto.Hash                       // H, hash of the work report
 	EpochIndex uint32                            // ⌊τ/E⌋ - N2, epoch index
-	Judgements  [ValidatorsSuperMajority]Judgement // ⟦{⊺,⊥},NV,E⟧⌊2/3V⌋+1
+	Judgements  [common.ValidatorsSuperMajority]Judgement // ⟦{⊺,⊥},NV,E⟧⌊2/3V⌋+1
 }
 
 type Culprit struct {
@@ -38,4 +36,15 @@ type Judgement struct {
 	IsValid        bool                    // v: {⊺,⊥}
 	ValidatorIndex uint16                  // i: NV
 	Signature      crypto.Ed25519Signature // s: E
+}
+
+// CountPositiveJudgments counts the number of positive judgments in a verdict
+func CountPositiveJudgments(judgments [common.ValidatorsSuperMajority]Judgement) int {
+	count := 0
+	for _, judgment := range judgments {
+		if judgment.IsValid {
+			count++
+		}
+	}
+	return count
 }
