@@ -1,7 +1,9 @@
 package block
 
 import (
+	"encoding/json"
 	"fmt"
+
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -152,4 +154,15 @@ func NewErrorWorkResult(serviceId ServiceId, serviceHashCode, payloadHash crypto
 		GasPrioritizationRatio: gasPrioritizationRatio,
 		Output:                 WorkResultOutputOrError{errorResult},
 	}
+}
+
+func (w *WorkReport)Hash()(crypto.Hash, error) {
+	if w == nil {
+		return crypto.Hash{}, nil
+	}
+	jsonData, err := json.Marshal(w)
+	if err != nil {
+		return crypto.Hash{}, err
+	}
+	return crypto.HashData(jsonData), nil
 }

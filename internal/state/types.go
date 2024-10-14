@@ -9,7 +9,7 @@ import (
 )
 
 type Assignment struct {
-	WorkReport block.WorkReport // Work-Report (w)
+	WorkReport *block.WorkReport // Work-Report (w)
 	Time       jamtime.Timeslot // time at which work-report was reported but not yet accumulated (t)
 }
 

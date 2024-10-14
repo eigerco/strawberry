@@ -148,7 +148,7 @@ func TestAddUniqueEdPubKey(t *testing.T) {
 
 func TestProcessVerdictGood(t *testing.T) {
     judgements := &Judgements{}
-    verdict := createVerdictWithJudgments(crypto.Hash{1}, block.ValidatorsSuperMajority)
+    verdict := createVerdictWithJudgments(crypto.Hash{1}, common.ValidatorsSuperMajority)
     
     processVerdict(judgements, verdict)
     
@@ -185,7 +185,7 @@ func TestProcessVerdictWonky(t *testing.T) {
 func TestProcessVerdictMultiple(t *testing.T) {
     judgements := &Judgements{}
     
-    processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{1}, block.ValidatorsSuperMajority))
+    processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{1}, common.ValidatorsSuperMajority))
     processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{2}, 0))
     processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{3}, common.NumberOfValidators/3))
     
@@ -211,8 +211,8 @@ func TestCalculateNewJudgements(t *testing.T) {
         GoodWorkReports: []crypto.Hash{{2}},
     }
 
-    var judgements [block.ValidatorsSuperMajority]block.Judgement
-    for i := 0; i < block.ValidatorsSuperMajority; i++ {
+    var judgements [common.ValidatorsSuperMajority]block.Judgement
+    for i := 0; i < common.ValidatorsSuperMajority; i++ {
         judgements[i] = block.Judgement{IsValid: true, ValidatorIndex: uint16(i)}
     }
 
@@ -490,13 +490,45 @@ func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
-func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments int) block.Verdict {
-    verdict := block.Verdict{
-        ReportHash: reportHash,
-        Judgements:  [block.ValidatorsSuperMajority]block.Judgement{},
-    }
-    for i := 0; i < positiveJudgments; i++ {
-        verdict.Judgements[i] = block.Judgement{IsValid: true}
-    }
-    return verdict
+func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
+	// Create WorkReports with known hashes
+	workReport1 := &block.WorkReport{CoreIndex: 0}
+	workReport2 := &block.WorkReport{CoreIndex: 1}
+
+	hash1, _ := workReport1.Hash()
+	hash2, _ := workReport2.Hash()
+
+	coreAssignments := CoreAssignments{
+		{WorkReport: workReport1},
+		{WorkReport: workReport2},
+	}
+
+	disputes := block.DisputeExtrinsic{
+		Verdicts: []block.Verdict{
+			createVerdictWithJudgments(hash1, common.ValidatorsSuperMajority-1),
+			createVerdictWithJudgments(hash2, common.ValidatorsSuperMajority),
+		},
+	}
+
+	expectedAssignments := CoreAssignments{
+		{WorkReport: nil}, // Cleared due to less than super majority
+		{WorkReport: workReport2},
+	}
+
+	newAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(disputes, coreAssignments)
+	require.Equal(t, expectedAssignments, newAssignments)
+}
+
+func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16) block.Verdict {
+	var judgments [common.ValidatorsSuperMajority]block.Judgement // Use array instead of slice
+	for i := uint16(0); i < positiveJudgments; i++ {
+		judgments[i] = block.Judgement{
+			IsValid:        i < positiveJudgments,
+			ValidatorIndex: i,
+		}
+	}
+	return block.Verdict{
+		ReportHash: reportHash,
+		Judgements: judgments,
+	}
 }

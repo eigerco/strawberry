@@ -106,7 +106,7 @@ func RandomCoreAssignments(t *testing.T) CoreAssignments {
 	var assignments CoreAssignments
 	for i := range assignments {
 		assignments[i] = Assignment{
-			WorkReport: block.WorkReport{
+			WorkReport: &block.WorkReport{
 				WorkPackageSpecification: block.WorkPackageSpecification{WorkPackageHash: testutils.RandomHash(t)},
 				RefinementContext: block.RefinementContext{
 					Anchor:                  block.RefinementContextAnchor{HeaderHash: testutils.RandomHash(t)},
