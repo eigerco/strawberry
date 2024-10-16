@@ -63,10 +63,10 @@ func (i *instance) deductGasForOutOfBoundsError() error {
 	}
 
 	if i.GasRemaining() < gasCost {
-		return errOutOfGas
+		return polkavm.ErrOutOfGas
 	}
 
-	i.deductGas(gasCost)
+	i.DeductGas(gasCost)
 
 	return nil
 }
@@ -175,7 +175,7 @@ func (i *instance) NextInstruction() (instruction polkavm.Instruction, err error
 		if !ok {
 			return instruction, fmt.Errorf("trap opcode not defined in GasCosts map")
 		}
-		i.deductGas(gasCost)
+		i.DeductGas(gasCost)
 
 		return instruction, &TrapError{fmt.Errorf("unexpected program termination")}
 	}
@@ -188,10 +188,10 @@ func (i *instance) NextInstruction() (instruction polkavm.Instruction, err error
 		return instruction, fmt.Errorf("unknown opcode: %v", instruction.Opcode)
 	}
 	if i.gasRemaining < gasCost {
-		return instruction, errOutOfGas
+		return instruction, polkavm.ErrOutOfGas
 	}
 
-	i.deductGas(gasCost)
+	i.DeductGas(gasCost)
 	return instruction, nil
 }
 
@@ -199,7 +199,7 @@ func (i *instance) NextOffsets() {
 	i.instructionOffset += i.instructionLength
 	i.instructionCounter += 1
 }
-func (i *instance) deductGas(cost int64) {
+func (i *instance) DeductGas(cost int64) {
 	i.gasRemaining -= cost
 }
 
