@@ -53,47 +53,47 @@ func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, servic
 	// ⎩ δ†[s]l[H(p), |p|] = [τ′]
 
 	// Shallow copy of the entire state
-    newState := make(ServiceState, len(serviceState))
-    for k, v := range serviceState {
-        newState[k] = v
-    }
+	newState := make(ServiceState, len(serviceState))
+	for k, v := range serviceState {
+		newState[k] = v
+	}
 
-    for _, preimage := range preimages {
-        serviceId := block.ServiceId(preimage.ServiceIndex)
-        account, exists := newState[serviceId]
-        if !exists {
-            continue
-        }
+	for _, preimage := range preimages {
+		serviceId := block.ServiceId(preimage.ServiceIndex)
+		account, exists := newState[serviceId]
+		if !exists {
+			continue
+		}
 
-        preimageHash := crypto.HashData(preimage.Data)
-        preimageLength := PreimageLength(len(preimage.Data))
+		preimageHash := crypto.HashData(preimage.Data)
+		preimageLength := PreimageLength(len(preimage.Data))
 
-        // Check conditions from equation 155
+		// Check conditions from equation 155
 		// Eq. 155: ∀⎧⎩s, p⎫⎭ ∈ EP : K(δ[s]p) ∌ H(p) ∧ δ[s]l[⎧⎩H(p), |p|⎫⎭] = []
 		// For all preimages: hash not in lookup and no existing metadata
-        if _, exists := account.PreimageLookup[preimageHash]; exists {
-            continue // Skip if preimage already exists
-        }
-        metaKey := PreImageMetaKey{Hash: preimageHash, Length: preimageLength}
-        if existingMeta, exists := account.PreimageMeta[metaKey]; exists && len(existingMeta) > 0 {
-            continue // Skip if metadata already exists and is not empty
-        }
+		if _, exists := account.PreimageLookup[preimageHash]; exists {
+			continue // Skip if preimage already exists
+		}
+		metaKey := PreImageMetaKey{Hash: preimageHash, Length: preimageLength}
+		if existingMeta, exists := account.PreimageMeta[metaKey]; exists && len(existingMeta) > 0 {
+			continue // Skip if metadata already exists and is not empty
+		}
 
-        // If checks pass, add the new preimage
-        if account.PreimageLookup == nil {
-            account.PreimageLookup = make(map[crypto.Hash][]byte)
-        }
-        account.PreimageLookup[preimageHash] = preimage.Data
+		// If checks pass, add the new preimage
+		if account.PreimageLookup == nil {
+			account.PreimageLookup = make(map[crypto.Hash][]byte)
+		}
+		account.PreimageLookup[preimageHash] = preimage.Data
 
-        if account.PreimageMeta == nil {
-            account.PreimageMeta = make(map[PreImageMetaKey]PreimageHistoricalTimeslots)
-        }
-        account.PreimageMeta[metaKey] = []jamtime.Timeslot{newTimeslot}
+		if account.PreimageMeta == nil {
+			account.PreimageMeta = make(map[PreImageMetaKey]PreimageHistoricalTimeslots)
+		}
+		account.PreimageMeta[metaKey] = []jamtime.Timeslot{newTimeslot}
 
-        newState[serviceId] = account
-    }
+		newState[serviceId] = account
+	}
 
-    return newState
+	return newState
 }
 
 // calculateIntermediateCoreAssignmentsFromExtrinsics Equation 25: ρ† ≺ (ED , ρ)
@@ -120,9 +120,51 @@ func calculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeEx
 	return newAssignments
 }
 
-// calculateIntermediateCoreAssignmentsFromAvailability Equation 26: ρ‡ ≺ (EA, ρ†)
+// calculateIntermediateCoreAssignmentsFromAvailability implements equation 26: ρ‡ ≺ (EA, ρ†)
+// It calculates the intermediate core assignments based on availability assurances.
 func calculateIntermediateCoreAssignmentsFromAvailability(assurances block.AssurancesExtrinsic, coreAssignments CoreAssignments) CoreAssignments {
-	return CoreAssignments{}
+    // Initialize availability count for each core
+    availabilityCounts := make([]int, common.TotalNumberOfCores)
+
+    // Process each assurance in the AssurancesExtrinsic (EA)
+    for _, assurance := range assurances {
+        // Check the availability status for each core in this assurance
+        for coreIndex := uint32(0); coreIndex < common.TotalNumberOfCores; coreIndex++ {
+            // Calculate which byte and bit within the Bitfield correspond to this core
+            byteIndex := coreIndex / 8
+            bitIndex := coreIndex % 8
+
+            // Check if the bit corresponding to this core is set (1) in the Bitfield
+            if assurance.Bitfield[byteIndex]&(1<<bitIndex) != 0 {
+                // If set, increment the availability count for this core
+                availabilityCounts[coreIndex]++
+            }
+        }
+    }
+
+    // Create new CoreAssignments (ρ‡)
+    var newAssignments CoreAssignments
+
+    // Calculate the availability threshold (2/3 of validators)
+    // This implements part of equation 129: ∑a∈EA av[c] > 2/3 V
+    availabilityThreshold := (2 * common.NumberOfValidators) / 3
+
+    // Update assignments based on availability
+    // This implements equation 130: ∀c ∈ NC : ρ‡[c] ≡ { ∅ if ρ[c]w ∈ W, ρ†[c] otherwise }
+    for coreIndex := uint32(0); coreIndex < common.TotalNumberOfCores; coreIndex++ {
+        if availabilityCounts[coreIndex] > availabilityThreshold {
+            // If the availability count exceeds the threshold, keep the assignment
+            // This corresponds to ρ[c]w ∈ W in equation 129
+            newAssignments[coreIndex] = coreAssignments[coreIndex]
+        } else {
+            // If the availability count doesn't exceed the threshold, clear the assignment
+            // This corresponds to the ∅ case in equation 130
+            newAssignments[coreIndex] = Assignment{}
+        }
+    }
+
+    // Return the new intermediate CoreAssignments (ρ‡)
+    return newAssignments
 }
 
 // Final State Calculation Functions

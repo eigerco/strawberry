@@ -123,119 +123,119 @@ func TestCaculateNewSafroleStateWhenNotNewEpoch(t *testing.T) {
 }
 
 func TestAddUniqueHash(t *testing.T) {
-    slice := []crypto.Hash{{1}, {2}, {3}}
-    
-    newSlice := addUniqueHash(slice, crypto.Hash{2})
-    assert.Len(t, newSlice, 3, "Slice length should remain 3 when adding existing hash")
+	slice := []crypto.Hash{{1}, {2}, {3}}
 
-    newSlice = addUniqueHash(slice, crypto.Hash{4})
-    assert.Len(t, newSlice, 4, "Slice length should be 4 after adding new hash")
-    assert.Equal(t, crypto.Hash{4}, newSlice[3], "Last element should be the newly added hash")
+	newSlice := addUniqueHash(slice, crypto.Hash{2})
+	assert.Len(t, newSlice, 3, "Slice length should remain 3 when adding existing hash")
+
+	newSlice = addUniqueHash(slice, crypto.Hash{4})
+	assert.Len(t, newSlice, 4, "Slice length should be 4 after adding new hash")
+	assert.Equal(t, crypto.Hash{4}, newSlice[3], "Last element should be the newly added hash")
 }
 
 func TestAddUniqueEdPubKey(t *testing.T) {
-    key1 := ed25519.PublicKey([]byte{1, 2, 3})
-    key2 := ed25519.PublicKey([]byte{4, 5, 6})
-    slice := []ed25519.PublicKey{key1}
+	key1 := ed25519.PublicKey([]byte{1, 2, 3})
+	key2 := ed25519.PublicKey([]byte{4, 5, 6})
+	slice := []ed25519.PublicKey{key1}
 
-    newSlice := addUniqueEdPubKey(slice, key1)
-    assert.Len(t, newSlice, 1, "Slice length should remain 1 when adding existing key")
+	newSlice := addUniqueEdPubKey(slice, key1)
+	assert.Len(t, newSlice, 1, "Slice length should remain 1 when adding existing key")
 
-    newSlice = addUniqueEdPubKey(slice, key2)
-    assert.Len(t, newSlice, 2, "Slice length should be 2 after adding new key")
-    assert.Equal(t, key2, newSlice[1], "Last element should be the newly added key")
+	newSlice = addUniqueEdPubKey(slice, key2)
+	assert.Len(t, newSlice, 2, "Slice length should be 2 after adding new key")
+	assert.Equal(t, key2, newSlice[1], "Last element should be the newly added key")
 }
 
 func TestProcessVerdictGood(t *testing.T) {
-    judgements := &Judgements{}
-    verdict := createVerdictWithJudgments(crypto.Hash{1}, common.ValidatorsSuperMajority)
-    
-    processVerdict(judgements, verdict)
-    
-    assert.Len(t, judgements.GoodWorkReports, 1, "Should have 1 good work report")
-    assert.Equal(t, crypto.Hash{1}, judgements.GoodWorkReports[0], "Good work report should have hash {1}")
-    assert.Empty(t, judgements.BadWorkReports, "Should have no bad work reports")
-    assert.Empty(t, judgements.WonkyWorkReports, "Should have no wonky work reports")
+	judgements := &Judgements{}
+	verdict := createVerdictWithJudgments(crypto.Hash{1}, common.ValidatorsSuperMajority)
+
+	processVerdict(judgements, verdict)
+
+	assert.Len(t, judgements.GoodWorkReports, 1, "Should have 1 good work report")
+	assert.Equal(t, crypto.Hash{1}, judgements.GoodWorkReports[0], "Good work report should have hash {1}")
+	assert.Empty(t, judgements.BadWorkReports, "Should have no bad work reports")
+	assert.Empty(t, judgements.WonkyWorkReports, "Should have no wonky work reports")
 }
 
 func TestProcessVerdictBad(t *testing.T) {
-    judgements := &Judgements{}
-    verdict := createVerdictWithJudgments(crypto.Hash{2}, 0)
-    
-    processVerdict(judgements, verdict)
-    
-    assert.Len(t, judgements.BadWorkReports, 1, "Should have 1 bad work report")
-    assert.Equal(t, crypto.Hash{2}, judgements.BadWorkReports[0], "Bad work report should have hash {2}")
-    assert.Empty(t, judgements.GoodWorkReports, "Should have no good work reports")
-    assert.Empty(t, judgements.WonkyWorkReports, "Should have no wonky work reports")
+	judgements := &Judgements{}
+	verdict := createVerdictWithJudgments(crypto.Hash{2}, 0)
+
+	processVerdict(judgements, verdict)
+
+	assert.Len(t, judgements.BadWorkReports, 1, "Should have 1 bad work report")
+	assert.Equal(t, crypto.Hash{2}, judgements.BadWorkReports[0], "Bad work report should have hash {2}")
+	assert.Empty(t, judgements.GoodWorkReports, "Should have no good work reports")
+	assert.Empty(t, judgements.WonkyWorkReports, "Should have no wonky work reports")
 }
 
 func TestProcessVerdictWonky(t *testing.T) {
-    judgements := &Judgements{}
-    verdict := createVerdictWithJudgments(crypto.Hash{3}, common.NumberOfValidators/3)
-    
-    processVerdict(judgements, verdict)
-    
-    assert.Len(t, judgements.WonkyWorkReports, 1, "Should have 1 wonky work report")
-    assert.Equal(t, crypto.Hash{3}, judgements.WonkyWorkReports[0], "Wonky work report should have hash {3}")
-    assert.Empty(t, judgements.GoodWorkReports, "Should have no good work reports")
-    assert.Empty(t, judgements.BadWorkReports, "Should have no bad work reports")
+	judgements := &Judgements{}
+	verdict := createVerdictWithJudgments(crypto.Hash{3}, common.NumberOfValidators/3)
+
+	processVerdict(judgements, verdict)
+
+	assert.Len(t, judgements.WonkyWorkReports, 1, "Should have 1 wonky work report")
+	assert.Equal(t, crypto.Hash{3}, judgements.WonkyWorkReports[0], "Wonky work report should have hash {3}")
+	assert.Empty(t, judgements.GoodWorkReports, "Should have no good work reports")
+	assert.Empty(t, judgements.BadWorkReports, "Should have no bad work reports")
 }
 
 func TestProcessVerdictMultiple(t *testing.T) {
-    judgements := &Judgements{}
-    
-    processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{1}, common.ValidatorsSuperMajority))
-    processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{2}, 0))
-    processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{3}, common.NumberOfValidators/3))
-    
-    assert.Len(t, judgements.GoodWorkReports, 1, "Should have 1 good work report")
-    assert.Len(t, judgements.BadWorkReports, 1, "Should have 1 bad work report")
-    assert.Len(t, judgements.WonkyWorkReports, 1, "Should have 1 wonky work report")
+	judgements := &Judgements{}
+
+	processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{1}, common.ValidatorsSuperMajority))
+	processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{2}, 0))
+	processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{3}, common.NumberOfValidators/3))
+
+	assert.Len(t, judgements.GoodWorkReports, 1, "Should have 1 good work report")
+	assert.Len(t, judgements.BadWorkReports, 1, "Should have 1 bad work report")
+	assert.Len(t, judgements.WonkyWorkReports, 1, "Should have 1 wonky work report")
 }
 
 func TestProcessOffender(t *testing.T) {
-    judgements := &Judgements{}
-    key := ed25519.PublicKey([]byte{1, 2, 3})
+	judgements := &Judgements{}
+	key := ed25519.PublicKey([]byte{1, 2, 3})
 
-    processOffender(judgements, key)
-    assert.Len(t, judgements.OffendingValidators, 1, "Should have 1 offending validator")
+	processOffender(judgements, key)
+	assert.Len(t, judgements.OffendingValidators, 1, "Should have 1 offending validator")
 
-    processOffender(judgements, key) // Add same key again
-    assert.Len(t, judgements.OffendingValidators, 1, "Should still have 1 offending validator after adding duplicate")
+	processOffender(judgements, key) // Add same key again
+	assert.Len(t, judgements.OffendingValidators, 1, "Should still have 1 offending validator after adding duplicate")
 }
 
 func TestCalculateNewJudgements(t *testing.T) {
-    stateJudgements := Judgements{
-        BadWorkReports:  []crypto.Hash{{1}},
-        GoodWorkReports: []crypto.Hash{{2}},
-    }
+	stateJudgements := Judgements{
+		BadWorkReports:  []crypto.Hash{{1}},
+		GoodWorkReports: []crypto.Hash{{2}},
+	}
 
-    var judgements [common.ValidatorsSuperMajority]block.Judgement
-    for i := 0; i < common.ValidatorsSuperMajority; i++ {
-        judgements[i] = block.Judgement{IsValid: true, ValidatorIndex: uint16(i)}
-    }
+	var judgements [common.ValidatorsSuperMajority]block.Judgement
+	for i := 0; i < common.ValidatorsSuperMajority; i++ {
+		judgements[i] = block.Judgement{IsValid: true, ValidatorIndex: uint16(i)}
+	}
 
-    disputes := block.DisputeExtrinsic{
-        Verdicts: []block.Verdict{
-            {
-                ReportHash: crypto.Hash{3},
-                Judgements:  judgements,
-            },
-        },
-        Culprits: []block.Culprit{
-            {ValidatorEd25519PublicKey: ed25519.PublicKey([]byte{1, 2, 3})},
-        },
-        Faults: []block.Fault{
-            {ValidatorEd25519PublicKey: ed25519.PublicKey([]byte{4, 5, 6})},
-        },
-    }
+	disputes := block.DisputeExtrinsic{
+		Verdicts: []block.Verdict{
+			{
+				ReportHash: crypto.Hash{3},
+				Judgements: judgements,
+			},
+		},
+		Culprits: []block.Culprit{
+			{ValidatorEd25519PublicKey: ed25519.PublicKey([]byte{1, 2, 3})},
+		},
+		Faults: []block.Fault{
+			{ValidatorEd25519PublicKey: ed25519.PublicKey([]byte{4, 5, 6})},
+		},
+	}
 
-    newJudgements := calculateNewJudgements(disputes, stateJudgements)
+	newJudgements := calculateNewJudgements(disputes, stateJudgements)
 
-    assert.Len(t, newJudgements.BadWorkReports, 1, "Should have 1 bad work report")
-    assert.Len(t, newJudgements.GoodWorkReports, 2, "Should have 2 good work reports")
-    assert.Len(t, newJudgements.OffendingValidators, 2, "Should have 2 offending validators")
+	assert.Len(t, newJudgements.BadWorkReports, 1, "Should have 1 bad work report")
+	assert.Len(t, newJudgements.GoodWorkReports, 2, "Should have 2 good work reports")
+	assert.Len(t, newJudgements.OffendingValidators, 2, "Should have 2 offending validators")
 }
 
 func TestCalculateIntermediateBlockState(t *testing.T) {
@@ -303,7 +303,7 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 	serviceState := ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
-				{4, 5, 6}:{7, 8, 9},
+				{4, 5, 6}: {7, 8, 9},
 			},
 			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
 				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
@@ -314,12 +314,12 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 	expectedServiceState := ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
-				{4, 5, 6}: {7, 8, 9},
-				preimageHash:         preimageData,
+				{4, 5, 6}:    {7, 8, 9},
+				preimageHash: preimageData,
 			},
 			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
 				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
-				{Hash: preimageHash, Length: preimageLength}:             {newTimeslot},
+				{Hash: preimageHash, Length: preimageLength}:            {newTimeslot},
 			},
 		},
 	}
@@ -332,7 +332,7 @@ func TestCalculateIntermediateServiceStateEmptyPreimages(t *testing.T) {
 	serviceState := ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
-				{4, 5, 6}:{7, 8, 9},
+				{4, 5, 6}: {7, 8, 9},
 			},
 			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
 				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
@@ -360,7 +360,7 @@ func TestCalculateIntermediateServiceStateNonExistentService(t *testing.T) {
 	serviceState := ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
-				{4, 5, 6}:{7, 8, 9},
+				{4, 5, 6}: {7, 8, 9},
 			},
 			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
 				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
@@ -449,11 +449,11 @@ func TestCalculateIntermediateServiceStateExistingPreimage(t *testing.T) {
 	expectedServiceState := ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
-				existingPreimageHash:         existingPreimageData,
+				existingPreimageHash:             existingPreimageData,
 				crypto.HashData(newPreimageData): newPreimageData,
 			},
 			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
-				{Hash: existingPreimageHash, Length: PreimageLength(len(existingPreimageData))}: {jamtime.Timeslot(50)},
+				{Hash: existingPreimageHash, Length: PreimageLength(len(existingPreimageData))}:        {jamtime.Timeslot(50)},
 				{Hash: crypto.HashData(newPreimageData), Length: PreimageLength(len(newPreimageData))}: {newTimeslot},
 			},
 		},
@@ -519,8 +519,41 @@ func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 	require.Equal(t, expectedAssignments, newAssignments)
 }
 
+func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
+	testCases := []struct {
+		name           string
+		availableCores int
+		validators     int
+		expectedKept   int
+	}{
+		{"No Cores Available, All Validators", 0, common.NumberOfValidators, 0},
+		{"No Cores Available, No Validators", 0, 0, 0},
+		{"Half Cores Available, No Validators", common.TotalNumberOfCores / 2, 0, 0},
+		{"Half Cores Available, 2/3 Validators", common.TotalNumberOfCores / 2, (2 * common.NumberOfValidators / 3), 0},
+		{"Half Cores Available, 2/3+1 Validators", common.TotalNumberOfCores / 2, (2 * common.NumberOfValidators / 3) + 1, common.TotalNumberOfCores / 2},
+		{"Half Cores Available, All Validators", common.TotalNumberOfCores / 2, common.NumberOfValidators, common.TotalNumberOfCores / 2},
+		{"All Cores Available, All Validators", common.TotalNumberOfCores, common.NumberOfValidators, common.TotalNumberOfCores},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assurances := createAssuranceExtrinsic(tc.availableCores, tc.validators)
+			initialAssignments := createInitialAssignments()
+			newAssignments := calculateIntermediateCoreAssignmentsFromAvailability(assurances, initialAssignments)
+
+			keptCount := 0
+			for _, assignment := range newAssignments {
+				if assignment.WorkReport != nil {
+					keptCount++
+				}
+			}
+			require.Equal(t, tc.expectedKept, keptCount, "Number of kept assignments should match expected")
+		})
+	}
+}
+
 func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16) block.Verdict {
-	var judgments [common.ValidatorsSuperMajority]block.Judgement // Use array instead of slice
+	var judgments [common.ValidatorsSuperMajority]block.Judgement
 	for i := uint16(0); i < positiveJudgments; i++ {
 		judgments[i] = block.Judgement{
 			IsValid:        i < positiveJudgments,
@@ -531,4 +564,33 @@ func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16
 		ReportHash: reportHash,
 		Judgements: judgments,
 	}
+}
+
+func createInitialAssignments() CoreAssignments {
+	var initialAssignments CoreAssignments
+	for i := range initialAssignments {
+		initialAssignments[i] = Assignment{
+			WorkReport: &block.WorkReport{CoreIndex: uint16(i)},
+			Time:       jamtime.Timeslot(100),
+		}
+	}
+	return initialAssignments
+}
+
+func createAssuranceExtrinsic(availableCores int, validators int) block.AssurancesExtrinsic {
+	assurances := make(block.AssurancesExtrinsic, validators)
+	for i := 0; i < validators; i++ {
+		assurance := block.Assurance{
+			ValidatorIndex: uint16(i),
+		}
+
+		for j := 0; j < availableCores && j < common.TotalNumberOfCores; j++ {
+			byteIndex := j / 8
+			bitIndex := j % 8
+			assurance.Bitfield[byteIndex] |= 1 << bitIndex
+		}
+
+		assurances[i] = assurance
+	}
+	return assurances
 }
