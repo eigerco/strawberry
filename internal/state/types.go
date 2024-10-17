@@ -10,7 +10,7 @@ import (
 
 type Assignment struct {
 	WorkReport *block.WorkReport // Work-Report (w)
-	Time       jamtime.Timeslot // time at which work-report was reported but not yet accumulated (t)
+	Time       jamtime.Timeslot  // time at which work-report was reported but not yet accumulated (t)
 }
 
 type Judgements struct {
@@ -26,6 +26,15 @@ type PendingAuthorizersQueues [common.TotalNumberOfCores][PendingAuthorizersQueu
 
 type EntropyPool [EntropyPoolSize]crypto.Hash
 type CoreAuthorizersPool [common.TotalNumberOfCores][]crypto.Hash // TODO: Maximum length per core: MaxAuthorizersPerCore
+
+type WorkReportWithUnAccumulatedDependencies struct {
+	WorkReport   block.WorkReport
+	Dependencies map[crypto.Hash]struct{} // Set of Dependencies (Work-Package Hashes related to work report)
+}
+
+type AccumulationQueue [jamtime.TimeslotsPerEpoch][]WorkReportWithUnAccumulatedDependencies
+
+type AccumulationHistory [jamtime.TimeslotsPerEpoch]map[crypto.Hash]crypto.Hash
 
 // Context is an intermediate value for state transition calculations
 // TODO: Add relevant fields when state transitions are implemented

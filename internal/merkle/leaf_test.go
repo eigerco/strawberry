@@ -2,8 +2,8 @@ package merkle
 
 import (
 	"bytes"
+	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/blake2b"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +17,7 @@ func TestEncodeLeafNode(t *testing.T) {
 
 		assert.True(t, node.IsLeaf())
 		assert.True(t, node.IsEmbeddedLeaf())
-		assert.Equal(t, LeafNodeFlag|EmbeddedLeafFlag, node[0])
+		assert.Equal(t, LeafNodeFlag, node[0])
 		embeddedValueSize, err := node.GetEmbeddedValueSize()
 		assert.Equal(t, 0, embeddedValueSize)
 		require.NoError(t, err)
@@ -38,7 +38,7 @@ func TestEncodeLeafNode(t *testing.T) {
 
 		assert.True(t, node.IsLeaf())
 		assert.True(t, node.IsEmbeddedLeaf())
-		assert.Equal(t, LeafNodeFlag|EmbeddedLeafFlag|byte(len(value)), node[0])
+		assert.Equal(t, LeafNodeFlag|byte(len(value)), node[0])
 		embeddedValueSize, err := node.GetEmbeddedValueSize()
 		require.NoError(t, err)
 		assert.Equal(t, len(value), embeddedValueSize)
@@ -65,7 +65,7 @@ func TestEncodeLeafNode(t *testing.T) {
 
 		assert.True(t, node.IsLeaf())
 		assert.True(t, node.IsEmbeddedLeaf())
-		assert.Equal(t, LeafNodeFlag|EmbeddedLeafFlag|byte(EmbeddedValueMaxSize), node[0])
+		assert.Equal(t, LeafNodeFlag|byte(EmbeddedValueMaxSize), node[0])
 		embeddedValueSize, err := node.GetEmbeddedValueSize()
 		require.NoError(t, err)
 		assert.Equal(t, EmbeddedValueMaxSize, embeddedValueSize)
@@ -87,7 +87,7 @@ func TestEncodeLeafNode(t *testing.T) {
 
 		assert.True(t, node.IsLeaf())
 		assert.False(t, node.IsEmbeddedLeaf())
-		assert.Equal(t, LeafNodeFlag, node[0])
+		assert.Equal(t, LeafNodeFlag|NotEmbeddedLeafFlag, node[0])
 
 		gotKey, err := node.GetLeafKey()
 		require.NoError(t, err)
@@ -98,7 +98,7 @@ func TestEncodeLeafNode(t *testing.T) {
 
 		valueHash, err := node.GetLeafValueHash()
 		require.NoError(t, err)
-		expectedHash := blake2b.Sum256(value)
+		expectedHash := crypto.HashData(value)
 		assert.Equal(t, expectedHash[:], valueHash[:])
 	})
 
