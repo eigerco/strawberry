@@ -33,7 +33,7 @@ func TestGasRemaining(t *testing.T) {
 	err = host_call.GasRemaining(instance)
 	assert.NoError(t, err)
 
-	expectedGas := initialGas - host_call.GasCost
+	expectedGas := initialGas - host_call.GasRemainingCost
 
 	assert.Equal(t, expectedGas, instance.GasRemaining())
 	assert.Equal(t, expectedGas, (int64(instance.GetReg(polkavm.A1))<<32)|int64(instance.GetReg(polkavm.A0)))
