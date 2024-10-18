@@ -52,7 +52,7 @@ func TestInstance_Execute(t *testing.T) {
 
 	// not enough gas
 	_, _, err = m.Run("add_numbers", 9, 1, 10)
-	require.ErrorIs(t, err, errOutOfGas)
+	require.ErrorIs(t, err, polkavm.ErrOutOfGas)
 }
 
 func getThirdNumber(args ...uint32) (uint32, error) {
