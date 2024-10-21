@@ -3,7 +3,6 @@ package state
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/merkle"
-	"golang.org/x/crypto/blake2b"
 )
 
 // MerklizeState computes the Merkle root of a given state.
@@ -21,12 +20,12 @@ func MerklizeState(s State) (crypto.Hash, error) {
 	}
 
 	// Recursively compute the Merkle root
-	rootHash := merklizeRecursive(serializedState, keys, 0)
+	rootHash := merklize(serializedState, keys, 0)
 	return rootHash, nil
 }
 
-// merklizeRecursive builds a Merkle tree recursively
-func merklizeRecursive(serializedState map[crypto.Hash][]byte, keys []crypto.Hash, bitIndex int) crypto.Hash {
+// merklize builds a Merkle tree recursively
+func merklize(serializedState map[crypto.Hash][]byte, keys []crypto.Hash, bitIndex int) crypto.Hash {
 	// If empty, return a zero hash
 	if len(keys) == 0 {
 		return crypto.Hash{}
@@ -40,7 +39,7 @@ func merklizeRecursive(serializedState map[crypto.Hash][]byte, keys []crypto.Has
 		// Encode the leaf node
 		leafNode := merkle.EncodeLeafNode(merkle.StateKey(key), value)
 		// Hash the leaf node
-		return blake2b.Sum256(leafNode[:])
+		return crypto.HashData(reverseBitsInByteArray(leafNode[:]))
 	}
 
 	// Split keys into left and right based on the current bit
@@ -54,13 +53,13 @@ func merklizeRecursive(serializedState map[crypto.Hash][]byte, keys []crypto.Has
 	}
 
 	// Compute hashes for both halves
-	leftHash := merklizeRecursive(serializedState, leftKeys, bitIndex+1)
-	rightHash := merklizeRecursive(serializedState, rightKeys, bitIndex+1)
+	leftHash := merklize(serializedState, leftKeys, bitIndex+1)
+	rightHash := merklize(serializedState, rightKeys, bitIndex+1)
 
 	// Combine the two child hashes into a branch node
 	branchNode := merkle.EncodeBranchNode(leftHash, rightHash)
 	// Hash the branch node
-	return blake2b.Sum256(branchNode[:])
+	return crypto.HashData(reverseBitsInByteArray(branchNode[:]))
 }
 
 // getBit extracts the bit at the given position in the byte array
@@ -68,4 +67,22 @@ func getBit(data []byte, bitIndex int) byte {
 	byteIndex := bitIndex / 8
 	bitPosition := bitIndex % 8
 	return (data[byteIndex] >> (7 - bitPosition)) & 1
+}
+
+// reverseBitsInByte reverses the bits in a single byte
+func reverseBitsInByte(b byte) byte {
+	var reversed byte
+	for i := 0; i < 8; i++ {
+		reversed = (reversed << 1) | (b & 1) // Shift the reversed byte and extract the LSB of b
+		b >>= 1                              // Shift b to the right to process the next bit
+	}
+	return reversed
+}
+
+// reverseBitsInByteArray reverses the bits in each byte of a byte array
+func reverseBitsInByteArray(arr []byte) []byte {
+	for i := range arr {
+		arr[i] = reverseBitsInByte(arr[i]) // Reverse bits in each byte
+	}
+	return arr
 }

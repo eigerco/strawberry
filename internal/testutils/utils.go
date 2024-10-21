@@ -16,6 +16,10 @@ func RandomTimeslot() jamtime.Timeslot {
 	return jamtime.Timeslot(RandomUint32())
 }
 
+func RandomUint16() uint16 {
+	return uint16(RandomUint32() & 0xFFFF)
+}
+
 func RandomUint32() uint32 {
 	return mathRand.Uint32()
 }

@@ -232,11 +232,37 @@ func (bw *byteWriter) sortMapKeys(keys []reflect.Value) error {
 		sort.Slice(keys, func(i, j int) bool {
 			return !keys[i].Bool() && keys[j].Bool()
 		})
+	case reflect.Array:
+		// Check if the array is a byte array ([N]byte)
+		if keys[0].Type().Elem().Kind() == reflect.Uint8 {
+			sort.Slice(keys, func(i, j int) bool {
+				return compareByteArrays(keys[i], keys[j])
+			})
+		} else {
+			return fmt.Errorf("unsupported array type: %v", keys[0].Type())
+		}
 	default:
 		return fmt.Errorf(ErrEncodingMapFieldKeyType, keys[0].Kind())
 	}
 
 	return nil
+}
+
+// compareByteArrays compares two reflect.Value arrays (assumed to be byte arrays) lexicographically
+func compareByteArrays(a, b reflect.Value) bool {
+	// Convert reflect.Value arrays to byte slices
+	aBytes := reflectToByteSlice(a)
+	bBytes := reflectToByteSlice(b)
+	return bytes.Compare(aBytes, bBytes) < 0
+}
+
+// reflectToByteSlice converts a reflect.Value of an array (e.g., [32]byte) to a []byte
+func reflectToByteSlice(v reflect.Value) []byte {
+	byteSlice := make([]byte, v.Len())
+	for i := 0; i < v.Len(); i++ {
+		byteSlice[i] = byte(v.Index(i).Uint()) // Convert each element to a byte
+	}
+	return byteSlice
 }
 
 func (bw *byteWriter) encodeBool(l bool) error {

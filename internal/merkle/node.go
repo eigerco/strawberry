@@ -10,8 +10,8 @@ const (
 	// LeafNodeFlag indicates a leaf node.
 	LeafNodeFlag byte = 0b10000000
 
-	// EmbeddedLeafFlag indicates an embedded leaf node.
-	EmbeddedLeafFlag byte = 0b01000000
+	// NotEmbeddedLeafFlag indicates an embedded leaf node.
+	NotEmbeddedLeafFlag byte = 0b01000000
 
 	// ValueSizeMask extracts the embedded value size.
 	ValueSizeMask byte = 0b00111111
@@ -46,7 +46,7 @@ func (n Node) IsBranch() bool {
 // IsEmbeddedLeaf returns true if the node is an embedded-value leaf node, false otherwise.
 // A node is an embedded-value leaf if it's a leaf and its second bit is 1.
 func (n Node) IsEmbeddedLeaf() bool {
-	return n.IsLeaf() && n[0]&EmbeddedLeafFlag != 0
+	return n.IsLeaf() && n[0]&NotEmbeddedLeafFlag == 0
 }
 
 // GetEmbeddedValueSize returns the size of the embedded value if the node is an embedded-value leaf.

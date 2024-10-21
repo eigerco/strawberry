@@ -19,7 +19,7 @@ func EncodeBranchNode(left, right crypto.Hash) Node {
 	var node Node
 
 	// Clear only the least significant bit of the first byte
-	node[0] = left[0] & 0b11111110
+	node[0] = left[0] & 0b01111111
 
 	// Copy the rest of l
 	copy(node[1:32], left[1:])
