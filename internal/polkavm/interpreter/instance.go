@@ -2,7 +2,6 @@ package interpreter
 
 import (
 	"fmt"
-
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
@@ -34,6 +33,11 @@ type instance struct {
 	instructions        []polkavm.Instruction
 	instructionCounter  int
 	gasRemaining        int64
+	HostFuncContext     polkavm.HostFuncContext
+}
+
+func (i *instance) GetHostFuncContext() polkavm.HostFuncContext {
+	return i.HostFuncContext
 }
 
 func (i *instance) GetReg(reg polkavm.Reg) uint32 {
@@ -192,6 +196,7 @@ func (i *instance) NextInstruction() (instruction polkavm.Instruction, err error
 	}
 
 	i.DeductGas(gasCost)
+
 	return instruction, nil
 }
 

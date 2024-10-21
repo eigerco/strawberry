@@ -1,6 +1,10 @@
 package polkavm
 
-import "math"
+import (
+	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/state"
+	"math"
+)
 
 type Module interface {
 	AddHostFunc(string, HostFunc)
@@ -8,7 +12,14 @@ type Module interface {
 	Instantiate(instructionOffset uint32, gasLimit int64) Instance
 }
 
+type HostFuncContext struct {
+	ServiceId    block.ServiceId
+	ServiceState state.ServiceState
+	MemoryMap    *MemoryMap
+}
+
 type Instance interface {
+	GetHostFuncContext() HostFuncContext
 	GetReg(Reg) uint32
 	SetReg(Reg, uint32)
 
@@ -26,7 +37,7 @@ type Instance interface {
 	Sbrk(mm *MemoryMap, size uint32) (uint32, error)
 }
 
-type HostFunc func(args ...uint32) (uint32, error)
+type HostFunc func(instance Instance) (uint32, error)
 
 type Mutator interface {
 	Trap() error

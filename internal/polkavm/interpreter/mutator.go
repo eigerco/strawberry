@@ -38,9 +38,7 @@ func NewMutator(i polkavm.Instance, m *Module, memoryMap *polkavm.MemoryMap) *Mu
 		}
 
 		v.hostFunctions = append(v.hostFunctions, func(instance polkavm.Instance) error {
-			ret, err := hostFn(instance.GetReg(polkavm.A0), instance.GetReg(polkavm.A1),
-				instance.GetReg(polkavm.A2), instance.GetReg(polkavm.A3),
-				instance.GetReg(polkavm.A4), instance.GetReg(polkavm.A5))
+			ret, err := hostFn(instance)
 			if err != nil {
 				return &TrapError{fmt.Errorf("external function error: %w", err)}
 			}

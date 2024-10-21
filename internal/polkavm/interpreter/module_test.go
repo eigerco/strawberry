@@ -42,19 +42,19 @@ func TestInstance_Execute(t *testing.T) {
 	gasLimit := int64(1000)
 
 	m.AddHostFunc("get_third_number", getThirdNumber)
-	res, gasRemaining, err := m.Run("add_numbers", gasLimit, 1, 10)
+	res, i, err := m.Run("add_numbers", gasLimit, polkavm.HostFuncContext{}, nil, 1, 10)
 	require.NoError(t, err)
 
-	assert.Equal(t, gasLimit-int64(len(pp.Instructions)), gasRemaining)
+	assert.Equal(t, gasLimit-int64(len(pp.Instructions)), i.GasRemaining())
 
 	// 1 + 10 + 100 = 111
 	assert.Equal(t, uint32(111), res)
 
 	// not enough gas
-	_, _, err = m.Run("add_numbers", 9, 1, 10)
+	_, _, err = m.Run("add_numbers", 9, polkavm.HostFuncContext{}, nil, 1, 10)
 	require.ErrorIs(t, err, polkavm.ErrOutOfGas)
 }
 
-func getThirdNumber(args ...uint32) (uint32, error) {
+func getThirdNumber(instance polkavm.Instance) (uint32, error) {
 	return 100, nil
 }

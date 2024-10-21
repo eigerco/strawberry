@@ -23,28 +23,31 @@ func NewModule(program *polkavm.Program, memoryMap *polkavm.MemoryMap) (*Module,
 	}, nil
 }
 
-func (m *Module) Run(symbol string, gasLimit int64, args ...uint32) (result uint32, gasRemaining int64, err error) {
+func (m *Module) Run(symbol string, gasLimit int64, hostCtx polkavm.HostFuncContext, configurator func(polkavm.Instance), args ...uint32) (uint32, polkavm.Instance, error) {
 	if len(args) > 6 {
-		return 0, gasLimit, fmt.Errorf("too many arguments, max allowed arguments: 6")
+		return 0, &instance{}, fmt.Errorf("too many arguments, max allowed arguments: 6")
 	}
 	instructionOffset, ok := m.program.LookupExport(symbol)
 	if !ok {
-		return 0, gasLimit, fmt.Errorf("symbol %q not found", symbol)
+		return 0, &instance{}, fmt.Errorf("symbol %q not found", symbol)
 	}
 
-	i := m.Instantiate(instructionOffset, gasLimit)
+	i := m.Instantiate(instructionOffset, gasLimit, hostCtx)
+	if configurator != nil {
+		configurator(i)
+	}
 	for n, arg := range args {
 		i.SetReg(polkavm.A0+polkavm.Reg(n), arg)
 	}
 	mutator := NewMutator(i, m, m.memoryMap)
 
 	if err := mutator.Execute(); err != nil {
-		return 0, i.GasRemaining(), err
+		return 0, i, err
 	}
-	return i.GetReg(polkavm.A0), i.GasRemaining(), nil
+	return i.GetReg(polkavm.A0), i, nil
 }
 
-func (m *Module) Instantiate(instructionOffset uint32, gasLimit int64) polkavm.Instance {
+func (m *Module) Instantiate(instructionOffset uint32, gasLimit int64, ctx polkavm.HostFuncContext) polkavm.Instance {
 	return &instance{
 		memory: newBasicMemory(m.memoryMap, m.program.RWData),
 		regs: map[polkavm.Reg]uint32{
@@ -54,5 +57,6 @@ func (m *Module) Instantiate(instructionOffset uint32, gasLimit int64) polkavm.I
 		instructionOffset:   instructionOffset,
 		offsetForBasicBlock: make(map[uint32]int),
 		gasRemaining:        gasLimit,
+		HostFuncContext:     ctx,
 	}
 }
