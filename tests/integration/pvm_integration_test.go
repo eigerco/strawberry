@@ -75,7 +75,7 @@ func Test_Vectors(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			i := m.Instantiate(tc.InitialPc, tc.InitialGas)
+			i := m.Instantiate(tc.InitialPc, tc.InitialGas, polkavm.HostFuncContext{})
 			for _, mem := range tc.InitialMemory {
 				err := i.SetMemory(mm, mem.Address, mem.Contents)
 				if err != nil {
