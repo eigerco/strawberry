@@ -1,10 +1,7 @@
 package merkle
 
 import (
-	"fmt"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
-	"golang.org/x/crypto/blake2b"
+	"github.com/eigerco/strawberry/internal/crypto"
 )
 
 // EncodeLeafNode encodes a leaf node in the Merkle Patricia Trie.
@@ -32,25 +29,15 @@ func EncodeLeafNode(key StateKey, value StateValue) Node {
 	var node Node
 
 	if len(value) <= EmbeddedValueMaxSize {
-		jamCodec := codec.NewJamCodec()
-		serializer := serialization.NewSerializer(jamCodec)
-		encodedValueLength, err := serializer.Encode(len(value))
-		if err != nil {
-			panic(fmt.Sprintf("state value should always be encodable: %v", err))
-		}
-		if len(encodedValueLength) != 1 {
-			panic(fmt.Sprintf("encoded value length should be one byte: %v", len(encodedValueLength)))
-		}
-
 		// Embedded-value leaf
-		node[0] = LeafNodeFlag | EmbeddedLeafFlag | encodedValueLength[0] // 1000 0000 | 0100 0000 | encoded value length
-		copy(node[1:32], key[:31])                                        // First 31 bytes of key
-		copy(node[32:], value)                                            // Value (up to 32 bytes)
+		node[0] = LeafNodeFlag | byte(len(value)) // 1000 0000 | value length
+		copy(node[1:32], key[:31])                // First 31 bytes of key
+		copy(node[32:], value)                    // Value (up to 32 bytes)
 	} else {
 		// Regular leaf
-		node[0] = LeafNodeFlag     // 1000 0000
-		copy(node[1:32], key[:31]) // First 31 bytes of key
-		hash := blake2b.Sum256(value)
+		node[0] = LeafNodeFlag | NotEmbeddedLeafFlag // 1100 0000
+		copy(node[1:32], key[:31])                   // First 31 bytes of key
+		hash := crypto.HashData(value)
 		copy(node[32:], hash[:]) // Hash of the value
 	}
 

@@ -41,6 +41,8 @@ func SerializeState(state State) (map[crypto.Hash][]byte, error) {
 		{11, state.TimeslotIndex},
 		{12, state.PrivilegedServices},
 		{13, state.ValidatorStatistics},
+		{14, state.AccumulationQueue},
+		{15, state.AccumulationHistory},
 	}
 
 	for _, field := range basicFields {

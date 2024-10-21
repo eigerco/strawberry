@@ -138,6 +138,63 @@ func RandomWorkResult(t *testing.T) block.WorkResult {
 	}
 }
 
+func RandomAccumulationQueue(t *testing.T) AccumulationQueue {
+	var queue AccumulationQueue
+	for i := 0; i < len(queue); i++ {
+		// For each timeslot, create a random slice of WorkReportWithUnAccumulatedDependencies
+		numReports := testutils.RandomUint32()%5 + 1 // Random number of work reports (1-5)
+		for j := 0; j < int(numReports); j++ {
+			queue[i] = append(queue[i], WorkReportWithUnAccumulatedDependencies{
+				WorkReport:   RandomWorkReport(t),
+				Dependencies: RandomHashSet(t, 5), // Random set of crypto.Hash
+			})
+		}
+	}
+	return queue
+}
+
+func RandomAccumulationHistory(t *testing.T) AccumulationHistory {
+	var history AccumulationHistory
+	for i := 0; i < len(history); i++ {
+		numEntries := testutils.RandomUint32()%5 + 1 // Random number of map entries (1-5)
+		history[i] = make(map[crypto.Hash]crypto.Hash)
+		for j := 0; j < int(numEntries); j++ {
+			history[i][testutils.RandomHash(t)] = testutils.RandomHash(t)
+		}
+	}
+	return history
+}
+
+func RandomWorkReport(t *testing.T) block.WorkReport {
+	return block.WorkReport{
+		WorkPackageSpecification: block.WorkPackageSpecification{
+			WorkPackageHash: testutils.RandomHash(t),
+		},
+		RefinementContext: block.RefinementContext{
+			Anchor: block.RefinementContextAnchor{
+				HeaderHash: testutils.RandomHash(t),
+			},
+			LookupAnchor: block.RefinementContextLookupAnchor{
+				HeaderHash: testutils.RandomHash(t),
+				Timeslot:   testutils.RandomTimeslot(),
+			},
+		},
+		CoreIndex:      testutils.RandomUint16(),
+		AuthorizerHash: testutils.RandomHash(t),
+		Output:         []byte("random output"),
+		WorkResults:    []block.WorkResult{RandomWorkResult(t)},
+	}
+}
+
+func RandomHashSet(t *testing.T, maxSize int) map[crypto.Hash]struct{} {
+	set := make(map[crypto.Hash]struct{})
+	numEntries := testutils.RandomUint32()%uint32(maxSize) + 1
+	for i := 0; i < int(numEntries); i++ {
+		set[testutils.RandomHash(t)] = struct{}{}
+	}
+	return set
+}
+
 func RandomBlockState(t *testing.T) BlockState {
 	var state BlockState
 	state.HeaderHash = testutils.RandomHash(t)
@@ -233,6 +290,8 @@ func RandomState(t *testing.T) State {
 		TimeslotIndex:            testutils.RandomTimeslot(),
 		PastJudgements:           RandomJudgements(t),
 		ValidatorStatistics:      RandomValidatorStatisticsState(),
+		AccumulationQueue:        RandomAccumulationQueue(t),
+		AccumulationHistory:      RandomAccumulationHistory(t),
 	}
 }
 
@@ -269,6 +328,8 @@ func DeserializeState(serializedState map[crypto.Hash][]byte) (State, error) {
 		{11, &state.TimeslotIndex},
 		{12, &state.PrivilegedServices},
 		{13, &state.ValidatorStatistics},
+		{14, &state.AccumulationQueue},
+		{15, &state.AccumulationHistory},
 	}
 
 	for _, field := range basicFields {

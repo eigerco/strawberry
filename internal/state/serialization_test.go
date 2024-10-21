@@ -80,6 +80,10 @@ func TestSerializeState(t *testing.T) {
 	assert.Equal(t, sortByteSlicesCopy(state.PastJudgements.BadWorkReports), decodedState.PastJudgements.BadWorkReports, "BadWorkReports mismatch")
 	assert.Equal(t, sortByteSlicesCopy(state.PastJudgements.WonkyWorkReports), decodedState.PastJudgements.WonkyWorkReports, "WonkyWorkReports mismatch")
 	assert.Equal(t, sortByteSlicesCopy(state.PastJudgements.OffendingValidators), decodedState.PastJudgements.OffendingValidators, "OffendingValidators mismatch")
+
+	// Compare Accumulation Queue and History
+	assert.Equal(t, state.AccumulationQueue, decodedState.AccumulationQueue, "AccumulationQueue mismatch")
+	assert.Equal(t, state.AccumulationHistory, decodedState.AccumulationHistory, "AccumulationHistory mismatch")
 }
 
 func TestSerializeSafroleState(t *testing.T) {
@@ -269,6 +273,30 @@ func TestSerializeStateValidatorStatistics(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(13)
+	hashKey := crypto.Hash(stateKey)
+	assert.Contains(t, serializedState, hashKey)
+	assert.NotEmpty(t, serializedState[hashKey])
+}
+
+// TestSerializeStateAccumulatedQueue checks the serialization of the AccumulatedQueue field.
+func TestSerializeStateAccumulatedQueue(t *testing.T) {
+	state := RandomState(t)
+	serializedState, err := SerializeState(state)
+	require.NoError(t, err)
+
+	stateKey := generateStateKeyBasic(14)
+	hashKey := crypto.Hash(stateKey)
+	assert.Contains(t, serializedState, hashKey)
+	assert.NotEmpty(t, serializedState[hashKey])
+}
+
+// TestSerializeStateAccumulatedHistory checks the serialization of the AccumulatedHistory field.
+func TestSerializeStateAccumulatedHistory(t *testing.T) {
+	state := RandomState(t)
+	serializedState, err := SerializeState(state)
+	require.NoError(t, err)
+
+	stateKey := generateStateKeyBasic(15)
 	hashKey := crypto.Hash(stateKey)
 	assert.Contains(t, serializedState, hashKey)
 	assert.NotEmpty(t, serializedState[hashKey])
