@@ -1,8 +1,6 @@
 package polkavm
 
 import (
-	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/state"
 	"math"
 )
 
@@ -12,14 +10,7 @@ type Module interface {
 	Instantiate(instructionOffset uint32, gasLimit int64) Instance
 }
 
-type HostFuncContext struct {
-	ServiceId    block.ServiceId
-	ServiceState state.ServiceState
-	MemoryMap    *MemoryMap
-}
-
 type Instance interface {
-	GetHostFuncContext() HostFuncContext
 	GetReg(Reg) uint32
 	SetReg(Reg, uint32)
 

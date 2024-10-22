@@ -32,11 +32,11 @@ func TestGasRemaining(t *testing.T) {
 	module, err := interpreter.NewModule(pp, memoryMap)
 	require.NoError(t, err)
 
-	module.AddHostFunc("gas_remaining", host_call.GasRemaining)
+	module.AddHostFunc("gas_remaining", host_call.GasRemainingFunc())
 
 	initialGas := int64(100)
 
-	_, instance, err := module.Run("test_gas", initialGas, polkavm.HostFuncContext{}, nil, uint32(initialGas&((1<<32)-1)), uint32(initialGas>>32))
+	_, instance, err := module.Run("test_gas", initialGas, nil, uint32(initialGas&((1<<32)-1)), uint32(initialGas>>32))
 	require.NoError(t, err)
 
 	expectedGas := initialGas - host_call.GasRemainingCost
@@ -70,20 +70,19 @@ func TestLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	initialGas := int64(100)
-	module.AddHostFunc("lookup", host_call.Lookup)
+	module.AddHostFunc("lookup", host_call.LookupFunc(1, make(state.ServiceState), memoryMap))
 
 	// Service Not Found
-	res, instance, err := module.Run("test_lookup", initialGas, polkavm.HostFuncContext{
-		ServiceId:    1,
-		ServiceState: make(state.ServiceState),
-		MemoryMap:    memoryMap,
-	}, nil, uint32(1))
+	res, instance, err := module.Run("test_lookup", initialGas, nil, uint32(1))
 	require.NoError(t, err)
 
 	assert.Equal(t, uint32(polkavm.HostCallResultNone), res)
 	assert.Equal(t, initialGas-host_call.LookupCost-int64(len(pp.Instructions)), instance.GasRemaining())
 
 	// Successful Key Lookup
+	module, err = interpreter.NewModule(pp, memoryMap)
+	require.NoError(t, err)
+
 	serviceId := block.ServiceId(1)
 	val := []byte("value to store")
 
@@ -103,11 +102,9 @@ func TestLookup(t *testing.T) {
 		},
 	}
 
-	_, instance, err = module.Run("test_lookup", initialGas, polkavm.HostFuncContext{
-		ServiceId:    1,
-		ServiceState: serviceState,
-		MemoryMap:    memoryMap,
-	}, func(i polkavm.Instance) {
+	module.AddHostFunc("lookup", host_call.LookupFunc(1, serviceState, memoryMap))
+
+	_, instance, err = module.Run("test_lookup", initialGas, func(i polkavm.Instance) {
 		err := i.SetMemory(memoryMap, ho, dataToHash)
 		require.NoError(t, err)
 	}, uint32(serviceId), ho, bo, 32)

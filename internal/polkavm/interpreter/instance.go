@@ -33,11 +33,6 @@ type instance struct {
 	instructions        []polkavm.Instruction
 	instructionCounter  int
 	gasRemaining        int64
-	HostFuncContext     polkavm.HostFuncContext
-}
-
-func (i *instance) GetHostFuncContext() polkavm.HostFuncContext {
-	return i.HostFuncContext
 }
 
 func (i *instance) GetReg(reg polkavm.Reg) uint32 {
