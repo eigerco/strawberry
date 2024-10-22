@@ -2,7 +2,6 @@ package interpreter
 
 import (
 	"fmt"
-
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
@@ -192,6 +191,7 @@ func (i *instance) NextInstruction() (instruction polkavm.Instruction, err error
 	}
 
 	i.DeductGas(gasCost)
+
 	return instruction, nil
 }
 
