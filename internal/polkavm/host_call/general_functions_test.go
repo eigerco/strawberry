@@ -32,7 +32,7 @@ func TestGasRemaining(t *testing.T) {
 	module, err := interpreter.NewModule(pp, memoryMap)
 	require.NoError(t, err)
 
-	module.AddHostFunc("gas_remaining", host_call.GasRemainingFunc())
+	module.AddHostFunc("gas_remaining", host_call.GasRemaining)
 
 	initialGas := int64(100)
 
@@ -70,7 +70,7 @@ func TestLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	initialGas := int64(100)
-	module.AddHostFunc("lookup", host_call.LookupFunc(1, make(state.ServiceState), memoryMap))
+	module.AddHostFunc("lookup", host_call.MakeLookupFunc(1, make(state.ServiceState), memoryMap))
 
 	// Service Not Found
 	res, instance, err := module.Run("test_lookup", initialGas, nil, uint32(1))
@@ -102,7 +102,7 @@ func TestLookup(t *testing.T) {
 		},
 	}
 
-	module.AddHostFunc("lookup", host_call.LookupFunc(1, serviceState, memoryMap))
+	module.AddHostFunc("lookup", host_call.MakeLookupFunc(1, serviceState, memoryMap))
 
 	_, instance, err = module.Run("test_lookup", initialGas, func(i polkavm.Instance) {
 		err := i.SetMemory(memoryMap, ho, dataToHash)

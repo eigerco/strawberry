@@ -13,31 +13,29 @@ const (
 	LookupCost       = 10
 )
 
-// GasRemainingFunc ΩG
-func GasRemainingFunc() polkavm.HostFunc {
-	return func(instance polkavm.Instance) (uint32, error) {
-		if err := deductGas(instance, GasRemainingCost); err != nil {
-			return 0, err
-		}
-
-		ksLower := instance.GetReg(polkavm.A0) // Lower 32 bits
-		ksUpper := instance.GetReg(polkavm.A1) // Upper 32 bits
-
-		// Combine the two parts into a single 64-bit value
-		ks := (uint64(ksUpper) << 32) | uint64(ksLower)
-
-		ks -= uint64(GasRemainingCost)
-
-		// Split the new ξ' value into its lower and upper parts.
-		omega0, omega1 := uint32(ks&((1<<32)-1)), uint32(ks>>32)
-		instance.SetReg(polkavm.A1, omega1)
-
-		return omega0, nil
+// GasRemaining ΩG
+func GasRemaining(instance polkavm.Instance) (uint32, error) {
+	if err := deductGas(instance, GasRemainingCost); err != nil {
+		return 0, err
 	}
+
+	ksLower := instance.GetReg(polkavm.A0) // Lower 32 bits
+	ksUpper := instance.GetReg(polkavm.A1) // Upper 32 bits
+
+	// Combine the two parts into a single 64-bit value
+	ks := (uint64(ksUpper) << 32) | uint64(ksLower)
+
+	ks -= uint64(GasRemainingCost)
+
+	// Split the new ξ' value into its lower and upper parts.
+	omega0, omega1 := uint32(ks&((1<<32)-1)), uint32(ks>>32)
+	instance.SetReg(polkavm.A1, omega1)
+
+	return omega0, nil
 }
 
-// LookupFunc ΩL
-func LookupFunc(serviceId block.ServiceId, serviceState state.ServiceState, memoryMap *polkavm.MemoryMap) polkavm.HostFunc {
+// MakeLookupFunc ΩL
+func MakeLookupFunc(serviceId block.ServiceId, serviceState state.ServiceState, memoryMap *polkavm.MemoryMap) polkavm.HostFunc {
 	return func(instance polkavm.Instance) (uint32, error) {
 		if err := deductGas(instance, LookupCost); err != nil {
 			return 0, err
