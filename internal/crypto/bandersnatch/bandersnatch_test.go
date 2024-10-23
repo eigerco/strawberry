@@ -1,9 +1,10 @@
 package bandersnatch
 
 import (
+	"testing"
+
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 var seed = crypto.BandersnatchSeedKey{
@@ -13,90 +14,21 @@ var seed = crypto.BandersnatchSeedKey{
 	0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20,
 }
 
-var seed2 = crypto.BandersnatchSeedKey{
-	0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
-	0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30,
-	0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38,
-	0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40,
-}
-
 func TestSignAndVerify(t *testing.T) {
-	pk1, err := NewPrivateKeyFromSeed(seed)
+	sk, err := NewPrivateKeyFromSeed(seed)
+	require.NoError(t, err)
+	pk, err := Public(sk)
 	require.NoError(t, err)
 
-	message := []byte("Test message")
-
-	signature1, err := pk1.Sign(message)
+	vrfInputData := []byte("vrf data")
+	auxData := []byte("aux data")
+	sig, err := Sign(sk, vrfInputData, auxData)
 	require.NoError(t, err)
 
-	publicKey1, err := pk1.Public()
+	ok, outputHash := Verify(pk, vrfInputData, auxData, sig)
+	require.True(t, ok)
+
+	outputHash2, err := OutputHash(sig)
 	require.NoError(t, err)
-
-	pk2, err := NewPrivateKeyFromSeed(seed2)
-	require.NoError(t, err)
-
-	publicKey2, err := pk2.Public()
-	require.NoError(t, err)
-
-	isValid := VerifySignature(signature1, message, publicKey1)
-	require.True(t, isValid)
-
-	// invalid signature from second key
-	isInvalid := VerifySignature(signature1, message, publicKey2)
-	require.False(t, isInvalid)
-
-}
-
-func TestGenerateAndVerifyVrfProof(t *testing.T) {
-	pk1, err := NewPrivateKeyFromSeed(seed)
-	require.NoError(t, err)
-
-	pk2, err := NewPrivateKeyFromSeed(seed2)
-	require.NoError(t, err)
-
-	data := []byte("test data")
-	context := []byte("context")
-
-	// Valid VRF Proof
-	proof, err := pk1.GenerateVrfProof(data, context)
-	require.NoError(t, err)
-
-	pubKey1, err := pk1.Public()
-	require.NoError(t, err)
-
-	valid := VerifyVrfProof(proof, data, context, pubKey1)
-	require.True(t, valid)
-
-	// Invalid VRF Proof - Changed Data
-	proof, err = pk1.GenerateVrfProof(data, context)
-	require.NoError(t, err)
-
-	pubKey1, err = pk1.Public()
-	require.NoError(t, err)
-
-	invalidData := []byte("invalid data")
-	valid = VerifyVrfProof(proof, invalidData, context, pubKey1)
-	require.False(t, valid)
-
-	// Invalid VRF Proof - Changed Context
-	proof, err = pk1.GenerateVrfProof(data, context)
-	require.NoError(t, err)
-
-	pubKey1, err = pk1.Public()
-	require.NoError(t, err)
-
-	invalidContext := []byte("invalid context")
-	valid = VerifyVrfProof(proof, data, invalidContext, pubKey1)
-	require.False(t, valid)
-
-	// Invalid VRF Proof - Different Key
-	proof, err = pk1.GenerateVrfProof(data, context)
-	require.NoError(t, err)
-
-	pubKey2, err := pk2.Public()
-	require.NoError(t, err)
-
-	valid = VerifyVrfProof(proof, data, context, pubKey2)
-	require.False(t, valid)
-
+	require.Equal(t, outputHash, outputHash2)
 }

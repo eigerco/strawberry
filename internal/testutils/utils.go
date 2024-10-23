@@ -3,9 +3,10 @@ package testutils
 import (
 	"crypto/ed25519"
 	"crypto/rand"
-	"github.com/eigerco/strawberry/internal/jamtime"
 	mathRand "math/rand"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/jamtime"
 
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
@@ -53,7 +54,7 @@ func RandomBandersnatchPublicKey(t *testing.T) crypto.BandersnatchPublicKey {
 	return crypto.BandersnatchPublicKey(hash)
 }
 
-func RandomBandersnatchPrivateKey(t *testing.T) *bandersnatch.PrivateKey {
+func RandomBandersnatchPrivateKey(t *testing.T) crypto.BandersnatchPrivateKey {
 	hash := make([]byte, crypto.BandersnatchSize)
 	_, err := rand.Read(hash)
 	require.NoError(t, err)
