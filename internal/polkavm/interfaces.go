@@ -1,5 +1,9 @@
 package polkavm
 
+import (
+	"math"
+)
+
 type Module interface {
 	AddHostFunc(string, HostFunc)
 	Run(symbol string, gasLimit int64, args ...uint32) (result uint32, gasRemaining int64, err error)
@@ -24,7 +28,7 @@ type Instance interface {
 	Sbrk(mm *MemoryMap, size uint32) (uint32, error)
 }
 
-type HostFunc func(args ...uint32) (uint32, error)
+type HostFunc func(instance Instance) (uint32, error)
 
 type Mutator interface {
 	Trap() error
@@ -123,23 +127,23 @@ type HostCallResult struct {
 	Msg       string
 }
 
-type HostCallCode uint
+type HostCallCode uint32
 
 const (
-	HostCallResultNone HostCallCode = 2<<32 - 1
-	HostCallResultWhat HostCallCode = 2<<32 - 2
-	HostCallResultOob  HostCallCode = 2<<32 - 3
-	HostCallResultWho  HostCallCode = 2<<32 - 4
-	HostCallResultFull HostCallCode = 2<<32 - 5
-	HostCallResultCore HostCallCode = 2<<32 - 6
-	HostCallResultCash HostCallCode = 2<<32 - 7
-	HostCallResultLow  HostCallCode = 2<<32 - 8
-	HostCallResultHigh HostCallCode = 2<<32 - 9
-	HostCallResultHuh  HostCallCode = 2<<32 - 10
+	HostCallResultNone HostCallCode = math.MaxUint32
+	HostCallResultWhat HostCallCode = math.MaxUint32 - 1
+	HostCallResultOob  HostCallCode = math.MaxUint32 - 2
+	HostCallResultWho  HostCallCode = math.MaxUint32 - 3
+	HostCallResultFull HostCallCode = math.MaxUint32 - 4
+	HostCallResultCore HostCallCode = math.MaxUint32 - 5
+	HostCallResultCash HostCallCode = math.MaxUint32 - 6
+	HostCallResultLow  HostCallCode = math.MaxUint32 - 7
+	HostCallResultHigh HostCallCode = math.MaxUint32 - 8
+	HostCallResultHuh  HostCallCode = math.MaxUint32 - 9
 	HostCallResultOk   HostCallCode = 0
 )
 
-type HostCallInnerCode uint
+type HostCallInnerCode uint32
 
 const (
 	HostCallInnerCodeHalt  HostCallInnerCode = 0
