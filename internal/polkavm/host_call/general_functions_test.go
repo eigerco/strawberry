@@ -7,6 +7,8 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/pkg/serialization"
+	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/blake2b"
@@ -116,4 +118,76 @@ func TestLookup(t *testing.T) {
 	assert.Equal(t, val, actualValue)
 	assert.Equal(t, uint32(len(val)), instance.GetReg(polkavm.A0))
 	assert.Equal(t, initialGas-host_call.LookupCost-int64(len(pp.Instructions)), instance.GasRemaining())
+}
+
+func TestRead(t *testing.T) {
+	pp := &polkavm.Program{
+		RODataSize: 0,
+		RWDataSize: 256,
+		StackSize:  512,
+		Instructions: []polkavm.Instruction{
+			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 3, Length: 2},
+		},
+		Imports: []string{"read"},
+		Exports: []polkavm.ProgramExport{{TargetCodeOffset: 0, Symbol: "test_read"}},
+	}
+
+	memoryMap, err := polkavm.NewMemoryMap(
+		polkavm.VmMinPageSize,
+		pp.RODataSize,
+		pp.RWDataSize,
+		pp.StackSize,
+		pp.ROData,
+	)
+	require.NoError(t, err)
+
+	module, err := interpreter.NewModule(pp, memoryMap)
+	require.NoError(t, err)
+
+	serviceId := block.ServiceId(1)
+	keyData := []byte("key_to_read")
+	value := []byte("value_to_read")
+
+	// Compute the hash H(E4(s) || keyData)
+	serializer := serialization.NewSerializer(codec.NewJamCodec())
+	serviceIdBytes, err := serializer.Encode(serviceId)
+	require.NoError(t, err)
+
+	hashInput := make([]byte, 0, len(serviceIdBytes)+len(keyData))
+	hashInput = append(hashInput, serviceIdBytes...)
+	hashInput = append(hashInput, keyData...)
+	k := blake2b.Sum256(hashInput)
+
+	serviceState := state.ServiceState{
+		serviceId: state.ServiceAccount{
+			Storage: map[crypto.Hash][]byte{
+				k: value,
+			},
+		},
+	}
+
+	module.AddHostFunc("read", host_call.MakeReadFunc(1, serviceState, memoryMap))
+
+	initialGas := int64(100)
+
+	ko := memoryMap.RWDataAddress
+	bo := memoryMap.RWDataAddress + 100
+	kz := uint32(len(keyData))
+	bz := uint32(32)
+
+	result, instance, err := module.Run("test_read", initialGas, func(instance polkavm.Instance) {
+		err = instance.SetMemory(memoryMap, ko, keyData)
+		require.NoError(t, err)
+	}, uint32(serviceId), ko, kz, bo, bz)
+	require.NoError(t, err)
+
+	actualValue, err := instance.GetMemory(memoryMap, bo, len(value))
+	require.NoError(t, err)
+	require.Equal(t, value, actualValue)
+
+	require.Equal(t, uint32(len(value)), result)
+
+	expectedGasRemaining := initialGas - host_call.ReadCost - int64(len(pp.Instructions))
+	require.Equal(t, expectedGasRemaining, instance.GasRemaining())
 }
