@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -13,7 +14,9 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 )
-
+const (
+	signatureContextGuarantee = "$jam_guarantee"
+)
 // TODO: These calculations are just mocks for now. They will be replaced with actual calculations when the state transitions are implemented.
 
 // Intermediate State Calculation Functions
@@ -366,11 +369,156 @@ func calculateNewJudgements(disputes block.DisputeExtrinsic, stateJudgements Jud
 	return newJudgements
 }
 
-// calculateNewCoreAssignments Equation 27: ρ′ ≺ (EG, ρ‡, κ, τ′)
-func calculateNewCoreAssignments(guarantees block.GuaranteesExtrinsic, coreAssignments CoreAssignments, validators safrole.ValidatorsData, timeslot jamtime.Timeslot) CoreAssignments {
-	return CoreAssignments{}
+// calculateNewCoreAssignments updates the core assignments based on new guarantees.
+// This implements equation 27: ρ′ ≺ (EG, ρ‡, κ, τ′)
+//
+// It also implements part of equation 139 regarding timeslot validation:
+// R(⌊τ′/R⌋ - 1) ≤ t ≤ τ′
+func calculateNewCoreAssignments(
+	guarantees block.GuaranteesExtrinsic,
+	intermediateAssignments CoreAssignments,
+	validatorState ValidatorState,
+	newTimeslot jamtime.Timeslot,
+) CoreAssignments {
+	newAssignments := intermediateAssignments
+	sortedGuarantees := sortGuaranteesByCoreIndex(guarantees.Guarantees)
+
+	for _, guarantee := range sortedGuarantees {
+		coreIndex := guarantee.WorkReport.CoreIndex
+
+		// Check timeslot range: R(⌊τ′/R⌋ - 1) ≤ t ≤ τ′
+		previousRotationStart := (newTimeslot/common.ValidatorRotationPeriod - 1) * common.ValidatorRotationPeriod
+		if guarantee.Timeslot < jamtime.Timeslot(previousRotationStart) ||
+			guarantee.Timeslot > newTimeslot {
+			continue
+		}
+
+		if isAssignmentValid(intermediateAssignments[coreIndex], newTimeslot) {
+			// Determine which validator set to use based on timeslots
+			validators := determineValidatorSet(
+				guarantee.Timeslot,
+				newTimeslot,
+				validatorState.CurrentValidators,
+				validatorState.ArchivedValidators,
+			)
+
+			if verifyGuaranteeCredentials(guarantee, validators) {
+				newAssignments[coreIndex] = Assignment{
+					WorkReport: &guarantee.WorkReport,
+					Time:       newTimeslot,
+				}
+			}
+		}
+	}
+
+	return newAssignments
 }
 
+// determineValidatorSet implements validator set selection from equations 135 and 139:
+// From equation 139:
+//
+//	(c, k) = {
+//	    G if ⌊τ′/R⌋ = ⌊t/R⌋
+//	    G* otherwise
+//
+// Where G* is determined by equation 135:
+//
+//	let (e, k) = {
+//	    (η′2, κ′) if ⌊τ′/R⌋ = ⌊τ′/E⌋
+//	    (η′3, λ′) otherwise
+func determineValidatorSet(
+	guaranteeTimeslot jamtime.Timeslot,
+	currentTimeslot jamtime.Timeslot,
+	currentValidators safrole.ValidatorsData,
+	archivedValidators safrole.ValidatorsData,
+) safrole.ValidatorsData {
+	currentRotation := currentTimeslot / common.ValidatorRotationPeriod
+	guaranteeRotation := guaranteeTimeslot / common.ValidatorRotationPeriod
+
+	if currentRotation == guaranteeRotation {
+		return currentValidators
+	}
+	return archivedValidators
+}
+
+// sortGuaranteesByCoreIndex sorts the guarantees by their core index in ascending order.
+// This implements equation 137 from the graypaper: EG = [(gw)c ^ g ∈ EG]
+// which ensures that guarantees are ordered by core index.
+func sortGuaranteesByCoreIndex(guarantees []block.Guarantee) []block.Guarantee {
+	sortedGuarantees := make([]block.Guarantee, len(guarantees))
+	copy(sortedGuarantees, guarantees)
+
+	sort.Slice(sortedGuarantees, func(i, j int) bool {
+		return sortedGuarantees[i].WorkReport.CoreIndex < sortedGuarantees[j].WorkReport.CoreIndex
+	})
+
+	return sortedGuarantees
+}
+
+// isAssignmentValid checks if a new assignment can be made for a core.
+// This implements the condition from equation 142:
+// ρ‡[wc] = ∅ ∨ Ht ≥ ρ‡[wc]t + U
+func isAssignmentValid(currentAssignment Assignment, newTimeslot jamtime.Timeslot) bool {
+	return currentAssignment.WorkReport == nil ||
+		newTimeslot >= currentAssignment.Time+common.WorkReportTimeoutPeriod
+}
+
+// verifyGuaranteeCredentials verifies the credentials of a guarantee.
+// This implements two equations from the graypaper:
+//
+// Equation 138: ∀g ∈ EG : ga = [v _ {v, s} ∈ ga]
+// Which ensures credentials are ordered by validator index
+//
+//	Equation 139: ∀(w, t, a) ∈ EG, ∀(v, s) ∈ a : {
+//	    s ∈ Ek[v]E⟨XG ⌢ H(E(w))⟩
+//	    cv = wc
+//	}
+func verifyGuaranteeCredentials(
+	guarantee block.Guarantee,
+	validators safrole.ValidatorsData,
+) bool {
+	// Verify that credentials are ordered by validator index (equation 138)
+	for i := 1; i < len(guarantee.Credentials); i++ {
+		if guarantee.Credentials[i-1].ValidatorIndex >= guarantee.Credentials[i].ValidatorIndex {
+			return false
+		}
+	}
+
+	// Verify the signatures using the correct validator keys (equation 139)
+	for _, credential := range guarantee.Credentials {
+		if credential.ValidatorIndex >= uint16(len(validators)) {
+			return false
+		}
+
+		// Check if the validator is assigned to the core specified in the work report
+		if !isValidatorAssignedToCore(credential.ValidatorIndex, guarantee.WorkReport.CoreIndex, validators) {
+			return false
+		}
+
+		validatorKey := validators[credential.ValidatorIndex]
+		// Check if the validator key is valid
+		if len(validatorKey.Ed25519) != ed25519.PublicKeySize {
+			return false
+		}
+		reportBytes, err := json.Marshal(guarantee.WorkReport)
+		if err != nil {
+			return false
+		}
+		hashed := crypto.HashData(reportBytes)
+		message := append([]byte(signatureContextGuarantee), hashed[:]...)
+		if !ed25519.Verify(validatorKey.Ed25519, message, credential.Signature[:]) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// TODO: This function should implement the logic to check if the validator is assigned to the core
+// For now, it's a placeholder implementation
+func isValidatorAssignedToCore(validatorIndex uint16, coreIndex uint16, validators safrole.ValidatorsData) bool {
+	return true
+}
 // calculateNewArchivedValidators Equation 22: λ′ ≺ (H, τ, λ, κ)
 func calculateNewArchivedValidators(header block.Header, timeslot jamtime.Timeslot, archivedValidators safrole.ValidatorsData, validators safrole.ValidatorsData) (safrole.ValidatorsData, error) {
 	if !header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
