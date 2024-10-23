@@ -55,21 +55,6 @@ func (i *instance) GasRemaining() int64 {
 	return i.gasRemaining
 }
 
-func (i *instance) deductGasForOutOfBoundsError() error {
-	gasCost, exists := polkavm.GasCosts[polkavm.Trap]
-	if !exists {
-		return fmt.Errorf("trap opcode not defined in GasCosts map")
-	}
-
-	if i.GasRemaining() < gasCost {
-		return polkavm.ErrOutOfGas
-	}
-
-	i.DeductGas(gasCost)
-
-	return nil
-}
-
 func (i *instance) GetMemory(memoryMap *polkavm.MemoryMap, address uint32, length int) ([]byte, error) {
 	var start uint32
 	var memorySlice []byte
@@ -85,10 +70,6 @@ func (i *instance) GetMemory(memoryMap *polkavm.MemoryMap, address uint32, lengt
 
 	offset := int(address - start)
 	if offset+length > len(memorySlice) {
-		err := i.deductGasForOutOfBoundsError()
-		if err != nil {
-			return nil, err
-		}
 		return nil, fmt.Errorf("memory slice out of range, address %d, length: %d", address, length)
 	}
 	return memorySlice[offset : offset+length], nil
@@ -108,10 +89,6 @@ func (i *instance) SetMemory(memoryMap *polkavm.MemoryMap, address uint32, data 
 
 	offset := int(address - start)
 	if offset+length > len(memorySlice) {
-		err := i.deductGasForOutOfBoundsError()
-		if err != nil {
-			return err
-		}
 		return fmt.Errorf("memory slice out of range, address %d, length: %d %d %d", address, length, offset, len(memorySlice))
 	}
 	copy(memorySlice[offset:offset+length], data)
