@@ -2,8 +2,12 @@
 
 package common
 
+import "github.com/eigerco/strawberry/internal/jamtime"
+
 const (
 	NumberOfValidators = 6
 	TotalNumberOfCores = 2
 	ValidatorsSuperMajority = (2 * NumberOfValidators / 3) + 1
+	WorkReportTimeoutPeriod = jamtime.Timeslot(5)
+	ValidatorRotationPeriod = jamtime.Timeslot(10)
 )

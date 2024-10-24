@@ -2,12 +2,14 @@ package state
 
 import (
 	"crypto/ed25519"
+	"encoding/json"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -550,6 +552,271 @@ func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
 			require.Equal(t, tc.expectedKept, keptCount, "Number of kept assignments should match expected")
 		})
 	}
+}
+
+func TestCalculateNewCoreAssignments(t *testing.T) {
+    t.Run("valid guarantees within rotation period", func(t *testing.T) {
+        pubKey1, prvKey1, err := testutils.RandomED25519Keys(t)
+        require.NoError(t, err)
+        pubKey2, prvKey2, err := testutils.RandomED25519Keys(t)
+        require.NoError(t, err)
+        validatorKeys := make([]crypto.ValidatorKey, 2)
+        validatorKeys[0].Ed25519 = pubKey1
+        validatorKeys[1].Ed25519 = pubKey2
+        validatorsData := safrole.ValidatorsData{
+            {Ed25519: validatorKeys[0].Ed25519},
+            {Ed25519: validatorKeys[1].Ed25519},
+        }
+
+        validatorState := ValidatorState{
+            CurrentValidators:   validatorsData,
+            ArchivedValidators: validatorsData,
+        }
+        currentTimeslot := jamtime.Timeslot(100)
+        
+        workReport := block.WorkReport{
+            CoreIndex: 0,
+        }
+
+        // Marshal and hash the work report for signing
+        reportBytes, err := json.Marshal(workReport)
+        require.NoError(t, err)
+        reportHash := crypto.HashData(reportBytes)
+        message := append([]byte(signatureContextGuarantee), reportHash[:]...)
+        signature1 := ed25519.Sign(prvKey1, message)
+        signature2 := ed25519.Sign(prvKey2, message)
+
+        // Create credentials with valid signatures
+        credentials := []block.CredentialSignature{
+            {
+                ValidatorIndex: 0,
+                Signature:     [64]byte(signature1),
+            },
+            {
+                ValidatorIndex: 1,
+                Signature:     [64]byte(signature2),
+            },
+        }
+        
+        guarantees := block.GuaranteesExtrinsic{
+            Guarantees: []block.Guarantee{
+                {
+                    WorkReport:  workReport,
+                    Timeslot:   currentTimeslot - 1,
+                    Credentials: credentials,
+                },
+            },
+        }
+        
+        intermediateAssignments := CoreAssignments{}
+        
+        newAssignments := calculateNewCoreAssignments(
+            guarantees,
+            intermediateAssignments,
+            validatorState,
+            currentTimeslot,
+        )
+        
+        // Assert
+        require.NotNil(t, newAssignments[0].WorkReport)
+        require.Equal(t, workReport, *newAssignments[0].WorkReport)
+        require.Equal(t, currentTimeslot, newAssignments[0].Time)
+    })
+
+    t.Run("invalid guarantee due to timeslot too old", func(t *testing.T) {
+        pubKey1, prvKey1, err := testutils.RandomED25519Keys(t)
+        require.NoError(t, err)
+        pubKey2, prvKey2, err := testutils.RandomED25519Keys(t)
+        require.NoError(t, err)
+        validatorKeys := make([]crypto.ValidatorKey, 2)
+        validatorKeys[0].Ed25519 = pubKey1
+        validatorKeys[1].Ed25519 = pubKey2
+        validatorsData := safrole.ValidatorsData{
+            {Ed25519: validatorKeys[0].Ed25519},
+            {Ed25519: validatorKeys[1].Ed25519},
+        }
+
+        validatorState := ValidatorState{
+            CurrentValidators:   validatorsData,
+            ArchivedValidators: validatorsData,
+        }
+        currentTimeslot := jamtime.Timeslot(100)
+        
+        workReport := block.WorkReport{
+            CoreIndex: 0,
+        }
+
+        reportBytes, err := json.Marshal(workReport)
+        require.NoError(t, err)
+        reportHash := crypto.HashData(reportBytes)
+        message := append([]byte(signatureContextGuarantee), reportHash[:]...)
+        signature1 := ed25519.Sign(prvKey1, message)
+        signature2 := ed25519.Sign(prvKey2, message)
+
+        credentials := []block.CredentialSignature{
+            {
+                ValidatorIndex: 0,
+                Signature:     [64]byte(signature1),
+            },
+            {
+                ValidatorIndex: 1,
+                Signature:     [64]byte(signature2),
+            },
+        }
+        
+        // Create guarantee with timeslot outside valid range
+        oldTimeslot := currentTimeslot - common.ValidatorRotationPeriod*2
+        guarantees := block.GuaranteesExtrinsic{
+            Guarantees: []block.Guarantee{
+                {
+                    WorkReport:  workReport,
+                    Timeslot:   oldTimeslot,
+                    Credentials: credentials,
+                },
+            },
+        }
+        
+        intermediateAssignments := CoreAssignments{}
+        
+        newAssignments := calculateNewCoreAssignments(
+            guarantees,
+            intermediateAssignments,
+            validatorState,
+            currentTimeslot,
+        )
+        
+        require.Nil(t, newAssignments[0].WorkReport)
+    })
+
+    t.Run("invalid guarantee due to unordered credentials", func(t *testing.T) {
+        pubKey1, prvKey1, err := testutils.RandomED25519Keys(t)
+        require.NoError(t, err)
+        pubKey2, prvKey2, err := testutils.RandomED25519Keys(t)
+        require.NoError(t, err)
+        validatorKeys := make([]crypto.ValidatorKey, 2)
+        validatorKeys[0].Ed25519 = pubKey1
+        validatorKeys[1].Ed25519 = pubKey2
+        validatorsData := safrole.ValidatorsData{
+            {Ed25519: validatorKeys[0].Ed25519},
+            {Ed25519: validatorKeys[1].Ed25519},
+        }
+
+        validatorState := ValidatorState{
+            CurrentValidators:   validatorsData,
+            ArchivedValidators: validatorsData,
+        }
+        currentTimeslot := jamtime.Timeslot(100)
+        
+        workReport := block.WorkReport{
+            CoreIndex: 0,
+        }
+
+        reportBytes, err := json.Marshal(workReport)
+        require.NoError(t, err)
+        reportHash := crypto.HashData(reportBytes)
+        message := append([]byte(signatureContextGuarantee), reportHash[:]...)
+        signature1 := ed25519.Sign(prvKey1, message)
+        signature2 := ed25519.Sign(prvKey2, message)
+
+        // Create credentials with unordered validator indices
+        credentials := []block.CredentialSignature{
+            {
+                ValidatorIndex: 1,
+                Signature:     [64]byte(signature2),
+            },
+            {
+                ValidatorIndex: 0,
+                Signature:     [64]byte(signature1),
+            },
+        }
+        
+        guarantees := block.GuaranteesExtrinsic{
+            Guarantees: []block.Guarantee{
+                {
+                    WorkReport:  workReport,
+                    Timeslot:   currentTimeslot - 1,
+                    Credentials: credentials,
+                },
+            },
+        }
+        
+        intermediateAssignments := CoreAssignments{}
+        
+        newAssignments := calculateNewCoreAssignments(
+            guarantees,
+            intermediateAssignments,
+            validatorState,
+            currentTimeslot,
+        )
+        
+        require.Nil(t, newAssignments[0].WorkReport)
+    })
+
+    t.Run("invalid guarantee due to wrong signature", func(t *testing.T) {
+        pubKey1, _, err := testutils.RandomED25519Keys(t)
+        require.NoError(t, err)
+        pubKey2, prvKey2, err := testutils.RandomED25519Keys(t)
+        require.NoError(t, err)
+        _, wrongPrvKey, err := testutils.RandomED25519Keys(t)
+        require.NoError(t, err)
+        
+        validatorKeys := make([]crypto.ValidatorKey, 2)
+        validatorKeys[0].Ed25519 = pubKey1
+        validatorKeys[1].Ed25519 = pubKey2
+        validatorsData := safrole.ValidatorsData{
+            {Ed25519: validatorKeys[0].Ed25519},
+            {Ed25519: validatorKeys[1].Ed25519},
+        }
+
+        validatorState := ValidatorState{
+            CurrentValidators:   validatorsData,
+            ArchivedValidators: validatorsData,
+        }
+        currentTimeslot := jamtime.Timeslot(100)
+        
+        workReport := block.WorkReport{
+            CoreIndex: 0,
+        }
+
+        reportBytes, err := json.Marshal(workReport)
+        require.NoError(t, err)
+        reportHash := crypto.HashData(reportBytes)
+        message := append([]byte(signatureContextGuarantee), reportHash[:]...)
+        wrongSignature := ed25519.Sign(wrongPrvKey, message)
+        signature2 := ed25519.Sign(prvKey2, message)
+
+        credentials := []block.CredentialSignature{
+            {
+                ValidatorIndex: 0,
+                Signature:     [64]byte(wrongSignature), // Wrong signature for validator 0
+            },
+            {
+                ValidatorIndex: 1,
+                Signature:     [64]byte(signature2),
+            },
+        }
+        
+        guarantees := block.GuaranteesExtrinsic{
+            Guarantees: []block.Guarantee{
+                {
+                    WorkReport:  workReport,
+                    Timeslot:   currentTimeslot - 1,
+                    Credentials: credentials,
+                },
+            },
+        }
+        
+        intermediateAssignments := CoreAssignments{}
+        
+        newAssignments := calculateNewCoreAssignments(
+            guarantees,
+            intermediateAssignments,
+            validatorState,
+            currentTimeslot,
+        )
+        
+        require.Nil(t, newAssignments[0].WorkReport)
+    })
 }
 
 func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16) block.Verdict {

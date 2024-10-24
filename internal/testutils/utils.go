@@ -35,6 +35,10 @@ func RandomHash(t *testing.T) crypto.Hash {
 	return crypto.Hash(hash)
 }
 
+func RandomED25519Keys(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey, error) {
+	return ed25519.GenerateKey(rand.Reader)
+}
+
 func RandomED25519PublicKey(t *testing.T) ed25519.PublicKey {
 	key := ed25519.PublicKey(make([]byte, crypto.Ed25519PublicSize))
 	_, err := rand.Read(key)
