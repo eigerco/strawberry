@@ -5,7 +5,7 @@ package integration_test
 import (
 	"encoding/hex"
 	"encoding/json"
-	"github.com/eigerco/strawberry/internal/merkle"
+	"github.com/eigerco/strawberry/internal/merkle/trie"
 	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
@@ -42,7 +42,7 @@ func TestMerkleTreeFromJSON(t *testing.T) {
 		}
 
 		// Calculate the merkle root
-		result := merkle.Merklize(kvs, 0)
+		result := trie.Merklize(kvs, 0)
 
 		// Check if the calculated output matches the expected output
 		expected := hexToBytes(t, vector.Output)

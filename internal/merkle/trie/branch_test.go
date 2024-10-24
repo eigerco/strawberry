@@ -1,4 +1,4 @@
-package merkle
+package trie
 
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
