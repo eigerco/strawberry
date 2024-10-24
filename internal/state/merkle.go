@@ -2,7 +2,7 @@ package state
 
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/merkle"
+	"github.com/eigerco/strawberry/internal/merkle/trie"
 )
 
 // MerklizeState computes the Merkle root of a given state.
@@ -20,6 +20,6 @@ func MerklizeState(s State) (crypto.Hash, error) {
 	}
 
 	// Compute the Merkle root
-	rootHash := merkle.Merklize(kvs, 0)
+	rootHash := trie.Merklize(kvs, 0)
 	return rootHash, nil
 }

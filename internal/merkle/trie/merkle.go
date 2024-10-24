@@ -1,4 +1,4 @@
-package merkle
+package trie
 
 import (
 	"bytes"
@@ -40,7 +40,7 @@ func Merklize(keyValues [][2][]byte, i int) crypto.Hash {
 	return crypto.HashData(branchNode[:])
 }
 
-// bit function to get a bit from the key
+// get a bit from the key
 func bit(k []byte, i int) bool {
 	return (k[i/8] & (1 << (7 - i%8))) != 0
 }
