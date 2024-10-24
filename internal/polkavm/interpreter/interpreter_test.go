@@ -29,32 +29,49 @@ func TestInstance_Execute(t *testing.T) {
 		Exports: []polkavm.ProgramExport{{TargetCodeOffset: 0, Symbol: "add_numbers"}},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(polkavm.VmMaxPageSize, pp.RODataSize, pp.RWDataSize, pp.StackSize, pp.ROData)
-	if err != nil {
-		t.Fatal(err)
-	}
-	m, err := NewModule(pp, memoryMap)
-	if err != nil {
-		t.Fatal(err)
-	}
+	memoryMap, err := polkavm.NewMemoryMap(0x1000, pp.RODataSize, pp.RWDataSize, pp.StackSize, 0)
 	require.NoError(t, err)
 
-	gasLimit := int64(1000)
+	memory := NewMemory(memoryMap, pp.RWData, pp.ROData, nil)
+	entryPoint, ok := pp.LookupExport("add_numbers")
+	require.True(t, ok)
 
-	m.AddHostFunc("get_third_number", getThirdNumber)
-	res, i, err := m.Run("add_numbers", gasLimit, nil, 1, 10)
-	require.NoError(t, err)
+	t.Run("1 + 10 + 100 = 111", func(t *testing.T) {
+		gasLimit := int64(1000)
+		i := Instantiate(memory, entryPoint, gasLimit)
+		i.SetReg(polkavm.RA, polkavm.VmAddressReturnToHost)
+		i.SetReg(polkavm.SP, memoryMap.StackAddressHigh)
+		i.SetReg(polkavm.A0, 1)
+		i.SetReg(polkavm.A1, 10)
+		m := NewMutator(i, pp, memoryMap)
 
-	assert.Equal(t, gasLimit-int64(len(pp.Instructions)), i.GasRemaining())
+		err = m.AddHostFunc("get_third_number", getThirdNumber)
+		require.NoError(t, err)
 
-	// 1 + 10 + 100 = 111
-	assert.Equal(t, uint32(111), res)
+		err = m.Execute()
+		require.NoError(t, err)
 
-	// not enough gas
-	_, _, err = m.Run("add_numbers", 9, nil, 1, 10)
-	require.ErrorIs(t, err, polkavm.ErrOutOfGas)
+		assert.Equal(t, gasLimit-int64(len(pp.Instructions)), i.GasRemaining())
+		assert.Equal(t, uint32(111), i.GetReg(polkavm.A0))
+	})
+
+	t.Run("not enough gas", func(t *testing.T) {
+		i := Instantiate(memory, entryPoint, 9)
+		i.SetReg(polkavm.RA, polkavm.VmAddressReturnToHost)
+		i.SetReg(polkavm.SP, memoryMap.StackAddressHigh)
+		i.SetReg(polkavm.A0, 1)
+		i.SetReg(polkavm.A1, 10)
+		m := NewMutator(i, pp, memoryMap)
+
+		err = m.AddHostFunc("get_third_number", getThirdNumber)
+		require.NoError(t, err)
+
+		err = m.Execute()
+		require.ErrorIs(t, err, polkavm.ErrOutOfGas)
+	})
 }
 
-func getThirdNumber(instance polkavm.Instance) (uint32, error) {
-	return 100, nil
+func getThirdNumber(instance polkavm.Instance) error {
+	instance.SetReg(polkavm.A0, 100)
+	return nil
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"math"
 
 	"github.com/eigerco/strawberry/internal/polkavm"
@@ -23,28 +22,12 @@ const (
 
 var _ polkavm.Mutator = &Mutator{}
 
-func NewMutator(i polkavm.Instance, m *Module, memoryMap *polkavm.MemoryMap) *Mutator {
+func NewMutator(i polkavm.Instance, program *polkavm.Program, memoryMap *polkavm.MemoryMap) *Mutator {
 	v := &Mutator{
 		instance:      i,
-		hostFunctions: []callFunc{},
+		hostFunctions: make([]callFunc, len(program.Imports)),
 		memoryMap:     memoryMap,
-		program:       m.program,
-	}
-	for _, imp := range m.program.Imports {
-		hostFn, ok := m.hostFunctions[imp]
-		if !ok {
-			log.Println("host function not defined")
-			continue
-		}
-
-		v.hostFunctions = append(v.hostFunctions, func(instance polkavm.Instance) error {
-			ret, err := hostFn(instance)
-			if err != nil {
-				return &TrapError{fmt.Errorf("external function error: %w", err)}
-			}
-			instance.SetReg(polkavm.A0, ret)
-			return err
-		})
+		program:       program,
 	}
 	return v
 }
@@ -54,6 +37,16 @@ type Mutator struct {
 	program       *polkavm.Program
 	memoryMap     *polkavm.MemoryMap
 	hostFunctions []callFunc
+}
+
+func (m *Mutator) AddHostFunc(name string, fn callFunc) error {
+	for i, importName := range m.program.Imports {
+		if importName == name {
+			m.hostFunctions[i] = fn
+			return nil
+		}
+	}
+	return fmt.Errorf("host function %s not defined", name)
 }
 
 func (m *Mutator) branch(condition bool, target uint32) {
@@ -124,7 +117,7 @@ func leEncode(memLen int, src uint32) ([]byte, error) {
 	case x32:
 		binary.LittleEndian.PutUint32(slice, src)
 	default:
-		return nil, fmt.Errorf("invalid memory slice length: %d", memLen)
+		return nil, fmt.Errorf("invalid Memory slice length: %d", memLen)
 	}
 	return slice, nil
 }
@@ -137,12 +130,12 @@ func leDecode(memLen int, src []byte) (uint32, error) {
 	case x32:
 		return binary.LittleEndian.Uint32(src), nil
 	default:
-		return 0, fmt.Errorf("invalid memory slice length: %d", memLen)
+		return 0, fmt.Errorf("invalid Memory slice length: %d", memLen)
 	}
 }
 
 func (m *Mutator) jumpIndirectImpl(target uint32) error {
-	if target == polkavm.VmAddrReturnToHost {
+	if target == polkavm.VmAddressReturnToHost {
 		return io.EOF
 	}
 	instructionOffset := m.program.JumpTableGetByAddress(target)

@@ -2,6 +2,7 @@ package interpreter
 
 import (
 	"fmt"
+
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
@@ -23,16 +24,34 @@ func (e ExecutionError) Error() string {
 
 type callFunc func(instance polkavm.Instance) error
 
+// InitRegs Equation 246: standard program initialization, registers
+func InitRegs(i polkavm.Instance, args []byte) {
+	i.SetReg(polkavm.RA, 1<<32-1<<16)
+	i.SetReg(polkavm.SP, 1<<32-2*(1<<16)-2<<24)
+	i.SetReg(polkavm.A0, 1<<32-1<<16-2<<24)
+	i.SetReg(polkavm.A1, uint32(len(args)))
+}
+
+func Instantiate(memory *Memory, instructionOffset uint32, gasLimit int64) polkavm.Instance {
+	return &instance{
+		memory:              memory,
+		regs:                map[polkavm.Reg]uint32{},
+		instructionOffset:   instructionOffset,
+		offsetForBasicBlock: make(map[uint32]int),
+		gasRemaining:        gasLimit,
+	}
+}
+
 type instance struct {
-	memory              *memory
-	regs                map[polkavm.Reg]uint32
+	memory              *Memory                // The memory sequence; a member of the set M (μ)
+	regs                map[polkavm.Reg]uint32 // The registers (ω)
 	instructionOffset   uint32
 	instructionLength   uint32
 	cycleCounter        uint64
 	offsetForBasicBlock map[uint32]int
-	instructions        []polkavm.Instruction
-	instructionCounter  int
-	gasRemaining        int64
+	instructions        []polkavm.Instruction // The instruction sequence (ζ)
+	instructionCounter  int                   // The instruction counter (ı)
+	gasRemaining        int64                 // The gas counter (ϱ)
 }
 
 func (i *instance) GetReg(reg polkavm.Reg) uint32 {
@@ -56,43 +75,11 @@ func (i *instance) GasRemaining() int64 {
 }
 
 func (i *instance) GetMemory(memoryMap *polkavm.MemoryMap, address uint32, length int) ([]byte, error) {
-	var start uint32
-	var memorySlice []byte
-	if address >= memoryMap.StackAddressLow {
-		start, memorySlice = memoryMap.StackAddressLow, i.memory.stack
-	} else if address >= memoryMap.RWDataAddress {
-		start, memorySlice = memoryMap.RWDataAddress, i.memory.rwData
-	} else if address >= memoryMap.RODataAddress {
-		start, memorySlice = memoryMap.RODataAddress, memoryMap.ROData
-	} else {
-		return nil, fmt.Errorf("memory access error")
-	}
-
-	offset := int(address - start)
-	if offset+length > len(memorySlice) {
-		return nil, fmt.Errorf("memory slice out of range, address %d, length: %d", address, length)
-	}
-	return memorySlice[offset : offset+length], nil
+	return i.memory.Get(memoryMap, address, length)
 }
 
 func (i *instance) SetMemory(memoryMap *polkavm.MemoryMap, address uint32, data []byte) error {
-	var start uint32
-	var memorySlice []byte
-	var length = len(data)
-	if address >= memoryMap.StackAddressLow {
-		start, memorySlice = memoryMap.StackAddressLow, i.memory.stack
-	} else if address >= memoryMap.RWDataAddress {
-		start, memorySlice = memoryMap.RWDataAddress, i.memory.rwData
-	} else {
-		return fmt.Errorf("memory access error")
-	}
-
-	offset := int(address - start)
-	if offset+length > len(memorySlice) {
-		return fmt.Errorf("memory slice out of range, address %d, length: %d %d %d", address, length, offset, len(memorySlice))
-	}
-	copy(memorySlice[offset:offset+length], data)
-	return nil
+	return i.memory.Set(memoryMap, address, data)
 }
 
 func (i *instance) Sbrk(memoryMap *polkavm.MemoryMap, size uint32) (uint32, error) {
@@ -178,19 +165,4 @@ func (i *instance) NextOffsets() {
 }
 func (i *instance) DeductGas(cost int64) {
 	i.gasRemaining -= cost
-}
-
-func newBasicMemory(memoryMap *polkavm.MemoryMap, rwData []byte) *memory {
-	m := &memory{
-		rwData: make([]byte, memoryMap.RWDataSize),
-		stack:  make([]byte, memoryMap.StackSize),
-	}
-	copy(m.rwData, rwData)
-	return m
-}
-
-type memory struct {
-	rwData   []byte
-	stack    []byte
-	heapSize uint32
 }

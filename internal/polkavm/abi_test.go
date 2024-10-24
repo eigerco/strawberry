@@ -33,8 +33,8 @@ func Test_memoryMap(t *testing.T) {
 		expectedRWDataAddress:    0x10000 + VmMaxPageSize + maxSize,
 		expectedRWDataSize:       0,
 		expectedStackSize:        0,
-		expectedStackAddressHigh: VmAddrUserStackHigh,
-		expectedStackAddressLow:  VmAddrUserStackHigh,
+		expectedStackAddressHigh: VmAddressSpaceTop,
+		expectedStackAddressLow:  VmAddressSpaceTop,
 		expectedHeapBase:         0x10000 + VmMaxPageSize + maxSize,
 		expectedMaxHeapSize:      0,
 	}, {
@@ -52,8 +52,8 @@ func Test_memoryMap(t *testing.T) {
 		expectedRODataSize:       0,
 		expectedRWDataAddress:    VmMaxPageSize * 2,
 		expectedRWDataSize:       maxSize,
-		expectedStackAddressHigh: VmAddrUserStackHigh,
-		expectedStackAddressLow:  VmAddrUserStackHigh,
+		expectedStackAddressHigh: VmAddressSpaceTop,
+		expectedStackAddressLow:  VmAddressSpaceTop,
 		expectedStackSize:        0,
 		expectedHeapBase:         VmMaxPageSize*2 + maxSize,
 		expectedMaxHeapSize:      0,
@@ -63,15 +63,15 @@ func Test_memoryMap(t *testing.T) {
 		expectedRODataSize:       0,
 		expectedRWDataAddress:    VmMaxPageSize * 2,
 		expectedRWDataSize:       0,
-		expectedStackAddressHigh: VmAddrUserStackHigh,
-		expectedStackAddressLow:  VmAddrUserStackHigh - maxSize,
+		expectedStackAddressHigh: VmAddressSpaceTop,
+		expectedStackAddressLow:  VmAddressSpaceTop - maxSize,
 		expectedStackSize:        maxSize,
 		expectedHeapBase:         VmMaxPageSize * 2,
 		expectedMaxHeapSize:      0,
 	}}
 	for _, tc := range tests {
 		t.Run("", func(t *testing.T) {
-			m, err := NewMemoryMap(tc.pageSize, tc.roDataSize, tc.rwDataSize, tc.stackSize, []byte{})
+			m, err := NewMemoryMap(tc.pageSize, tc.roDataSize, tc.rwDataSize, tc.stackSize, 0)
 			if err != nil {
 				if tc.expectError {
 					return

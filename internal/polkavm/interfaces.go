@@ -4,12 +4,6 @@ import (
 	"math"
 )
 
-type Module interface {
-	AddHostFunc(string, HostFunc)
-	Run(symbol string, gasLimit int64, args ...uint32) (result uint32, gasRemaining int64, err error)
-	Instantiate(instructionOffset uint32, gasLimit int64) Instance
-}
-
 type Instance interface {
 	GetReg(Reg) uint32
 	SetReg(Reg, uint32)
@@ -28,7 +22,7 @@ type Instance interface {
 	Sbrk(mm *MemoryMap, size uint32) (uint32, error)
 }
 
-type HostFunc func(instance Instance) (uint32, error)
+type HostFunc func(instance Instance) (HostCallCode, error)
 
 type Mutator interface {
 	Trap() error

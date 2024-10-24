@@ -25,7 +25,10 @@ const (
 	SectionOptDebugLineProgramRanges byte = 130
 	SectionEndOfFile                 byte = 0
 
-	BlobVersionV1             byte = 1
+	BlobLenSize           = 8 // for 64 bit blobs
+	BlobVersionV1x32 byte = 0
+	BlobVersionV1x64 byte = 1
+
 	VersionDebugLineProgramV1 byte = 1
 
 	VmMaximumJumpTableEntries uint32 = 16 * 1024 * 1024
@@ -36,6 +39,7 @@ const (
 )
 
 type Program struct {
+	Is64Bit                bool
 	RODataSize             uint32
 	RWDataSize             uint32
 	StackSize              uint32
@@ -104,11 +108,21 @@ func ParseBlob(r *Reader) (pp *Program, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if blobVersion != BlobVersionV1 {
+	if blobVersion != BlobVersionV1x32 && blobVersion != BlobVersionV1x64 {
 		return pp, fmt.Errorf("unsupported version: %d", blobVersion)
 	}
 
-	pp = &Program{}
+	blobLenBytes := make([]byte, 8)
+	_, err = r.Read(blobLenBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read blob length: %w", err)
+	}
+	blobLen := binary.LittleEndian.Uint64(blobLenBytes)
+
+	if blobLen != uint64(r.Len()) {
+		return pp, fmt.Errorf("blob size doesn't match the blob length metadata")
+	}
+	pp = &Program{Is64Bit: blobVersion == BlobVersionV1x64}
 	section, err := r.ReadByte()
 	if err != nil {
 		return nil, err
@@ -146,7 +160,14 @@ func ParseBlob(r *Reader) (pp *Program, err error) {
 		}
 	}
 	if section == SectionCodeAndJumpTable {
-		if section, err = parseCodeAndJumpTable(r, pp); err != nil {
+		secLen, err := r.ReadVarint()
+		if err != nil {
+			return nil, err
+		}
+		if err = ParseCodeAndJumpTable(secLen, r, pp); err != nil {
+			return nil, err
+		}
+		if section, err = r.ReadByte(); err != nil {
 			return nil, err
 		}
 	}
@@ -268,32 +289,28 @@ func parseImports(r *Reader, p *Program) (byte, error) {
 	return r.ReadByte()
 }
 
-func parseCodeAndJumpTable(r *Reader, p *Program) (byte, error) {
-	secLen, err := r.ReadVarint()
-	if err != nil {
-		return 0, err
-	}
+func ParseCodeAndJumpTable(secLen uint32, r *Reader, p *Program) error {
 	initialPosition := r.Position()
 	jumpTableEntryCount, err := r.ReadVarint()
 	if err != nil {
-		return 0, err
+		return err
 	}
 	if jumpTableEntryCount > VmMaximumJumpTableEntries {
-		return 0, fmt.Errorf("the jump table section is too long")
+		return fmt.Errorf("the jump table section is too long")
 	}
 	jumpTableEntrySize, err := r.ReadByte()
 	if err != nil {
-		return 0, err
+		return err
 	}
 	codeLength, err := r.ReadVarint()
 	if err != nil {
-		return 0, err
+		return err
 	}
 	if codeLength > VmMaximumCodeSize {
-		return 0, fmt.Errorf("the code section is too long")
+		return fmt.Errorf("the code section is too long")
 	}
 	if jumpTableEntrySize > 4 {
-		return 0, fmt.Errorf("invalid jump table entry size")
+		return fmt.Errorf("invalid jump table entry size")
 	}
 
 	//TODO check for underflow and overflow?
@@ -301,7 +318,7 @@ func parseCodeAndJumpTable(r *Reader, p *Program) (byte, error) {
 
 	jumpTable := make([]byte, jumpTableLength)
 	if _, err = r.Read(jumpTable); err != nil {
-		return 0, err
+		return err
 	}
 	for i := 0; i < len(jumpTable); i += int(jumpTableEntrySize) {
 		switch jumpTableEntrySize {
@@ -322,13 +339,13 @@ func parseCodeAndJumpTable(r *Reader, p *Program) (byte, error) {
 
 	code := make([]byte, codeLength)
 	if _, err = r.Read(code); err != nil {
-		return 0, err
+		return err
 	}
 
 	bitmaskLength := secLen - uint32(r.Position()-initialPosition)
 	bitmask := make([]byte, bitmaskLength)
 	if _, err = r.Read(bitmask); err != nil {
-		return 0, err
+		return err
 	}
 	expectedBitmaskLength := codeLength / 8
 	if codeLength%8 != 0 {
@@ -336,19 +353,19 @@ func parseCodeAndJumpTable(r *Reader, p *Program) (byte, error) {
 	}
 
 	if bitmaskLength != expectedBitmaskLength {
-		return 0, fmt.Errorf("the bitmask Length doesn't match the code Length")
+		return fmt.Errorf("the bitmask Length doesn't match the code Length")
 	}
 
 	offset := 0
 	for offset < len(code) {
 		nextOffset, instr, err := parseInstruction(code, bitmask, offset)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		p.Instructions = append(p.Instructions, instr)
 		offset = nextOffset
 	}
-	return r.ReadByte()
+	return nil
 }
 
 func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruction, error) {
@@ -493,4 +510,16 @@ func (r *Reader) Position() int64 {
 	}
 
 	return pos
+}
+
+func (r *Reader) Len() int64 {
+	pos := r.Position()
+	ln, err := r.Seek(0, io.SeekEnd)
+	if err != nil {
+		panic(fmt.Errorf("failed to get blob length: %w", err))
+	}
+	if _, err = r.Seek(pos, io.SeekStart); err != nil {
+		panic(fmt.Errorf("failed to seek blob position: %w", err))
+	}
+	return ln
 }

@@ -1,6 +1,8 @@
 package host_call
 
 import (
+	"math"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/polkavm"
@@ -8,7 +10,6 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"golang.org/x/crypto/blake2b"
-	"math"
 )
 
 const (

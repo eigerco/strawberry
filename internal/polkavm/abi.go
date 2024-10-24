@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	AddressSpaceSize    uint64 = 0x100000000
-	VmMinPageSize       uint32 = 0x1000                                           // The minimum page size of the VM
-	VmMaxPageSize       uint32 = 0x10000                                          // The maximum page size of the VM.
-	VmAddrReturnToHost  uint32 = 0xffff0000                                       // The address which, when jumped to, will return to the host.
-	VmAddrUserStackHigh uint32 = uint32(AddressSpaceSize - uint64(VmMaxPageSize)) // The address at which the program's stack starts inside of the VM.
+	AddressSpaceSize      uint64 = 0x100000000                                      // 2^32
+	VmMinPageSize         uint32 = 0x1000                                           // The minimum page size of the VM
+	VmMaxPageSize         uint32 = 0x10000                                          // The maximum page size of the VM.
+	VmAddressReturnToHost uint32 = 0xffff0000                                       // The address which, when jumped to, will return to the host.
+	VmAddressSpaceTop     uint32 = uint32(AddressSpaceSize - uint64(VmMaxPageSize)) // The address at which the program's stack starts inside of the VM.
+	VmAddressSpaceBottom  uint32 = VmMaxPageSize                                    // The bottom of the accessible address space inside the VM (ZQ?)
 )
 
 var (
@@ -25,7 +26,7 @@ var (
 	ErrPageSizeNotPowerOfTwo = errors.New("page size is not a power of two")
 )
 
-func NewMemoryMap(pageSize, roDataSize, rwDataSize, stackSize uint32, roData []byte) (*MemoryMap, error) {
+func NewMemoryMap(pageSize, roDataSize, rwDataSize, stackSize, argsDataSize uint32) (*MemoryMap, error) {
 	if pageSize < VmMinPageSize {
 		return nil, fmt.Errorf("invalid page size: page size is too small")
 	}
@@ -63,40 +64,52 @@ func NewMemoryMap(pageSize, roDataSize, rwDataSize, stackSize uint32, roData []b
 	if err != nil {
 		return nil, fmt.Errorf("failed to instantiate memory map stack size: %w", err)
 	}
-	var addressLow uint64
-	addressLow += uint64(VmMaxPageSize)
+	argsDataAddressSpace, err := AlignToNextPageUint64(uint64(VmMaxPageSize), uint64(argsDataSize))
+	if err != nil {
+		return nil, fmt.Errorf("the size of the arguments data is too big %w", err)
+	}
+
+	argsDataSize, err = AlignToNextPageUint32(pageSize, argsDataSize)
+	if err != nil {
+		return nil, fmt.Errorf("the size of the arguments data is too big %w", err)
+	}
+	var addressLow uint64 = 0
+	addressLow += uint64(VmAddressSpaceBottom)
 	addressLow += roDataAddressSpace
 	addressLow += uint64(VmMaxPageSize)
 
+	rwDataAddress := uint32(addressLow)
 	heapBase := addressLow + uint64(originalRwDataSize)
 	addressLow += rwDataAddressSpace
 	heapSlack := addressLow - heapBase
 	addressLow += uint64(VmMaxPageSize)
 
-	addressHigh := uint64(VmAddrUserStackHigh)
-	addressHigh -= stackAddressSpace
+	addressHigh := int64(VmAddressSpaceTop)
+	addressHigh -= int64(argsDataAddressSpace)
+	argsDataAddress := uint32(addressHigh)
+	addressHigh -= int64(VmMaxPageSize)
+	stackAddressHigh := uint32(addressHigh)
+	addressHigh -= int64(stackAddressSpace)
 
-	if addressLow > addressHigh {
+	if int64(addressLow) > addressHigh {
 		return nil, fmt.Errorf("maximum memory size exceeded")
 	}
 
-	maxHeapSize := addressHigh - addressLow + heapSlack
-	rwDataAddressOffset, err := AlignToNextPageUint32(VmMaxPageSize, VmMaxPageSize+roDataSize)
-	if err != nil {
-		return nil, err
-	}
+	maxHeapSize := uint64(addressHigh) - addressLow + heapSlack
+
 	return &MemoryMap{
 		PageSize:         pageSize,
 		RODataSize:       roDataSize,
+		RWDataAddress:    rwDataAddress,
 		RWDataSize:       rwDataSize,
+		StackAddressHigh: stackAddressHigh,
+		StackAddressLow:  stackAddressHigh - stackSize,
 		StackSize:        stackSize,
 		HeapBase:         uint32(heapBase),
 		MaxHeapSize:      uint32(maxHeapSize),
-		StackAddressHigh: VmAddrUserStackHigh,
 		RODataAddress:    VmMaxPageSize,
-		StackAddressLow:  VmAddrUserStackHigh - stackSize,
-		RWDataAddress:    rwDataAddressOffset + VmMaxPageSize,
-		ROData:           roData,
+		ArgsDataAddress:  argsDataAddress,
+		ArgsDataSize:     argsDataSize,
 	}, nil
 }
 
@@ -111,7 +124,8 @@ type MemoryMap struct {
 	RODataAddress    uint32
 	StackAddressLow  uint32
 	RWDataAddress    uint32
-	ROData           []byte
+	ArgsDataAddress  uint32
+	ArgsDataSize     uint32
 }
 
 func AlignToNextPageInt(pageSize int, value int) (int, error) {

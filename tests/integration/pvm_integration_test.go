@@ -1,11 +1,10 @@
-//go:build integration
+///go:build integration
 
 package integration_test
 
 import (
 	"bytes"
 	"embed"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -65,28 +64,27 @@ func Test_Vectors(t *testing.T) {
 				t.Fatal(file.Name(), err)
 			}
 
-			pp, err := polkavm.ParseBlob(polkavm.NewReader(bytes.NewReader(buildProgramBlob(tc.Program))))
-			if err != nil {
+			pp := &polkavm.Program{}
+			if err := polkavm.ParseCodeAndJumpTable(uint32(len(tc.Program)), polkavm.NewReader(bytes.NewReader(tc.Program)), pp); err != nil {
 				t.Fatal(err)
 			}
 
 			mm := getMemoryMap(tc.InitialPageMap)
-			m, err := interpreter.NewModule(pp, mm)
-			if err != nil {
-				t.Fatal(err)
-			}
-			i := m.Instantiate(tc.InitialPc, tc.InitialGas)
+			mem := interpreter.NewMemory(mm, nil, nil, nil)
+
+			i := interpreter.Instantiate(mem, tc.InitialPc, tc.InitialGas)
+			// instantiate memory
 			for _, mem := range tc.InitialMemory {
 				err := i.SetMemory(mm, mem.Address, mem.Contents)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
+
 			for reg, val := range tc.InitialRegs {
 				i.SetReg(polkavm.Reg(reg), val)
 			}
-			mutator := interpreter.NewMutator(i, m, mm)
-			err = mutator.Execute()
+			err = interpreter.NewMutator(i, pp, mm).Execute()
 			assert.Equal(t, int(tc.ExpectedPc), int(i.GetInstructionOffset()))
 			assert.Equal(t, tc.ExpectedRegs, getRegs(i))
 			assert.Equal(t, tc.ExpectedStatus, error2status(err))
@@ -110,7 +108,7 @@ func getRegs(instance polkavm.Instance) (regs [13]uint32) {
 }
 
 func getMemoryMap(pageMap []Page) *polkavm.MemoryMap {
-	mm := &polkavm.MemoryMap{PageSize: polkavm.VmMinPageSize}
+	mm := &polkavm.MemoryMap{PageSize: polkavm.VmMinPageSize, ArgsDataAddress: 1<<32 - 1}
 	for _, page := range pageMap {
 		if !page.IsWritable {
 			mm.RODataAddress = page.Address
@@ -118,7 +116,6 @@ func getMemoryMap(pageMap []Page) *polkavm.MemoryMap {
 		} else if page.IsWritable && mm.StackAddressLow == 0 {
 			mm.StackAddressLow = page.Address
 			mm.StackSize = page.Length
-
 		} else {
 			mm.RWDataAddress = page.Address
 			mm.RWDataSize = page.Length
@@ -137,16 +134,4 @@ func error2status(err error) string {
 	default:
 		return fmt.Sprintf("unknown: %s", err)
 	}
-}
-
-func buildProgramBlob(codeAndJumpTable []byte) []byte {
-	blob := polkavm.BlobMagic[:]
-	blob = append(blob, 1)
-	blob = append(blob, polkavm.SectionCodeAndJumpTable)
-	sectionLen := make([]byte, 4)
-	n := binary.PutUvarint(sectionLen, uint64(len(codeAndJumpTable)))
-	blob = append(blob, sectionLen[:n]...)
-	blob = append(blob, codeAndJumpTable...)
-	blob = append(blob, 0)
-	return blob
 }
