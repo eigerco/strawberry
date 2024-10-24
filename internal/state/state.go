@@ -67,7 +67,7 @@ func (s *State) UpdateState(newBlock block.Block) {
 
 	newJudgements := calculateNewJudgements(newBlock.Extrinsic.ED, s.PastJudgements)
 
-	newCoreAuthorizations := calculateNewCoreAuthorizations(newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
+	newCoreAuthorizations := calculateNewCoreAuthorizations(newBlock.Header, newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
 
 	newValidators, err := calculateNewValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.CurrentValidators, s.ValidatorState.SafroleState.NextValidators)
 	if err != nil {
