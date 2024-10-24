@@ -12,8 +12,9 @@ import (
 
 const (
 	GasRemainingCost = 10
-	LookupCost       = 10
-	ReadCost         = 10
+	LookupCost
+	ReadCost
+	WriteCost
 )
 
 // GasRemaining ΩG
@@ -53,7 +54,7 @@ func MakeLookupFunc(serviceId block.ServiceId, serviceState state.ServiceState, 
 		//  account 'a'
 		a, exists := serviceState[block.ServiceId(sID)]
 		if !exists {
-			return uint32(polkavm.HostCallResultNone), nil
+			return 0, polkavm.ErrAccountNotFound
 		}
 
 		ho := instance.GetReg(polkavm.A1)
@@ -109,7 +110,7 @@ func MakeReadFunc(serviceId block.ServiceId, serviceState state.ServiceState, me
 		//  account 'a'
 		storedService, exists := serviceState[block.ServiceId(sID)]
 		if !exists {
-			return uint32(polkavm.HostCallResultNone), nil
+			return 0, polkavm.ErrAccountNotFound
 		}
 
 		// read key data from memory at ko..ko+kz
@@ -152,6 +153,66 @@ func MakeReadFunc(serviceId block.ServiceId, serviceState state.ServiceState, me
 		}
 
 		return uint32(polkavm.HostCallResultNone), nil
+	}
+}
+
+// MakeWriteFunc ΩW
+func MakeWriteFunc(serviceId block.ServiceId, serviceState state.ServiceState, memoryMap *polkavm.MemoryMap) polkavm.HostFunc {
+	return func(instance polkavm.Instance) (uint32, error) {
+		if err := deductGas(instance, WriteCost); err != nil {
+			return 0, err
+		}
+
+		ko := instance.GetReg(polkavm.A0)
+		kz := instance.GetReg(polkavm.A1)
+		vo := instance.GetReg(polkavm.A2)
+		vz := instance.GetReg(polkavm.A3)
+
+		var l uint32
+
+		keyData, err := instance.GetMemory(memoryMap, ko, int(kz))
+		if err != nil {
+			return 0, err
+		}
+
+		serializer := serialization.NewSerializer(codec.NewJamCodec())
+		serviceIdBytes, err := serializer.Encode(serviceId)
+		if err != nil {
+			return 0, err
+		}
+		hashInput := append(serviceIdBytes, keyData...)
+		k := blake2b.Sum256(hashInput)
+
+		a, accountExists := serviceState[serviceId]
+		if !accountExists {
+			return 0, polkavm.ErrAccountNotFound
+		}
+
+		v, keyExists := a.Storage[k]
+		if !keyExists {
+			return uint32(polkavm.HostCallResultNone), nil
+		}
+
+		l = uint32(len(v))
+
+		if vz == 0 {
+			delete(a.Storage, k)
+		} else {
+			availableMemory := memoryMap.RWDataAddress + memoryMap.RWDataSize - vo
+			if availableMemory < vz {
+				return uint32(polkavm.HostCallResultFull), nil
+			}
+
+			valueData, err := instance.GetMemory(memoryMap, vo, int(vz))
+			if err != nil {
+				return uint32(polkavm.HostCallResultOob), nil
+			}
+
+			a.Storage[k] = valueData
+		}
+
+		serviceState[serviceId] = a
+		return l, nil
 	}
 }
 
