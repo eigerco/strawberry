@@ -44,10 +44,9 @@ func MakeLookupFunc(serviceId block.ServiceId, serviceState state.ServiceState, 
 			return 0, err
 		}
 
-		omega0 := instance.GetReg(polkavm.A0)
+		sID := instance.GetReg(polkavm.A0)
 
-		sID := omega0
-		if omega0 == math.MaxUint32 {
+		if sID == math.MaxUint32 {
 			sID = uint32(serviceId)
 		}
 
@@ -97,14 +96,13 @@ func MakeReadFunc(serviceId block.ServiceId, serviceState state.ServiceState, me
 			return 0, err
 		}
 
-		omega0 := instance.GetReg(polkavm.A0)
+		sID := instance.GetReg(polkavm.A0)
 		ko := instance.GetReg(polkavm.A1)
 		kz := instance.GetReg(polkavm.A2)
 		bo := instance.GetReg(polkavm.A3)
 		bz := instance.GetReg(polkavm.A4)
 
-		sID := omega0
-		if omega0 == math.MaxUint32 {
+		if sID == math.MaxUint32 {
 			sID = uint32(serviceId)
 		}
 
