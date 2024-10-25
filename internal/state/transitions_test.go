@@ -524,9 +524,9 @@ func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
 	testCases := []struct {
 		name           string
-		availableCores int
-		validators     int
-		expectedKept   int
+		availableCores uint16
+		validators     uint16
+		expectedKept   uint16
 	}{
 		{"No Cores Available, All Validators", 0, common.NumberOfValidators, 0},
 		{"No Cores Available, No Validators", 0, 0, 0},
@@ -543,7 +543,7 @@ func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
 			initialAssignments := createInitialAssignments()
 			newAssignments := calculateIntermediateCoreAssignmentsFromAvailability(assurances, initialAssignments)
 
-			keptCount := 0
+			keptCount := uint16(0)
 			for _, assignment := range newAssignments {
 				if assignment.WorkReport != nil {
 					keptCount++
@@ -819,6 +819,130 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
     })
 }
 
+func TestCalculateNewCoreAuthorizations(t *testing.T) {
+    t.Run("add new authorizer to empty pool", func(t *testing.T) {
+        header := block.Header{
+            TimeSlotIndex: 1,
+        }
+        pendingAuths := PendingAuthorizersQueues{}
+        currentAuths := CoreAuthorizersPool{}
+        
+        // Set up a pending authorizer for core 0
+        newAuth := testutils.RandomHash(t)
+        pendingAuths[0][1] = newAuth // At index 1 (matching TimeSlotIndex)
+        
+        newAuths := calculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
+        
+        require.Len(t, newAuths[0], 1)
+        assert.Equal(t, newAuth, newAuths[0][0])
+    })
+
+    t.Run("remove used authorizer and add new one", func(t *testing.T) {
+        header := block.Header{
+            TimeSlotIndex: 1,
+        }
+        
+        // Create a guarantee that uses an authorizer
+        usedAuth := testutils.RandomHash(t)
+        workReport := block.WorkReport{
+            CoreIndex:      0,
+            AuthorizerHash: usedAuth,
+        }
+        guarantees := block.GuaranteesExtrinsic{
+            Guarantees: []block.Guarantee{
+                {WorkReport: workReport},
+            },
+        }
+        
+        // Set up current authorizations with the used authorizer
+        currentAuths := CoreAuthorizersPool{}
+        currentAuths[0] = []crypto.Hash{usedAuth}
+        
+        // Set up pending authorizations with new authorizer
+        pendingAuths := PendingAuthorizersQueues{}
+        newAuth := testutils.RandomHash(t)
+        pendingAuths[0][1] = newAuth // At index 1 (matching TimeSlotIndex)
+        
+        newAuths := calculateNewCoreAuthorizations(header, guarantees, pendingAuths, currentAuths)
+        
+        require.Len(t, newAuths[0], 1)
+        assert.Equal(t, newAuth, newAuths[0][0])
+        assert.NotContains(t, newAuths[0], usedAuth)
+    })
+
+    t.Run("maintain max size limit", func(t *testing.T) {
+        header := block.Header{
+            TimeSlotIndex: 1,
+        }
+        
+        // Fill current authorizations to max size
+        currentAuths := CoreAuthorizersPool{}
+        for i := 0; i < MaxAuthorizersPerCore; i++ {
+            currentAuths[0] = append(currentAuths[0], testutils.RandomHash(t))
+        }
+        
+        // Set up new pending authorizer
+        pendingAuths := PendingAuthorizersQueues{}
+        newAuth := testutils.RandomHash(t)
+        pendingAuths[0][1] = newAuth
+        
+        newAuths := calculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
+        
+        // Check that size limit is maintained and oldest auth was removed
+        require.Len(t, newAuths[0], MaxAuthorizersPerCore)
+        assert.Equal(t, newAuth, newAuths[0][MaxAuthorizersPerCore-1])
+        assert.NotEqual(t, currentAuths[0][0], newAuths[0][0])
+    })
+
+    t.Run("handle empty pending authorization", func(t *testing.T) {
+        header := block.Header{
+            TimeSlotIndex: 1,
+        }
+        
+        currentAuths := CoreAuthorizersPool{}
+        existingAuth := testutils.RandomHash(t)
+        currentAuths[0] = []crypto.Hash{existingAuth}
+        
+        // Empty pending authorizations
+        pendingAuths := PendingAuthorizersQueues{}
+        
+        newAuths := calculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
+        
+        // Should keep existing authorizations unchanged
+        require.Len(t, newAuths[0], 1)
+        assert.Equal(t, existingAuth, newAuths[0][0])
+    })
+
+    t.Run("handle multiple cores", func(t *testing.T) {
+        header := block.Header{
+            TimeSlotIndex: 1,
+        }
+        
+        // Set up authorizations for two cores
+        currentAuths := CoreAuthorizersPool{}
+        existingAuth0 := testutils.RandomHash(t)
+        existingAuth1 := testutils.RandomHash(t)
+        currentAuths[0] = []crypto.Hash{existingAuth0}
+        currentAuths[1] = []crypto.Hash{existingAuth1}
+        
+        // Set up new pending authorizations
+        pendingAuths := PendingAuthorizersQueues{}
+        newAuth0 := testutils.RandomHash(t)
+        newAuth1 := testutils.RandomHash(t)
+        pendingAuths[0][1] = newAuth0
+        pendingAuths[1][1] = newAuth1
+        
+        newAuths := calculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
+        
+        require.Len(t, newAuths[0], 2)
+        require.Len(t, newAuths[1], 2)
+        assert.Contains(t, newAuths[0], existingAuth0)
+        assert.Contains(t, newAuths[0], newAuth0)
+        assert.Contains(t, newAuths[1], existingAuth1)
+        assert.Contains(t, newAuths[1], newAuth1)
+    })
+}
+
 func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16) block.Verdict {
 	var judgments [common.ValidatorsSuperMajority]block.Judgement
 	for i := uint16(0); i < positiveJudgments; i++ {
@@ -844,14 +968,14 @@ func createInitialAssignments() CoreAssignments {
 	return initialAssignments
 }
 
-func createAssuranceExtrinsic(availableCores int, validators int) block.AssurancesExtrinsic {
+func createAssuranceExtrinsic(availableCores uint16, validators uint16) block.AssurancesExtrinsic {
 	assurances := make(block.AssurancesExtrinsic, validators)
-	for i := 0; i < validators; i++ {
+	for i := uint16(0); i < validators; i++ {
 		assurance := block.Assurance{
 			ValidatorIndex: uint16(i),
 		}
 
-		for j := 0; j < availableCores && j < common.TotalNumberOfCores; j++ {
+		for j := uint16(0); j < availableCores && j < common.TotalNumberOfCores; j++ {
 			byteIndex := j / 8
 			bitIndex := j % 8
 			assurance.Bitfield[byteIndex] |= 1 << bitIndex
