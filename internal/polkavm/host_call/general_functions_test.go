@@ -75,11 +75,11 @@ func TestLookup(t *testing.T) {
 	module.AddHostFunc("lookup", host_call.MakeLookupFunc(1, make(state.ServiceState), memoryMap))
 
 	// Service Not Found
-	res, instance, err := module.Run("test_lookup", initialGas, nil, uint32(1))
-	require.NoError(t, err)
+	_, instance, err := module.Run("test_lookup", initialGas, nil, uint32(1))
+	require.Error(t, err)
 
-	assert.Equal(t, uint32(polkavm.HostCallResultNone), res)
-	assert.Equal(t, initialGas-host_call.LookupCost-int64(len(pp.Instructions)), instance.GasRemaining())
+	// only one instruction executed before error
+	assert.Equal(t, initialGas-host_call.LookupCost-int64(1), instance.GasRemaining())
 
 	// Successful Key Lookup
 	module, err = interpreter.NewModule(pp, memoryMap)
@@ -189,5 +189,86 @@ func TestRead(t *testing.T) {
 	require.Equal(t, uint32(len(value)), result)
 
 	expectedGasRemaining := initialGas - host_call.ReadCost - int64(len(pp.Instructions))
+	require.Equal(t, expectedGasRemaining, instance.GasRemaining())
+}
+
+func TestWrite(t *testing.T) {
+	pp := &polkavm.Program{
+		RODataSize: 0,
+		RWDataSize: 256,
+		StackSize:  512,
+		Instructions: []polkavm.Instruction{
+			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 3, Length: 2},
+		},
+		Imports: []string{"write"},
+		Exports: []polkavm.ProgramExport{{TargetCodeOffset: 0, Symbol: "test_write"}},
+	}
+
+	memoryMap, err := polkavm.NewMemoryMap(
+		polkavm.VmMinPageSize,
+		pp.RODataSize,
+		pp.RWDataSize,
+		pp.StackSize,
+		pp.ROData,
+	)
+	require.NoError(t, err)
+
+	module, err := interpreter.NewModule(pp, memoryMap)
+	require.NoError(t, err)
+
+	serviceId := block.ServiceId(1)
+	keyData := []byte("key_to_write")
+	value := []byte("value_to_write")
+
+	serializer := serialization.NewSerializer(codec.NewJamCodec())
+	serviceIdBytes, err := serializer.Encode(serviceId)
+	require.NoError(t, err)
+
+	hashInput := append(serviceIdBytes, keyData...)
+	k := blake2b.Sum256(hashInput)
+
+	serviceState := state.ServiceState{
+		serviceId: state.ServiceAccount{
+			Storage: map[crypto.Hash][]byte{
+				k: value,
+			},
+		},
+	}
+
+	module.AddHostFunc("write", host_call.MakeWriteFunc(serviceId, serviceState, memoryMap))
+
+	initialGas := int64(100)
+
+	ko := memoryMap.RWDataAddress
+	vo := memoryMap.RWDataAddress + 100
+	kz := uint32(len(keyData))
+	vz := uint32(len(value))
+
+	result, instance, err := module.Run("test_write", initialGas, func(instance polkavm.Instance) {
+		err = instance.SetMemory(memoryMap, ko, keyData)
+		require.NoError(t, err)
+
+		err = instance.SetMemory(memoryMap, vo, value)
+		require.NoError(t, err)
+	}, ko, kz, vo, vz)
+	require.NoError(t, err)
+
+	actualValue, err := instance.GetMemory(memoryMap, vo, len(value))
+	require.NoError(t, err)
+	require.Equal(t, value, actualValue)
+
+	require.Equal(t, uint32(len(value)), result)
+
+	storedService, exists := serviceState[serviceId]
+	require.True(t, exists)
+
+	storedValue, keyExists := storedService.Storage[k]
+	require.True(t, keyExists)
+	require.Equal(t, value, storedValue)
+
+	require.Equal(t, uint32(len(value)), result)
+
+	expectedGasRemaining := initialGas - host_call.WriteCost - int64(len(pp.Instructions))
 	require.Equal(t, expectedGasRemaining, instance.GasRemaining())
 }
