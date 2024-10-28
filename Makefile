@@ -26,7 +26,7 @@ test: build-bandersnatch
 .PHONY: integration
 ## integration: Runs integration tests.
 integration:
-	go test ./... -race -v --tags=integration
+	go test ./tests/... -race -v --tags=integration
 
 ## install-hooks: Install git-hooks from .githooks directory.
 .PHONY: install-hooks

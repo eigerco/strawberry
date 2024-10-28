@@ -8,7 +8,7 @@ import (
 )
 
 func Test_memoryMap(t *testing.T) {
-	maxSize := uint32(AddressSpaceSize - uint64(VmMaxPageSize)*4)
+	maxSize := uint32(AddressSpaceSize - uint64(VmMaxPageSize)*5)
 	tests := []struct {
 		expectError                                 bool
 		pageSize, roDataSize, rwDataSize, stackSize uint32
@@ -22,19 +22,19 @@ func Test_memoryMap(t *testing.T) {
 		expectedRWDataSize:       0x4000,
 		expectedStackSize:        0x4000,
 		expectedRWDataAddress:    0x30000,
-		expectedStackAddressHigh: 0xffff0000,
-		expectedStackAddressLow:  0xfffec000,
+		expectedStackAddressHigh: 0xfffe0000,
+		expectedStackAddressLow:  0xfffdc000,
 		expectedHeapBase:         0x30001,
-		expectedMaxHeapSize:      AddressSpaceSize - uint64(VmMaxPageSize)*3 - uint64(0x30001),
+		expectedMaxHeapSize:      AddressSpaceSize - uint64(VmMaxPageSize)*4 - uint64(0x30001),
 	}, {
 		pageSize: 0x4000, roDataSize: maxSize, rwDataSize: 0, stackSize: 0,
 		expectedRODataAddress:    0x10000,
 		expectedRODataSize:       maxSize,
 		expectedRWDataAddress:    0x10000 + VmMaxPageSize + maxSize,
 		expectedRWDataSize:       0,
+		expectedStackAddressHigh: VmAddressSpaceTop - VmMaxPageSize,
+		expectedStackAddressLow:  VmAddressSpaceTop - VmMaxPageSize,
 		expectedStackSize:        0,
-		expectedStackAddressHigh: VmAddressSpaceTop,
-		expectedStackAddressLow:  VmAddressSpaceTop,
 		expectedHeapBase:         0x10000 + VmMaxPageSize + maxSize,
 		expectedMaxHeapSize:      0,
 	}, {
@@ -52,8 +52,8 @@ func Test_memoryMap(t *testing.T) {
 		expectedRODataSize:       0,
 		expectedRWDataAddress:    VmMaxPageSize * 2,
 		expectedRWDataSize:       maxSize,
-		expectedStackAddressHigh: VmAddressSpaceTop,
-		expectedStackAddressLow:  VmAddressSpaceTop,
+		expectedStackAddressHigh: VmAddressSpaceTop - VmMaxPageSize,
+		expectedStackAddressLow:  VmAddressSpaceTop - VmMaxPageSize,
 		expectedStackSize:        0,
 		expectedHeapBase:         VmMaxPageSize*2 + maxSize,
 		expectedMaxHeapSize:      0,
@@ -63,15 +63,15 @@ func Test_memoryMap(t *testing.T) {
 		expectedRODataSize:       0,
 		expectedRWDataAddress:    VmMaxPageSize * 2,
 		expectedRWDataSize:       0,
-		expectedStackAddressHigh: VmAddressSpaceTop,
-		expectedStackAddressLow:  VmAddressSpaceTop - maxSize,
+		expectedStackAddressHigh: VmAddressSpaceTop - VmMaxPageSize,
+		expectedStackAddressLow:  VmAddressSpaceTop - VmMaxPageSize - maxSize,
 		expectedStackSize:        maxSize,
 		expectedHeapBase:         VmMaxPageSize * 2,
 		expectedMaxHeapSize:      0,
 	}}
 	for _, tc := range tests {
 		t.Run("", func(t *testing.T) {
-			m, err := NewMemoryMap(tc.pageSize, tc.roDataSize, tc.rwDataSize, tc.stackSize, 0)
+			m, err := NewMemoryMap(uint(tc.pageSize), uint(tc.roDataSize), uint(tc.rwDataSize), uint(tc.stackSize), 0)
 			if err != nil {
 				if tc.expectError {
 					return

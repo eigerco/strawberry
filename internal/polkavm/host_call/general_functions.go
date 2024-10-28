@@ -31,7 +31,7 @@ type AccountInfo struct {
 	TotalItems             uint32      // ti
 }
 
-// GasRemaining ΩG
+// GasRemaining ΩG(ξ, ω, ...)
 func GasRemaining(gas polkavm.Gas, regs polkavm.Registers) (polkavm.Gas, polkavm.Registers, error) {
 	if gas < GasRemainingCost {
 		return gas, regs, polkavm.ErrOutOfGas
@@ -45,8 +45,8 @@ func GasRemaining(gas polkavm.Gas, regs polkavm.Registers) (polkavm.Gas, polkavm
 	return gas, regs, nil
 }
 
-// Lookup ΩL
-func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+// Lookup ΩL(ξ, ω, μ, s, s, d)
+func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < LookupCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
 	}
@@ -55,23 +55,15 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, service
 	sID := regs[polkavm.A0]
 
 	// Determine the lookup key 'a'
-	var a state.ServiceAccount
-	if sID == uint32(serviceId) || sID == math.MaxUint32 {
+	a := s
+	if sID != math.MaxUint32 && sID != uint32(serviceId) {
+		var exists bool
 		// Lookup service account by serviceId in the serviceState
-		serviceAccount, serviceExists := serviceState[serviceId]
-		if !serviceExists {
-			regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
-			return gas, regs, mem, nil
-		}
-
-		a = serviceAccount
-	} else {
-		storedService, exists := serviceState[block.ServiceId(sID)]
+		a, exists = serviceState[serviceId]
 		if !exists {
 			regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
 			return gas, regs, mem, nil
 		}
-		a = storedService
 	}
 
 	ho := regs[polkavm.A1]
@@ -112,8 +104,8 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, service
 	return gas, regs, mem, err
 }
 
-// Read ΩR
-func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+// Read ΩR(ξ, ω, μ, s, s, d)
+func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < ReadCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
 	}
@@ -125,14 +117,13 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 	bo := regs[polkavm.A3]
 	bz := regs[polkavm.A4]
 
-	if sID == math.MaxUint32 {
-		sID = uint32(serviceId)
-	}
-
-	//  account 'a'
-	storedService, exists := serviceState[block.ServiceId(sID)]
-	if !exists {
-		return gas, regs, mem, polkavm.ErrAccountNotFound
+	a := s
+	if sID != math.MaxUint32 && sID != uint32(serviceId) {
+		var exists bool
+		a, exists = serviceState[block.ServiceId(sID)]
+		if !exists {
+			return gas, regs, mem, polkavm.ErrAccountNotFound
+		}
 	}
 
 	// read key data from memory at ko..ko+kz
@@ -157,7 +148,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 	// Compute the hash H(E4(s) + keyData)
 	k := blake2b.Sum256(hashInput)
 
-	v, exists := storedService.Storage[k]
+	v, exists := a.Storage[k]
 	if !exists {
 		regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
 		return gas, regs, mem, nil
@@ -179,7 +170,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 	return gas, regs, mem, nil
 }
 
-// Write ΩW
+// Write ΩW (ξ, ω, μ, s, s)
 func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId block.ServiceId, s state.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
 	if gas < WriteCost {
 		return gas, regs, mem, s, polkavm.ErrOutOfGas
@@ -235,65 +226,48 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceI
 	return gas, regs, mem, a, err               // return service account 'a' as opposed to 's' for not successful paths
 }
 
-func MakeInfoFunc(
-	serviceId block.ServiceId,
-	serviceState state.ServiceState,
-	memoryMap *polkavm.MemoryMap,
-) polkavm.HostFunc {
-	return func(instance polkavm.Instance) (uint32, error) {
-		if err := deductGas(instance, InfoCost); err != nil {
-			return 0, err
-		}
+// Info ΩI(ξ, ω, μ, s, s, d)
+func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+	if gas < InfoCost {
+		return gas, regs, mem, polkavm.ErrOutOfGas
+	}
+	gas -= InfoCost
 
-		sID := instance.GetReg(polkavm.A0)
-		omega1 := instance.GetReg(polkavm.A1)
+	sID := regs[polkavm.A0]
+	omega1 := regs[polkavm.A1]
 
-		if sID == math.MaxUint32 {
-			sID = uint32(serviceId)
-		}
-
-		t, exists := serviceState[block.ServiceId(sID)]
+	t := s
+	if sID != math.MaxUint32 && sID != uint32(serviceId) {
+		var exists bool
+		t, exists = serviceState[block.ServiceId(sID)]
 		if !exists {
-			return uint32(polkavm.HostCallResultNone), nil
+			regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+			return gas, regs, mem, nil
 		}
-
-		accountInfo := AccountInfo{
-			CodeHash:               t.CodeHash,
-			Balance:                t.Balance,
-			ThresholdBalance:       t.ThresholdBalance(),
-			GasLimitForAccumulator: t.GasLimitForAccumulator,
-			GasLimitOnTransfer:     t.GasLimitOnTransfer,
-			TotalStorageSize:       t.TotalStorageSize(),
-			TotalItems:             t.TotalItems(),
-		}
-
-		serializer := serialization.NewSerializer(codec.NewJamCodec())
-		// E(tc, tb, tt, tg , tm, tl, ti)
-		m, err := serializer.Encode(accountInfo)
-		if err != nil {
-			return 0, err
-		}
-
-		end := omega1 + uint32(len(m))
-		if end > memoryMap.RWDataAddress+memoryMap.RWDataSize {
-			return uint32(polkavm.HostCallResultOob), nil
-		}
-
-		err = instance.SetMemory(memoryMap, omega1, m)
-		if err != nil {
-			return uint32(polkavm.HostCallResultOob), nil
-		}
-
-		return uint32(polkavm.HostCallResultOk), nil
-	}
-}
-
-func deductGas(instance polkavm.Instance, gasCost int64) error {
-	if instance.GasRemaining() < gasCost {
-		return polkavm.ErrOutOfGas
 	}
 
-	instance.DeductGas(gasCost)
+	accountInfo := AccountInfo{
+		CodeHash:               t.CodeHash,
+		Balance:                t.Balance,
+		ThresholdBalance:       t.ThresholdBalance(),
+		GasLimitForAccumulator: t.GasLimitForAccumulator,
+		GasLimitOnTransfer:     t.GasLimitOnTransfer,
+		TotalStorageSize:       t.TotalStorageSize(),
+		TotalItems:             t.TotalItems(),
+	}
 
-	return nil
+	serializer := serialization.NewSerializer(codec.NewJamCodec())
+	// E(tc, tb, tt, tg , tm, tl, ti)
+	m, err := serializer.Encode(accountInfo)
+	if err != nil {
+		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
+	}
+
+	if err := mem.Write(omega1, m); err != nil {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+		return gas, regs, mem, nil
+	}
+
+	regs[polkavm.A0] = uint32(polkavm.HostCallResultOk)
+	return gas, regs, mem, nil
 }

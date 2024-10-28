@@ -45,12 +45,12 @@ func TestInstance_Execute(t *testing.T) {
 		polkavm.A0: 1,
 		polkavm.A1: 10,
 	}
-	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x nothing) (polkavm.Gas, polkavm.Registers, polkavm.Memory, nothing, polkavm.HostCallCode) {
+	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x nothing) (polkavm.Gas, polkavm.Registers, polkavm.Memory, nothing, error) {
 		if pp.Imports[hostCall] == "get_third_number" {
 			regs1 := getThirdNumber(regs)
-			return gasCounter, regs1, mem, struct{}{}, polkavm.HostCallResultOk
+			return gasCounter, regs1, mem, struct{}{}, nil
 		}
-		return gasCounter, regs, mem, struct{}{}, polkavm.HostCallResultWhat
+		return gasCounter, regs, mem, struct{}{}, nil
 	}
 	t.Run("1 + 10 + 100 = 111", func(t *testing.T) {
 		gasLimit := polkavm.Gas(1000)
