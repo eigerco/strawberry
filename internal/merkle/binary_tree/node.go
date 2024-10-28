@@ -12,7 +12,7 @@ func ComputeNode(blobs [][]byte, hashFunc func([]byte) crypto.Hash) []byte {
 
 	// If |blobs| = 1, return the hash of blobs[0]
 	if len(blobs) == 1 {
-		return convertHashToSlice(hashFunc(blobs[0]))
+		return convertHashToBlob(hashFunc(blobs[0]))
 	}
 
 	// Otherwise, compute the recursive hash combination
@@ -23,5 +23,5 @@ func ComputeNode(blobs [][]byte, hashFunc func([]byte) crypto.Hash) []byte {
 	// Concatenate "$node", left, and right
 	combined := append([]byte("$node"), append(left, right...)...)
 
-	return convertHashToSlice(hashFunc(combined))
+	return convertHashToBlob(hashFunc(combined))
 }
