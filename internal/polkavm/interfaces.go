@@ -13,53 +13,66 @@ const (
 
 // Memory Equation: 34 (M)
 type Memory struct {
-	data   []byte         // value V
-	access []accessRanges // access (A ∈ ⟦{W, R, ∅})
+	data []*memorySegment // data (V ∈ Y, A ∈ ⟦{W, R, ∅})
 }
 
-type accessRanges struct {
+type memorySegment struct {
 	start, end uint32
 	access     MemoryAccess
+	data       []byte
 }
 
 // Read reads from the set of readable indices (Vμ)
 func (m *Memory) Read(address uint32, data []byte) error {
-	if _, ok := m.inRange(address); !ok {
+	memSeg := m.inRange(address)
+	if data == nil {
 		return &ErrPageFault{Reason: "address not in a valid range", Address: address}
 	}
-	copy(data, m.data[address:address+uint32(len(data))])
+
+	offset := int(address - memSeg.start)
+	offsetEnd := offset + len(data)
+	if offsetEnd > len(memSeg.data) {
+		return &ErrPageFault{Reason: "memory exceeds page size, growing memory not supported", Address: address}
+	}
+	copy(data, memSeg.data[offset:offsetEnd])
 	return nil
 }
 
-func (m *Memory) inRange(address uint32) (MemoryAccess, bool) {
-	for _, r := range m.access {
+func (m *Memory) inRange(address uint32) *memorySegment {
+	for _, r := range m.data {
 		if address >= r.start && address <= r.end {
-			return r.access, true
+			return r
 		}
 	}
-	return ReadOnly, false
+	return nil
 }
 
 func (m *Memory) Sbrk(pageSize, heapTop uint32) error {
-	if heapTop > m.access[2].end {
+	if heapTop > m.data[2].end {
 		nextPage, err := AlignToNextPage(uint(pageSize), uint(heapTop))
 		if err != nil {
 			return err
 		}
 
-		m.access[2].end += uint32(nextPage)
+		m.data[2].end += uint32(nextPage)
 	}
 	return nil
 }
 
 // Write writes to the set of writeable indices (Vμ*)
 func (m *Memory) Write(address uint32, data []byte) error {
-	if access, ok := m.inRange(address); !ok {
+	memSeg := m.inRange(address)
+	if memSeg == nil {
 		return &ErrPageFault{Reason: "address not in a valid range", Address: address}
-	} else if access == ReadOnly {
+	} else if memSeg.access == ReadOnly {
 		return &ErrPageFault{Reason: "memory at address is read only", Address: address}
 	}
-	copy(m.data[address:address+uint32(len(data))], data)
+	offset := int(address - memSeg.start)
+	offsetEnd := offset + len(data)
+	if offsetEnd > len(memSeg.data) {
+		return &ErrPageFault{Reason: "memory exceeds page size, growing memory not supported", Address: address}
+	}
+	copy(memSeg.data[offset:offsetEnd], data)
 	return nil
 }
 

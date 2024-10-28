@@ -130,19 +130,20 @@ type MemoryMap struct {
 
 func (mm MemoryMap) NewMemory(rwData, roData, argsData []byte) Memory {
 	m := Memory{
-		data: make([]byte, 1<<32),
-		access: []accessRanges{
-			{mm.ArgsDataAddress, mm.ArgsDataAddress + mm.ArgsDataSize, ReadOnly},
-			{mm.StackAddressLow, mm.StackAddressLow + mm.StackSize, ReadWrite},
-			{mm.RWDataAddress, mm.RWDataAddress + mm.RWDataSize, ReadWrite},
-			{mm.RODataAddress, mm.RODataAddress + mm.RODataSize, ReadOnly},
+		data: []*memorySegment{
+			{mm.ArgsDataAddress, mm.ArgsDataAddress + mm.ArgsDataSize, ReadOnly, copySized(argsData, mm.ArgsDataSize)},
+			{mm.StackAddressLow, mm.StackAddressLow + mm.StackSize, ReadWrite, make([]byte, mm.StackSize)},
+			{mm.RWDataAddress, mm.RWDataAddress + mm.RWDataSize, ReadWrite, copySized(rwData, mm.RWDataSize)},
+			{mm.RODataAddress, mm.RODataAddress + mm.RODataSize, ReadOnly, copySized(roData, mm.RODataSize)},
 		},
 	}
-
-	copy(m.data[mm.RWDataAddress:mm.RWDataAddress+mm.RWDataSize], rwData)
-	copy(m.data[mm.RODataAddress:mm.RODataAddress+mm.RODataSize], roData)
-	copy(m.data[mm.ArgsDataAddress:mm.ArgsDataAddress+mm.ArgsDataSize], argsData)
 	return m
+}
+
+func copySized(data []byte, size uint32) []byte {
+	dst := make([]byte, size)
+	copy(dst, data)
+	return dst
 }
 
 func AlignToNextPage(pageSize uint, value uint) (uint, error) {

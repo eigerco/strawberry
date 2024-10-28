@@ -19,7 +19,7 @@ func (e *ErrPanic) Error() string {
 // ErrOutOfGas exhaustion of gas: (∞)
 var ErrOutOfGas = fmt.Errorf("out of gas")
 
-// ErrPageFault a page fault (attempt to access some address in RAM which is not accessible). This includes the address at fault. (F)
+// ErrPageFault a page fault (attempt to data some address in RAM which is not accessible). This includes the address at fault. (F)
 type ErrPageFault struct {
 	Reason  string
 	Address uint32
