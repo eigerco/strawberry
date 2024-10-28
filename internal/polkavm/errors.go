@@ -1,7 +1,5 @@
 package polkavm
 
-import "fmt"
-
 var (
-	ErrAccountNotFound = fmt.Errorf("account not found")
+	ErrAccountNotFound = ErrPanicf("account not found")
 )
