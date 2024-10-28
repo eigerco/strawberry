@@ -194,7 +194,7 @@ func TestComputeTraceProperties(t *testing.T) {
 				} else {
 					combined = append([]byte("$node"), append(trace[i], current...)...)
 				}
-				current = convertHashToSlice(testutils.MockHashData(combined))
+				current = convertHashToBlob(testutils.MockHashData(combined))
 				idx /= 2
 			}
 
