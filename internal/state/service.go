@@ -19,6 +19,42 @@ type ServiceAccount struct {
 	GasLimitOnTransfer     uint64                                          // Gas limit for on_transfer (m)
 }
 
+// TotalItems (94) ∀a ∈ V(δ): ai
+func (sa *ServiceAccount) TotalItems() uint32 {
+	totalPreimages := len(sa.PreimageLookup)
+	totalStorageItems := len(sa.Storage)
+	ai := 2*totalPreimages + totalStorageItems
+
+	return uint32(ai)
+}
+
+// TotalStorageSize (94) ∀a ∈ V(δ): al
+func (sa *ServiceAccount) TotalStorageSize() uint64 {
+	var al uint64 = 0
+
+	// PreimageLookup sizes
+	for _, z := range sa.PreimageLookup {
+		zSize := uint64(len(z))
+		al += 81 + zSize
+	}
+
+	// Storage sizes
+	for _, x := range sa.Storage {
+		xSize := uint64(len(x))
+		al += 32 + xSize
+	}
+
+	return al
+}
+
+// ThresholdBalance (94) ∀a ∈ V(δ): at
+func (sa *ServiceAccount) ThresholdBalance() uint64 {
+	ai := uint64(sa.TotalItems())
+	al := sa.TotalStorageSize()
+
+	return BasicMinimumBalance + AdditionalMinimumBalancePerItem*ai + AdditionalMinimumBalancePerOctet*al
+}
+
 type PrivilegedServices struct {
 	ManagerServiceId        block.ServiceId            // Manager service ID (m) - the service able to effect an alteration of PrivilegedServices from block to block. Also called Empower service.
 	AssignServiceId         block.ServiceId            // Assign service ID (a) - the service able to effect an alteration of the PendingAuthorizersQueues.

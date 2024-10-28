@@ -272,3 +272,85 @@ func TestWrite(t *testing.T) {
 	expectedGasRemaining := initialGas - host_call.WriteCost - int64(len(pp.Instructions))
 	require.Equal(t, expectedGasRemaining, instance.GasRemaining())
 }
+
+func TestInfo(t *testing.T) {
+	pp := &polkavm.Program{
+		RODataSize: 0,
+		RWDataSize: 256,
+		StackSize:  512,
+		Instructions: []polkavm.Instruction{
+			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 3, Length: 2},
+		},
+		Imports: []string{"info"},
+		Exports: []polkavm.ProgramExport{{TargetCodeOffset: 0, Symbol: "test_info"}},
+	}
+
+	memoryMap, err := polkavm.NewMemoryMap(
+		polkavm.VmMinPageSize,
+		pp.RODataSize,
+		pp.RWDataSize,
+		pp.StackSize,
+		pp.ROData,
+	)
+	require.NoError(t, err)
+
+	module, err := interpreter.NewModule(pp, memoryMap)
+	require.NoError(t, err)
+
+	serviceId := block.ServiceId(1)
+
+	sampleAccount := state.ServiceAccount{
+		CodeHash:               crypto.Hash{0x01, 0x02, 0x03},
+		Balance:                1000,
+		GasLimitForAccumulator: 5000,
+		GasLimitOnTransfer:     2000,
+		Storage:                make(map[crypto.Hash][]byte),
+		PreimageMeta:           make(map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots),
+	}
+
+	sampleAccount.Storage[crypto.Hash{0xAA}] = []byte("value1")
+	sampleAccount.Storage[crypto.Hash{0xBB}] = []byte("value2")
+
+	serviceState := state.ServiceState{
+		serviceId: sampleAccount,
+	}
+
+	module.AddHostFunc("info", host_call.MakeInfoFunc(serviceId, serviceState, memoryMap))
+
+	initialGas := int64(100)
+
+	omega1 := memoryMap.RWDataAddress
+
+	result, instance, err := module.Run("test_info", initialGas, nil, uint32(serviceId), omega1)
+	require.NoError(t, err)
+	require.Equal(t, uint32(polkavm.HostCallResultOk), result)
+
+	var accountInfo host_call.AccountInfo
+	serializer := serialization.NewSerializer(codec.NewJamCodec())
+	m, err := serializer.Encode(accountInfo)
+	require.NoError(t, err)
+	dataSize := len(m)
+
+	data, err := instance.GetMemory(memoryMap, omega1, dataSize)
+	require.NoError(t, err)
+
+	var receivedAccountInfo host_call.AccountInfo
+	err = serializer.Decode(data, &receivedAccountInfo)
+	require.NoError(t, err)
+
+	expectedAccountInfo := host_call.AccountInfo{
+		CodeHash:               crypto.Hash(sampleAccount.CodeHash[:]),
+		Balance:                sampleAccount.Balance,
+		ThresholdBalance:       sampleAccount.ThresholdBalance(),
+		GasLimitForAccumulator: sampleAccount.GasLimitForAccumulator,
+		GasLimitOnTransfer:     sampleAccount.GasLimitOnTransfer,
+		TotalStorageSize:       sampleAccount.TotalStorageSize(),
+		TotalItems:             sampleAccount.TotalItems(),
+	}
+
+	require.Equal(t, expectedAccountInfo, receivedAccountInfo)
+
+	expectedGasRemaining := initialGas - host_call.InfoCost - int64(len(pp.Instructions))
+	require.Equal(t, expectedGasRemaining, instance.GasRemaining())
+}
