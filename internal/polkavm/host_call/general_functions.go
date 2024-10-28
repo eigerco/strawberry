@@ -2,6 +2,7 @@ package host_call
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/pkg/serialization"
@@ -15,7 +16,18 @@ const (
 	LookupCost
 	ReadCost
 	WriteCost
+	InfoCost
 )
+
+type AccountInfo struct {
+	CodeHash               crypto.Hash // tc
+	Balance                uint64      // tb
+	ThresholdBalance       uint64      // tt
+	GasLimitForAccumulator uint64      // tg
+	GasLimitOnTransfer     uint64      // tm
+	TotalStorageSize       uint64      // tl
+	TotalItems             uint32      // ti
+}
 
 // GasRemaining ΩG
 func GasRemaining(instance polkavm.Instance) (uint32, error) {
@@ -213,6 +225,59 @@ func MakeWriteFunc(serviceId block.ServiceId, serviceState state.ServiceState, m
 
 		serviceState[serviceId] = a
 		return l, nil
+	}
+}
+
+func MakeInfoFunc(
+	serviceId block.ServiceId,
+	serviceState state.ServiceState,
+	memoryMap *polkavm.MemoryMap,
+) polkavm.HostFunc {
+	return func(instance polkavm.Instance) (uint32, error) {
+		if err := deductGas(instance, InfoCost); err != nil {
+			return 0, err
+		}
+
+		sID := instance.GetReg(polkavm.A0)
+		omega1 := instance.GetReg(polkavm.A1)
+
+		if sID == math.MaxUint32 {
+			sID = uint32(serviceId)
+		}
+
+		t, exists := serviceState[block.ServiceId(sID)]
+		if !exists {
+			return uint32(polkavm.HostCallResultNone), nil
+		}
+
+		accountInfo := AccountInfo{
+			CodeHash:               t.CodeHash,
+			Balance:                t.Balance,
+			ThresholdBalance:       t.ThresholdBalance(),
+			GasLimitForAccumulator: t.GasLimitForAccumulator,
+			GasLimitOnTransfer:     t.GasLimitOnTransfer,
+			TotalStorageSize:       t.TotalStorageSize(),
+			TotalItems:             t.TotalItems(),
+		}
+
+		serializer := serialization.NewSerializer(codec.NewJamCodec())
+		// E(tc, tb, tt, tg , tm, tl, ti)
+		m, err := serializer.Encode(accountInfo)
+		if err != nil {
+			return 0, err
+		}
+
+		end := omega1 + uint32(len(m))
+		if end > memoryMap.RWDataAddress+memoryMap.RWDataSize {
+			return uint32(polkavm.HostCallResultOob), nil
+		}
+
+		err = instance.SetMemory(memoryMap, omega1, m)
+		if err != nil {
+			return uint32(polkavm.HostCallResultOob), nil
+		}
+
+		return uint32(polkavm.HostCallResultOk), nil
 	}
 }
 

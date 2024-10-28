@@ -14,9 +14,11 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 )
+
 const (
 	signatureContextGuarantee = "$jam_guarantee"
 )
+
 // TODO: These calculations are just mocks for now. They will be replaced with actual calculations when the state transitions are implemented.
 
 // Intermediate State Calculation Functions
@@ -126,48 +128,48 @@ func calculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeEx
 // calculateIntermediateCoreAssignmentsFromAvailability implements equation 26: ρ‡ ≺ (EA, ρ†)
 // It calculates the intermediate core assignments based on availability assurances.
 func calculateIntermediateCoreAssignmentsFromAvailability(assurances block.AssurancesExtrinsic, coreAssignments CoreAssignments) CoreAssignments {
-    // Initialize availability count for each core
-    availabilityCounts := make([]int, common.TotalNumberOfCores)
+	// Initialize availability count for each core
+	availabilityCounts := make([]int, common.TotalNumberOfCores)
 
-    // Process each assurance in the AssurancesExtrinsic (EA)
-    for _, assurance := range assurances {
-        // Check the availability status for each core in this assurance
-        for coreIndex := uint16(0); coreIndex < common.TotalNumberOfCores; coreIndex++ {
-            // Calculate which byte and bit within the Bitfield correspond to this core
-            byteIndex := coreIndex / 8
-            bitIndex := coreIndex % 8
+	// Process each assurance in the AssurancesExtrinsic (EA)
+	for _, assurance := range assurances {
+		// Check the availability status for each core in this assurance
+		for coreIndex := uint16(0); coreIndex < common.TotalNumberOfCores; coreIndex++ {
+			// Calculate which byte and bit within the Bitfield correspond to this core
+			byteIndex := coreIndex / 8
+			bitIndex := coreIndex % 8
 
-            // Check if the bit corresponding to this core is set (1) in the Bitfield
-            if assurance.Bitfield[byteIndex]&(1<<bitIndex) != 0 {
-                // If set, increment the availability count for this core
-                availabilityCounts[coreIndex]++
-            }
-        }
-    }
+			// Check if the bit corresponding to this core is set (1) in the Bitfield
+			if assurance.Bitfield[byteIndex]&(1<<bitIndex) != 0 {
+				// If set, increment the availability count for this core
+				availabilityCounts[coreIndex]++
+			}
+		}
+	}
 
-    // Create new CoreAssignments (ρ‡)
-    var newAssignments CoreAssignments
+	// Create new CoreAssignments (ρ‡)
+	var newAssignments CoreAssignments
 
-    // Calculate the availability threshold (2/3 of validators)
-    // This implements part of equation 129: ∑a∈EA av[c] > 2/3 V
-    availabilityThreshold := (2 * common.NumberOfValidators) / 3
+	// Calculate the availability threshold (2/3 of validators)
+	// This implements part of equation 129: ∑a∈EA av[c] > 2/3 V
+	availabilityThreshold := (2 * common.NumberOfValidators) / 3
 
-    // Update assignments based on availability
-    // This implements equation 130: ∀c ∈ NC : ρ‡[c] ≡ { ∅ if ρ[c]w ∈ W, ρ†[c] otherwise }
-    for coreIndex := uint16(0); coreIndex < common.TotalNumberOfCores; coreIndex++ {
-        if availabilityCounts[coreIndex] > availabilityThreshold {
-            // If the availability count exceeds the threshold, keep the assignment
-            // This corresponds to ρ[c]w ∈ W in equation 129
-            newAssignments[coreIndex] = coreAssignments[coreIndex]
-        } else {
-            // If the availability count doesn't exceed the threshold, clear the assignment
-            // This corresponds to the ∅ case in equation 130
-            newAssignments[coreIndex] = Assignment{}
-        }
-    }
+	// Update assignments based on availability
+	// This implements equation 130: ∀c ∈ NC : ρ‡[c] ≡ { ∅ if ρ[c]w ∈ W, ρ†[c] otherwise }
+	for coreIndex := uint16(0); coreIndex < common.TotalNumberOfCores; coreIndex++ {
+		if availabilityCounts[coreIndex] > availabilityThreshold {
+			// If the availability count exceeds the threshold, keep the assignment
+			// This corresponds to ρ[c]w ∈ W in equation 129
+			newAssignments[coreIndex] = coreAssignments[coreIndex]
+		} else {
+			// If the availability count doesn't exceed the threshold, clear the assignment
+			// This corresponds to the ∅ case in equation 130
+			newAssignments[coreIndex] = Assignment{}
+		}
+	}
 
-    // Return the new intermediate CoreAssignments (ρ‡)
-    return newAssignments
+	// Return the new intermediate CoreAssignments (ρ‡)
+	return newAssignments
 }
 
 // Final State Calculation Functions
@@ -278,63 +280,63 @@ func calculateNewEntropyPool(header block.Header, timeslot jamtime.Timeslot, ent
 
 // calculateNewCoreAuthorizations implements equation 29: α' ≺ (H, EG, φ', α)
 func calculateNewCoreAuthorizations(header block.Header, guarantees block.GuaranteesExtrinsic, pendingAuthorizations PendingAuthorizersQueues, currentAuthorizations CoreAuthorizersPool) CoreAuthorizersPool {
-    var newCoreAuthorizations CoreAuthorizersPool
+	var newCoreAuthorizations CoreAuthorizersPool
 
-    // For each core
-    for c := uint16(0); c < common.TotalNumberOfCores; c++ {
-        // Start with the existing authorizations for this core
-        newAuths := make([]crypto.Hash, len(currentAuthorizations[c]))
-        copy(newAuths, currentAuthorizations[c])
+	// For each core
+	for c := uint16(0); c < common.TotalNumberOfCores; c++ {
+		// Start with the existing authorizations for this core
+		newAuths := make([]crypto.Hash, len(currentAuthorizations[c]))
+		copy(newAuths, currentAuthorizations[c])
 
-        // F(c) - Remove authorizer if it was used in a guarantee for this core
-        for _, guarantee := range guarantees.Guarantees {
-            if guarantee.WorkReport.CoreIndex == c {
-                // Remove the used authorizer from the list 
-                newAuths = removeAuthorizer(newAuths, guarantee.WorkReport.AuthorizerHash)
-            }
-        }
+		// F(c) - Remove authorizer if it was used in a guarantee for this core
+		for _, guarantee := range guarantees.Guarantees {
+			if guarantee.WorkReport.CoreIndex == c {
+				// Remove the used authorizer from the list
+				newAuths = removeAuthorizer(newAuths, guarantee.WorkReport.AuthorizerHash)
+			}
+		}
 
-        // Get new authorizer from the queue based on current timeslot
-        // φ'[c][Ht]↺O - Get authorizer from queue, wrapping around queue size
-        queueIndex := header.TimeSlotIndex % PendingAuthorizersQueueSize
-        newAuthorizer := pendingAuthorizations[c][queueIndex]
-        
-        // Only add new authorizer if it's not empty
-        if newAuthorizer != (crypto.Hash{}) {
-            // ← Append new authorizer maintaining max size O
-            newAuths = appendAuthorizerLimited(newAuths, newAuthorizer, MaxAuthorizersPerCore)
-        }
+		// Get new authorizer from the queue based on current timeslot
+		// φ'[c][Ht]↺O - Get authorizer from queue, wrapping around queue size
+		queueIndex := header.TimeSlotIndex % PendingAuthorizersQueueSize
+		newAuthorizer := pendingAuthorizations[c][queueIndex]
 
-        // Store the new authorizations for this core
-        newCoreAuthorizations[c] = newAuths
-    }
+		// Only add new authorizer if it's not empty
+		if newAuthorizer != (crypto.Hash{}) {
+			// ← Append new authorizer maintaining max size O
+			newAuths = appendAuthorizerLimited(newAuths, newAuthorizer, MaxAuthorizersPerCore)
+		}
 
-    return newCoreAuthorizations
+		// Store the new authorizations for this core
+		newCoreAuthorizations[c] = newAuths
+	}
+
+	return newCoreAuthorizations
 }
 
 // removeAuthorizer removes an authorizer from a list while maintaining order
 func removeAuthorizer(auths []crypto.Hash, toRemove crypto.Hash) []crypto.Hash {
-    for i := 0; i < len(auths); i++ {
-        if auths[i] == toRemove {
-            // Remove by shifting remaining elements left
-            copy(auths[i:], auths[i+1:])
-            return auths[:len(auths)-1]
-        }
-    }
-    return auths
+	for i := 0; i < len(auths); i++ {
+		if auths[i] == toRemove {
+			// Remove by shifting remaining elements left
+			copy(auths[i:], auths[i+1:])
+			return auths[:len(auths)-1]
+		}
+	}
+	return auths
 }
 
 // appendAuthorizerLimited appends a new authorizer while maintaining max size limit
 // This implements the "←" (append limited) operator from the paper
 func appendAuthorizerLimited(auths []crypto.Hash, newAuth crypto.Hash, maxSize int) []crypto.Hash {
-    // If at max size, remove oldest (leftmost) element
-    if len(auths) >= maxSize {
-        copy(auths, auths[1:])
-        auths = auths[:len(auths)-1]
-    }
-    
-    // Append new authorizer
-    return append(auths, newAuth)
+	// If at max size, remove oldest (leftmost) element
+	if len(auths) >= maxSize {
+		copy(auths, auths[1:])
+		auths = auths[:len(auths)-1]
+	}
+
+	// Append new authorizer
+	return append(auths, newAuth)
 }
 
 // calculateNewValidators Equation 21: κ′ ≺ (H, τ, κ, γ, ψ′)
@@ -575,6 +577,7 @@ func verifyGuaranteeCredentials(
 func isValidatorAssignedToCore(validatorIndex uint16, coreIndex uint16, validators safrole.ValidatorsData) bool {
 	return true
 }
+
 // calculateNewArchivedValidators Equation 22: λ′ ≺ (H, τ, λ, κ)
 func calculateNewArchivedValidators(header block.Header, timeslot jamtime.Timeslot, archivedValidators safrole.ValidatorsData, validators safrole.ValidatorsData) (safrole.ValidatorsData, error) {
 	if !header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
