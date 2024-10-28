@@ -4,30 +4,76 @@ import (
 	"math"
 )
 
-type Instance interface {
-	GetReg(Reg) uint32
-	SetReg(Reg, uint32)
+type MemoryAccess bool
 
-	NextInstruction() (Instruction, error)
-	NextOffsets()
-	GetInstructionOffset() uint32
-	SetInstructionOffset(target uint32)
-	StartBasicBlock(program *Program)
+const (
+	ReadOnly  MemoryAccess = false // (R)
+	ReadWrite MemoryAccess = true  // (W)
+)
 
-	GasRemaining() int64
-	DeductGas(cost int64)
-
-	GetMemory(mm *MemoryMap, address uint32, length int) ([]byte, error)
-	SetMemory(mm *MemoryMap, address uint32, data []byte) error
-	Sbrk(mm *MemoryMap, size uint32) (uint32, error)
+// Memory Equation: 34 (M)
+type Memory struct {
+	data   []byte         // value V
+	access []accessRanges // access (A ∈ ⟦{W, R, ∅})
 }
 
-type HostFunc func(instance Instance) (HostCallCode, error)
+type accessRanges struct {
+	start, end uint32
+	access     MemoryAccess
+}
+
+// Read reads from the set of readable indices (Vμ)
+func (m *Memory) Read(address uint32, data []byte) error {
+	if _, ok := m.inRange(address); !ok {
+		return &ErrPageFault{Reason: "address not in a valid range", Address: address}
+	}
+	copy(data, m.data[address:address+uint32(len(data))])
+	return nil
+}
+
+func (m *Memory) inRange(address uint32) (MemoryAccess, bool) {
+	for _, r := range m.access {
+		if address >= r.start && address <= r.end {
+			return r.access, true
+		}
+	}
+	return ReadOnly, false
+}
+
+func (m *Memory) Sbrk(pageSize, heapTop uint32) error {
+	if heapTop > m.access[2].end {
+		nextPage, err := AlignToNextPage(uint(pageSize), uint(heapTop))
+		if err != nil {
+			return err
+		}
+
+		m.access[2].end += uint32(nextPage)
+	}
+	return nil
+}
+
+// Write writes to the set of writeable indices (Vμ*)
+func (m *Memory) Write(address uint32, data []byte) error {
+	if access, ok := m.inRange(address); !ok {
+		return &ErrPageFault{Reason: "address not in a valid range", Address: address}
+	} else if access == ReadOnly {
+		return &ErrPageFault{Reason: "memory at address is read only", Address: address}
+	}
+	copy(m.data[address:address+uint32(len(data))], data)
+	return nil
+}
+
+type Registers [13]uint32
+
+type Gas int64
+
+// HostCall the generic Ω function definition Ωx(n, ξ, ω, μ, x) defined in section A.6
+type HostCall[X any] func(hostCall uint32, gasCounter Gas, regs Registers, mem Memory, x X) (Gas, Registers, Memory, X, error)
 
 type Mutator interface {
 	Trap() error
 	Fallthrough()
-	Sbrk(dst Reg, size Reg)
+	Sbrk(dst Reg, size Reg) error
 	MoveReg(d Reg, s Reg)
 	BranchEq(s1 Reg, s2 Reg, target uint32)
 	BranchEqImm(s1 Reg, s2 uint32, target uint32)
@@ -85,7 +131,6 @@ type Mutator interface {
 	CmovIfZeroImm(d Reg, c Reg, s uint32)
 	CmovIfNotZero(d Reg, s, c Reg)
 	CmovIfNotZeroImm(d Reg, c Reg, s uint32)
-	Ecalli(imm uint32) HostCallResult
 	StoreU8(src Reg, offset uint32) error
 	StoreU16(src Reg, offset uint32) error
 	StoreU32(src Reg, offset uint32) error

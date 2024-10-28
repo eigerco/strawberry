@@ -1,4 +1,4 @@
-///go:build integration
+//go:build integration
 
 package integration_test
 
@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -20,18 +21,18 @@ import (
 var testvectors embed.FS
 
 type TestCase struct {
-	Name           string        `json:"name"`
-	InitialRegs    [13]uint32    `json:"initial-regs"`
-	InitialPc      uint32        `json:"initial-pc"`
-	InitialPageMap []Page        `json:"initial-page-map"`
-	InitialMemory  []MemoryChunk `json:"initial-memory"`
-	InitialGas     int64         `json:"initial-gas"`
-	Program        []byte        `json:"program"`
-	ExpectedStatus string        `json:"expected-status"`
-	ExpectedRegs   [13]uint32    `json:"expected-regs"`
-	ExpectedPc     uint32        `json:"expected-pc"`
-	ExpectedMemory []MemoryChunk `json:"expected-memory"`
-	ExpectedGas    int64         `json:"expected-gas"`
+	Name           string            `json:"name"`
+	InitialRegs    polkavm.Registers `json:"initial-regs"`
+	InitialPc      uint32            `json:"initial-pc"`
+	InitialPageMap []Page            `json:"initial-page-map"`
+	InitialMemory  []MemoryChunk     `json:"initial-memory"`
+	InitialGas     polkavm.Gas       `json:"initial-gas"`
+	Program        []byte            `json:"program"`
+	ExpectedStatus string            `json:"expected-status"`
+	ExpectedRegs   polkavm.Registers `json:"expected-regs"`
+	ExpectedPc     uint32            `json:"expected-pc"`
+	ExpectedMemory []MemoryChunk     `json:"expected-memory"`
+	ExpectedGas    polkavm.Gas       `json:"expected-gas"`
 }
 
 type Page struct {
@@ -70,41 +71,29 @@ func Test_Vectors(t *testing.T) {
 			}
 
 			mm := getMemoryMap(tc.InitialPageMap)
-			mem := interpreter.NewMemory(mm, nil, nil, nil)
+			mem := mm.NewMemory(nil, nil, nil)
 
-			i := interpreter.Instantiate(mem, tc.InitialPc, tc.InitialGas)
-			// instantiate memory
-			for _, mem := range tc.InitialMemory {
-				err := i.SetMemory(mm, mem.Address, mem.Contents)
+			for _, initialMem := range tc.InitialMemory {
+				err := mem.Write(initialMem.Address, initialMem.Contents)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
-
-			for reg, val := range tc.InitialRegs {
-				i.SetReg(polkavm.Reg(reg), val)
-			}
-			err = interpreter.NewMutator(i, pp, mm).Execute()
-			assert.Equal(t, int(tc.ExpectedPc), int(i.GetInstructionOffset()))
-			assert.Equal(t, tc.ExpectedRegs, getRegs(i))
+			instructionCounter, gas, regs, mem, _, err := interpreter.Invoke(pp, mm, tc.InitialPc, tc.InitialGas, tc.InitialRegs, mem)
+			assert.Equal(t, int(tc.ExpectedPc), int(instructionCounter))
+			assert.Equal(t, tc.ExpectedRegs, regs)
 			assert.Equal(t, tc.ExpectedStatus, error2status(err))
-			for _, mem := range tc.ExpectedMemory {
-				data, err := i.GetMemory(mm, mem.Address, len(mem.Contents))
+			for _, expectedMem := range tc.ExpectedMemory {
+				data := make([]byte, len(expectedMem.Contents))
+				err := mem.Read(expectedMem.Address, data)
 				if err != nil {
 					t.Fatal(err)
 				}
-				assert.Equal(t, mem.Contents, data)
+				assert.Equal(t, expectedMem.Contents, data)
 			}
-			assert.Equal(t, tc.ExpectedGas, i.GasRemaining())
+			assert.Equal(t, tc.ExpectedGas, gas)
 		})
 	}
-}
-
-func getRegs(instance polkavm.Instance) (regs [13]uint32) {
-	for i := 0; i < 13; i++ {
-		regs[i] = instance.GetReg(polkavm.Reg(i))
-	}
-	return regs
 }
 
 func getMemoryMap(pageMap []Page) *polkavm.MemoryMap {
@@ -128,8 +117,14 @@ func error2status(err error) string {
 	if err == nil {
 		return "halt"
 	}
+	if errors.Is(err, polkavm.ErrHalt) {
+		return "halt"
+	}
+	if errors.Is(err, polkavm.ErrHostCall) {
+		return "host_call"
+	}
 	switch err.(type) {
-	case *interpreter.TrapError:
+	case *polkavm.ErrPanic:
 		return "trap"
 	default:
 		return fmt.Sprintf("unknown: %s", err)

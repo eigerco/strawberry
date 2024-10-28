@@ -2,8 +2,6 @@ package interpreter
 
 import (
 	"encoding/binary"
-	"fmt"
-	"io"
 	"math"
 
 	"github.com/eigerco/strawberry/internal/polkavm"
@@ -22,40 +20,28 @@ const (
 
 var _ polkavm.Mutator = &Mutator{}
 
-func NewMutator(i polkavm.Instance, program *polkavm.Program, memoryMap *polkavm.MemoryMap) *Mutator {
+func NewMutator(i *instance, program *polkavm.Program, memoryMap *polkavm.MemoryMap) *Mutator {
 	v := &Mutator{
-		instance:      i,
-		hostFunctions: make([]callFunc, len(program.Imports)),
-		memoryMap:     memoryMap,
-		program:       program,
+		instance:  i,
+		memoryMap: memoryMap,
+		program:   program,
 	}
 	return v
 }
 
 type Mutator struct {
-	instance      polkavm.Instance
-	program       *polkavm.Program
-	memoryMap     *polkavm.MemoryMap
-	hostFunctions []callFunc
-}
-
-func (m *Mutator) AddHostFunc(name string, fn callFunc) error {
-	for i, importName := range m.program.Imports {
-		if importName == name {
-			m.hostFunctions[i] = fn
-			return nil
-		}
-	}
-	return fmt.Errorf("host function %s not defined", name)
+	instance  *instance
+	program   *polkavm.Program
+	memoryMap *polkavm.MemoryMap
 }
 
 func (m *Mutator) branch(condition bool, target uint32) {
 	if condition {
-		m.instance.SetInstructionOffset(target)
+		m.instance.instructionOffset = target
 	} else {
 		m.instance.NextOffsets()
 	}
-	m.instance.StartBasicBlock(m.program)
+	m.instance.startBasicBlock(m.program)
 }
 
 func (m *Mutator) load(memLen int, signed bool, dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
@@ -64,14 +50,15 @@ func (m *Mutator) load(memLen int, signed bool, dst polkavm.Reg, base polkavm.Re
 		address = m.get(base)
 	}
 	address += offset
-	slice, err := m.instance.GetMemory(m.memoryMap, address, memLen)
+	slice := make([]byte, memLen)
+	err := m.instance.memory.Read(address, slice)
 	if err != nil {
-		return &TrapError{err}
+		return err
 	}
 
 	value, err := leDecode(memLen, slice)
 	if err != nil {
-		return &TrapError{Err: err}
+		return err
 	}
 	m.setNext(dst, toSigned(value, memLen, signed))
 	return nil
@@ -85,10 +72,10 @@ func (m *Mutator) store(memLen int, signed bool, src uint32, base polkavm.Reg, o
 	address += offset
 	data, err := leEncode(memLen, toSigned(src, memLen, signed))
 	if err != nil {
-		return &TrapError{Err: err}
+		return err
 	}
-	if err = m.instance.SetMemory(m.memoryMap, address, data); err != nil {
-		return &TrapError{Err: err}
+	if err = m.instance.memory.Write(address, data); err != nil {
+		return err
 	}
 
 	m.instance.NextOffsets()
@@ -117,7 +104,7 @@ func leEncode(memLen int, src uint32) ([]byte, error) {
 	case x32:
 		binary.LittleEndian.PutUint32(slice, src)
 	default:
-		return nil, fmt.Errorf("invalid Memory slice length: %d", memLen)
+		return nil, polkavm.ErrPanicf("invalid Memory slice length: %d", memLen)
 	}
 	return slice, nil
 }
@@ -130,29 +117,29 @@ func leDecode(memLen int, src []byte) (uint32, error) {
 	case x32:
 		return binary.LittleEndian.Uint32(src), nil
 	default:
-		return 0, fmt.Errorf("invalid Memory slice length: %d", memLen)
+		return 0, polkavm.ErrPanicf("invalid Memory slice length: %d", memLen)
 	}
 }
 
 func (m *Mutator) jumpIndirectImpl(target uint32) error {
 	if target == polkavm.VmAddressReturnToHost {
-		return io.EOF
+		return polkavm.ErrHalt
 	}
 	instructionOffset := m.program.JumpTableGetByAddress(target)
 	if instructionOffset == nil {
-		return &TrapError{Err: fmt.Errorf("indirect jump to address %v: INVALID", target)}
+		return polkavm.ErrPanicf("indirect jump to address %v: INVALID", target)
 	}
-	m.instance.SetInstructionOffset(*instructionOffset)
-	m.instance.StartBasicBlock(m.program)
+	m.instance.instructionOffset = *instructionOffset
+	m.instance.startBasicBlock(m.program)
 	return nil
 }
 
 func (m *Mutator) get(vv polkavm.Reg) uint32 {
-	return m.instance.GetReg(vv)
+	return m.instance.regs[vv]
 }
 
 func (m *Mutator) set(dst polkavm.Reg, value uint32) {
-	m.instance.SetReg(dst, value)
+	m.instance.regs[dst] = value
 }
 
 func (m *Mutator) setNext(dst polkavm.Reg, value uint32) {
@@ -160,17 +147,35 @@ func (m *Mutator) setNext(dst polkavm.Reg, value uint32) {
 	m.instance.NextOffsets()
 }
 func (m *Mutator) Trap() error {
-	return &TrapError{fmt.Errorf("explicit trap")}
+	return polkavm.ErrPanicf("explicit trap")
 }
 func (m *Mutator) Fallthrough() {
 	m.instance.NextOffsets()
-	m.instance.StartBasicBlock(m.program)
+	m.instance.startBasicBlock(m.program)
 }
-func (m *Mutator) Sbrk(dst polkavm.Reg, size polkavm.Reg) {
-	s := m.get(size)
-	result, _ := m.instance.Sbrk(m.memoryMap, s)
-	m.setNext(dst, result)
+func (m *Mutator) Sbrk(dst polkavm.Reg, sizeReg polkavm.Reg) error {
+	size := m.get(sizeReg)
+	if size == 0 {
+		// The guest wants to know the current heap pointer.
+		m.setNext(dst, m.instance.heapSize)
+		return nil
+	}
+
+	newHeapSize := m.instance.heapSize + size
+	if newHeapSize > uint32(m.memoryMap.MaxHeapSize) {
+		return polkavm.ErrPanicf("max heap size exceeded")
+	}
+
+	m.instance.heapSize = newHeapSize
+	heapTop := m.memoryMap.HeapBase + newHeapSize
+	if err := m.instance.memory.Sbrk(m.memoryMap.PageSize, heapTop); err != nil {
+		return polkavm.ErrPanicf(err.Error())
+	}
+
+	m.setNext(dst, uint32(heapTop))
+	return nil
 }
+
 func (m *Mutator) MoveReg(d polkavm.Reg, s polkavm.Reg) {
 	m.setNext(d, m.get(s))
 }
@@ -359,44 +364,7 @@ func (m *Mutator) CmovIfNotZeroImm(d polkavm.Reg, c polkavm.Reg, s uint32) {
 
 	m.instance.NextOffsets()
 }
-func (m *Mutator) Ecalli(imm uint32) polkavm.HostCallResult {
-	callFn := m.hostFunctions[imm]
-	if callFn == nil {
-		return polkavm.HostCallResult{Code: polkavm.HostCallResultWho}
-	}
-	result := func() (result polkavm.HostCallResult) {
-		defer func() {
-			if e := recover(); e != nil {
-				msg := ""
-				switch x := e.(type) {
-				case error:
-					msg = x.Error()
-				case fmt.Stringer:
-					msg = x.String()
-				}
-				result = polkavm.HostCallResult{
-					Code:      polkavm.HostCallResultOk,
-					InnerCode: polkavm.HostCallInnerCodePanic,
-					Msg:       msg,
-				}
-			}
-		}()
-		if err := callFn(m.instance); err != nil {
-			return polkavm.HostCallResult{
-				Code:      polkavm.HostCallResultOk,
-				InnerCode: polkavm.HostCallInnerCodeFault,
-				Msg:       err.Error(),
-			}
-		}
 
-		return polkavm.HostCallResult{
-			Code:      polkavm.HostCallResultOk,
-			InnerCode: polkavm.HostCallInnerCodeHalt,
-		}
-	}()
-	m.instance.NextOffsets()
-	return result
-}
 func (m *Mutator) StoreU8(src polkavm.Reg, offset uint32) error {
 	return m.store(x8, unsigned, m.get(src), 0, offset)
 }
@@ -476,30 +444,12 @@ func (m *Mutator) LoadImmAndJumpIndirect(ra polkavm.Reg, base polkavm.Reg, value
 	return m.jumpIndirectImpl(target)
 }
 func (m *Mutator) Jump(target uint32) {
-	m.instance.SetInstructionOffset(target)
-	m.instance.StartBasicBlock(m.program)
-}
-func (m *Mutator) JumpIndirect(base polkavm.Reg, offset uint32) error {
-	return m.jumpIndirectImpl(m.get(base) + offset)
+	m.instance.instructionOffset = target
+	m.instance.startBasicBlock(m.program)
 }
 
-func (m *Mutator) Execute() error {
-	m.instance.StartBasicBlock(m.program)
-	for {
-		instruction, err := m.instance.NextInstruction()
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-		if err = instruction.StepOnce(m); err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-	}
+func (m *Mutator) JumpIndirect(base polkavm.Reg, offset uint32) error {
+	return m.jumpIndirectImpl(m.get(base) + offset)
 }
 
 func divUnsigned(lhs uint32, rhs uint32) uint32 {

@@ -3,17 +3,17 @@ package host_call
 import (
 	"math"
 
+	"golang.org/x/crypto/blake2b"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/state"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"golang.org/x/crypto/blake2b"
 )
 
 const (
-	GasRemainingCost = 10
+	GasRemainingCost polkavm.Gas = 10
 	LookupCost
 	ReadCost
 	WriteCost
@@ -31,76 +31,84 @@ type AccountInfo struct {
 }
 
 // GasRemaining ΩG
-func GasRemaining(instance polkavm.Instance) (uint32, error) {
-	if err := deductGas(instance, GasRemainingCost); err != nil {
-		return 0, err
+func GasRemaining(gas polkavm.Gas, regs polkavm.Registers) (polkavm.Gas, polkavm.Registers, error) {
+	if gas < GasRemainingCost {
+		return gas, regs, polkavm.ErrOutOfGas
 	}
-
-	ksLower := instance.GetReg(polkavm.A0) // Lower 32 bits
-	ksUpper := instance.GetReg(polkavm.A1) // Upper 32 bits
-
-	// Combine the two parts into a single 64-bit value
-	ks := (uint64(ksUpper) << 32) | uint64(ksLower)
-
-	ks -= uint64(GasRemainingCost)
+	gas -= GasRemainingCost
 
 	// Split the new ξ' value into its lower and upper parts.
-	omega0, omega1 := uint32(ks&((1<<32)-1)), uint32(ks>>32)
-	instance.SetReg(polkavm.A1, omega1)
+	regs[polkavm.A0] = uint32(gas & ((1 << 32) - 1))
+	regs[polkavm.A1] = uint32(gas >> 32)
 
-	return omega0, nil
+	return gas, regs, nil
 }
 
-// MakeLookupFunc ΩL
-func MakeLookupFunc(serviceId block.ServiceId, serviceState state.ServiceState, memoryMap *polkavm.MemoryMap) polkavm.HostFunc {
-	return func(instance polkavm.Instance) (uint32, error) {
-		if err := deductGas(instance, LookupCost); err != nil {
-			return 0, err
-		}
-
-		sID := instance.GetReg(polkavm.A0)
-
-		if sID == math.MaxUint32 {
-			sID = uint32(serviceId)
-		}
-
-		//  account 'a'
-		a, exists := serviceState[block.ServiceId(sID)]
-		if !exists {
-			return 0, polkavm.ErrAccountNotFound
-		}
-
-		ho := instance.GetReg(polkavm.A1)
-
-		// Ensure the memory range is valid for hashing (µho..ho+32)
-		memorySlice, err := instance.GetMemory(memoryMap, ho, 32)
-		if err != nil {
-			return uint32(polkavm.HostCallResultOob), nil
-		}
-
-		// Compute the hash H(µho..ho+32)
-		hash := blake2b.Sum256(memorySlice)
-
-		// Lookup value in storage (v) using the hash
-		v, exists := a.Storage[hash]
-		if !exists {
-			return uint32(polkavm.HostCallResultNone), nil
-		}
-
-		bo := instance.GetReg(polkavm.A2)
-		bz := instance.GetReg(polkavm.A3)
-
-		// Write value to memory if within bounds
-		if len(v) > 0 && len(v) <= int(bz) {
-			if err = instance.SetMemory(memoryMap, bo, v); err != nil {
-				return uint32(polkavm.HostCallResultOob), nil
-			}
-		} else {
-			return uint32(polkavm.HostCallResultOob), nil
-		}
-
-		return uint32(len(v)), nil
+// Lookup ΩL
+func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+	if gas < LookupCost {
+		return gas, regs, mem, polkavm.ErrOutOfGas
 	}
+	gas -= LookupCost
+
+	sID := regs[polkavm.A0]
+
+	// Determine the lookup key 'a'
+	var a state.ServiceAccount
+	if omega0 == uint32(serviceId) || omega0 == math.MaxUint32 {
+		// Lookup service account by serviceId in the serviceState
+		serviceAccount, serviceExists := serviceState[serviceId]
+		if !serviceExists {
+			regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+			return gas, regs, mem, nil
+		}
+
+		a = serviceAccount
+	} else {
+		storedService, exists := serviceState[block.ServiceId(omega0)]
+		if !exists {
+			regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+			return gas, regs, mem, nil
+		}
+		a = storedService
+	}
+
+	ho := regs[polkavm.A1]
+
+	// Ensure the memory range is valid for hashing (µho..ho+32)
+	memorySlice := make([]byte, 32)
+	err := mem.Read(ho, memorySlice)
+	if err != nil {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+		return gas, regs, mem, err
+	}
+
+	// Compute the hash H(µho..ho+32)
+	hash := blake2b.Sum256(memorySlice)
+
+	// Lookup value in storage (v) using the hash
+	v, exists := a.Storage[hash]
+	if !exists {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+		return gas, regs, mem, nil
+	}
+
+	bo := regs[polkavm.A2]
+	bz := regs[polkavm.A3]
+
+	// Write value to memory if within bounds
+	if len(v) > 0 && len(v) <= int(bz) {
+		if err = mem.Write(bo, v); err != nil {
+			regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+			return gas, regs, mem, err
+		}
+	} else {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+		return gas, regs, mem, err
+	}
+
+	regs[polkavm.A0] = uint32(len(v))
+	return gas, regs, mem, err
 }
 
 // MakeReadFunc ΩR

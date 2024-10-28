@@ -90,56 +90,20 @@ func Test_memoryMap(t *testing.T) {
 	}
 }
 
-func Test_alignToNextPageUint64(t *testing.T) {
-	v, _ := AlignToNextPageUint64(4096, 0)
-	assert.Equal(t, uint64(0), v)
-	v, _ = AlignToNextPageUint64(4096, 1)
-	assert.Equal(t, uint64(4096), v)
-	v, _ = AlignToNextPageUint64(4096, 4095)
-	assert.Equal(t, uint64(4096), v)
-	v, _ = AlignToNextPageUint64(4096, 4096)
-	assert.Equal(t, uint64(4096), v)
-	v, _ = AlignToNextPageUint64(4096, 4097)
-	assert.Equal(t, uint64(8192), v)
-	var maxVal uint64 = math.MaxUint64 + 1 - 4096
-	v, _ = AlignToNextPageUint64(4096, maxVal)
-	assert.Equal(t, maxVal, v)
-	_, err := AlignToNextPageUint64(4096, maxVal+1)
-	assert.Error(t, err)
-}
-
 func Test_alignToNextPageUint32(t *testing.T) {
-	v, _ := AlignToNextPageUint32(4096, 0)
-	assert.Equal(t, uint32(0), v)
-	v, _ = AlignToNextPageUint32(4096, 1)
-	assert.Equal(t, uint32(4096), v)
-	v, _ = AlignToNextPageUint32(4096, 4095)
-	assert.Equal(t, uint32(4096), v)
-	v, _ = AlignToNextPageUint32(4096, 4096)
-	assert.Equal(t, uint32(4096), v)
-	v, _ = AlignToNextPageUint32(4096, 4097)
-	assert.Equal(t, uint32(8192), v)
-	var maxVal uint32 = math.MaxUint32 + 1 - 4096
-	v, _ = AlignToNextPageUint32(4096, maxVal)
+	v, _ := AlignToNextPage(4096, 0)
+	assert.Equal(t, uint(0), v)
+	v, _ = AlignToNextPage(4096, 1)
+	assert.Equal(t, uint(4096), v)
+	v, _ = AlignToNextPage(4096, 4095)
+	assert.Equal(t, uint(4096), v)
+	v, _ = AlignToNextPage(4096, 4096)
+	assert.Equal(t, uint(4096), v)
+	v, _ = AlignToNextPage(4096, 4097)
+	assert.Equal(t, uint(8192), v)
+	var maxVal uint = math.MaxUint + 1 - 4096
+	v, _ = AlignToNextPage(4096, maxVal)
 	assert.Equal(t, maxVal, v)
-	_, err := AlignToNextPageUint32(4096, maxVal+1)
-	assert.Error(t, err)
-}
-
-func Test_alignToNextPageInt(t *testing.T) {
-	v, _ := AlignToNextPageInt(4096, 0)
-	assert.Equal(t, 0, v)
-	v, _ = AlignToNextPageInt(4096, 1)
-	assert.Equal(t, 4096, v)
-	v, _ = AlignToNextPageInt(4096, 4095)
-	assert.Equal(t, 4096, v)
-	v, _ = AlignToNextPageInt(4096, 4096)
-	assert.Equal(t, 4096, v)
-	v, _ = AlignToNextPageInt(4096, 4097)
-	assert.Equal(t, 8192, v)
-	var maxVal = math.MaxInt + 1 - 4096
-	v, _ = AlignToNextPageInt(4096, maxVal)
-	assert.Equal(t, maxVal, v)
-	_, err := AlignToNextPageInt(4096, maxVal+1)
+	_, err := AlignToNextPage(4096, maxVal+1)
 	assert.Error(t, err)
 }
