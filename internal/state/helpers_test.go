@@ -5,14 +5,16 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func RandomValidatorsData(t *testing.T) safrole.ValidatorsData {
@@ -228,8 +230,8 @@ func RandomValidatorStatistics() ValidatorStatistics {
 
 func RandomValidatorStatisticsState() ValidatorStatisticsState {
 	return ValidatorStatisticsState{
-		RandomValidatorStatistics(),
-		RandomValidatorStatistics(),
+		[common.NumberOfValidators]ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
+		[common.NumberOfValidators]ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
 	}
 }
 

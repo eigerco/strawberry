@@ -943,6 +943,166 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 	})
 }
 
+func TestCalculateNewValidatorStatistics(t *testing.T) {
+    t.Run("new epoch transition", func(t *testing.T) {
+        // Initial state with some existing stats
+        initialStats := ValidatorStatisticsState{
+            0: [1023]ValidatorStatistics{
+                0: {NumOfBlocks: 5},
+                1: {NumOfTickets: 3},
+            },
+            1: [1023]ValidatorStatistics{
+                0: {NumOfBlocks: 10},
+                1: {NumOfTickets: 6},
+            },
+        }
+
+        block := block.Block{
+            Header: block.Header{
+                TimeSlotIndex: jamtime.Timeslot(600), // First slot in new epoch
+				BlockAuthorIndex: 2,
+            },
+        }
+
+        newStats := calculateNewValidatorStatistics(block, jamtime.Timeslot(600), initialStats)
+
+        // Check that stats were rotated correctly
+        assert.Equal(t, uint32(10), newStats[0][0].NumOfBlocks, "Previous current stats should become history")
+        assert.Equal(t, uint64(6), newStats[0][1].NumOfTickets, "Previous current stats should become history")
+        assert.Equal(t, uint32(0), newStats[1][0].NumOfBlocks, "Current stats should be reset")
+        assert.Equal(t, uint64(0), newStats[1][1].NumOfTickets, "Current stats should be reset")
+    })
+
+    t.Run("block author statistics", func(t *testing.T) {
+        initialStats := ValidatorStatisticsState{
+            1: [1023]ValidatorStatistics{}, // Current epoch stats
+        }
+
+        block := block.Block{
+            Header: block.Header{
+                TimeSlotIndex: jamtime.Timeslot(5),
+                BlockAuthorIndex: 1,
+            },
+            Extrinsic: block.Extrinsic{
+                ET: block.TicketExtrinsic{
+                    TicketProofs: []block.TicketProof{{}, {}, {}}, // 3 tickets
+                },
+                EP: block.PreimageExtrinsic{
+                    {Data: []byte("test1")},
+                    {Data: []byte("test2")},
+                },
+            },
+        }
+
+        newStats := calculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats)
+
+        // Check block author stats
+        assert.Equal(t, uint32(1), newStats[1][1].NumOfBlocks, "Block count should increment")
+        assert.Equal(t, uint64(3), newStats[1][1].NumOfTickets, "Ticket count should match")
+        assert.Equal(t, uint64(2), newStats[1][1].NumOfPreimages, "Preimage count should match")
+        assert.Equal(t, uint64(10), newStats[1][1].NumOfBytesAllPreimages, "Preimage bytes should match")
+        
+        // Check non-author stats remained zero
+        assert.Equal(t, uint32(0), newStats[1][0].NumOfBlocks, "Non-author stats should remain zero")
+    })
+
+    t.Run("guarantees and assurances", func(t *testing.T) {
+        initialStats := ValidatorStatisticsState{
+            1: [1023]ValidatorStatistics{}, // Current epoch stats
+        }
+
+        block := block.Block{
+            Header: block.Header{
+                TimeSlotIndex: jamtime.Timeslot(5),
+            },
+            Extrinsic: block.Extrinsic{
+                EG: block.GuaranteesExtrinsic{
+                    Guarantees: []block.Guarantee{
+                        {
+                            Credentials: []block.CredentialSignature{
+                                {ValidatorIndex: 0},
+                                {ValidatorIndex: 1},
+                            },
+                        },
+                        {
+                            Credentials: []block.CredentialSignature{
+                                {ValidatorIndex: 0},
+                            },
+                        },
+                    },
+                },
+                EA: block.AssurancesExtrinsic{
+                    {ValidatorIndex: 0},
+                    {ValidatorIndex: 1},
+                },
+            },
+        }
+
+        newStats := calculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats)
+
+        // Check guarantees and assurances
+        assert.Equal(t, uint64(2), newStats[1][0].NumOfGuaranteedReports, "Should count all guarantees for validator 0")
+        assert.Equal(t, uint64(1), newStats[1][1].NumOfGuaranteedReports, "Should count all guarantees for validator 1")
+        assert.Equal(t, uint64(1), newStats[1][0].NumOfAvailabilityAssurances, "Should count assurance for validator 0")
+        assert.Equal(t, uint64(1), newStats[1][1].NumOfAvailabilityAssurances, "Should count assurance for validator 1")
+    })
+
+    t.Run("full block processing", func(t *testing.T) {
+        initialStats := ValidatorStatisticsState{
+            1: [1023]ValidatorStatistics{
+                1: {
+                    NumOfBlocks: 5,
+                    NumOfTickets: 10,
+                    NumOfPreimages: 2,
+                    NumOfBytesAllPreimages: 100,
+                    NumOfGuaranteedReports: 3,
+                    NumOfAvailabilityAssurances: 2,
+                },
+            },
+        }
+
+        block := block.Block{
+            Header: block.Header{
+                TimeSlotIndex: jamtime.Timeslot(5),
+                BlockAuthorIndex: 1,
+            },
+            Extrinsic: block.Extrinsic{
+                ET: block.TicketExtrinsic{
+                    TicketProofs: []block.TicketProof{{}, {}}, // 2 tickets
+                },
+                EP: block.PreimageExtrinsic{
+                    {Data: []byte("test")}, // 4 bytes
+                },
+                EG: block.GuaranteesExtrinsic{
+                    Guarantees: []block.Guarantee{
+                        {
+                            Credentials: []block.CredentialSignature{
+                                {ValidatorIndex: 1},
+                            },
+                        },
+                    },
+                },
+                EA: block.AssurancesExtrinsic{
+                    {ValidatorIndex: 1},
+                },
+            },
+        }
+
+        newStats := calculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats)
+
+        expected := ValidatorStatistics{
+            NumOfBlocks: 6,
+            NumOfTickets: 12,
+            NumOfPreimages: 3,
+            NumOfBytesAllPreimages: 104,
+            NumOfGuaranteedReports: 4,
+            NumOfAvailabilityAssurances: 3,
+        }
+
+        assert.Equal(t, expected, newStats[1][1], "All statistics should be updated correctly")
+    })
+}
+
 func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16) block.Verdict {
 	var judgments [common.ValidatorsSuperMajority]block.Judgement
 	for i := uint16(0); i < positiveJudgments; i++ {

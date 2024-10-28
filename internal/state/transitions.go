@@ -591,7 +591,59 @@ func calculateServiceState(assurances block.AssurancesExtrinsic, coreAssignments
 	return make(ServiceState), PrivilegedServices{}, safrole.ValidatorsData{}, PendingAuthorizersQueues{}, Context{}
 }
 
-// calculateNewValidatorStatistics Equation 30: π′ ≺ (EG, EP, EA, ET, τ, τ′, π)
-func calculateNewValidatorStatistics(extrinsics block.Extrinsic, timeslot jamtime.Timeslot, newTimeSlot jamtime.Timeslot, validatorStatistics ValidatorStatisticsState) ValidatorStatisticsState {
-	return ValidatorStatisticsState{}
+// calculateNewValidatorStatistics implements equation 30:
+// π′ ≺ (EG, EP, EA, ET, τ, κ′, π, H)
+func calculateNewValidatorStatistics(block block.Block, currentTime jamtime.Timeslot, validatorStatistics ValidatorStatisticsState) ValidatorStatisticsState {
+	newStats := validatorStatistics
+
+	// Implements equations 170-171:
+	// let e = ⌊τ/E⌋, e′ = ⌊τ′/E⌋
+	// (a, π′₁) ≡ { (π₀, π₁) if e′ = e
+	//              ([{0,...,[0,...]},...], π₀) otherwise
+	if block.Header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
+		// Rotate statistics - completed stats become history, start fresh present stats
+		newStats[0] = newStats[1]                 // Move current to history
+		newStats[1] = [common.NumberOfValidators]ValidatorStatistics{} // Reset current
+	}
+
+	// Implements equation 172: ∀v ∈ NV
+	for v := uint16(0); v < uint16(len(newStats)); v++ {
+		// π′₀[v]b ≡ a[v]b + (v = Hi)
+		if v == block.Header.BlockAuthorIndex {
+			newStats[1][v].NumOfBlocks++
+
+			// π′₀[v]t ≡ a[v]t + {|ET| if v = Hi
+			//                     0 otherwise
+			newStats[1][v].NumOfTickets += uint64(len(block.Extrinsic.ET.TicketProofs))
+
+			// π′₀[v]p ≡ a[v]p + {|EP| if v = Hi
+			//                     0 otherwise
+			newStats[1][v].NumOfPreimages += uint64(len(block.Extrinsic.EP))
+
+			// π′₀[v]d ≡ a[v]d + {Σd∈EP|d| if v = Hi
+			//                     0 otherwise
+			for _, preimage := range block.Extrinsic.EP {
+				newStats[1][v].NumOfBytesAllPreimages += uint64(len(preimage.Data))
+			}
+		}
+
+		// π′₀[v]g ≡ a[v]g + (κ′v ∈ R)
+		// Where R is the set of reporter keys defined in eq 139
+		for _, guarantee := range block.Extrinsic.EG.Guarantees {
+			for _, credential := range guarantee.Credentials {
+				if credential.ValidatorIndex == v {
+					newStats[1][v].NumOfGuaranteedReports++
+				}
+			}
+		}
+
+		// π′₀[v]a ≡ a[v]a + (∃a ∈ EA : av = v)
+		for _, assurance := range block.Extrinsic.EA {
+			if assurance.ValidatorIndex == v {
+				newStats[1][v].NumOfAvailabilityAssurances++
+			}
+		}
+	}
+
+	return newStats
 }
