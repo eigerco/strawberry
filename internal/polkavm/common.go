@@ -1,6 +1,9 @@
 package polkavm
 
 import (
+	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/safrole"
+	"github.com/eigerco/strawberry/internal/state"
 	"math"
 )
 
@@ -230,4 +233,20 @@ func (r HostCallCode) String() string {
 		return "success"
 	}
 	return "unknown"
+}
+
+// ResultContext Equation 254
+type ResultContext struct {
+	ServiceAccount      *state.ServiceAccount          // s
+	AuthorizationsQueue state.PendingAuthorizersQueues // c
+	ValidatorKeys       safrole.ValidatorsData         // v
+	ServiceID           block.ServiceId                // i
+	DeferredTransfers   []state.DeferredTransfer       // t
+	ServicesState       state.ServiceState             // n
+	PrivilegedServices  state.PrivilegedServices       // p
+}
+
+type ResultContextPair struct {
+	RegularCtx     ResultContext // x
+	ExceptionalCtx ResultContext // y
 }
