@@ -255,7 +255,7 @@ func TestWrite(t *testing.T) {
 	err = mem.Write(vo, value)
 	require.NoError(t, err)
 	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, a state.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
-		gasCounter, regs, mem, _, err = host_call.Write(gasCounter, regs, mem, serviceId, sa)
+		gasCounter, regs, mem, _, err = host_call.Write(gasCounter, regs, mem, sa, serviceId)
 		require.NoError(t, err)
 		return gasCounter, regs, mem, a, nil
 	}

@@ -21,6 +21,14 @@ const (
 	InfoCost
 )
 
+const (
+	GasID    = 0
+	LookupID = 1
+	ReadID   = 2
+	WriteID  = 3
+	InfoID   = 4
+)
+
 type AccountInfo struct {
 	CodeHash               crypto.Hash // tc
 	Balance                uint64      // tb
@@ -171,7 +179,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.S
 }
 
 // Write ΩW (ξ, ω, μ, s, s)
-func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId block.ServiceId, s state.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
+func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount, serviceId block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
 	if gas < WriteCost {
 		return gas, regs, mem, s, polkavm.ErrOutOfGas
 	}
