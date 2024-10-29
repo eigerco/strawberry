@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sp-core = { git="https://github.com/paritytech/polkadot-sdk", features = ["full_crypto", "bandersnatch-experimental"] }
+ark-ec-vrfs ={ git = "https://github.com/davxy/ark-ec-vrfs", rev = "ea35e22", features = ["bandersnatch", "ring", "parallel"] }
+hex = "0.4.3"
+libc = "0.2.161"
 
 [lib]
 crate-type = ["cdylib"]

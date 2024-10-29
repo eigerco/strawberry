@@ -40,7 +40,7 @@ func getWinningTicketOrKey(header *block.Header, state *State) (interface{}, err
 }
 
 // TODO: Bandersnatch implement this function. This is just a mock.
-func isWinningKey(key crypto.BandersnatchSerializedPublicKey, header *block.Header, state *State) bool {
+func isWinningKey(key crypto.BandersnatchPublicKey, header *block.Header, state *State) bool {
 	winningTicketOrKey, err := getWinningTicketOrKey(header, state)
 	if err != nil {
 		return false
@@ -91,7 +91,7 @@ func buildSealContext(header *block.Header, state *State) ([]byte, error) {
 	return context, nil
 }
 
-func createSealSignature(header *block.Header, state *State, privateKey *bandersnatch.PrivateKey) error {
+func createSealSignature(header *block.Header, state *State, privateKey crypto.BandersnatchPrivateKey) error {
 	context, err := buildSealContext(header, state)
 	if err != nil {
 		return err
@@ -101,31 +101,26 @@ func createSealSignature(header *block.Header, state *State, privateKey *banders
 	if err != nil {
 		return err
 	}
-	message := append(unsealedHeader, context...)
 	// Hs(BlockSealSignaure) ∈ FEU(H)Ha⟨...⟩
-	header.BlockSealSignature, err = privateKey.Sign(message)
+	header.BlockSealSignature, err = bandersnatch.Sign(privateKey, context, unsealedHeader)
 
 	return err
 }
 
 // Implements equation 61 Hv ∈ F[]Ha⟨XE ⌢ Y(Hs)⟩
-func createVRFSignature(header *block.Header, privateKey *bandersnatch.PrivateKey) error {
+func createVRFSignature(header *block.Header, privateKey crypto.BandersnatchPrivateKey) error {
 	// XE is the constant context string
 	XE := []byte("$jam_entropy")
-	// Generate VRF proof for the seal signature
-	sealVrfProof, err := privateKey.GenerateVrfProof(header.BlockSealSignature[:], XE)
-	if err != nil {
-		return err
-	}
-	// Generate VRF output from the proof (this is effectively Y(Hs))
-	vrfOutput, err := bandersnatch.GenerateVrfOutput(sealVrfProof)
+	// Generate Y(Hs)
+	sealOutputHash, err := bandersnatch.OutputHash(header.BlockSealSignature)
 	if err != nil {
 		return err
 	}
 	// Construct the message: XE ⌢ Y(Hs)
-	message := append(XE, vrfOutput[:]...)
+	vrfInputData := append(XE, sealOutputHash[:]...)
+
 	// Sign the constructed message to get Hv
-	signature, err := privateKey.Sign(message)
+	signature, err := bandersnatch.Sign(privateKey, vrfInputData, []byte{})
 	if err != nil {
 		return err
 	}
@@ -136,30 +131,20 @@ func createVRFSignature(header *block.Header, privateKey *bandersnatch.PrivateKe
 }
 
 // TODO: Bandersnatch Mock implementation of verifying the VRF proof
-func extractVRFOutput(header block.Header) (crypto.VrfOutput, error) {
-	return crypto.VrfOutput{}, nil
+func extractVRFOutput(header block.Header) (crypto.BandersnatchOutputHash, error) {
+	return crypto.BandersnatchOutputHash{}, nil
 }
 
 // Implements equations 66 and 67
-func updateEntropyAccumulator(header *block.Header, state *State, privateKey *bandersnatch.PrivateKey) error {
-	// Constants
-	XE := []byte("$jam_entropy")
-
-	// Generate VRF proof using the VRF signature as input
-	vrfProof, err := privateKey.GenerateVrfProof(header.VRFSignature[:], XE)
-	if err != nil {
-		return err
-	}
-
-	// Generate VRF output from the proof
-	vrfOutput, err := bandersnatch.GenerateVrfOutput(vrfProof)
+func updateEntropyAccumulator(header *block.Header, state *State) error {
+	outputHash, err := bandersnatch.OutputHash(header.VRFSignature)
 	if err != nil {
 		return err
 	}
 
 	// Equation 66: η'0 ≡ H(η0 ⌢ Y(Hv))
-	newEntropy := crypto.HashData(append(state.EntropyPool[0][:], vrfOutput[:]...))
-	entropyPool:= EntropyPool{}
+	newEntropy := crypto.HashData(append(state.EntropyPool[0][:], outputHash[:]...))
+	entropyPool := EntropyPool{}
 
 	// Equation 67: Rotate entropy accumulators on epoch change
 	if header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
@@ -170,7 +155,7 @@ func updateEntropyAccumulator(header *block.Header, state *State, privateKey *ba
 	return nil
 }
 
-func rotateEntropyPool(pool EntropyPool) EntropyPool{
+func rotateEntropyPool(pool EntropyPool) EntropyPool {
 	pool[3] = pool[2]
 	pool[2] = pool[1]
 	pool[1] = pool[0]
@@ -178,19 +163,19 @@ func rotateEntropyPool(pool EntropyPool) EntropyPool{
 }
 
 // Should be called after a check if the validator has are winning key.
-func sealBlockAndUpdateEntropy(header *block.Header, state *State, privateKey *bandersnatch.PrivateKey) error {
+func sealBlockAndUpdateEntropy(header *block.Header, state *State, privateKey crypto.BandersnatchPrivateKey) error {
 	if err := createSealSignature(header, state, privateKey); err != nil {
 		return err
 	}
 	if err := createVRFSignature(header, privateKey); err != nil {
 		return err
 	}
-	return updateEntropyAccumulator(header, state, privateKey)
+	return updateEntropyAccumulator(header, state)
 }
 
 // Main function to implement all of section 6.4
-func AttemptBlockSealing(header *block.Header, state *State, privateKey *bandersnatch.PrivateKey) error {
-	publicKey, err := privateKey.Public()
+func AttemptBlockSealing(header *block.Header, state *State, privateKey crypto.BandersnatchPrivateKey) error {
+	publicKey, err := bandersnatch.Public(privateKey)
 	if err != nil {
 		return fmt.Errorf("failed to get public key: %w", err)
 	}
