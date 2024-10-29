@@ -4,36 +4,89 @@ import (
 	"math"
 )
 
-type Module interface {
-	AddHostFunc(string, HostFunc)
-	Run(symbol string, gasLimit int64, args ...uint32) (result uint32, gasRemaining int64, err error)
-	Instantiate(instructionOffset uint32, gasLimit int64) Instance
+type MemoryAccess bool
+
+const (
+	ReadOnly  MemoryAccess = false // (R)
+	ReadWrite MemoryAccess = true  // (W)
+)
+
+// Memory Equation: 34 (M)
+type Memory struct {
+	data []*memorySegment // data (V ∈ Y, A ∈ ⟦{W, R, ∅})
 }
 
-type Instance interface {
-	GetReg(Reg) uint32
-	SetReg(Reg, uint32)
-
-	NextInstruction() (Instruction, error)
-	NextOffsets()
-	GetInstructionOffset() uint32
-	SetInstructionOffset(target uint32)
-	StartBasicBlock(program *Program)
-
-	GasRemaining() int64
-	DeductGas(cost int64)
-
-	GetMemory(mm *MemoryMap, address uint32, length int) ([]byte, error)
-	SetMemory(mm *MemoryMap, address uint32, data []byte) error
-	Sbrk(mm *MemoryMap, size uint32) (uint32, error)
+type memorySegment struct {
+	start, end uint32
+	access     MemoryAccess
+	data       []byte
 }
 
-type HostFunc func(instance Instance) (uint32, error)
+// Read reads from the set of readable indices (Vμ)
+func (m *Memory) Read(address uint32, data []byte) error {
+	memSeg := m.inRange(address)
+	if data == nil {
+		return &ErrPageFault{Reason: "address not in a valid range", Address: address}
+	}
+
+	offset := int(address - memSeg.start)
+	offsetEnd := offset + len(data)
+	if offsetEnd > len(memSeg.data) {
+		return &ErrPageFault{Reason: "memory exceeds page size, growing memory not supported", Address: address}
+	}
+	copy(data, memSeg.data[offset:offsetEnd])
+	return nil
+}
+
+func (m *Memory) inRange(address uint32) *memorySegment {
+	for _, r := range m.data {
+		if address >= r.start && address <= r.end {
+			return r
+		}
+	}
+	return nil
+}
+
+func (m *Memory) Sbrk(pageSize, heapTop uint32) error {
+	if heapTop > m.data[2].end {
+		nextPage, err := AlignToNextPage(uint(pageSize), uint(heapTop))
+		if err != nil {
+			return err
+		}
+
+		m.data[2].end += uint32(nextPage)
+	}
+	return nil
+}
+
+// Write writes to the set of writeable indices (Vμ*)
+func (m *Memory) Write(address uint32, data []byte) error {
+	memSeg := m.inRange(address)
+	if memSeg == nil {
+		return &ErrPageFault{Reason: "address not in a valid range", Address: address}
+	} else if memSeg.access == ReadOnly {
+		return &ErrPageFault{Reason: "memory at address is read only", Address: address}
+	}
+	offset := int(address - memSeg.start)
+	offsetEnd := offset + len(data)
+	if offsetEnd > len(memSeg.data) {
+		return &ErrPageFault{Reason: "memory exceeds page size, growing memory not supported", Address: address}
+	}
+	copy(memSeg.data[offset:offsetEnd], data)
+	return nil
+}
+
+type Registers [13]uint32
+
+type Gas int64
+
+// HostCall the generic Ω function definition Ωx(n, ξ, ω, μ, x) defined in section A.6
+type HostCall[X any] func(hostCall uint32, gasCounter Gas, regs Registers, mem Memory, x X) (Gas, Registers, Memory, X, error)
 
 type Mutator interface {
 	Trap() error
 	Fallthrough()
-	Sbrk(dst Reg, size Reg)
+	Sbrk(dst Reg, size Reg) error
 	MoveReg(d Reg, s Reg)
 	BranchEq(s1 Reg, s2 Reg, target uint32)
 	BranchEqImm(s1 Reg, s2 uint32, target uint32)
@@ -91,7 +144,6 @@ type Mutator interface {
 	CmovIfZeroImm(d Reg, c Reg, s uint32)
 	CmovIfNotZero(d Reg, s, c Reg)
 	CmovIfNotZeroImm(d Reg, c Reg, s uint32)
-	Ecalli(imm uint32) HostCallResult
 	StoreU8(src Reg, offset uint32) error
 	StoreU16(src Reg, offset uint32) error
 	StoreU32(src Reg, offset uint32) error

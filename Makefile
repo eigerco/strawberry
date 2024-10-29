@@ -27,12 +27,12 @@ build-bandersnatch:
 .PHONY: test
 ## test: Runs unit tests.
 test: build-bandersnatch
-	go test ./... -race -v $(DARWIN_TEST_GOFLAGS) 
+	go test ./... -race -v $(DARWIN_TEST_GOFLAGS)
 
 .PHONY: integration
 ## integration: Runs integration tests.
 integration:
-	go test ./... -race -v $(DARWIN_TEST_GOFLAGS) --tags=integration 
+	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=integration
 
 ## install-hooks: Install git-hooks from .githooks directory.
 .PHONY: install-hooks

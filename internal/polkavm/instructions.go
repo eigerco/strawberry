@@ -2,7 +2,6 @@ package polkavm
 
 import (
 	"encoding/binary"
-	"fmt"
 )
 
 type Opcode byte
@@ -111,7 +110,7 @@ const (
 	LoadImmAndJumpIndirect Opcode = 42
 )
 
-var GasCosts = map[Opcode]int64{
+var GasCosts = map[Opcode]Gas{
 	Trap:                            1,
 	Fallthrough:                     1,
 	JumpIndirect:                    1,
@@ -490,32 +489,32 @@ type Instruction struct {
 	Length uint32
 }
 
-func (i *Instruction) StepOnce(mutator Mutator) error {
+func (i *Instruction) Mutate(mutator Mutator) (uint32, error) {
 	switch i.Opcode {
 	case Trap:
-		return mutator.Trap()
+		return 0, mutator.Trap()
 	case Fallthrough:
 		mutator.Fallthrough()
 	case JumpIndirect:
-		return mutator.JumpIndirect(i.Reg[0], i.Imm[0])
+		return 0, mutator.JumpIndirect(i.Reg[0], i.Imm[0])
 	case LoadImm:
 		mutator.LoadImm(i.Reg[0], i.Imm[0])
 	case LoadU8:
-		return mutator.LoadU8(i.Reg[0], i.Imm[0])
+		return 0, mutator.LoadU8(i.Reg[0], i.Imm[0])
 	case LoadI8:
-		return mutator.LoadI8(i.Reg[0], i.Imm[0])
+		return 0, mutator.LoadI8(i.Reg[0], i.Imm[0])
 	case LoadU16:
-		return mutator.LoadU16(i.Reg[0], i.Imm[0])
+		return 0, mutator.LoadU16(i.Reg[0], i.Imm[0])
 	case LoadI16:
-		return mutator.LoadI16(i.Reg[0], i.Imm[0])
+		return 0, mutator.LoadI16(i.Reg[0], i.Imm[0])
 	case LoadU32:
-		return mutator.LoadU32(i.Reg[0], i.Imm[0])
+		return 0, mutator.LoadU32(i.Reg[0], i.Imm[0])
 	case StoreU8:
-		return mutator.StoreU8(i.Reg[0], i.Imm[0])
+		return 0, mutator.StoreU8(i.Reg[0], i.Imm[0])
 	case StoreU16:
-		return mutator.StoreU16(i.Reg[0], i.Imm[0])
+		return 0, mutator.StoreU16(i.Reg[0], i.Imm[0])
 	case StoreU32:
-		return mutator.StoreU32(i.Reg[0], i.Imm[0])
+		return 0, mutator.StoreU32(i.Reg[0], i.Imm[0])
 	case LoadImmAndJump:
 		mutator.LoadImmAndJump(i.Reg[0], i.Imm[0], i.Imm[1])
 	case BranchEqImm:
@@ -539,28 +538,29 @@ func (i *Instruction) StepOnce(mutator Mutator) error {
 	case BranchGreaterUnsignedImm:
 		mutator.BranchGreaterUnsignedImm(i.Reg[0], i.Imm[0], i.Imm[1])
 	case StoreImmIndirectU8:
-		return mutator.StoreImmIndirectU8(i.Reg[0], i.Imm[0], i.Imm[1])
+		return 0, mutator.StoreImmIndirectU8(i.Reg[0], i.Imm[0], i.Imm[1])
 	case StoreImmIndirectU16:
-		return mutator.StoreImmIndirectU16(i.Reg[0], i.Imm[0], i.Imm[1])
+		return 0, mutator.StoreImmIndirectU16(i.Reg[0], i.Imm[0], i.Imm[1])
 	case StoreImmIndirectU32:
-		return mutator.StoreImmIndirectU32(i.Reg[0], i.Imm[0], i.Imm[1])
+		return 0, mutator.StoreImmIndirectU32(i.Reg[0], i.Imm[0], i.Imm[1])
 	case StoreIndirectU8:
-		return mutator.StoreIndirectU8(i.Reg[0], i.Reg[1], i.Imm[0])
+		return 0, mutator.StoreIndirectU8(i.Reg[0], i.Reg[1], i.Imm[0])
 	case StoreIndirectU16:
-		return mutator.StoreIndirectU16(i.Reg[0], i.Reg[1], i.Imm[0])
+		return 0, mutator.StoreIndirectU16(i.Reg[0], i.Reg[1], i.Imm[0])
 	case StoreIndirectU32:
-		return mutator.StoreIndirectU32(i.Reg[0], i.Reg[1], i.Imm[0])
+		return 0, mutator.StoreIndirectU32(i.Reg[0], i.Reg[1], i.Imm[0])
 	case LoadIndirectU8:
-		return mutator.LoadIndirectU8(i.Reg[0], i.Reg[1], i.Imm[0])
+		return 0, mutator.LoadIndirectU8(i.Reg[0], i.Reg[1], i.Imm[0])
 	case LoadIndirectI8:
-		return mutator.LoadIndirectI8(i.Reg[0], i.Reg[1], i.Imm[0])
+		return 0, mutator.LoadIndirectI8(i.Reg[0], i.Reg[1], i.Imm[0])
 	case LoadIndirectU16:
-		return mutator.LoadIndirectU16(i.Reg[0], i.Reg[1], i.Imm[0])
+		return 0, mutator.LoadIndirectU16(i.Reg[0], i.Reg[1], i.Imm[0])
 	case LoadIndirectI16:
-		return mutator.LoadIndirectI16(i.Reg[0], i.Reg[1], i.Imm[0])
+		return 0, mutator.LoadIndirectI16(i.Reg[0], i.Reg[1], i.Imm[0])
 	case LoadIndirectU32:
-		return mutator.LoadIndirectU32(i.Reg[0], i.Reg[1], i.Imm[0])
+		return 0, mutator.LoadIndirectU32(i.Reg[0], i.Reg[1], i.Imm[0])
 	case AddImm:
+
 		mutator.AddImm(i.Reg[0], i.Reg[1], i.Imm[0])
 	case AndImm:
 		mutator.AndImm(i.Reg[0], i.Reg[1], i.Imm[0])
@@ -655,25 +655,21 @@ func (i *Instruction) StepOnce(mutator Mutator) error {
 	case Jump:
 		mutator.Jump(i.Imm[0])
 	case Ecalli:
-		if result := mutator.Ecalli(i.Imm[0]); result.Code != HostCallResultOk {
-			return fmt.Errorf("host call terminated with code: %d - %s", result.Code, result.Code.String())
-		} else if result.InnerCode != HostCallInnerCodeHalt {
-			return fmt.Errorf("host call terminated with inner code: %d message: %s", result.InnerCode, result.Msg)
-		}
+		return i.Imm[0], ErrHostCall
 	case StoreImmU8:
-		return mutator.StoreImmU8(i.Imm[0], i.Imm[1])
+		return 0, mutator.StoreImmU8(i.Imm[0], i.Imm[1])
 	case StoreImmU16:
-		return mutator.StoreImmU16(i.Imm[0], i.Imm[1])
+		return 0, mutator.StoreImmU16(i.Imm[0], i.Imm[1])
 	case StoreImmU32:
-		return mutator.StoreImmU32(i.Imm[0], i.Imm[1])
+		return 0, mutator.StoreImmU32(i.Imm[0], i.Imm[1])
 	case MoveReg:
 		mutator.MoveReg(i.Reg[0], i.Reg[1])
 	case Sbrk:
-		mutator.Sbrk(i.Reg[0], i.Reg[1])
+		return 0, mutator.Sbrk(i.Reg[0], i.Reg[1])
 	case LoadImmAndJumpIndirect:
-		return mutator.LoadImmAndJumpIndirect(i.Reg[0], i.Reg[1], i.Imm[0], i.Imm[1])
+		return 0, mutator.LoadImmAndJumpIndirect(i.Reg[0], i.Reg[1], i.Imm[0], i.Imm[1])
 	}
-	return nil
+	return 0, nil
 }
 
 func (i *Instruction) IsBasicBlockTermination() bool {

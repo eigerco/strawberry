@@ -1,6 +1,7 @@
 package interpreter
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/polkavm"
@@ -29,32 +30,46 @@ func TestInstance_Execute(t *testing.T) {
 		Exports: []polkavm.ProgramExport{{TargetCodeOffset: 0, Symbol: "add_numbers"}},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(polkavm.VmMaxPageSize, pp.RODataSize, pp.RWDataSize, pp.StackSize, pp.ROData)
-	if err != nil {
-		t.Fatal(err)
-	}
-	m, err := NewModule(pp, memoryMap)
-	if err != nil {
-		t.Fatal(err)
-	}
+	memoryMap, err := polkavm.NewMemoryMap(0x1000, uint(pp.RODataSize), uint(pp.RWDataSize), uint(pp.StackSize), 0)
 	require.NoError(t, err)
 
-	gasLimit := int64(1000)
+	memory := memoryMap.NewMemory(pp.RWData, pp.ROData, nil)
 
-	m.AddHostFunc("get_third_number", getThirdNumber)
-	res, i, err := m.Run("add_numbers", gasLimit, nil, 1, 10)
-	require.NoError(t, err)
+	// find add numbers export
+	i := slices.IndexFunc(pp.Exports, func(e polkavm.ProgramExport) bool { return e.Symbol == "add_numbers" })
+	require.True(t, i >= 0)
+	entryPoint := pp.Exports[i].TargetCodeOffset
+	initialRegs := polkavm.Registers{
+		polkavm.RA: polkavm.VmAddressReturnToHost,
+		polkavm.SP: memoryMap.StackAddressHigh,
+		polkavm.A0: 1,
+		polkavm.A1: 10,
+	}
+	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x nothing) (polkavm.Gas, polkavm.Registers, polkavm.Memory, nothing, error) {
+		if pp.Imports[hostCall] == "get_third_number" {
+			regs1 := getThirdNumber(regs)
+			return gasCounter, regs1, mem, struct{}{}, nil
+		}
+		return gasCounter, regs, mem, struct{}{}, nil
+	}
+	t.Run("1 + 10 + 100 = 111", func(t *testing.T) {
+		gasLimit := polkavm.Gas(1000)
+		gas, regs, _, _, err := InvokeHostCall(pp, memoryMap, entryPoint, gasLimit, initialRegs, memory, hostCall, nothing{})
 
-	assert.Equal(t, gasLimit-int64(len(pp.Instructions)), i.GasRemaining())
+		require.ErrorIs(t, err, polkavm.ErrHalt)
+		assert.Equal(t, uint32(111), regs[polkavm.A0])
+		assert.Equal(t, gasLimit-polkavm.Gas(len(pp.Instructions)), gas)
+	})
 
-	// 1 + 10 + 100 = 111
-	assert.Equal(t, uint32(111), res)
-
-	// not enough gas
-	_, _, err = m.Run("add_numbers", 9, nil, 1, 10)
-	require.ErrorIs(t, err, polkavm.ErrOutOfGas)
+	t.Run("not enough gas", func(t *testing.T) {
+		_, _, _, _, err := InvokeHostCall(pp, memoryMap, entryPoint, 9, initialRegs, memory, hostCall, nothing{})
+		require.ErrorIs(t, err, polkavm.ErrOutOfGas)
+	})
 }
 
-func getThirdNumber(instance polkavm.Instance) (uint32, error) {
-	return 100, nil
+type nothing struct{}
+
+func getThirdNumber(regs polkavm.Registers) polkavm.Registers {
+	regs[polkavm.A0] = 100
+	return regs
 }

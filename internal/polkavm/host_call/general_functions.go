@@ -1,18 +1,20 @@
 package host_call
 
 import (
+	"github.com/eigerco/strawberry/pkg/serialization"
+	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"math"
+
+	"golang.org/x/crypto/blake2b"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/state"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
-	"golang.org/x/crypto/blake2b"
-	"math"
 )
 
 const (
-	GasRemainingCost = 10
+	GasRemainingCost polkavm.Gas = 10
 	LookupCost
 	ReadCost
 	WriteCost
@@ -29,264 +31,243 @@ type AccountInfo struct {
 	TotalItems             uint32      // ti
 }
 
-// GasRemaining ΩG
-func GasRemaining(instance polkavm.Instance) (uint32, error) {
-	if err := deductGas(instance, GasRemainingCost); err != nil {
-		return 0, err
+// GasRemaining ΩG(ξ, ω, ...)
+func GasRemaining(gas polkavm.Gas, regs polkavm.Registers) (polkavm.Gas, polkavm.Registers, error) {
+	if gas < GasRemainingCost {
+		return gas, regs, polkavm.ErrOutOfGas
 	}
-
-	ksLower := instance.GetReg(polkavm.A0) // Lower 32 bits
-	ksUpper := instance.GetReg(polkavm.A1) // Upper 32 bits
-
-	// Combine the two parts into a single 64-bit value
-	ks := (uint64(ksUpper) << 32) | uint64(ksLower)
-
-	ks -= uint64(GasRemainingCost)
+	gas -= GasRemainingCost
 
 	// Split the new ξ' value into its lower and upper parts.
-	omega0, omega1 := uint32(ks&((1<<32)-1)), uint32(ks>>32)
-	instance.SetReg(polkavm.A1, omega1)
+	regs[polkavm.A0] = uint32(gas & ((1 << 32) - 1))
+	regs[polkavm.A1] = uint32(gas >> 32)
 
-	return omega0, nil
+	return gas, regs, nil
 }
 
-// MakeLookupFunc ΩL
-func MakeLookupFunc(serviceId block.ServiceId, serviceState state.ServiceState, memoryMap *polkavm.MemoryMap) polkavm.HostFunc {
-	return func(instance polkavm.Instance) (uint32, error) {
-		if err := deductGas(instance, LookupCost); err != nil {
-			return 0, err
-		}
-
-		sID := instance.GetReg(polkavm.A0)
-
-		if sID == math.MaxUint32 {
-			sID = uint32(serviceId)
-		}
-
-		//  account 'a'
-		a, exists := serviceState[block.ServiceId(sID)]
-		if !exists {
-			return 0, polkavm.ErrAccountNotFound
-		}
-
-		ho := instance.GetReg(polkavm.A1)
-
-		// Ensure the memory range is valid for hashing (µho..ho+32)
-		memorySlice, err := instance.GetMemory(memoryMap, ho, 32)
-		if err != nil {
-			return uint32(polkavm.HostCallResultOob), nil
-		}
-
-		// Compute the hash H(µho..ho+32)
-		hash := blake2b.Sum256(memorySlice)
-
-		// Lookup value in storage (v) using the hash
-		v, exists := a.Storage[hash]
-		if !exists {
-			return uint32(polkavm.HostCallResultNone), nil
-		}
-
-		bo := instance.GetReg(polkavm.A2)
-		bz := instance.GetReg(polkavm.A3)
-
-		// Write value to memory if within bounds
-		if len(v) > 0 && len(v) <= int(bz) {
-			if err = instance.SetMemory(memoryMap, bo, v); err != nil {
-				return uint32(polkavm.HostCallResultOob), nil
-			}
-		} else {
-			return uint32(polkavm.HostCallResultOob), nil
-		}
-
-		return uint32(len(v)), nil
+// Lookup ΩL(ξ, ω, μ, s, s, d)
+func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+	if gas < LookupCost {
+		return gas, regs, mem, polkavm.ErrOutOfGas
 	}
+	gas -= LookupCost
+
+	sID := regs[polkavm.A0]
+
+	// Determine the lookup key 'a'
+	a := s
+	if sID != math.MaxUint32 && sID != uint32(serviceId) {
+		var exists bool
+		// Lookup service account by serviceId in the serviceState
+		a, exists = serviceState[serviceId]
+		if !exists {
+			regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+			return gas, regs, mem, nil
+		}
+	}
+
+	ho := regs[polkavm.A1]
+
+	// Ensure the memory range is valid for hashing (µho..ho+32)
+	memorySlice := make([]byte, 32)
+	err := mem.Read(ho, memorySlice)
+	if err != nil {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+		return gas, regs, mem, err
+	}
+
+	// Compute the hash H(µho..ho+32)
+	hash := blake2b.Sum256(memorySlice)
+
+	// Lookup value in storage (v) using the hash
+	v, exists := a.Storage[hash]
+	if !exists {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+		return gas, regs, mem, nil
+	}
+
+	bo := regs[polkavm.A2]
+	bz := regs[polkavm.A3]
+
+	// Write value to memory if within bounds
+	if len(v) > 0 && len(v) <= int(bz) {
+		if err = mem.Write(bo, v); err != nil {
+			regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+			return gas, regs, mem, err
+		}
+	} else {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+		return gas, regs, mem, err
+	}
+
+	regs[polkavm.A0] = uint32(len(v))
+	return gas, regs, mem, err
 }
 
-// MakeReadFunc ΩR
-func MakeReadFunc(serviceId block.ServiceId, serviceState state.ServiceState, memoryMap *polkavm.MemoryMap) polkavm.HostFunc {
-	return func(instance polkavm.Instance) (uint32, error) {
-		if err := deductGas(instance, ReadCost); err != nil {
-			return 0, err
-		}
-
-		sID := instance.GetReg(polkavm.A0)
-		ko := instance.GetReg(polkavm.A1)
-		kz := instance.GetReg(polkavm.A2)
-		bo := instance.GetReg(polkavm.A3)
-		bz := instance.GetReg(polkavm.A4)
-
-		if sID == math.MaxUint32 {
-			sID = uint32(serviceId)
-		}
-
-		//  account 'a'
-		storedService, exists := serviceState[block.ServiceId(sID)]
-		if !exists {
-			return 0, polkavm.ErrAccountNotFound
-		}
-
-		// read key data from memory at ko..ko+kz
-		keyData, err := instance.GetMemory(memoryMap, ko, int(kz))
-		if err != nil {
-			return uint32(polkavm.HostCallResultOob), nil
-		}
-
-		serializer := serialization.NewSerializer(codec.NewJamCodec())
-		serviceIdBytes, err := serializer.Encode(sID)
-		if err != nil {
-			return 0, err
-		}
-
-		// Concatenate E4(s) and keyData
-		hashInput := make([]byte, 0, len(serviceIdBytes)+len(keyData))
-		hashInput = append(hashInput, serviceIdBytes...)
-		hashInput = append(hashInput, keyData...)
-
-		// Compute the hash H(E4(s) + keyData)
-		k := blake2b.Sum256(hashInput)
-
-		v, exists := storedService.Storage[k]
-		if !exists {
-			return uint32(polkavm.HostCallResultNone), nil
-		}
-
-		writeLen := int(math.Min(float64(bz), float64(len(v))))
-
-		if writeLen > 0 {
-			if _, err = instance.GetMemory(memoryMap, bo, writeLen); err != nil {
-				return uint32(polkavm.HostCallResultOob), nil
-			}
-
-			if err = instance.SetMemory(memoryMap, bo, v[:writeLen]); err != nil {
-				return uint32(polkavm.HostCallResultOob), nil
-			}
-
-			return uint32(len(v)), nil
-		}
-
-		return uint32(polkavm.HostCallResultNone), nil
+// Read ΩR(ξ, ω, μ, s, s, d)
+func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+	if gas < ReadCost {
+		return gas, regs, mem, polkavm.ErrOutOfGas
 	}
+	gas -= ReadCost
+
+	sID := regs[polkavm.A0]
+	ko := regs[polkavm.A1]
+	kz := regs[polkavm.A2]
+	bo := regs[polkavm.A3]
+	bz := regs[polkavm.A4]
+
+	a := s
+	if sID != math.MaxUint32 && sID != uint32(serviceId) {
+		var exists bool
+		a, exists = serviceState[block.ServiceId(sID)]
+		if !exists {
+			return gas, regs, mem, polkavm.ErrAccountNotFound
+		}
+	}
+
+	// read key data from memory at ko..ko+kz
+	keyData := make([]byte, kz)
+	err := mem.Read(ko, keyData)
+	if err != nil {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+		return gas, regs, mem, nil
+	}
+
+	serializer := serialization.NewSerializer(codec.NewJamCodec())
+	serviceIdBytes, err := serializer.Encode(sID)
+	if err != nil {
+		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
+	}
+
+	// Concatenate E4(s) and keyData
+	hashInput := make([]byte, 0, len(serviceIdBytes)+len(keyData))
+	hashInput = append(hashInput, serviceIdBytes...)
+	hashInput = append(hashInput, keyData...)
+
+	// Compute the hash H(E4(s) + keyData)
+	k := blake2b.Sum256(hashInput)
+
+	v, exists := a.Storage[k]
+	if !exists {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+		return gas, regs, mem, nil
+	}
+
+	writeLen := int(math.Min(float64(bz), float64(len(v))))
+
+	if writeLen > 0 {
+		if err = mem.Write(bo, v[:writeLen]); err != nil {
+			regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+			return gas, regs, mem, nil
+		}
+
+		regs[polkavm.A0] = uint32(len(v))
+		return gas, regs, mem, nil
+	}
+
+	regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+	return gas, regs, mem, nil
 }
 
-// MakeWriteFunc ΩW
-func MakeWriteFunc(serviceId block.ServiceId, serviceState state.ServiceState, memoryMap *polkavm.MemoryMap) polkavm.HostFunc {
-	return func(instance polkavm.Instance) (uint32, error) {
-		if err := deductGas(instance, WriteCost); err != nil {
-			return 0, err
-		}
-
-		ko := instance.GetReg(polkavm.A0)
-		kz := instance.GetReg(polkavm.A1)
-		vo := instance.GetReg(polkavm.A2)
-		vz := instance.GetReg(polkavm.A3)
-
-		var l uint32
-
-		keyData, err := instance.GetMemory(memoryMap, ko, int(kz))
-		if err != nil {
-			return 0, err
-		}
-
-		serializer := serialization.NewSerializer(codec.NewJamCodec())
-		serviceIdBytes, err := serializer.Encode(serviceId)
-		if err != nil {
-			return 0, err
-		}
-		hashInput := append(serviceIdBytes, keyData...)
-		k := blake2b.Sum256(hashInput)
-
-		a, accountExists := serviceState[serviceId]
-		if !accountExists {
-			return 0, polkavm.ErrAccountNotFound
-		}
-
-		v, keyExists := a.Storage[k]
-		if !keyExists {
-			return uint32(polkavm.HostCallResultNone), nil
-		}
-
-		l = uint32(len(v))
-
-		if vz == 0 {
-			delete(a.Storage, k)
-		} else {
-			availableMemory := memoryMap.RWDataAddress + memoryMap.RWDataSize - vo
-			if availableMemory < vz {
-				return uint32(polkavm.HostCallResultFull), nil
-			}
-
-			valueData, err := instance.GetMemory(memoryMap, vo, int(vz))
-			if err != nil {
-				return uint32(polkavm.HostCallResultOob), nil
-			}
-
-			a.Storage[k] = valueData
-		}
-
-		serviceState[serviceId] = a
-		return l, nil
+// Write ΩW (ξ, ω, μ, s, s)
+func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId block.ServiceId, s state.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
+	if gas < WriteCost {
+		return gas, regs, mem, s, polkavm.ErrOutOfGas
 	}
+	gas -= WriteCost
+
+	ko := regs[polkavm.A0]
+	kz := regs[polkavm.A1]
+	vo := regs[polkavm.A2]
+	vz := regs[polkavm.A3]
+
+	keyData := make([]byte, kz)
+	err := mem.Read(ko, keyData)
+	if err != nil {
+		return gas, regs, mem, s, err
+	}
+
+	serializer := serialization.NewSerializer(codec.NewJamCodec())
+	serviceIdBytes, err := serializer.Encode(serviceId)
+	if err != nil {
+		return gas, regs, mem, s, err
+	}
+	hashInput := append(serviceIdBytes, keyData...)
+	k := blake2b.Sum256(hashInput)
+
+	a := s
+	if vz == 0 {
+		delete(a.Storage, k)
+	} else {
+		valueData := make([]byte, vz)
+		err := mem.Read(vo, valueData)
+		if err != nil {
+			regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+			return gas, regs, mem, s, err
+		}
+
+		a.Storage[k] = valueData
+	}
+
+	storageItem, ok := s.Storage[k]
+	if !ok {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+		return gas, regs, mem, s, err
+	}
+
+	if a.ThresholdBalance() > a.Balance {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultFull)
+		return gas, regs, mem, s, err
+	}
+
+	// otherwise a.ThresholdBalance() <= a.Balance
+	regs[polkavm.A0] = uint32(len(storageItem)) // l
+	return gas, regs, mem, a, err               // return service account 'a' as opposed to 's' for not successful paths
 }
 
-func MakeInfoFunc(
-	serviceId block.ServiceId,
-	serviceState state.ServiceState,
-	memoryMap *polkavm.MemoryMap,
-) polkavm.HostFunc {
-	return func(instance polkavm.Instance) (uint32, error) {
-		if err := deductGas(instance, InfoCost); err != nil {
-			return 0, err
-		}
+// Info ΩI(ξ, ω, μ, s, s, d)
+func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+	if gas < InfoCost {
+		return gas, regs, mem, polkavm.ErrOutOfGas
+	}
+	gas -= InfoCost
 
-		sID := instance.GetReg(polkavm.A0)
-		omega1 := instance.GetReg(polkavm.A1)
+	sID := regs[polkavm.A0]
+	omega1 := regs[polkavm.A1]
 
-		if sID == math.MaxUint32 {
-			sID = uint32(serviceId)
-		}
-
-		t, exists := serviceState[block.ServiceId(sID)]
+	t := s
+	if sID != math.MaxUint32 && sID != uint32(serviceId) {
+		var exists bool
+		t, exists = serviceState[block.ServiceId(sID)]
 		if !exists {
-			return uint32(polkavm.HostCallResultNone), nil
+			regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+			return gas, regs, mem, nil
 		}
-
-		accountInfo := AccountInfo{
-			CodeHash:               t.CodeHash,
-			Balance:                t.Balance,
-			ThresholdBalance:       t.ThresholdBalance(),
-			GasLimitForAccumulator: t.GasLimitForAccumulator,
-			GasLimitOnTransfer:     t.GasLimitOnTransfer,
-			TotalStorageSize:       t.TotalStorageSize(),
-			TotalItems:             t.TotalItems(),
-		}
-
-		serializer := serialization.NewSerializer(codec.NewJamCodec())
-		// E(tc, tb, tt, tg , tm, tl, ti)
-		m, err := serializer.Encode(accountInfo)
-		if err != nil {
-			return 0, err
-		}
-
-		end := omega1 + uint32(len(m))
-		if end > memoryMap.RWDataAddress+memoryMap.RWDataSize {
-			return uint32(polkavm.HostCallResultOob), nil
-		}
-
-		err = instance.SetMemory(memoryMap, omega1, m)
-		if err != nil {
-			return uint32(polkavm.HostCallResultOob), nil
-		}
-
-		return uint32(polkavm.HostCallResultOk), nil
-	}
-}
-
-func deductGas(instance polkavm.Instance, gasCost int64) error {
-	if instance.GasRemaining() < gasCost {
-		return polkavm.ErrOutOfGas
 	}
 
-	instance.DeductGas(gasCost)
+	accountInfo := AccountInfo{
+		CodeHash:               t.CodeHash,
+		Balance:                t.Balance,
+		ThresholdBalance:       t.ThresholdBalance(),
+		GasLimitForAccumulator: t.GasLimitForAccumulator,
+		GasLimitOnTransfer:     t.GasLimitOnTransfer,
+		TotalStorageSize:       t.TotalStorageSize(),
+		TotalItems:             t.TotalItems(),
+	}
 
-	return nil
+	serializer := serialization.NewSerializer(codec.NewJamCodec())
+	// E(tc, tb, tt, tg , tm, tl, ti)
+	m, err := serializer.Encode(accountInfo)
+	if err != nil {
+		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
+	}
+
+	if err := mem.Write(omega1, m); err != nil {
+		regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+		return gas, regs, mem, nil
+	}
+
+	regs[polkavm.A0] = uint32(polkavm.HostCallResultOk)
+	return gas, regs, mem, nil
 }
