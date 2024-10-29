@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+## Fixes a linker bug on MacOS, see https://github.com/golang/go/issues/61229#issuecomment-1954706803
+## Forces the old Apple linker.
+ifeq ($(shell uname),Darwin)
+    DARWIN_TEST_GOFLAGS=-ldflags=-extldflags=-Wl,-ld_classic
+endif
+
 all: help
 
 .PHONY: help
@@ -21,12 +27,12 @@ build-bandersnatch:
 .PHONY: test
 ## test: Runs unit tests.
 test: build-bandersnatch
-	go test ./... -race -v
+	go test ./... -race -v $(DARWIN_TEST_GOFLAGS)
 
 .PHONY: integration
 ## integration: Runs integration tests.
 integration:
-	go test ./tests/... -race -v --tags=integration
+	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=integration
 
 ## install-hooks: Install git-hooks from .githooks directory.
 .PHONY: install-hooks

@@ -4,7 +4,7 @@ go 1.22.5
 
 require (
 	github.com/ChainSafe/gossamer v0.9.0
-	github.com/ebitengine/purego v0.7.1
+	github.com/ebitengine/purego v0.8.1
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/crypto v0.27.0
 )
