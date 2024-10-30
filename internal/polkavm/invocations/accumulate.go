@@ -14,7 +14,7 @@ import (
 )
 
 // InvokeAccumulate ΨA(δ†, s, g, o) the paper assumes access to the state and header variables while in go we also need to pass it explicitly as 'state' and 'header'
-func InvokeAccumulate(st state.State, header *block.Header, serviceState state.ServiceState, serviceIndex block.ServiceId, gas polkavm.Gas, o []OperandResult) (x polkavm.ResultContext, r *crypto.Hash, err error) {
+func InvokeAccumulate(st state.State, header *block.Header, serviceState state.ServiceState, serviceIndex block.ServiceId, gas polkavm.Gas, accOperand []state.AccumulationOperand) (x polkavm.ResultContext, r *crypto.Hash, err error) {
 	s := serviceState[serviceIndex]
 	serviceCode := s.PreimageLookup[s.CodeHash]
 	serializer := serialization.NewSerializer(&codec.JAMCodec{})
@@ -35,7 +35,7 @@ func InvokeAccumulate(st state.State, header *block.Header, serviceState state.S
 		ExceptionalCtx: ctx,
 	}
 
-	args, err := serializer.Encode(o)
+	args, err := serializer.Encode(accOperand)
 	if err != nil {
 		return newCtx(st, &s, 0), nil, err
 	}
@@ -91,7 +91,7 @@ func InvokeAccumulate(st state.State, header *block.Header, serviceState state.S
 		}
 		return ctxPair.ExceptionalCtx, nil, err
 	}
-	// if o ∈ Y ∖ H. There is no sure way to check that a byte array is a hash
+	// if accOperand ∈ Y ∖ H. There is no sure way to check that a byte array is a hash
 	// one way would be to check the shannon entropy but this also not a guarantee, so we just limit to checking the size
 	if len(ret) == crypto.HashSize {
 		h := crypto.Hash(ret)
@@ -146,27 +146,4 @@ func check(i block.ServiceId, serviceState state.ServiceState) block.ServiceId {
 	}
 
 	return check((i-(1<<8)+1)%((1<<32)-(1<<9))+(1<<8), serviceState)
-}
-
-// OperandResult Equation 159: O ≡ (o ∈ Y ∪ J, l ∈ H, k ∈ H, a ∈ Y)
-type OperandResult struct {
-	WorkPackageHash     crypto.Hash                   // Hash of the work-package (k)
-	AuthorizationOutput []byte                        // Authorization output (a)
-	PayloadHash         crypto.Hash                   // Hash of the payload (l)
-	Output              block.WorkResultOutputOrError // Output of the work result (o) ∈ Y ∪ J: []byte or error
-}
-
-// GetOperandResults Equation 160: (M)
-func GetOperandResults(serviceID block.ServiceId, w block.WorkReport) (results []OperandResult) {
-	for _, r := range w.WorkResults { // Wr
-		if r.ServiceId == serviceID {
-			results = append(results, OperandResult{
-				WorkPackageHash:     w.WorkPackageSpecification.WorkPackageHash,
-				AuthorizationOutput: w.Output,
-				PayloadHash:         r.PayloadHash,
-				Output:              r.Output,
-			})
-		}
-	}
-	return results
 }

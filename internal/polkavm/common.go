@@ -1,10 +1,11 @@
 package polkavm
 
 import (
+	"math"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
-	"math"
 )
 
 type MemoryAccess bool
