@@ -236,8 +236,8 @@ func (r HostCallCode) String() string {
 	return "unknown"
 }
 
-// ResultContext Equation 254
-type ResultContext struct {
+// AccumulateContext Equation 254
+type AccumulateContext struct {
 	ServiceAccount      *state.ServiceAccount          // s
 	AuthorizationsQueue state.PendingAuthorizersQueues // c
 	ValidatorKeys       safrole.ValidatorsData         // v
@@ -247,7 +247,7 @@ type ResultContext struct {
 	PrivilegedServices  state.PrivilegedServices       // p
 }
 
-type ResultContextPair struct {
-	RegularCtx     ResultContext // x
-	ExceptionalCtx ResultContext // y
+type AccumulateContextPair struct {
+	RegularCtx     AccumulateContext // x
+	ExceptionalCtx AccumulateContext // y
 }
