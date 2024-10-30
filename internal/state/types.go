@@ -36,6 +36,14 @@ type AccumulationQueue [jamtime.TimeslotsPerEpoch][]WorkReportWithUnAccumulatedD
 
 type AccumulationHistory [jamtime.TimeslotsPerEpoch]map[crypto.Hash]crypto.Hash
 
+// AccumulationOperand represents a single operand for accumulation (equation 159)
+type AccumulationOperand struct {
+	Output              block.WorkResultOutputOrError // Output or error (o ∈ Y ∪ J)
+	PayloadHash         crypto.Hash                   // Payload hash (l ∈ H)
+	WorkPackageHash     crypto.Hash                   // Work-package hash (k ∈ H)
+	AuthorizationOutput []byte                        // Authorization output (a ∈ Y)
+}
+
 // Context is an intermediate value for state transition calculations
 // TODO: Add relevant fields when state transitions are implemented
 type Context struct {
