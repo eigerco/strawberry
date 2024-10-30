@@ -6,8 +6,9 @@ use bandersnatch::{IetfProof, Input, Output, Public, RingProof, Secret};
 use libc::{c_int, size_t};
 use std::ptr;
 use std::slice;
+use std::sync::OnceLock;
 
-const RING_SIZE: usize = 1023;
+const DEFAULT_RING_SIZE: usize = 1023;
 const SECRET_KEY_LENGTH: usize = 32;
 const PUBLIC_KEY_LENGTH: usize = 32;
 const IETF_VRF_SIGNATURE_LENGTH: usize = 96;
@@ -86,9 +87,22 @@ pub struct RingVrfSignature {
     proof: RingProof,
 }
 
+static RING_SIZE: OnceLock<usize> = OnceLock::new();
+
+/// Initialize the ring size. This has to be called before ring_context() in
+/// order to take effect, otherwise it will default to DEFAULT_RING_SIZE.
+fn init_ring_size_impl(size: usize) {
+    let _ = RING_SIZE.set(size);
+}
+
+/// Get the current ring size which is set once. The ring size influences the
+/// commitment generated.  Test vectors use a ring size of 6 and this produces a
+/// different commitment compared to a ring size of 1023.
+fn ring_size() -> usize {
+    *RING_SIZE.get_or_init(|| DEFAULT_RING_SIZE)
+}
 /// "Static" ring context data.
 fn ring_context() -> &'static RingContext {
-    use std::sync::OnceLock;
     static RING_CTX: OnceLock<RingContext> = OnceLock::new();
     RING_CTX.get_or_init(|| {
         use bandersnatch::PcsParams;
@@ -96,11 +110,10 @@ fn ring_context() -> &'static RingContext {
             env!("CARGO_MANIFEST_DIR"),
             "/data/zcash-srs-2-11-uncompressed.bin"
         ));
-
         let pcs_params =
             PcsParams::deserialize_uncompressed_unchecked(&mut &EMBEDDED_RAW_PCS_PARAMS[..])
                 .expect("Failed to deserialize PCS parameters");
-        RingContext::from_srs(RING_SIZE, pcs_params)
+        RingContext::from_srs(ring_size(), pcs_params)
             .expect("Failed to construct RingContext from SRS")
     })
 }
@@ -220,7 +233,23 @@ impl RingVrfVerifier {
     }
 }
 
+/// Sets the initial ring size.
+#[no_mangle]
+pub unsafe extern "C" fn init_ring_size(ring_size: size_t) -> c_int {
+    init_ring_size_impl(ring_size);
+
+    0
+}
+
+/// Gets the ring size. This will either be the ring_size set by init_ring_size,
+/// or else it will default to DEFAULT_RING_SIZE.
+#[no_mangle]
+pub unsafe extern "C" fn get_ring_size() -> size_t {
+    ring_size()
+}
+
 /// Creates a new secret key from a provided seed byte array.
+///
 ///
 /// Writes the secret to the provided secret_out byte array which is expected to
 /// have a length of SECRET_LENGTH.
@@ -695,7 +724,7 @@ mod tests {
 
     #[test]
     fn test_bandersnatch_vrf() {
-        let mut ring: Vec<_> = (0..RING_SIZE)
+        let mut ring: Vec<_> = (0..ring_size())
             .map(|i| Secret::from_seed(&i.to_le_bytes()).public())
             .collect();
         let prover_key_index: usize = 3;
