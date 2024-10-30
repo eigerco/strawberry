@@ -34,7 +34,7 @@ func (s *State) UpdateState(newBlock block.Block) {
 
 	newTimeState := calculateNewTimeState(newBlock.Header)
 
-	newValidatorStatistics := calculateNewValidatorStatistics(newBlock.Extrinsic, s.TimeslotIndex, newTimeState, s.ValidatorStatistics)
+	newValidatorStatistics := calculateNewValidatorStatistics(newBlock, newTimeState, s.ValidatorStatistics)
 
 	intermediateCoreAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
 	intermediateCoreAssignments = calculateIntermediateCoreAssignmentsFromAvailability(newBlock.Extrinsic.EA, intermediateCoreAssignments)

@@ -15,10 +15,10 @@ type ValidatorState struct {
 }
 
 // ValidatorStatisticsState represents the statistics related to validators.
-type ValidatorStatisticsState [2]ValidatorStatistics // Completed statistics (π[0]) - The activity statistics for the validators which have completed their work. Present statistics (π[1]) - The activity statistics for the validators which are currently being accumulated.
+type ValidatorStatisticsState [2][1023]ValidatorStatistics // Completed statistics (π[0]) - The activity statistics for the validators which have completed their work. Present statistics (π[1]) - The activity statistics for the validators which are currently being accumulated.
 
 type ValidatorStatistics struct {
-	NumOfBlocks                 uint32 // Number of blocks (n) - The number of blocks produced by the validator.
+	NumOfBlocks                 uint32 // Number of blocks (b) - The number of blocks produced by the validator.
 	NumOfTickets                uint64 // Number of tickets (t) - The number of tickets introduced by the validator.
 	NumOfPreimages              uint64 // Number of preimages (p) - The number of preimages introduced by the validator.
 	NumOfBytesAllPreimages      uint64 // Number of bytes across all preimages (d) - The total number of octets across all preimages introduced by the validator.
