@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/ed25519"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
 )
@@ -15,7 +16,7 @@ type ValidatorState struct {
 }
 
 // ValidatorStatisticsState represents the statistics related to validators.
-type ValidatorStatisticsState [2][1023]ValidatorStatistics // Completed statistics (π[0]) - The activity statistics for the validators which have completed their work. Present statistics (π[1]) - The activity statistics for the validators which are currently being accumulated.
+type ValidatorStatisticsState [2][common.NumberOfValidators]ValidatorStatistics // Completed statistics (π[0]) - The activity statistics for the validators which have completed their work. Present statistics (π[1]) - The activity statistics for the validators which are currently being accumulated.
 
 type ValidatorStatistics struct {
 	NumOfBlocks                 uint32 // Number of blocks (b) - The number of blocks produced by the validator.

@@ -10,10 +10,6 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
 )
 
-const (
-	OnTransferCost = 10
-)
-
 // InvokeOnTransfer On-Transfer service-account invocation (ΨT).
 // The only state alteration it facilitates are basic alteration to the storage of the subject account
 func InvokeOnTransfer(serviceState state.ServiceState, serviceIndex block.ServiceId, transfers []state.DeferredTransfer) (state.ServiceAccount, error) {

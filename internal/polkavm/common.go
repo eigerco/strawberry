@@ -2,6 +2,10 @@ package polkavm
 
 import (
 	"math"
+
+	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/safrole"
+	"github.com/eigerco/strawberry/internal/state"
 )
 
 type MemoryAccess bool
@@ -230,4 +234,20 @@ func (r HostCallCode) String() string {
 		return "success"
 	}
 	return "unknown"
+}
+
+// AccumulateContext Equation 254
+type AccumulateContext struct {
+	ServiceAccount      *state.ServiceAccount          // s
+	AuthorizationsQueue state.PendingAuthorizersQueues // c
+	ValidatorKeys       safrole.ValidatorsData         // v
+	ServiceID           block.ServiceId                // i
+	DeferredTransfers   []state.DeferredTransfer       // t
+	ServicesState       state.ServiceState             // n
+	PrivilegedServices  state.PrivilegedServices       // p
+}
+
+type AccumulateContextPair struct {
+	RegularCtx     AccumulateContext // x
+	ExceptionalCtx AccumulateContext // y
 }
