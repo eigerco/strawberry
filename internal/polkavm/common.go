@@ -1,8 +1,6 @@
 package polkavm
 
 import (
-	"math"
-
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
@@ -175,65 +173,6 @@ type Mutator interface {
 	LoadImmAndJumpIndirect(ra Reg, base Reg, value, offset uint32) error
 	Jump(target uint32)
 	JumpIndirect(base Reg, offset uint32) error
-}
-
-type HostCallResult struct {
-	Code      HostCallCode
-	InnerCode HostCallInnerCode
-	Msg       string
-}
-
-type HostCallCode uint32
-
-const (
-	HostCallResultNone HostCallCode = math.MaxUint32
-	HostCallResultWhat HostCallCode = math.MaxUint32 - 1
-	HostCallResultOob  HostCallCode = math.MaxUint32 - 2
-	HostCallResultWho  HostCallCode = math.MaxUint32 - 3
-	HostCallResultFull HostCallCode = math.MaxUint32 - 4
-	HostCallResultCore HostCallCode = math.MaxUint32 - 5
-	HostCallResultCash HostCallCode = math.MaxUint32 - 6
-	HostCallResultLow  HostCallCode = math.MaxUint32 - 7
-	HostCallResultHigh HostCallCode = math.MaxUint32 - 8
-	HostCallResultHuh  HostCallCode = math.MaxUint32 - 9
-	HostCallResultOk   HostCallCode = 0
-)
-
-type HostCallInnerCode uint32
-
-const (
-	HostCallInnerCodeHalt  HostCallInnerCode = 0
-	HostCallInnerCodePanic HostCallInnerCode = 1
-	HostCallInnerCodeFault HostCallInnerCode = 2
-	HostCallInnerCodeHost  HostCallInnerCode = 3
-)
-
-func (r HostCallCode) String() string {
-	switch r {
-	case HostCallResultNone:
-		return "item does not exist"
-	case HostCallResultWhat:
-		return "name unknown"
-	case HostCallResultOob:
-		return "the return value for memory index provided is not accessible"
-	case HostCallResultWho:
-		return "index unknown"
-	case HostCallResultFull:
-		return "storage full"
-	case HostCallResultCore:
-		return "core index unknown"
-	case HostCallResultCash:
-		return "insufficient funds"
-	case HostCallResultLow:
-		return "gas limit too low"
-	case HostCallResultHigh:
-		return "gas limit too high"
-	case HostCallResultHuh:
-		return "the item is already solicited or cannot be forgotten"
-	case HostCallResultOk:
-		return "success"
-	}
-	return "unknown"
 }
 
 // AccumulateContext Equation 254

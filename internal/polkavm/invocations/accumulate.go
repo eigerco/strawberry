@@ -2,11 +2,13 @@ package invocations
 
 import (
 	"errors"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
+	. "github.com/eigerco/strawberry/internal/polkavm/util"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
@@ -29,7 +31,7 @@ func InvokeAccumulate(currentState state.State, header *block.Header, serviceSta
 		return newCtx(currentState, &s, 0), nil, err
 	}
 	// Equation 256: I (a ∈ A, s ∈ NS)
-	ctx := newCtx(currentState, &s, check((theNewServiceID-(1<<8)+1)%((1<<32)-(1<<9))+(1<<8), serviceState))
+	ctx := newCtx(currentState, &s, Check((theNewServiceID-(Bit8)+1)%(Bit32-Bit9)+Bit8, serviceState))
 	ctxPair := polkavm.AccumulateContextPair{
 		RegularCtx:     ctx,
 		ExceptionalCtx: ctx,
@@ -68,15 +70,15 @@ func InvokeAccumulate(currentState state.State, header *block.Header, serviceSta
 		case host_call.UpgradeID:
 			gasCounter, regs, mem, ctx, err = host_call.Upgrade(gasCounter, regs, mem, ctx)
 		case host_call.TransferID:
-			gasCounter, regs, mem, ctx, err = host_call.Transfer(gasCounter, regs, mem, ctx)
+			gasCounter, regs, mem, ctx, err = host_call.Transfer(gasCounter, regs, mem, ctx, serviceIndex, serviceState)
 		case host_call.QuitID:
-			gasCounter, regs, mem, ctx, err = host_call.Quit(gasCounter, regs, mem, ctx)
+			gasCounter, regs, mem, ctx, err = host_call.Quit(gasCounter, regs, mem, ctx, serviceIndex, serviceState)
 		case host_call.SolicitID:
 			gasCounter, regs, mem, ctx, err = host_call.Solicit(gasCounter, regs, mem, ctx, header.TimeSlotIndex)
 		case host_call.ForgetID:
 			gasCounter, regs, mem, ctx, err = host_call.Forget(gasCounter, regs, mem, ctx, header.TimeSlotIndex)
 		default:
-			regs[polkavm.A0] = uint32(polkavm.HostCallResultWhat)
+			regs[polkavm.A0] = uint32(host_call.WHAT)
 			gasCounter -= AccumulateCost
 		}
 		return gasCounter, regs, mem, ctx, err
@@ -137,13 +139,4 @@ func newServiceID(serializer *serialization.Serializer, serviceIndex block.Servi
 	newId := block.ServiceId(0)
 	jam.DeserializeTrivialNatural(hashData[:], &newId)
 	return newId, nil
-}
-
-// check Equation 260: checks if the identifier is unique across all services
-func check(serviceIndex block.ServiceId, serviceState state.ServiceState) block.ServiceId {
-	if _, ok := serviceState[serviceIndex]; !ok {
-		return serviceIndex
-	}
-
-	return check((serviceIndex-(1<<8)+1)%((1<<32)-(1<<9))+(1<<8), serviceState)
 }

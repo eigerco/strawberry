@@ -13,22 +13,6 @@ import (
 	"github.com/eigerco/strawberry/internal/state"
 )
 
-const (
-	GasRemainingCost polkavm.Gas = 10
-	LookupCost
-	ReadCost
-	WriteCost
-	InfoCost
-)
-
-const (
-	GasID    = 0
-	LookupID = 1
-	ReadID   = 2
-	WriteID  = 3
-	InfoID   = 4
-)
-
 type AccountInfo struct {
 	CodeHash               crypto.Hash // tc
 	Balance                uint64      // tb
@@ -69,7 +53,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state
 		// Lookup service account by serviceId in the serviceState
 		a, exists = serviceState[serviceId]
 		if !exists {
-			regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+			regs[polkavm.A0] = uint32(NONE)
 			return gas, regs, mem, nil
 		}
 	}
@@ -80,7 +64,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state
 	memorySlice := make([]byte, 32)
 	err := mem.Read(ho, memorySlice)
 	if err != nil {
-		regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+		regs[polkavm.A0] = uint32(OOB)
 		return gas, regs, mem, err
 	}
 
@@ -90,7 +74,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state
 	// Lookup value in storage (v) using the hash
 	v, exists := a.Storage[hash]
 	if !exists {
-		regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+		regs[polkavm.A0] = uint32(NONE)
 		return gas, regs, mem, nil
 	}
 
@@ -100,11 +84,11 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state
 	// Write value to memory if within bounds
 	if len(v) > 0 && len(v) <= int(bz) {
 		if err = mem.Write(bo, v); err != nil {
-			regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+			regs[polkavm.A0] = uint32(OOB)
 			return gas, regs, mem, err
 		}
 	} else {
-		regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+		regs[polkavm.A0] = uint32(OOB)
 		return gas, regs, mem, err
 	}
 
@@ -138,7 +122,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.S
 	keyData := make([]byte, kz)
 	err := mem.Read(ko, keyData)
 	if err != nil {
-		regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+		regs[polkavm.A0] = uint32(OOB)
 		return gas, regs, mem, nil
 	}
 
@@ -158,7 +142,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.S
 
 	v, exists := a.Storage[k]
 	if !exists {
-		regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+		regs[polkavm.A0] = uint32(NONE)
 		return gas, regs, mem, nil
 	}
 
@@ -166,7 +150,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.S
 
 	if writeLen > 0 {
 		if err = mem.Write(bo, v[:writeLen]); err != nil {
-			regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+			regs[polkavm.A0] = uint32(OOB)
 			return gas, regs, mem, nil
 		}
 
@@ -174,7 +158,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.S
 		return gas, regs, mem, nil
 	}
 
-	regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+	regs[polkavm.A0] = uint32(NONE)
 	return gas, regs, mem, nil
 }
 
@@ -211,7 +195,7 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.
 		valueData := make([]byte, vz)
 		err := mem.Read(vo, valueData)
 		if err != nil {
-			regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+			regs[polkavm.A0] = uint32(OOB)
 			return gas, regs, mem, s, err
 		}
 
@@ -220,12 +204,12 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.
 
 	storageItem, ok := s.Storage[k]
 	if !ok {
-		regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+		regs[polkavm.A0] = uint32(NONE)
 		return gas, regs, mem, s, err
 	}
 
 	if a.ThresholdBalance() > a.Balance {
-		regs[polkavm.A0] = uint32(polkavm.HostCallResultFull)
+		regs[polkavm.A0] = uint32(FULL)
 		return gas, regs, mem, s, err
 	}
 
@@ -249,7 +233,7 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.S
 		var exists bool
 		t, exists = serviceState[block.ServiceId(sID)]
 		if !exists {
-			regs[polkavm.A0] = uint32(polkavm.HostCallResultNone)
+			regs[polkavm.A0] = uint32(NONE)
 			return gas, regs, mem, nil
 		}
 	}
@@ -272,10 +256,10 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.S
 	}
 
 	if err := mem.Write(omega1, m); err != nil {
-		regs[polkavm.A0] = uint32(polkavm.HostCallResultOob)
+		regs[polkavm.A0] = uint32(OOB)
 		return gas, regs, mem, nil
 	}
 
-	regs[polkavm.A0] = uint32(polkavm.HostCallResultOk)
+	regs[polkavm.A0] = uint32(OK)
 	return gas, regs, mem, nil
 }
