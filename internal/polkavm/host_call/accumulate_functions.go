@@ -258,11 +258,10 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 
 // Quit ΩQ(ξ, ω, μ, (X, Y), s, δ)
 func Quit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceIndex block.ServiceId, serviceState state.ServiceState) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	quitCost := QuitBaseCost + Gas(regs[A1]) | Gas(regs[A2])<<32
-	if gas < quitCost {
+	if gas < QuitCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
-	gas -= quitCost
+	gas -= QuitCost
 
 	// let [d, o] = ω0,1
 	d, o := regs[A0], regs[A1]

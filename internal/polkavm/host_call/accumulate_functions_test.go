@@ -274,7 +274,7 @@ func TestAccumulate(t *testing.T) {
 				A0: uint32(OK),
 			},
 			serviceId:   block.ServiceId(123123123),
-			initialGas:  100000000100,
+			initialGas:  100,
 			expectedGas: 88,
 			X: AccumulateContext{
 				ServicesState: state.ServiceState{
@@ -283,7 +283,7 @@ func TestAccumulate(t *testing.T) {
 					},
 				},
 				ServiceAccount: &state.ServiceAccount{
-					Balance: 100000000100,
+					Balance: 100,
 				},
 			},
 			err: ErrHalt,
@@ -294,14 +294,14 @@ func TestAccumulate(t *testing.T) {
 					},
 				},
 				ServiceAccount: &state.ServiceAccount{
-					Balance: 100000000100,
+					Balance: 100,
 				},
 				DeferredTransfers: []state.DeferredTransfer{{
 					SenderServiceIndex:   block.ServiceId(123123123),
 					ReceiverServiceIndex: 1234,
-					Balance:              200,
-					Memo:                 state.Memo(fixedSizeBytes(state.TransferMemoSizeBytes, []byte("memo message"))),
-					GasLimit:             100000000100,
+					Balance:              100,
+					Memo:                 state.Memo(fixedSizeBytes(state.TransferMemoSizeBytes, []byte("memo message 2"))),
+					GasLimit:             89,
 				}},
 			},
 		}, {

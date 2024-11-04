@@ -20,7 +20,7 @@ const (
 	NewCost
 	UpgradeCost
 	TransferBaseCost
-	QuitBaseCost
+	QuitCost
 	SolicitCost
 	ForgetCost
 )
