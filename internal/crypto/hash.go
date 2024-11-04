@@ -1,6 +1,8 @@
 package crypto
 
-import "golang.org/x/crypto/blake2b"
+import (
+	"golang.org/x/crypto/blake2b"
+)
 
 type Hash [HashSize]byte
 

@@ -305,10 +305,149 @@ func TestAccumulate(t *testing.T) {
 				}},
 			},
 		}, {
-			name: "solicit",
+			name: "solicit_out_of_gas",
 			fn:   fnTms(Solicit),
 			alloc: alloc{
 				A0: hash2bytes(randomHash),
+			},
+			initialRegs: deltaRegs{
+				A1: 256, // z: preimage length
+			},
+			timeslot:   jamtime.Timeslot(1000),
+			initialGas: 10, // Less than SolicitCost
+			X: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					Balance:      200,
+					PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{},
+				},
+			},
+			expectedGas: 8, // Gas gets decremented by fixed amount (2) when processing instructions even on error
+			expectedX: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					Balance:      200,
+					PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{},
+				},
+			},
+			err: ErrOutOfGas,
+		}, {
+			name: "solicit_new_preimage",
+			fn:   fnTms(Solicit),
+			alloc: alloc{
+				A0: hash2bytes(randomHash),
+			},
+			initialRegs: deltaRegs{
+				A1: 256, // z: preimage length
+			},
+			timeslot:    jamtime.Timeslot(1000),
+			initialGas:  100,
+			expectedGas: 88,
+			expectedDeltaRegs: deltaRegs{
+				A0: uint32(OK),
+			},
+			X: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					Balance:      200,
+					PreimageMeta: make(map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots),
+				},
+			},
+			expectedX: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					Balance: 200,
+					PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+						{Hash: randomHash, Length: state.PreimageLength(256)}: {},
+					},
+				},
+			},
+		}, {
+			name: "solicit_append_timeslot",
+			fn:   fnTms(Solicit),
+			alloc: alloc{
+				A0: hash2bytes(randomHash),
+			},
+			initialRegs: deltaRegs{
+				A1: 256, // z: preimage length
+			},
+			timeslot:    jamtime.Timeslot(1000),
+			initialGas:  100,
+			expectedGas: 88,
+			expectedDeltaRegs: deltaRegs{
+				A0: uint32(OK),
+			},
+			X: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					Balance: 200,
+					PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+						{Hash: randomHash, Length: state.PreimageLength(256)}: {800, 900}, // Exactly 2 timeslots
+					},
+				},
+			},
+			expectedX: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					Balance: 200,
+					PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+						{Hash: randomHash, Length: state.PreimageLength(256)}: {800, 900, 1000}, // Appended current timeslot
+					},
+				},
+			},
+		}, {
+			name: "solicit_invalid_timeslots",
+			fn:   fnTms(Solicit),
+			alloc: alloc{
+				A0: hash2bytes(randomHash),
+			},
+			initialRegs: deltaRegs{
+				A1: 256,
+			},
+			timeslot:    jamtime.Timeslot(1000),
+			initialGas:  100,
+			expectedGas: 88,
+			expectedDeltaRegs: deltaRegs{
+				A0: uint32(HUH),
+			},
+			X: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					Balance: 200,
+					PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+						{Hash: randomHash, Length: state.PreimageLength(256)}: {800}, // Invalid: not 2 timeslots
+					},
+				},
+			},
+			expectedX: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					Balance: 200,
+					PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+						{Hash: randomHash, Length: state.PreimageLength(256)}: {800}, // State unchanged
+					},
+				},
+			},
+		}, {
+			name: "solicit_insufficient_balance",
+			fn:   fnTms(Solicit),
+			alloc: alloc{
+				A0: hash2bytes(randomHash),
+			},
+			initialRegs: deltaRegs{
+				A1: 256,
+			},
+			timeslot:    jamtime.Timeslot(1000),
+			initialGas:  100,
+			expectedGas: 88,
+			expectedDeltaRegs: deltaRegs{
+				A0: uint32(FULL),
+			},
+			X: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					Balance:      50, // Less than threshold
+					PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{},
+				},
+			},
+			expectedX: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					Balance: 50,
+					PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+						{Hash: randomHash, Length: state.PreimageLength(256)}: {},
+					},
+				},
 			},
 		}, {
 			name: "forget",
