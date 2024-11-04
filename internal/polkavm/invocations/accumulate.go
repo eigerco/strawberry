@@ -110,7 +110,7 @@ func newCtx(currentState state.State, serviceAccount *state.ServiceAccount, serv
 		ValidatorKeys:       currentState.ValidatorState.QueuedValidators,
 		ServiceID:           serviceIndex,
 		DeferredTransfers:   []state.DeferredTransfer{},
-		ServicesState:       nil,
+		ServicesState:       make(state.ServiceState),
 		PrivilegedServices:  currentState.PrivilegedServices,
 	}
 }

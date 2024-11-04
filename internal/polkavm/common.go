@@ -15,7 +15,8 @@ const (
 
 // Memory Equation: 34 (M)
 type Memory struct {
-	data []*memorySegment // data (V ∈ Y, A ∈ ⟦{W, R, ∅})
+	pageSize uint32
+	data     []*memorySegment // data (V ∈ Y, A ∈ ⟦{W, R, ∅})
 }
 
 type memorySegment struct {
@@ -27,7 +28,7 @@ type memorySegment struct {
 // Read reads from the set of readable indices (Vμ)
 func (m *Memory) Read(address uint32, data []byte) error {
 	memSeg := m.inRange(address)
-	if data == nil {
+	if memSeg == nil {
 		return &ErrPageFault{Reason: "address not in a valid range", Address: address}
 	}
 
