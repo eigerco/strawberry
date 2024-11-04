@@ -15,8 +15,7 @@ const (
 
 // Memory Equation: 34 (M)
 type Memory struct {
-	pageSize uint32
-	data     []*memorySegment // data (V ∈ Y, A ∈ ⟦{W, R, ∅})
+	data []*memorySegment // data (V ∈ Y, A ∈ ⟦{W, R, ∅})
 }
 
 type memorySegment struct {

@@ -52,6 +52,10 @@ func TestAccumulate(t *testing.T) {
 	var oldServiceID block.ServiceId = 123123
 	var newServiceID = pvmutil.Check(pvmutil.Bump(oldServiceID), make(state.ServiceState))
 	randomHash := testutils.RandomHash(t)
+	randomHash2 := testutils.RandomHash(t)
+	randomTimeslot1 := testutils.RandomTimeslot()
+	randomTimeslot2 := testutils.RandomTimeslot()
+	randomTimeslot3 := testutils.RandomTimeslot()
 
 	tests := []struct {
 		name        string
@@ -450,10 +454,107 @@ func TestAccumulate(t *testing.T) {
 				},
 			},
 		}, {
-			name: "forget",
-			fn:   fnTms(Forget),
-			alloc: alloc{
-				A0: hash2bytes(randomHash),
+			name:              "forget_0",
+			fn:                fnTms(Forget),
+			alloc:             alloc{A0: hash2bytes(randomHash)},
+			initialRegs:       deltaRegs{A1: 123},
+			expectedDeltaRegs: deltaRegs{A0: uint32(OK)},
+			initialGas:        100,
+			expectedGas:       88,
+			X: AccumulateContext{ServiceAccount: &state.ServiceAccount{
+				PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+					{Hash: randomHash, Length: 123}: {},
+				},
+				PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+				CodeHash:       randomHash2,
+				Balance:        111,
+			}},
+			expectedX: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					PreimageMeta:   map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{},
+					PreimageLookup: map[crypto.Hash][]byte{},
+					CodeHash:       randomHash2,
+					Balance:        111,
+				},
+			},
+		}, {
+			name:              "forget_1",
+			fn:                fnTms(Forget),
+			alloc:             alloc{A0: hash2bytes(randomHash)},
+			initialRegs:       deltaRegs{A1: 123},
+			expectedDeltaRegs: deltaRegs{A0: uint32(OK)},
+			initialGas:        100,
+			expectedGas:       88,
+			timeslot:          randomTimeslot2,
+			X: AccumulateContext{ServiceAccount: &state.ServiceAccount{
+				PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+					{Hash: randomHash, Length: 123}: {randomTimeslot1},
+				},
+				PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+				CodeHash:       randomHash2,
+				Balance:        111,
+			}},
+			expectedX: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+						{Hash: randomHash, Length: 123}: {randomTimeslot1, randomTimeslot2},
+					},
+					PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+					CodeHash:       randomHash2,
+					Balance:        111,
+				},
+			},
+		}, {
+			name:              "forget_2",
+			fn:                fnTms(Forget),
+			alloc:             alloc{A0: hash2bytes(randomHash)},
+			initialRegs:       deltaRegs{A1: 123},
+			expectedDeltaRegs: deltaRegs{A0: uint32(OK)},
+			initialGas:        100,
+			expectedGas:       88,
+			timeslot:          randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1,
+			X: AccumulateContext{ServiceAccount: &state.ServiceAccount{
+				PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+					{Hash: randomHash, Length: 123}: {randomTimeslot1, randomTimeslot2},
+				},
+				PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+				CodeHash:       randomHash2,
+				Balance:        111,
+			}},
+			expectedX: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					PreimageMeta:   map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{},
+					PreimageLookup: map[crypto.Hash][]byte{},
+					CodeHash:       randomHash2,
+					Balance:        111,
+				},
+			},
+		}, {
+			name:              "forget_3",
+			fn:                fnTms(Forget),
+			alloc:             alloc{A0: hash2bytes(randomHash)},
+			initialRegs:       deltaRegs{A1: 123},
+			expectedDeltaRegs: deltaRegs{A0: uint32(OK)},
+			initialGas:        100,
+			expectedGas:       88,
+			timeslot:          randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1,
+			X: AccumulateContext{ServiceAccount: &state.ServiceAccount{
+				PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+					{Hash: randomHash, Length: 123}: {randomTimeslot1, randomTimeslot2, randomTimeslot3},
+				},
+				PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+				CodeHash:       randomHash2,
+				Balance:        111,
+			}},
+			expectedX: AccumulateContext{
+				ServiceAccount: &state.ServiceAccount{
+					PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
+						{Hash: randomHash, Length: 123}: {randomTimeslot3, randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1},
+					},
+					PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+					CodeHash:       randomHash2,
+					Balance:        111,
+				},
 			},
 		},
 	}

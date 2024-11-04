@@ -15,7 +15,7 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-// InvokeAccumulate ΨA(δ†, s, g, o) the paper assumes access to the state and header variables while in go we also need to pass it explicitly as 'state' and 'header'
+// InvokeAccumulate ΨA(δ†, s, g, o) Equation 255 the paper assumes access to the state and header variables while in go we also need to pass it explicitly as 'state' and 'header'
 func InvokeAccumulate(currentState state.State, header *block.Header, serviceState state.ServiceState, serviceIndex block.ServiceId, gas polkavm.Gas, accOperand []state.AccumulationOperand) (x polkavm.AccumulateContext, r *crypto.Hash, err error) {
 	s := serviceState[serviceIndex]
 	serviceCode := s.PreimageLookup[s.CodeHash]
