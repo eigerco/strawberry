@@ -9,6 +9,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	. "github.com/eigerco/strawberry/internal/polkavm/util"
+	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
@@ -16,7 +17,7 @@ import (
 )
 
 // InvokeAccumulate ΨA(δ†, s, g, o) Equation 255 the paper assumes access to the state and header variables while in go we also need to pass it explicitly as 'state' and 'header'
-func InvokeAccumulate(currentState state.State, header *block.Header, serviceState state.ServiceState, serviceIndex block.ServiceId, gas polkavm.Gas, accOperand []state.AccumulationOperand) (x polkavm.AccumulateContext, r *crypto.Hash, err error) {
+func InvokeAccumulate(currentState state.State, header *block.Header, serviceState service.ServiceState, serviceIndex block.ServiceId, gas polkavm.Gas, accOperand []state.AccumulationOperand) (x polkavm.AccumulateContext, r *crypto.Hash, err error) {
 	s := serviceState[serviceIndex]
 	serviceCode := s.PreimageLookup[s.CodeHash]
 	serializer := serialization.NewSerializer(&codec.JAMCodec{})
@@ -52,7 +53,7 @@ func InvokeAccumulate(currentState state.State, header *block.Header, serviceSta
 		case host_call.ReadID:
 			gasCounter, regs, mem, err = host_call.Read(gasCounter, regs, mem, s, serviceIndex, serviceState)
 		case host_call.WriteID:
-			var s state.ServiceAccount
+			var s service.ServiceAccount
 			gasCounter, regs, mem, s, err = host_call.Write(gasCounter, regs, mem, s, serviceIndex)
 			ctx.RegularCtx.ServiceAccount = &s
 		case host_call.InfoID:
@@ -103,14 +104,14 @@ func InvokeAccumulate(currentState state.State, header *block.Header, serviceSta
 	return ctxPair.RegularCtx, nil, nil
 }
 
-func newCtx(currentState state.State, serviceAccount *state.ServiceAccount, serviceIndex block.ServiceId) polkavm.AccumulateContext {
+func newCtx(currentState state.State, serviceAccount *service.ServiceAccount, serviceIndex block.ServiceId) polkavm.AccumulateContext {
 	return polkavm.AccumulateContext{
 		ServiceAccount:      serviceAccount,
 		AuthorizationsQueue: currentState.PendingAuthorizersQueues,
 		ValidatorKeys:       currentState.ValidatorState.QueuedValidators,
 		ServiceID:           serviceIndex,
-		DeferredTransfers:   []state.DeferredTransfer{},
-		ServicesState:       make(state.ServiceState),
+		DeferredTransfers:   []service.DeferredTransfer{},
+		ServicesState:       make(service.ServiceState),
 		PrivilegedServices:  currentState.PrivilegedServices,
 	}
 }

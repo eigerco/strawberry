@@ -10,6 +10,7 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	. "github.com/eigerco/strawberry/internal/polkavm"
 	. "github.com/eigerco/strawberry/internal/polkavm/util"
+	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 )
 
@@ -140,10 +141,10 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Ga
 	codeHash := crypto.Hash(codeHashBytes)
 
 	// let a = (c, s ∶ {}, l ∶ {(c, l) ↦ []}, b ∶ at, g, m) if c ≠ ∇
-	account := state.ServiceAccount{
+	account := service.ServiceAccount{
 		Storage: make(map[crypto.Hash][]byte),
-		PreimageMeta: map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots{
-			{Hash: codeHash, Length: state.PreimageLength(preimageLength)}: {},
+		PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+			{Hash: codeHash, Length: service.PreimageLength(preimageLength)}: {},
 		},
 		CodeHash:               codeHash,
 		GasLimitForAccumulator: gasLimitAccumulator,
@@ -196,7 +197,7 @@ func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair)
 }
 
 // Transfer ΩT (ξ, ω, μ, (X, Y), s, δ)
-func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceIndex block.ServiceId, serviceState state.ServiceState) (Gas, Registers, Memory, AccumulateContextPair, error) {
+func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceIndex block.ServiceId, serviceState service.ServiceState) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	// let (d, al, ah, gl, gh, o) = ω0..6
 	receiverId, al, ah, gl, gh, o := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4], regs[A5]
 
@@ -213,17 +214,17 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	gasLimit := uint64(gh)<<32 | uint64(gl)
 
 	// m = μo⋅⋅⋅+M if No⋅⋅⋅+M ⊂ Vμ otherwise ∇
-	m := make([]byte, state.TransferMemoSizeBytes)
+	m := make([]byte, service.TransferMemoSizeBytes)
 	if err := mem.Read(o, m); err != nil {
 		return gas, withCode(regs, OK), mem, ctxPair, nil
 	}
 
 	// let t ∈ T = (s, d, a, m, g)
-	deferredTransfer := state.DeferredTransfer{
+	deferredTransfer := service.DeferredTransfer{
 		SenderServiceIndex:   serviceIndex,
 		ReceiverServiceIndex: block.ServiceId(receiverId),
 		Balance:              newBalance,
-		Memo:                 state.Memo(m),
+		Memo:                 service.Memo(m),
 		GasLimit:             gasLimit,
 	}
 
@@ -257,7 +258,7 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 }
 
 // Quit ΩQ(ξ, ω, μ, (X, Y), s, δ)
-func Quit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceIndex block.ServiceId, serviceState state.ServiceState) (Gas, Registers, Memory, AccumulateContextPair, error) {
+func Quit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceIndex block.ServiceId, serviceState service.ServiceState) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < QuitCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
@@ -267,13 +268,13 @@ func Quit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, se
 	receiverId, addr := regs[A0], regs[A1]
 
 	//let a = (xs)b − (xs)t + BS
-	newBalance := ctxPair.RegularCtx.ServiceAccount.Balance - ctxPair.RegularCtx.ServiceAccount.ThresholdBalance() + state.BasicMinimumBalance
+	newBalance := ctxPair.RegularCtx.ServiceAccount.Balance - ctxPair.RegularCtx.ServiceAccount.ThresholdBalance() + service.BasicMinimumBalance
 
 	//let g = ξ
 	gasLimit := uint64(gas)
 
 	// m = E−1(μo⋅⋅⋅+M)
-	memo := make([]byte, state.TransferMemoSizeBytes)
+	memo := make([]byte, service.TransferMemoSizeBytes)
 	if err := mem.Read(addr, memo); err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
@@ -284,11 +285,11 @@ func Quit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, se
 		return gas, withCode(regs, OK), mem, ctxPair, ErrHalt
 	}
 	// let t ∈ T ≡ (s, d, a, m, g)
-	deferredTransfer := state.DeferredTransfer{
+	deferredTransfer := service.DeferredTransfer{
 		SenderServiceIndex:   serviceIndex,
 		ReceiverServiceIndex: block.ServiceId(receiverId),
 		Balance:              newBalance,
-		Memo:                 state.Memo(memo),
+		Memo:                 service.Memo(memo),
 		GasLimit:             gasLimit,
 	}
 	allServices := maps.Clone(serviceState)
@@ -328,11 +329,11 @@ func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	serviceAccount := *ctxPair.RegularCtx.ServiceAccount
 	preimageHash := crypto.Hash(preimageHashBytes)
 	// (h, z)
-	key := state.PreImageMetaKey{Hash: preimageHash, Length: state.PreimageLength(preimageLength)}
+	key := service.PreImageMetaKey{Hash: preimageHash, Length: service.PreimageLength(preimageLength)}
 
 	if _, ok := serviceAccount.PreimageMeta[key]; !ok {
 		// except: al[(h, z)] = [] if h ≠ ∇ ∧ (h, z) !∈ (xs)l
-		serviceAccount.PreimageMeta[key] = state.PreimageHistoricalTimeslots{}
+		serviceAccount.PreimageMeta[key] = service.PreimageHistoricalTimeslots{}
 	} else if len(serviceAccount.PreimageMeta[key]) == 2 {
 		// except: al[(h, z)] = (xs)l[(h, z)] ++ t if (xs)l[(h, z)] = [X, Y]
 		serviceAccount.PreimageMeta[key] = append(serviceAccount.PreimageMeta[key], timeslot)
@@ -370,7 +371,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 	preimageHash := crypto.Hash(preimageHashBytes)
 
 	// (h, z)
-	key := state.PreImageMetaKey{Hash: preimageHash, Length: state.PreimageLength(preimageLength)}
+	key := service.PreImageMetaKey{Hash: preimageHash, Length: service.PreimageLength(preimageLength)}
 
 	switch len(serviceAccount.PreimageMeta[key]) {
 	case 0: // if (xs)l[h, z] ∈ {[]}
@@ -407,7 +408,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 		if serviceAccount.PreimageMeta[key][1] < timeslot-jamtime.PreimageExpulsionPeriod { // if Y < t − D
 
 			// except: al[h, z] = [(xs)l[h, z]2, t]
-			serviceAccount.PreimageMeta[key] = state.PreimageHistoricalTimeslots{serviceAccount.PreimageMeta[key][2], timeslot}
+			serviceAccount.PreimageMeta[key] = service.PreimageHistoricalTimeslots{serviceAccount.PreimageMeta[key][2], timeslot}
 			return gas, withCode(regs, OK), mem, ctxPair, nil
 		}
 	}

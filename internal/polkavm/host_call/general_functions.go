@@ -10,7 +10,7 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/polkavm"
-	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/service"
 )
 
 type AccountInfo struct {
@@ -38,7 +38,7 @@ func GasRemaining(gas polkavm.Gas, regs polkavm.Registers) (polkavm.Gas, polkavm
 }
 
 // Lookup ΩL(ξ, ω, μ, s, s, d)
-func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < LookupCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
 	}
@@ -97,7 +97,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state
 }
 
 // Read ΩR(ξ, ω, μ, s, s, d)
-func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < ReadCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
 	}
@@ -163,7 +163,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.S
 }
 
 // Write ΩW (ξ, ω, μ, s, s)
-func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount, serviceId block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
+func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 	if gas < WriteCost {
 		return gas, regs, mem, s, polkavm.ErrOutOfGas
 	}
@@ -219,7 +219,7 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.
 }
 
 // Info ΩI(ξ, ω, μ, s, s, d)
-func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount, serviceId block.ServiceId, serviceState state.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < InfoCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
 	}

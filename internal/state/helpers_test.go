@@ -12,6 +12,8 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/eigerco/strawberry/internal/validator"
+	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"github.com/stretchr/testify/require"
@@ -54,11 +56,11 @@ func RandomEpochKeys(t *testing.T) crypto.EpochKeys {
 	return epochKeys
 }
 
-func RandomServiceAccount(t *testing.T) ServiceAccount {
-	return ServiceAccount{
+func RandomServiceAccount(t *testing.T) service.ServiceAccount {
+	return service.ServiceAccount{
 		Storage:                map[crypto.Hash][]byte{testutils.RandomHash(t): []byte("data")},
 		PreimageLookup:         map[crypto.Hash][]byte{testutils.RandomHash(t): []byte("preimage")},
-		PreimageMeta:           map[PreImageMetaKey]PreimageHistoricalTimeslots{{Hash: testutils.RandomHash(t), Length: 32}: {testutils.RandomTimeslot()}},
+		PreimageMeta:           map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{{Hash: testutils.RandomHash(t), Length: 32}: {testutils.RandomTimeslot()}},
 		CodeHash:               testutils.RandomHash(t),
 		Balance:                testutils.RandomUint64(),
 		GasLimitForAccumulator: testutils.RandomUint64(),
@@ -66,13 +68,13 @@ func RandomServiceAccount(t *testing.T) ServiceAccount {
 	}
 }
 
-func RandomPrivilegedServices() PrivilegedServices {
+func RandomPrivilegedServices() service.PrivilegedServices {
 	amountOfGasPerServiceId := map[block.ServiceId]uint64{
 		block.ServiceId(123): 12344,
 		block.ServiceId(234): 23455,
 		block.ServiceId(345): 34566,
 	}
-	return PrivilegedServices{
+	return service.PrivilegedServices{
 		ManagerServiceId:        block.ServiceId(123),
 		AssignServiceId:         block.ServiceId(234),
 		DesignateServiceId:      block.ServiceId(345),
@@ -208,8 +210,8 @@ func RandomBlockState(t *testing.T) BlockState {
 	return state
 }
 
-func RandomValidatorState(t *testing.T) ValidatorState {
-	return ValidatorState{
+func RandomValidatorState(t *testing.T) validator.ValidatorState {
+	return validator.ValidatorState{
 		CurrentValidators:  RandomValidatorsData(t),
 		ArchivedValidators: RandomValidatorsData(t),
 		QueuedValidators:   RandomValidatorsData(t),
@@ -217,8 +219,8 @@ func RandomValidatorState(t *testing.T) ValidatorState {
 	}
 }
 
-func RandomValidatorStatistics() ValidatorStatistics {
-	return ValidatorStatistics{
+func RandomValidatorStatistics() validator.ValidatorStatistics {
+	return validator.ValidatorStatistics{
 		NumOfBlocks:                 testutils.RandomUint32(),
 		NumOfTickets:                testutils.RandomUint64(),
 		NumOfPreimages:              testutils.RandomUint64(),
@@ -228,10 +230,10 @@ func RandomValidatorStatistics() ValidatorStatistics {
 	}
 }
 
-func RandomValidatorStatisticsState() ValidatorStatisticsState {
-	return ValidatorStatisticsState{
-		[common.NumberOfValidators]ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
-		[common.NumberOfValidators]ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
+func RandomValidatorStatisticsState() validator.ValidatorStatisticsState {
+	return validator.ValidatorStatisticsState{
+		[common.NumberOfValidators]validator.ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
+		[common.NumberOfValidators]validator.ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
 	}
 }
 
@@ -275,7 +277,7 @@ func RandomSafroleStateWithEpochKeys(t *testing.T) safrole.State {
 }
 
 func RandomState(t *testing.T) State {
-	services := make(ServiceState)
+	services := make(service.ServiceState)
 	for i := 0; i < 10; i++ {
 		services[block.ServiceId(789)] = RandomServiceAccount(t)
 	}
@@ -403,7 +405,7 @@ func deserializeJudgements(state *State, serializer *serialization.Serializer, s
 }
 
 func deserializeServices(state *State, serializer *serialization.Serializer, serializedState map[crypto.Hash][]byte) error {
-	state.Services = make(ServiceState)
+	state.Services = make(service.ServiceState)
 
 	// Iterate over serializedState and look for service entries (identified by prefix 255)
 	for stateKey, encodedValue := range serializedState {
@@ -426,7 +428,7 @@ func deserializeServices(state *State, serializer *serialization.Serializer, ser
 			}
 
 			// Create and populate the ServiceAccount from the deserialized data
-			serviceAccount := ServiceAccount{
+			serviceAccount := service.ServiceAccount{
 				CodeHash:               combined.CodeHash,
 				Balance:                combined.Balance,
 				GasLimitForAccumulator: combined.GasLimitForAccumulator,

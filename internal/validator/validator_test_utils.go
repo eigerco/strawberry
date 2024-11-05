@@ -1,4 +1,4 @@
-package state
+package validator
 
 import (
 	"testing"
@@ -11,16 +11,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupValidatorState(t *testing.T) *ValidatorState {
+func SetupValidatorState(t *testing.T) *ValidatorState {
 	validatorState := ValidatorState{}
-	validatorState.CurrentValidators = randomListOfValidators(t)
-	validatorState.QueuedValidators = randomListOfValidators(t)
-	validatorState.ArchivedValidators = randomListOfValidators(t)
+	validatorState.CurrentValidators = RandomListOfValidators(t)
+	validatorState.QueuedValidators = RandomListOfValidators(t)
+	validatorState.ArchivedValidators = RandomListOfValidators(t)
 	safroleState := safrole.State{}
-	safroleState.NextValidators = randomListOfValidators(t)
+	safroleState.NextValidators = RandomListOfValidators(t)
 	safroleState.TicketAccumulator = make([]block.Ticket, jamtime.TimeslotsPerEpoch)
 	for i := 0; i < jamtime.TimeslotsPerEpoch; i++ {
-		safroleState.TicketAccumulator[i] = randomTicket(t)
+		safroleState.TicketAccumulator[i] = RandomTicket(t)
 	}
 	safroleState.SealingKeySeries = safrole.TicketsOrKeys{}
 	var epochKeys crypto.EpochKeys
@@ -33,14 +33,14 @@ func setupValidatorState(t *testing.T) *ValidatorState {
 	return &validatorState
 }
 
-func randomTicket(t *testing.T) block.Ticket {
+func RandomTicket(t *testing.T) block.Ticket {
 	return block.Ticket{
 		Identifier: testutils.RandomHash(t),
 		EntryIndex: uint8(0),
 	}
 }
 
-func randomListOfValidators(t *testing.T) safrole.ValidatorsData {
+func RandomListOfValidators(t *testing.T) safrole.ValidatorsData {
 	var validators safrole.ValidatorsData
 	for i := uint16(0); i < 2; i++ {
 		validators[i] = testutils.RandomValidatorKey(t)

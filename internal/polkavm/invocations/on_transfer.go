@@ -5,30 +5,30 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
-	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
 )
 
 // InvokeOnTransfer On-Transfer service-account invocation (ΨT).
 // The only state alteration it facilitates are basic alteration to the storage of the subject account
-func InvokeOnTransfer(serviceState state.ServiceState, serviceIndex block.ServiceId, transfers []state.DeferredTransfer) (state.ServiceAccount, error) {
-	service := serviceState[serviceIndex]
-	serviceCode := service.PreimageLookup[service.CodeHash]
+func InvokeOnTransfer(serviceState service.ServiceState, serviceIndex block.ServiceId, transfers []service.DeferredTransfer) (service.ServiceAccount, error) {
+	serviceAccount := serviceState[serviceIndex]
+	serviceCode := serviceAccount.PreimageLookup[serviceAccount.CodeHash]
 	if serviceCode == nil || len(transfers) == 0 {
-		return service, nil
+		return serviceAccount, nil
 	}
 	var gas polkavm.Gas
 	for _, transfer := range transfers {
 		gas += polkavm.Gas(transfer.GasLimit)
-		service.Balance += transfer.Balance
+		serviceAccount.Balance += transfer.Balance
 	}
 	args, err := serialization.NewSerializer(codec.NewJamCodec()).Encode(transfers)
 	if err != nil {
-		return service, err
+		return serviceAccount, err
 	}
 
-	hostCallFunc := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s state.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
+	hostCallFunc := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 		switch hostCall {
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
@@ -47,6 +47,6 @@ func InvokeOnTransfer(serviceState state.ServiceState, serviceIndex block.Servic
 		return gasCounter, regs, mem, s, err
 	}
 
-	_, _, x1, err := interpreter.InvokeWholeProgram(serviceCode, 15, gas, args, hostCallFunc, service)
+	_, _, x1, err := interpreter.InvokeWholeProgram(serviceCode, 15, gas, args, hostCallFunc, serviceAccount)
 	return x1, err
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"github.com/stretchr/testify/assert"
@@ -52,7 +53,7 @@ func TestBuildSealContextWithKey(t *testing.T) {
 			hash,
 		},
 	}
-	validatorState := setupValidatorState(t)
+	validatorState := validator.SetupValidatorState(t)
 	state.ValidatorState = *validatorState
 	context, err := buildSealContext(header, state)
 	require.NoError(t, err)
@@ -68,7 +69,7 @@ func TestBuildSealContextWithTicket(t *testing.T) {
 	}
 	toks := safrole.TicketsOrKeys{}
 	var tickets = safrole.TicketsBodies{}
-	tickets[0] = randomTicket(t)
+	tickets[0] = validator.RandomTicket(t)
 	err := toks.SetValue(tickets)
 	require.NoError(t, err)
 	state := &State{
@@ -79,7 +80,7 @@ func TestBuildSealContextWithTicket(t *testing.T) {
 			hash,
 		},
 	}
-	validatorState := setupValidatorState(t)
+	validatorState := validator.SetupValidatorState(t)
 	validatorState.SafroleState.SealingKeySeries = toks
 	state.ValidatorState = *validatorState
 
@@ -109,7 +110,7 @@ func TestSealBlockAndUpdateEntropy(t *testing.T) {
 			testutils.RandomHash(t),
 			testutils.RandomHash(t),
 		},
-		ValidatorState: ValidatorState{
+		ValidatorState: validator.ValidatorState{
 			SafroleState: safrole.State{
 				SealingKeySeries: sealingKeySeries,
 			},
@@ -129,7 +130,7 @@ func TestRotateEntropyPool(t *testing.T) {
 		testutils.RandomHash(t),
 		testutils.RandomHash(t),
 	}
-	result:= rotateEntropyPool(initialEntropyPool)
+	result := RotateEntropyPool(initialEntropyPool)
 	assert.Equal(t, initialEntropyPool[2], result[3])
 	assert.Equal(t, initialEntropyPool[1], result[2])
 	assert.Equal(t, initialEntropyPool[0], result[1])

@@ -2,10 +2,12 @@ package state
 
 import (
 	"encoding/binary"
+	"testing"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/service"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 // TestGenerateStateKey verifies that the state key generation works as expected.
@@ -52,7 +54,7 @@ func TestCalculateFootprintSize(t *testing.T) {
 	storage := map[crypto.Hash][]byte{
 		{0x01}: {0x01, 0x02, 0x03},
 	}
-	preimageMeta := map[PreImageMetaKey]PreimageHistoricalTimeslots{
+	preimageMeta := map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 		{Hash: crypto.Hash{0x02}, Length: 32}: {},
 	}
 

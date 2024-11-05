@@ -131,7 +131,7 @@ func createVRFSignature(header *block.Header, privateKey crypto.BandersnatchPriv
 }
 
 // TODO: Bandersnatch Mock implementation of verifying the VRF proof
-func extractVRFOutput(header block.Header) (crypto.BandersnatchOutputHash, error) {
+func ExtractVRFOutput(header block.Header) (crypto.BandersnatchOutputHash, error) {
 	return crypto.BandersnatchOutputHash{}, nil
 }
 
@@ -148,14 +148,14 @@ func updateEntropyAccumulator(header *block.Header, state *State) error {
 
 	// Equation 67: Rotate entropy accumulators on epoch change
 	if header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
-		entropyPool = rotateEntropyPool(state.EntropyPool)
+		entropyPool = RotateEntropyPool(state.EntropyPool)
 	}
 	entropyPool[0] = newEntropy
 	state.EntropyPool = entropyPool
 	return nil
 }
 
-func rotateEntropyPool(pool EntropyPool) EntropyPool {
+func RotateEntropyPool(pool EntropyPool) EntropyPool {
 	pool[3] = pool[2]
 	pool[2] = pool[1]
 	pool[1] = pool[0]

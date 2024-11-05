@@ -1,4 +1,4 @@
-package state
+package statetransition
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -13,19 +14,103 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
+	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/validator"
 )
 
 const (
 	signatureContextGuarantee = "$jam_guarantee"
 )
 
+// UpdateState updates the state
+// TODO: all the calculations which are not dependent on intermediate / new state can be done in parallel
+//
+//	it might be worth making State immutable and make it so that UpdateState returns a new State with all the updated fields
+func UpdateState(s *state.State, newBlock block.Block) {
+	// Calculate newSafroleState state values
+
+	newTimeState := calculateNewTimeState(newBlock.Header)
+
+	newValidatorStatistics := calculateNewValidatorStatistics(newBlock, newTimeState, s.ValidatorStatistics)
+
+	intermediateCoreAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
+	intermediateCoreAssignments = calculateIntermediateCoreAssignmentsFromAvailability(newBlock.Extrinsic.EA, intermediateCoreAssignments)
+	newCoreAssignments := calculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState, newTimeState)
+
+	intermediateServiceState := calculateIntermediateServiceState(newBlock.Extrinsic.EP, s.Services, newTimeState)
+	newServices, newPrivilegedServices, newQueuedValidators, newPendingCoreAuthorizations, context := calculateServiceState(
+		newBlock.Extrinsic.EA,
+		newCoreAssignments,
+		intermediateServiceState,
+		s.PrivilegedServices,
+		s.ValidatorState.QueuedValidators,
+		s.PendingAuthorizersQueues,
+	)
+
+	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
+	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, context)
+	if err != nil {
+		// TODO handle error
+		log.Printf("Error calculating new Recent Blocks: %v", err)
+	}
+
+	newEntropyPool, err := calculateNewEntropyPool(newBlock.Header, s.TimeslotIndex, s.EntropyPool)
+	if err != nil {
+		// TODO handle error
+		log.Printf("Error calculating new Entropy pool: %v", err)
+	} else {
+		s.EntropyPool = newEntropyPool
+	}
+
+	newJudgements := calculateNewJudgements(newBlock.Extrinsic.ED, s.PastJudgements)
+
+	newCoreAuthorizations := calculateNewCoreAuthorizations(newBlock.Header, newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
+
+	newValidators, err := calculateNewValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.CurrentValidators, s.ValidatorState.SafroleState.NextValidators)
+	if err != nil {
+		// TODO handle error
+		log.Printf("Error calculating new Validators: %v", err)
+	} else {
+		s.ValidatorState.CurrentValidators = newValidators
+	}
+
+	newArchivedValidators, err := calculateNewArchivedValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.CurrentValidators)
+	if err != nil {
+		// TODO handle error
+		log.Printf("Error calculating new Archived Validators: %v", err)
+	} else {
+		s.ValidatorState.ArchivedValidators = newArchivedValidators
+	}
+
+	newSafroleState, err := calculateNewSafroleState(newBlock.Header, s.TimeslotIndex, newBlock.Extrinsic.ET, s.ValidatorState.QueuedValidators)
+	if err != nil {
+		// TODO handle error
+		log.Printf("Error calculating new Safrole state: %v", err)
+	} else {
+		s.ValidatorState.SafroleState = newSafroleState
+	}
+
+	// Update the state with newSafroleState values
+	s.TimeslotIndex = newTimeState
+	s.ValidatorStatistics = newValidatorStatistics
+	s.RecentBlocks = newRecentBlocks
+	s.CoreAssignments = newCoreAssignments
+	s.PastJudgements = newJudgements
+	s.CoreAuthorizersPool = newCoreAuthorizations
+	s.ValidatorState.QueuedValidators = newQueuedValidators
+	s.Services = newServices
+	s.PrivilegedServices = newPrivilegedServices
+}
+
+
 // TODO: These calculations are just mocks for now. They will be replaced with actual calculations when the state transitions are implemented.
 
 // Intermediate State Calculation Functions
 
 // calculateIntermediateBlockState Equation 17: β† ≺ (H, β)
-func calculateIntermediateBlockState(header block.Header, previousRecentBlocks []BlockState) []BlockState {
-	intermediateBlocks := make([]BlockState, len(previousRecentBlocks))
+func calculateIntermediateBlockState(header block.Header, previousRecentBlocks []state.BlockState) []state.BlockState {
+	intermediateBlocks := make([]state.BlockState, len(previousRecentBlocks))
 
 	// Copy all elements from previousRecentBlocks to intermediateBlocks
 	copy(intermediateBlocks, previousRecentBlocks)
@@ -51,14 +136,14 @@ func calculateIntermediateBlockState(header block.Header, previousRecentBlocks [
 //     length |p|, with the value being the new timeslot τ′
 //
 // The function returns a new ServiceState without modifying the input state.
-func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, serviceState ServiceState, newTimeslot jamtime.Timeslot) ServiceState {
+func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, serviceState service.ServiceState, newTimeslot jamtime.Timeslot) service.ServiceState {
 	// Equation 156:
 	// δ† = δ ex. ∀⎧⎩s, p⎫⎭ ∈ EP:
 	// ⎧ δ†[s]p[H(p)] = p
 	// ⎩ δ†[s]l[H(p), |p|] = [τ′]
 
 	// Shallow copy of the entire state
-	newState := make(ServiceState, len(serviceState))
+	newState := make(service.ServiceState, len(serviceState))
 	for k, v := range serviceState {
 		newState[k] = v
 	}
@@ -71,7 +156,7 @@ func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, servic
 		}
 
 		preimageHash := crypto.HashData(preimage.Data)
-		preimageLength := PreimageLength(len(preimage.Data))
+		preimageLength := service.PreimageLength(len(preimage.Data))
 
 		// Check conditions from equation 155
 		// Eq. 155: ∀⎧⎩s, p⎫⎭ ∈ EP : K(δ[s]p) ∌ H(p) ∧ δ[s]l[⎧⎩H(p), |p|⎫⎭] = []
@@ -79,7 +164,7 @@ func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, servic
 		if _, exists := account.PreimageLookup[preimageHash]; exists {
 			continue // Skip if preimage already exists
 		}
-		metaKey := PreImageMetaKey{Hash: preimageHash, Length: preimageLength}
+		metaKey := service.PreImageMetaKey{Hash: preimageHash, Length: preimageLength}
 		if existingMeta, exists := account.PreimageMeta[metaKey]; exists && len(existingMeta) > 0 {
 			continue // Skip if metadata already exists and is not empty
 		}
@@ -91,7 +176,7 @@ func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, servic
 		account.PreimageLookup[preimageHash] = preimage.Data
 
 		if account.PreimageMeta == nil {
-			account.PreimageMeta = make(map[PreImageMetaKey]PreimageHistoricalTimeslots)
+			account.PreimageMeta = make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots)
 		}
 		account.PreimageMeta[metaKey] = []jamtime.Timeslot{newTimeslot}
 
@@ -102,7 +187,7 @@ func calculateIntermediateServiceState(preimages block.PreimageExtrinsic, servic
 }
 
 // calculateIntermediateCoreAssignmentsFromExtrinsics Equation 25: ρ† ≺ (ED , ρ)
-func calculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeExtrinsic, coreAssignments CoreAssignments) CoreAssignments {
+func calculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeExtrinsic, coreAssignments state.CoreAssignments) state.CoreAssignments {
 	newAssignments := coreAssignments // Create a copy of the current assignments
 
 	// Process each verdict in the disputes
@@ -115,7 +200,7 @@ func calculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeEx
 			for c := uint16(0); c < common.TotalNumberOfCores; c++ {
 				if newAssignments[c].WorkReport != nil {
 					if hash, err := newAssignments[c].WorkReport.Hash(); err == nil && hash == reportHash {
-						newAssignments[c] = Assignment{} // Clear the assignment
+						newAssignments[c] = state.Assignment{} // Clear the assignment
 					}
 				}
 			}
@@ -127,7 +212,7 @@ func calculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeEx
 
 // calculateIntermediateCoreAssignmentsFromAvailability implements equation 26: ρ‡ ≺ (EA, ρ†)
 // It calculates the intermediate core assignments based on availability assurances.
-func calculateIntermediateCoreAssignmentsFromAvailability(assurances block.AssurancesExtrinsic, coreAssignments CoreAssignments) CoreAssignments {
+func calculateIntermediateCoreAssignmentsFromAvailability(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments) state.CoreAssignments {
 	// Initialize availability count for each core
 	availabilityCounts := make([]int, common.TotalNumberOfCores)
 
@@ -148,7 +233,7 @@ func calculateIntermediateCoreAssignmentsFromAvailability(assurances block.Assur
 	}
 
 	// Create new CoreAssignments (ρ‡)
-	var newAssignments CoreAssignments
+	var newAssignments state.CoreAssignments
 
 	// Calculate the availability threshold (2/3 of validators)
 	// This implements part of equation 129: ∑a∈EA av[c] > 2/3 V
@@ -164,7 +249,7 @@ func calculateIntermediateCoreAssignmentsFromAvailability(assurances block.Assur
 		} else {
 			// If the availability count doesn't exceed the threshold, clear the assignment
 			// This corresponds to the ∅ case in equation 130
-			newAssignments[coreIndex] = Assignment{}
+			newAssignments[coreIndex] = state.Assignment{}
 		}
 	}
 
@@ -180,7 +265,7 @@ func calculateNewTimeState(header block.Header) jamtime.Timeslot {
 }
 
 // calculateNewRecentBlocks Equation 18: β′ ≺ (H, EG, β†, C)
-func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentBlocks []BlockState, context Context) ([]BlockState, error) {
+func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentBlocks []state.BlockState, context state.Context) ([]state.BlockState, error) {
 	// Calculate accumulation-result Merkle tree root (r)
 	accumulationRoot := calculateAccumulationRoot(context.Accumulations)
 
@@ -201,7 +286,7 @@ func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesEx
 		return nil, err
 	}
 
-	newBlockState := BlockState{
+	newBlockState := state.BlockState{
 		HeaderHash:            crypto.HashData(headerBytes),
 		StateRoot:             header.PriorStateRoot,
 		AccumulationResultMMR: newMMR,
@@ -212,8 +297,8 @@ func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesEx
 	newRecentBlocks := append(intermediateRecentBlocks, newBlockState)
 
 	// Ensure we only keep the most recent H blocks
-	if len(newRecentBlocks) > MaxRecentBlocks {
-		newRecentBlocks = newRecentBlocks[len(newRecentBlocks)-MaxRecentBlocks:]
+	if len(newRecentBlocks) > state.MaxRecentBlocks {
+		newRecentBlocks = newRecentBlocks[len(newRecentBlocks)-state.MaxRecentBlocks:]
 	}
 
 	return newRecentBlocks, nil
@@ -251,8 +336,8 @@ func calculateNewSafroleState(header block.Header, timeslot jamtime.Timeslot, ti
 	}
 	validTickets := block.ExtractTicketFromProof(tickets.TicketProofs)
 	newSafrole := safrole.State{}
-	newNextValidators := nullifyOffenders(queuedValidators, header.OffendersMarkers)
-	ringCommitment := CalculateRingCommitment(newNextValidators)
+	newNextValidators := validator.NullifyOffenders(queuedValidators, header.OffendersMarkers)
+	ringCommitment := validator.CalculateRingCommitment(newNextValidators)
 	newSealingKeySeries, err := safrole.DetermineNewSealingKeys(timeslot, validTickets, safrole.TicketsOrKeys{}, header.EpochMarker)
 	if err != nil {
 		return safrole.State{}, err
@@ -264,23 +349,23 @@ func calculateNewSafroleState(header block.Header, timeslot jamtime.Timeslot, ti
 }
 
 // calculateNewEntropyPool Equation 20: η′ ≺ (H, τ, η)
-func calculateNewEntropyPool(header block.Header, timeslot jamtime.Timeslot, entropyPool EntropyPool) (EntropyPool, error) {
+func calculateNewEntropyPool(header block.Header, timeslot jamtime.Timeslot, entropyPool state.EntropyPool) (state.EntropyPool, error) {
 	newEntropyPool := entropyPool
-	vrfOutput, err := extractVRFOutput(header)
+	vrfOutput, err := state.ExtractVRFOutput(header)
 	if err != nil {
-		return EntropyPool{}, err
+		return state.EntropyPool{}, err
 	}
 	newEntropy := crypto.Hash(append(entropyPool[0][:], vrfOutput[:]...))
 	if header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
-		newEntropyPool = rotateEntropyPool(entropyPool)
+		newEntropyPool = state.RotateEntropyPool(entropyPool)
 	}
 	newEntropyPool[0] = newEntropy
 	return newEntropyPool, nil
 }
 
 // calculateNewCoreAuthorizations implements equation 29: α' ≺ (H, EG, φ', α)
-func calculateNewCoreAuthorizations(header block.Header, guarantees block.GuaranteesExtrinsic, pendingAuthorizations PendingAuthorizersQueues, currentAuthorizations CoreAuthorizersPool) CoreAuthorizersPool {
-	var newCoreAuthorizations CoreAuthorizersPool
+func calculateNewCoreAuthorizations(header block.Header, guarantees block.GuaranteesExtrinsic, pendingAuthorizations state.PendingAuthorizersQueues, currentAuthorizations state.CoreAuthorizersPool) state.CoreAuthorizersPool {
+	var newCoreAuthorizations state.CoreAuthorizersPool
 
 	// For each core
 	for c := uint16(0); c < common.TotalNumberOfCores; c++ {
@@ -298,13 +383,13 @@ func calculateNewCoreAuthorizations(header block.Header, guarantees block.Guaran
 
 		// Get new authorizer from the queue based on current timeslot
 		// φ'[c][Ht]↺O - Get authorizer from queue, wrapping around queue size
-		queueIndex := header.TimeSlotIndex % PendingAuthorizersQueueSize
+		queueIndex := header.TimeSlotIndex % state.PendingAuthorizersQueueSize
 		newAuthorizer := pendingAuthorizations[c][queueIndex]
 
 		// Only add new authorizer if it's not empty
 		if newAuthorizer != (crypto.Hash{}) {
 			// ← Append new authorizer maintaining max size O
-			newAuths = appendAuthorizerLimited(newAuths, newAuthorizer, MaxAuthorizersPerCore)
+			newAuths = appendAuthorizerLimited(newAuths, newAuthorizer, state.MaxAuthorizersPerCore)
 		}
 
 		// Store the new authorizations for this core
@@ -368,14 +453,14 @@ func addUniqueEdPubKey(slice []ed25519.PublicKey, key ed25519.PublicKey) []ed255
 }
 
 // processVerdict categorizes a verdict based on positive judgments. Equations 111, 112, 113.
-func processVerdict(judgements *Judgements, verdict block.Verdict) {
+func processVerdict(judgements *state.Judgements, verdict block.Verdict) {
 	positiveJudgments := 0
 	for _, judgment := range verdict.Judgements {
 		if judgment.IsValid {
 			positiveJudgments++
 		}
 	}
-
+	
 	switch positiveJudgments {
 	// Equation 111: ψ'g ≡ ψg ∪ {r | {r, ⌊2/3V⌋ + 1} ∈ V}
 	case common.ValidatorsSuperMajority:
@@ -393,13 +478,13 @@ func processVerdict(judgements *Judgements, verdict block.Verdict) {
 }
 
 // processOffender adds an offending validator to the list
-func processOffender(judgements *Judgements, key ed25519.PublicKey) {
+func processOffender(judgements *state.Judgements, key ed25519.PublicKey) {
 	judgements.OffendingValidators = addUniqueEdPubKey(judgements.OffendingValidators, key)
 }
 
 // calculateNewJudgements Equation 23: ψ′ ≺ (ED, ψ)
-func calculateNewJudgements(disputes block.DisputeExtrinsic, stateJudgements Judgements) Judgements {
-	newJudgements := Judgements{
+func calculateNewJudgements(disputes block.DisputeExtrinsic, stateJudgements state.Judgements) state.Judgements {
+	newJudgements := state.Judgements{
 		BadWorkReports:      make([]crypto.Hash, len(stateJudgements.BadWorkReports)),
 		GoodWorkReports:     make([]crypto.Hash, len(stateJudgements.GoodWorkReports)),
 		WonkyWorkReports:    make([]crypto.Hash, len(stateJudgements.WonkyWorkReports)),
@@ -434,10 +519,10 @@ func calculateNewJudgements(disputes block.DisputeExtrinsic, stateJudgements Jud
 // R(⌊τ′/R⌋ - 1) ≤ t ≤ τ′
 func calculateNewCoreAssignments(
 	guarantees block.GuaranteesExtrinsic,
-	intermediateAssignments CoreAssignments,
-	validatorState ValidatorState,
+	intermediateAssignments state.CoreAssignments,
+	validatorState validator.ValidatorState,
 	newTimeslot jamtime.Timeslot,
-) CoreAssignments {
+) state.CoreAssignments {
 	newAssignments := intermediateAssignments
 	sortedGuarantees := sortGuaranteesByCoreIndex(guarantees.Guarantees)
 
@@ -461,7 +546,7 @@ func calculateNewCoreAssignments(
 			)
 
 			if verifyGuaranteeCredentials(guarantee, validators) {
-				newAssignments[coreIndex] = Assignment{
+				newAssignments[coreIndex] = state.Assignment{
 					WorkReport: &guarantee.WorkReport,
 					Time:       newTimeslot,
 				}
@@ -516,7 +601,7 @@ func sortGuaranteesByCoreIndex(guarantees []block.Guarantee) []block.Guarantee {
 // isAssignmentValid checks if a new assignment can be made for a core.
 // This implements the condition from equation 142:
 // ρ‡[wc] = ∅ ∨ Ht ≥ ρ‡[wc]t + U
-func isAssignmentValid(currentAssignment Assignment, newTimeslot jamtime.Timeslot) bool {
+func isAssignmentValid(currentAssignment state.Assignment, newTimeslot jamtime.Timeslot) bool {
 	return currentAssignment.WorkReport == nil ||
 		newTimeslot >= currentAssignment.Time+common.WorkReportTimeoutPeriod
 }
@@ -587,13 +672,13 @@ func calculateNewArchivedValidators(header block.Header, timeslot jamtime.Timesl
 }
 
 // calculateServiceState Equation 28: δ′, 𝝌′, ι′, φ′, C ≺ (EA, ρ′, δ†, 𝝌, ι, φ)
-func calculateServiceState(assurances block.AssurancesExtrinsic, coreAssignments CoreAssignments, intermediateServiceState ServiceState, privilegedServices PrivilegedServices, queuedValidators safrole.ValidatorsData, coreAuthorizationQueue PendingAuthorizersQueues) (ServiceState, PrivilegedServices, safrole.ValidatorsData, PendingAuthorizersQueues, Context) {
-	return make(ServiceState), PrivilegedServices{}, safrole.ValidatorsData{}, PendingAuthorizersQueues{}, Context{}
+func calculateServiceState(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments, intermediateServiceState service.ServiceState, privilegedServices service.PrivilegedServices, queuedValidators safrole.ValidatorsData, coreAuthorizationQueue state.PendingAuthorizersQueues) (service.ServiceState, service.PrivilegedServices, safrole.ValidatorsData, state.PendingAuthorizersQueues, state.Context) {
+	return make(service.ServiceState), service.PrivilegedServices{}, safrole.ValidatorsData{}, state.PendingAuthorizersQueues{}, state.Context{}
 }
 
 // calculateNewValidatorStatistics implements equation 30:
 // π′ ≺ (EG, EP, EA, ET, τ, κ′, π, H)
-func calculateNewValidatorStatistics(block block.Block, currentTime jamtime.Timeslot, validatorStatistics ValidatorStatisticsState) ValidatorStatisticsState {
+func calculateNewValidatorStatistics(block block.Block, currentTime jamtime.Timeslot, validatorStatistics validator.ValidatorStatisticsState) validator.ValidatorStatisticsState {
 	newStats := validatorStatistics
 
 	// Implements equations 170-171:
@@ -603,7 +688,7 @@ func calculateNewValidatorStatistics(block block.Block, currentTime jamtime.Time
 	if block.Header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
 		// Rotate statistics - completed stats become history, start fresh present stats
 		newStats[0] = newStats[1]                 // Move current to history
-		newStats[1] = [common.NumberOfValidators]ValidatorStatistics{} // Reset current
+		newStats[1] = [common.NumberOfValidators]validator.ValidatorStatistics{} // Reset current
 	}
 
 	// Implements equation 172: ∀v ∈ NV
