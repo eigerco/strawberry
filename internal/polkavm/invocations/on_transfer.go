@@ -41,7 +41,7 @@ func InvokeOnTransfer(serviceState state.ServiceState, serviceIndex block.Servic
 		case host_call.InfoID:
 			gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, s, serviceIndex, serviceState)
 		default:
-			regs[polkavm.A0] = uint32(polkavm.HostCallResultWhat)
+			regs[polkavm.A0] = uint32(host_call.WHAT)
 			gasCounter -= OnTransferCost
 		}
 		return gasCounter, regs, mem, s, err

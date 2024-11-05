@@ -80,7 +80,7 @@ func TestLookup(t *testing.T) {
 		gasRemaining, regs, _, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, state.ServiceAccount{})
 		require.ErrorIs(t, err, polkavm.ErrHalt)
 
-		assert.Equal(t, uint32(polkavm.HostCallResultNone), regs[polkavm.A0])
+		assert.Equal(t, uint32(host_call.NONE), regs[polkavm.A0])
 		assert.Equal(t, initialGas-host_call.LookupCost-polkavm.GasCosts[polkavm.JumpIndirect]-polkavm.GasCosts[polkavm.Ecalli], gasRemaining)
 	})
 
@@ -334,7 +334,7 @@ func TestInfo(t *testing.T) {
 	gasRemaining, regs, _, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, sampleAccount)
 	require.ErrorIs(t, err, polkavm.ErrHalt)
 
-	require.Equal(t, uint32(polkavm.HostCallResultOk), regs[polkavm.A0])
+	require.Equal(t, uint32(host_call.OK), regs[polkavm.A0])
 
 	var accountInfo host_call.AccountInfo
 	serializer := serialization.NewSerializer(codec.NewJamCodec())
