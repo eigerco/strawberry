@@ -3,6 +3,7 @@ package state
 import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
 )
@@ -112,7 +113,7 @@ func serializeJudgements(state State, serializer *serialization.Serializer, seri
 	return nil
 }
 
-func serializeServiceAccount(serviceId block.ServiceId, serviceAccount ServiceAccount, serializer *serialization.Serializer, serializedState map[crypto.Hash][]byte) error {
+func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializer *serialization.Serializer, serializedState map[crypto.Hash][]byte) error {
 	encodedCodeHash, err := serializer.Encode(serviceAccount.CodeHash)
 	if err != nil {
 		return err
@@ -161,7 +162,7 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount ServiceAc
 	return nil
 }
 
-func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount ServiceAccount, serializer *serialization.Serializer, serializedState map[crypto.Hash][]byte) error {
+func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializer *serialization.Serializer, serializedState map[crypto.Hash][]byte) error {
 	for hash, value := range serviceAccount.Storage {
 		encodedValue, err := serializer.Encode(value)
 		if err != nil {

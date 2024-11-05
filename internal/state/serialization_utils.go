@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"encoding/binary"
-	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/crypto"
 	"slices"
 	"sort"
+
+	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/service"
 )
 
 // generateStateKeyBasic to generate state key based only on i
@@ -62,7 +64,7 @@ func generateStateKeyInterleaved(s block.ServiceId, h [32]byte) [32]byte {
 }
 
 // calculateFootprintSize calculates the storage footprint size (al) based on Equation 94.
-func calculateFootprintSize(storage map[crypto.Hash][]byte, preimageMeta map[PreImageMetaKey]PreimageHistoricalTimeslots) uint64 {
+func calculateFootprintSize(storage map[crypto.Hash][]byte, preimageMeta map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots) uint64 {
 	var totalSize uint64 = 0
 
 	// Calculate the footprint size for the preimage metadata

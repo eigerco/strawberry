@@ -2,7 +2,7 @@ package pvmutil
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/service"
 )
 
 const (
@@ -17,7 +17,7 @@ func Bump(i block.ServiceId) block.ServiceId {
 }
 
 // Check Equation 260: checks if the identifier is unique across all services
-func Check(serviceIndex block.ServiceId, serviceState state.ServiceState) block.ServiceId {
+func Check(serviceIndex block.ServiceId, serviceState service.ServiceState) block.ServiceId {
 	if _, ok := serviceState[serviceIndex]; !ok {
 		return serviceIndex
 	}

@@ -10,8 +10,4 @@ const (
 	MaxWorkPackageSizeBytes               = 96 * 1024 // (WR) Maximum size of a serialized work-package in bytes
 	EntropyPoolSize                       = 4         // () Size of the entropy pool
 	PendingAuthorizersQueueSize           = 80        // (Q) The maximum number of items in the authorizers queue.
-	TransferMemoSizeBytes                 = 128       // (M) Size of the transfer memo in bytes.
-	BasicMinimumBalance                   = 100       // (BS) The basic minimum balance which all services require.
-	AdditionalMinimumBalancePerItem       = 10        // (BI) The additional minimum balance required per item of elective service state.
-	AdditionalMinimumBalancePerOctet      = 1         // (BL) The additional minimum balance required per octet of elective service state.
 )

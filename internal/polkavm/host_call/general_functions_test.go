@@ -1,9 +1,10 @@
 package host_call_test
 
 import (
+	"testing"
+
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
-	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/service"
 )
 
 func TestGasRemaining(t *testing.T) {
@@ -72,12 +73,12 @@ func TestLookup(t *testing.T) {
 		}
 		mem := memoryMap.NewMemory(nil, nil, nil)
 		initialGas := polkavm.Gas(100)
-		hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x state.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
-			gasCounter, regs, mem, err = host_call.Lookup(gasCounter, regs, mem, state.ServiceAccount{}, 1, make(state.ServiceState))
+		hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
+			gasCounter, regs, mem, err = host_call.Lookup(gasCounter, regs, mem, service.ServiceAccount{}, 1, make(service.ServiceState))
 			require.NoError(t, err)
 			return gasCounter, regs, mem, x, nil
 		}
-		gasRemaining, regs, _, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, state.ServiceAccount{})
+		gasRemaining, regs, _, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
 		require.ErrorIs(t, err, polkavm.ErrHalt)
 
 		assert.Equal(t, uint32(host_call.NONE), regs[polkavm.A0])
@@ -105,16 +106,16 @@ func TestLookup(t *testing.T) {
 			polkavm.A2: bo,
 			polkavm.A3: 32,
 		}
-		sa := state.ServiceAccount{
+		sa := service.ServiceAccount{
 			Storage: map[crypto.Hash][]byte{
 				hash: val,
 			},
 		}
-		serviceState := state.ServiceState{
+		serviceState := service.ServiceState{
 			serviceId: sa,
 		}
 
-		hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x state.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
+		hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 			gasCounter, regs, mem, err = host_call.Lookup(gasCounter, regs, mem, sa, serviceId, serviceState)
 			require.NoError(t, err)
 			return gasCounter, regs, mem, x, nil
@@ -157,12 +158,12 @@ func TestRead(t *testing.T) {
 	hashInput = append(hashInput, keyData...)
 	k := blake2b.Sum256(hashInput)
 
-	sa := state.ServiceAccount{
+	sa := service.ServiceAccount{
 		Storage: map[crypto.Hash][]byte{
 			k: value,
 		},
 	}
-	serviceState := state.ServiceState{
+	serviceState := service.ServiceState{
 		serviceId: sa,
 	}
 
@@ -185,7 +186,7 @@ func TestRead(t *testing.T) {
 	err = mem.Write(ko, keyData)
 	require.NoError(t, err)
 
-	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x state.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
+	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 		gasCounter, regs, mem, err = host_call.Read(gasCounter, regs, mem, x, serviceId, serviceState)
 		require.NoError(t, err)
 		return gasCounter, regs, mem, x, nil
@@ -226,7 +227,7 @@ func TestWrite(t *testing.T) {
 	hashInput := append(serviceIdBytes, keyData...)
 	k := blake2b.Sum256(hashInput)
 
-	sa := state.ServiceAccount{
+	sa := service.ServiceAccount{
 		Balance: 200,
 		Storage: map[crypto.Hash][]byte{
 			k: value,
@@ -254,7 +255,7 @@ func TestWrite(t *testing.T) {
 	require.NoError(t, err)
 	err = mem.Write(vo, value)
 	require.NoError(t, err)
-	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, a state.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
+	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, a service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 		gasCounter, regs, mem, _, err = host_call.Write(gasCounter, regs, mem, sa, serviceId)
 		require.NoError(t, err)
 		return gasCounter, regs, mem, a, nil
@@ -300,19 +301,19 @@ func TestInfo(t *testing.T) {
 
 	serviceId := block.ServiceId(1)
 
-	sampleAccount := state.ServiceAccount{
+	sampleAccount := service.ServiceAccount{
 		CodeHash:               crypto.Hash{0x01, 0x02, 0x03},
 		Balance:                1000,
 		GasLimitForAccumulator: 5000,
 		GasLimitOnTransfer:     2000,
 		Storage:                make(map[crypto.Hash][]byte),
-		PreimageMeta:           make(map[state.PreImageMetaKey]state.PreimageHistoricalTimeslots),
+		PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 	}
 
 	sampleAccount.Storage[crypto.Hash{0xAA}] = []byte("value1")
 	sampleAccount.Storage[crypto.Hash{0xBB}] = []byte("value2")
 
-	serviceState := state.ServiceState{
+	serviceState := service.ServiceState{
 		serviceId: sampleAccount,
 	}
 
@@ -326,7 +327,7 @@ func TestInfo(t *testing.T) {
 		polkavm.A0: uint32(serviceId),
 		polkavm.A1: omega1,
 	}
-	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x state.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, state.ServiceAccount, error) {
+	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 		gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, x, serviceId, serviceState)
 		require.NoError(t, err)
 		return gasCounter, regs, mem, x, nil

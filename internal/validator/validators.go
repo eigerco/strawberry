@@ -1,4 +1,4 @@
-package state
+package validator
 
 import (
 	"crypto/ed25519"
@@ -33,7 +33,7 @@ func CalculateRingCommitment(safrole.ValidatorsData) crypto.RingCommitment {
 	return crypto.RingCommitment{}
 }
 
-func nullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed25519.PublicKey) safrole.ValidatorsData {
+func NullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed25519.PublicKey) safrole.ValidatorsData {
 	offenderMap := make(map[string]struct{})
 	for _, key := range offenders {
 		offenderMap[string(key)] = struct{}{}

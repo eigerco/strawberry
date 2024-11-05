@@ -1,10 +1,18 @@
-package state
+package service
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
+
+const (
+	BasicMinimumBalance                   = 100       // (BS) The basic minimum balance which all services require.
+	AdditionalMinimumBalancePerItem       = 10        // (BI) The additional minimum balance required per item of elective service state.
+	AdditionalMinimumBalancePerOctet      = 1         // (BL) The additional minimum balance required per octet of elective service state.
+	TransferMemoSizeBytes                 = 128       // (M) Size of the transfer memo in bytes.
+)
+
 
 type ServiceState map[block.ServiceId]ServiceAccount
 
@@ -68,3 +76,14 @@ type PreImageMetaKey struct {
 	Length PreimageLength // Length (presupposed) of the preimage ()
 }
 type PreimageHistoricalTimeslots []jamtime.Timeslot // Metadata for preimages (l) - TODO: There is a MaxHistoricalTimeslotsForPreimageMeta.
+
+type Memo [TransferMemoSizeBytes]byte
+
+// DeferredTransfer Equation 161: T ≡ (s ∈ Ns, d ∈ Ns, a ∈ Nb, m ∈ Ym, g ∈ Ng)
+type DeferredTransfer struct {
+	SenderServiceIndex   block.ServiceId // sender service index (s)
+	ReceiverServiceIndex block.ServiceId // receiver service index (d)
+	Balance              uint64          // balance value (a)
+	Memo                 Memo            // memo (m)
+	GasLimit             uint64          // gas limit (g)
+}

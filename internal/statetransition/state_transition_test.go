@@ -1,4 +1,4 @@
-package state
+package statetransition
 
 import (
 	"crypto/ed25519"
@@ -10,7 +10,10 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
+	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -58,7 +61,7 @@ func TestCalculateNewEntropyPoolWhenNotNewEpoch(t *testing.T) {
 	assert.Equal(t, entropyPool[1], newEntropyPool[1])
 }
 func TestCalculateNewValidatorsWhenNewEpoch(t *testing.T) {
-	vs := setupValidatorState(t)
+	vs := validator.SetupValidatorState(t)
 	prevNextValidators := vs.SafroleState.NextValidators
 	header := block.Header{
 		TimeSlotIndex: 600,
@@ -69,7 +72,7 @@ func TestCalculateNewValidatorsWhenNewEpoch(t *testing.T) {
 }
 
 func TestCalculateNewValidatorsWhenNotNewEpoch(t *testing.T) {
-	vs := setupValidatorState(t)
+	vs := validator.SetupValidatorState(t)
 	prevValidators := vs.CurrentValidators
 	header := block.Header{
 		TimeSlotIndex: 2,
@@ -80,7 +83,7 @@ func TestCalculateNewValidatorsWhenNotNewEpoch(t *testing.T) {
 }
 
 func TestCalcualteNewArchivedValidatorsWhenNewEpoch(t *testing.T) {
-	vs := setupValidatorState(t)
+	vs := validator.SetupValidatorState(t)
 	prevValidators := vs.CurrentValidators
 	header := block.Header{
 		TimeSlotIndex: 600,
@@ -91,7 +94,7 @@ func TestCalcualteNewArchivedValidatorsWhenNewEpoch(t *testing.T) {
 }
 
 func TestCalcualteNewArchivedValidatorsWhenNotNewEpoch(t *testing.T) {
-	vs := setupValidatorState(t)
+	vs := validator.SetupValidatorState(t)
 	prevArchivedValidators := vs.ArchivedValidators
 	header := block.Header{
 		TimeSlotIndex: 2,
@@ -102,7 +105,7 @@ func TestCalcualteNewArchivedValidatorsWhenNotNewEpoch(t *testing.T) {
 }
 
 func TestCaculateNewSafroleStateWhenNewEpoch(t *testing.T) {
-	vs := setupValidatorState(t)
+	vs := validator.SetupValidatorState(t)
 	header := block.Header{
 		TimeSlotIndex: 600,
 	}
@@ -114,7 +117,7 @@ func TestCaculateNewSafroleStateWhenNewEpoch(t *testing.T) {
 }
 
 func TestCaculateNewSafroleStateWhenNotNewEpoch(t *testing.T) {
-	vs := setupValidatorState(t)
+	vs := validator.SetupValidatorState(t)
 	header := block.Header{
 		TimeSlotIndex: 1,
 	}
@@ -149,7 +152,7 @@ func TestAddUniqueEdPubKey(t *testing.T) {
 }
 
 func TestProcessVerdictGood(t *testing.T) {
-	judgements := &Judgements{}
+	judgements := &state.Judgements{}
 	verdict := createVerdictWithJudgments(crypto.Hash{1}, common.ValidatorsSuperMajority)
 
 	processVerdict(judgements, verdict)
@@ -161,7 +164,7 @@ func TestProcessVerdictGood(t *testing.T) {
 }
 
 func TestProcessVerdictBad(t *testing.T) {
-	judgements := &Judgements{}
+	judgements := &state.Judgements{}
 	verdict := createVerdictWithJudgments(crypto.Hash{2}, 0)
 
 	processVerdict(judgements, verdict)
@@ -173,7 +176,7 @@ func TestProcessVerdictBad(t *testing.T) {
 }
 
 func TestProcessVerdictWonky(t *testing.T) {
-	judgements := &Judgements{}
+	judgements := &state.Judgements{}
 	verdict := createVerdictWithJudgments(crypto.Hash{3}, common.NumberOfValidators/3)
 
 	processVerdict(judgements, verdict)
@@ -185,7 +188,7 @@ func TestProcessVerdictWonky(t *testing.T) {
 }
 
 func TestProcessVerdictMultiple(t *testing.T) {
-	judgements := &Judgements{}
+	judgements := &state.Judgements{}
 
 	processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{1}, common.ValidatorsSuperMajority))
 	processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{2}, 0))
@@ -197,7 +200,7 @@ func TestProcessVerdictMultiple(t *testing.T) {
 }
 
 func TestProcessOffender(t *testing.T) {
-	judgements := &Judgements{}
+	judgements := &state.Judgements{}
 	key := ed25519.PublicKey([]byte{1, 2, 3})
 
 	processOffender(judgements, key)
@@ -208,7 +211,7 @@ func TestProcessOffender(t *testing.T) {
 }
 
 func TestCalculateNewJudgements(t *testing.T) {
-	stateJudgements := Judgements{
+	stateJudgements := state.Judgements{
 		BadWorkReports:  []crypto.Hash{{1}},
 		GoodWorkReports: []crypto.Hash{{2}},
 	}
@@ -245,12 +248,12 @@ func TestCalculateIntermediateBlockState(t *testing.T) {
 		PriorStateRoot: crypto.Hash{1, 2, 3},
 	}
 
-	previousRecentBlocks := []BlockState{
+	previousRecentBlocks := []state.BlockState{
 		{StateRoot: crypto.Hash{4, 5, 6}},
 		{StateRoot: crypto.Hash{7, 8, 9}},
 	}
 
-	expectedIntermediateBlocks := []BlockState{
+	expectedIntermediateBlocks := []state.BlockState{
 		{StateRoot: crypto.Hash{4, 5, 6}},
 		{StateRoot: crypto.Hash{1, 2, 3}},
 	}
@@ -264,9 +267,9 @@ func TestCalculateIntermediateBlockStateEmpty(t *testing.T) {
 		PriorStateRoot: crypto.Hash{1, 2, 3},
 	}
 
-	previousRecentBlocks := []BlockState{}
+	previousRecentBlocks := []state.BlockState{}
 
-	expectedIntermediateBlocks := []BlockState{}
+	expectedIntermediateBlocks := []state.BlockState{}
 
 	intermediateBlocks := calculateIntermediateBlockState(header, previousRecentBlocks)
 	require.Equal(t, expectedIntermediateBlocks, intermediateBlocks)
@@ -277,11 +280,11 @@ func TestCalculateIntermediateBlockStateSingleElement(t *testing.T) {
 		PriorStateRoot: crypto.Hash{1, 2, 3},
 	}
 
-	previousRecentBlocks := []BlockState{
+	previousRecentBlocks := []state.BlockState{
 		{StateRoot: crypto.Hash{4, 5, 6}},
 	}
 
-	expectedIntermediateBlocks := []BlockState{
+	expectedIntermediateBlocks := []state.BlockState{
 		{StateRoot: crypto.Hash{1, 2, 3}},
 	}
 
@@ -292,7 +295,7 @@ func TestCalculateIntermediateBlockStateSingleElement(t *testing.T) {
 func TestCalculateIntermediateServiceState(t *testing.T) {
 	preimageData := []byte{1, 2, 3}
 	preimageHash := crypto.HashData(preimageData)
-	preimageLength := PreimageLength(len(preimageData))
+	preimageLength := service.PreimageLength(len(preimageData))
 	newTimeslot := jamtime.Timeslot(100)
 
 	preimages := block.PreimageExtrinsic{
@@ -302,25 +305,25 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 		},
 	}
 
-	serviceState := ServiceState{
+	serviceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
 				{4, 5, 6}: {7, 8, 9},
 			},
-			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
-				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
+			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+				{Hash: crypto.Hash{4, 5, 6}, Length: service.PreimageLength(3)}: {jamtime.Timeslot(50)},
 			},
 		},
 	}
 
-	expectedServiceState := ServiceState{
+	expectedServiceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
 				{4, 5, 6}:    {7, 8, 9},
 				preimageHash: preimageData,
 			},
-			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
-				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
+			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+				{Hash: crypto.Hash{4, 5, 6}, Length: service.PreimageLength(3)}: {jamtime.Timeslot(50)},
 				{Hash: preimageHash, Length: preimageLength}:            {newTimeslot},
 			},
 		},
@@ -331,13 +334,13 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 }
 
 func TestCalculateIntermediateServiceStateEmptyPreimages(t *testing.T) {
-	serviceState := ServiceState{
+	serviceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
 				{4, 5, 6}: {7, 8, 9},
 			},
-			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
-				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
+			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+				{Hash: crypto.Hash{4, 5, 6}, Length: service.PreimageLength(3)}: {jamtime.Timeslot(50)},
 			},
 		},
 	}
@@ -359,13 +362,13 @@ func TestCalculateIntermediateServiceStateNonExistentService(t *testing.T) {
 		},
 	}
 
-	serviceState := ServiceState{
+	serviceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
 				{4, 5, 6}: {7, 8, 9},
 			},
-			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
-				{Hash: crypto.Hash{4, 5, 6}, Length: PreimageLength(3)}: {jamtime.Timeslot(50)},
+			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+				{Hash: crypto.Hash{4, 5, 6}, Length: service.PreimageLength(3)}: {jamtime.Timeslot(50)},
 			},
 		},
 	}
@@ -381,8 +384,8 @@ func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
 	preimageData2 := []byte{4, 5, 6}
 	preimageHash1 := crypto.HashData(preimageData1)
 	preimageHash2 := crypto.HashData(preimageData2)
-	preimageLength1 := PreimageLength(len(preimageData1))
-	preimageLength2 := PreimageLength(len(preimageData2))
+	preimageLength1 := service.PreimageLength(len(preimageData1))
+	preimageLength2 := service.PreimageLength(len(preimageData2))
 	newTimeslot := jamtime.Timeslot(100)
 
 	preimages := block.PreimageExtrinsic{
@@ -396,20 +399,20 @@ func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
 		},
 	}
 
-	serviceState := ServiceState{
+	serviceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{},
-			PreimageMeta:   map[PreImageMetaKey]PreimageHistoricalTimeslots{},
+			PreimageMeta:   map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
 		},
 	}
 
-	expectedServiceState := ServiceState{
+	expectedServiceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
 				preimageHash1: preimageData1,
 				preimageHash2: preimageData2,
 			},
-			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
+			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 				{Hash: preimageHash1, Length: preimageLength1}: {newTimeslot},
 				{Hash: preimageHash2, Length: preimageLength2}: {newTimeslot},
 			},
@@ -437,26 +440,26 @@ func TestCalculateIntermediateServiceStateExistingPreimage(t *testing.T) {
 		},
 	}
 
-	serviceState := ServiceState{
+	serviceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
 				existingPreimageHash: existingPreimageData,
 			},
-			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
-				{Hash: existingPreimageHash, Length: PreimageLength(len(existingPreimageData))}: {jamtime.Timeslot(50)},
+			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+				{Hash: existingPreimageHash, Length: service.PreimageLength(len(existingPreimageData))}: {jamtime.Timeslot(50)},
 			},
 		},
 	}
 
-	expectedServiceState := ServiceState{
+	expectedServiceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
 				existingPreimageHash:             existingPreimageData,
 				crypto.HashData(newPreimageData): newPreimageData,
 			},
-			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
-				{Hash: existingPreimageHash, Length: PreimageLength(len(existingPreimageData))}:        {jamtime.Timeslot(50)},
-				{Hash: crypto.HashData(newPreimageData), Length: PreimageLength(len(newPreimageData))}: {newTimeslot},
+			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+				{Hash: existingPreimageHash, Length: service.PreimageLength(len(existingPreimageData))}:        {jamtime.Timeslot(50)},
+				{Hash: crypto.HashData(newPreimageData), Length: service.PreimageLength(len(newPreimageData))}: {newTimeslot},
 			},
 		},
 	}
@@ -477,11 +480,11 @@ func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
 		},
 	}
 
-	serviceState := ServiceState{
+	serviceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{},
-			PreimageMeta: map[PreImageMetaKey]PreimageHistoricalTimeslots{
-				{Hash: preimageHash, Length: PreimageLength(len(preimageData))}: {jamtime.Timeslot(50)},
+			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+				{Hash: preimageHash, Length: service.PreimageLength(len(preimageData))}: {jamtime.Timeslot(50)},
 			},
 		},
 	}
@@ -500,7 +503,7 @@ func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 	hash1, _ := workReport1.Hash()
 	hash2, _ := workReport2.Hash()
 
-	coreAssignments := CoreAssignments{
+	coreAssignments := state.CoreAssignments{
 		{WorkReport: workReport1},
 		{WorkReport: workReport2},
 	}
@@ -512,7 +515,7 @@ func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 		},
 	}
 
-	expectedAssignments := CoreAssignments{
+	expectedAssignments := state.CoreAssignments{
 		{WorkReport: nil}, // Cleared due to less than super majority
 		{WorkReport: workReport2},
 	}
@@ -568,7 +571,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			{Ed25519: validatorKeys[1].Ed25519},
 		}
 
-		validatorState := ValidatorState{
+		validatorState := validator.ValidatorState{
 			CurrentValidators:  validatorsData,
 			ArchivedValidators: validatorsData,
 		}
@@ -608,7 +611,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			},
 		}
 
-		intermediateAssignments := CoreAssignments{}
+		intermediateAssignments := state.CoreAssignments{}
 
 		newAssignments := calculateNewCoreAssignments(
 			guarantees,
@@ -636,7 +639,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			{Ed25519: validatorKeys[1].Ed25519},
 		}
 
-		validatorState := ValidatorState{
+		validatorState := validator.ValidatorState{
 			CurrentValidators:  validatorsData,
 			ArchivedValidators: validatorsData,
 		}
@@ -676,7 +679,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			},
 		}
 
-		intermediateAssignments := CoreAssignments{}
+		intermediateAssignments := state.CoreAssignments{}
 
 		newAssignments := calculateNewCoreAssignments(
 			guarantees,
@@ -701,7 +704,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			{Ed25519: validatorKeys[1].Ed25519},
 		}
 
-		validatorState := ValidatorState{
+		validatorState := validator.ValidatorState{
 			CurrentValidators:  validatorsData,
 			ArchivedValidators: validatorsData,
 		}
@@ -740,7 +743,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			},
 		}
 
-		intermediateAssignments := CoreAssignments{}
+		intermediateAssignments := state.CoreAssignments{}
 
 		newAssignments := calculateNewCoreAssignments(
 			guarantees,
@@ -768,7 +771,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			{Ed25519: validatorKeys[1].Ed25519},
 		}
 
-		validatorState := ValidatorState{
+		validatorState := validator.ValidatorState{
 			CurrentValidators:  validatorsData,
 			ArchivedValidators: validatorsData,
 		}
@@ -806,7 +809,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			},
 		}
 
-		intermediateAssignments := CoreAssignments{}
+		intermediateAssignments := state.CoreAssignments{}
 
 		newAssignments := calculateNewCoreAssignments(
 			guarantees,
@@ -824,8 +827,8 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		header := block.Header{
 			TimeSlotIndex: 1,
 		}
-		pendingAuths := PendingAuthorizersQueues{}
-		currentAuths := CoreAuthorizersPool{}
+		pendingAuths := state.PendingAuthorizersQueues{}
+		currentAuths := state.CoreAuthorizersPool{}
 
 		// Set up a pending authorizer for core 0
 		newAuth := testutils.RandomHash(t)
@@ -855,11 +858,11 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		}
 
 		// Set up current authorizations with the used authorizer
-		currentAuths := CoreAuthorizersPool{}
+		currentAuths := state.CoreAuthorizersPool{}
 		currentAuths[0] = []crypto.Hash{usedAuth}
 
 		// Set up pending authorizations with new authorizer
-		pendingAuths := PendingAuthorizersQueues{}
+		pendingAuths := state.PendingAuthorizersQueues{}
 		newAuth := testutils.RandomHash(t)
 		pendingAuths[0][1] = newAuth // At index 1 (matching TimeSlotIndex)
 
@@ -876,21 +879,21 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		}
 
 		// Fill current authorizations to max size
-		currentAuths := CoreAuthorizersPool{}
-		for i := 0; i < MaxAuthorizersPerCore; i++ {
+		currentAuths := state.CoreAuthorizersPool{}
+		for i := 0; i < state.MaxAuthorizersPerCore; i++ {
 			currentAuths[0] = append(currentAuths[0], testutils.RandomHash(t))
 		}
 
 		// Set up new pending authorizer
-		pendingAuths := PendingAuthorizersQueues{}
+		pendingAuths := state.PendingAuthorizersQueues{}
 		newAuth := testutils.RandomHash(t)
 		pendingAuths[0][1] = newAuth
 
 		newAuths := calculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
 
 		// Check that size limit is maintained and oldest auth was removed
-		require.Len(t, newAuths[0], MaxAuthorizersPerCore)
-		assert.Equal(t, newAuth, newAuths[0][MaxAuthorizersPerCore-1])
+		require.Len(t, newAuths[0], state.MaxAuthorizersPerCore)
+		assert.Equal(t, newAuth, newAuths[0][state.MaxAuthorizersPerCore-1])
 		assert.NotEqual(t, currentAuths[0][0], newAuths[0][0])
 	})
 
@@ -899,12 +902,12 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 			TimeSlotIndex: 1,
 		}
 
-		currentAuths := CoreAuthorizersPool{}
+		currentAuths := state.CoreAuthorizersPool{}
 		existingAuth := testutils.RandomHash(t)
 		currentAuths[0] = []crypto.Hash{existingAuth}
 
 		// Empty pending authorizations
-		pendingAuths := PendingAuthorizersQueues{}
+		pendingAuths := state.PendingAuthorizersQueues{}
 
 		newAuths := calculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
 
@@ -919,14 +922,14 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		}
 
 		// Set up authorizations for two cores
-		currentAuths := CoreAuthorizersPool{}
+		currentAuths := state.CoreAuthorizersPool{}
 		existingAuth0 := testutils.RandomHash(t)
 		existingAuth1 := testutils.RandomHash(t)
 		currentAuths[0] = []crypto.Hash{existingAuth0}
 		currentAuths[1] = []crypto.Hash{existingAuth1}
 
 		// Set up new pending authorizations
-		pendingAuths := PendingAuthorizersQueues{}
+		pendingAuths := state.PendingAuthorizersQueues{}
 		newAuth0 := testutils.RandomHash(t)
 		newAuth1 := testutils.RandomHash(t)
 		pendingAuths[0][1] = newAuth0
@@ -946,12 +949,12 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 func TestCalculateNewValidatorStatistics(t *testing.T) {
     t.Run("new epoch transition", func(t *testing.T) {
         // Initial state with some existing stats
-        initialStats := ValidatorStatisticsState{
-            0: [1023]ValidatorStatistics{
+        initialStats := validator.ValidatorStatisticsState{
+            0: [1023]validator.ValidatorStatistics{
                 0: {NumOfBlocks: 5},
                 1: {NumOfTickets: 3},
             },
-            1: [1023]ValidatorStatistics{
+            1: [1023]validator.ValidatorStatistics{
                 0: {NumOfBlocks: 10},
                 1: {NumOfTickets: 6},
             },
@@ -974,8 +977,8 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
     })
 
     t.Run("block author statistics", func(t *testing.T) {
-        initialStats := ValidatorStatisticsState{
-            1: [1023]ValidatorStatistics{}, // Current epoch stats
+        initialStats := validator.ValidatorStatisticsState{
+            1: [1023]validator.ValidatorStatistics{}, // Current epoch stats
         }
 
         block := block.Block{
@@ -1007,8 +1010,8 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
     })
 
     t.Run("guarantees and assurances", func(t *testing.T) {
-        initialStats := ValidatorStatisticsState{
-            1: [1023]ValidatorStatistics{}, // Current epoch stats
+        initialStats := validator.ValidatorStatisticsState{
+            1: [1023]validator.ValidatorStatistics{}, // Current epoch stats
         }
 
         block := block.Block{
@@ -1048,8 +1051,8 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
     })
 
     t.Run("full block processing", func(t *testing.T) {
-        initialStats := ValidatorStatisticsState{
-            1: [1023]ValidatorStatistics{
+        initialStats := validator.ValidatorStatisticsState{
+            1: [1023]validator.ValidatorStatistics{
                 1: {
                     NumOfBlocks: 5,
                     NumOfTickets: 10,
@@ -1090,7 +1093,7 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 
         newStats := calculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats)
 
-        expected := ValidatorStatistics{
+        expected := validator.ValidatorStatistics{
             NumOfBlocks: 6,
             NumOfTickets: 12,
             NumOfPreimages: 3,
@@ -1117,10 +1120,10 @@ func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16
 	}
 }
 
-func createInitialAssignments() CoreAssignments {
-	var initialAssignments CoreAssignments
+func createInitialAssignments() state.CoreAssignments {
+	var initialAssignments state.CoreAssignments
 	for i := range initialAssignments {
-		initialAssignments[i] = Assignment{
+		initialAssignments[i] = state.Assignment{
 			WorkReport: &block.WorkReport{CoreIndex: uint16(i)},
 			Time:       jamtime.Timeslot(100),
 		}
