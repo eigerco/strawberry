@@ -2,10 +2,13 @@ package state
 
 import (
 	"crypto/ed25519"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/safrole"
+	"github.com/eigerco/strawberry/internal/service"
 )
 
 type Assignment struct {
@@ -44,9 +47,26 @@ type AccumulationOperand struct {
 	AuthorizationOutput []byte                        // Authorization output (a ∈ Y)
 }
 
+// AccumulationResult represents the result type from equation 162:
+// A: NS → {s ∈ A?, v ∈ ⟦K⟧V, t ∈ ⟦T⟧, r ∈ H?, c ∈ C⟦H⟧QHC, n ∈ D⟨NS → A⟩, p ∈ {m,a,v ∈ NS, g ∈ D⟨NS → NG⟩}}
+type AccumulationResult struct {
+	ServiceState      *service.ServiceAccount    // s - Optional updated service account state
+	ValidatorUpdates  safrole.ValidatorsData     // v - Single validator data set, not a slice
+	DeferredTransfers []service.DeferredTransfer // t - Deferred transfers sequence
+	AccumulationRoot  *crypto.Hash               // r - Optional accumulation result hash
+	CoreAssignments   PendingAuthorizersQueues   // c - Core authorizations queue
+	NewServices       service.ServiceState       // n - Newly created services mapping
+	PrivilegedUpdates struct {                   // p - Privileged service updates
+		ManagerServiceId   block.ServiceId            // m - Manager service
+		AssignServiceId    block.ServiceId            // a - Assign service
+		DesignateServiceId block.ServiceId            // v - Designate service
+		GasAssignments     map[block.ServiceId]uint64 // g - Gas assignments
+	}
+}
+
 // Context is an intermediate value for state transition calculations
 // TODO: Add relevant fields when state transitions are implemented
 type Context struct {
 	// Add relevant fields
-	Accumulations map[uint32]crypto.Hash
+	Accumulations map[block.ServiceId]crypto.Hash
 }
