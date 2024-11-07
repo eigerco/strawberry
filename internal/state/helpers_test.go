@@ -117,11 +117,10 @@ func RandomCoreAssignments(t *testing.T) CoreAssignments {
 					LookupAnchor:            block.RefinementContextLookupAnchor{HeaderHash: testutils.RandomHash(t), Timeslot: testutils.RandomTimeslot()},
 					PrerequisiteWorkPackage: nil,
 				},
-				CoreIndex:         uint16(i),
-				AuthorizerHash:    testutils.RandomHash(t),
-				Output:            []byte("output"),
-				WorkResults:       []block.WorkResult{RandomWorkResult(t)},
-				SegmentRootLookup: map[crypto.Hash]crypto.Hash{testutils.RandomHash(t): testutils.RandomHash(t)},
+				CoreIndex:      uint16(i),
+				AuthorizerHash: testutils.RandomHash(t),
+				Output:         []byte("output"),
+				WorkResults:    []block.WorkResult{RandomWorkResult(t)},
 			},
 			Time: testutils.RandomTimeslot(),
 		}
@@ -188,9 +187,6 @@ func RandomWorkReport(t *testing.T) block.WorkReport {
 		AuthorizerHash: testutils.RandomHash(t),
 		Output:         []byte("random output"),
 		WorkResults:    []block.WorkResult{RandomWorkResult(t)},
-		SegmentRootLookup: map[crypto.Hash]crypto.Hash{
-			testutils.RandomHash(t): testutils.RandomHash(t),
-		},
 	}
 }
 

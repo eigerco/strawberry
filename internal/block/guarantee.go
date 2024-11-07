@@ -1,7 +1,9 @@
 package block
 
 import (
+	"encoding/json"
 	"fmt"
+
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -160,10 +162,9 @@ func (w *WorkReport) Hash() (crypto.Hash, error) {
 	if w == nil {
 		return crypto.Hash{}, nil
 	}
-	// TODO encode as JAM instead of json due to impossibility to marshal Hash keys
-	jamData, err := jam.Marshal(w)
+	jsonData, err := json.Marshal(w)
 	if err != nil {
 		return crypto.Hash{}, err
 	}
-	return crypto.HashData(jamData), nil
+	return crypto.HashData(jsonData), nil
 }
