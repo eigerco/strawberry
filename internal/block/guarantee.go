@@ -36,6 +36,8 @@ type WorkReport struct {
 	AuthorizerHash           crypto.Hash              // HeaderHash of the authorizer (a)
 	Output                   []byte                   // Output of the work report (o)
 	WorkResults              []WorkResult             // Results of the evaluation of each of the items in the work-package (r) - Min value: MinWorkPackageResultsSize. Max value: MaxWorkPackageResultsSize.
+
+	SegmentRootLookup map[crypto.Hash]crypto.Hash // l ∈ D⟨H → H⟩ a segment-root lookup dictionary (l)
 }
 
 type WorkPackageSpecification struct {
@@ -156,7 +158,7 @@ func NewErrorWorkResult(serviceId ServiceId, serviceHashCode, payloadHash crypto
 	}
 }
 
-func (w *WorkReport)Hash()(crypto.Hash, error) {
+func (w *WorkReport) Hash() (crypto.Hash, error) {
 	if w == nil {
 		return crypto.Hash{}, nil
 	}
