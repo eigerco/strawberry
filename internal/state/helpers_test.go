@@ -11,9 +11,9 @@ import (
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
+	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"github.com/stretchr/testify/require"
@@ -161,9 +161,9 @@ func RandomAccumulationHistory(t *testing.T) AccumulationHistory {
 	var history AccumulationHistory
 	for i := 0; i < len(history); i++ {
 		numEntries := testutils.RandomUint32()%5 + 1 // Random number of map entries (1-5)
-		history[i] = make(map[crypto.Hash]crypto.Hash)
+		history[i] = make(map[crypto.Hash]struct{})
 		for j := 0; j < int(numEntries); j++ {
-			history[i][testutils.RandomHash(t)] = testutils.RandomHash(t)
+			history[i][testutils.RandomHash(t)] = struct{}{}
 		}
 	}
 	return history

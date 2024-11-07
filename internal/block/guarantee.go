@@ -27,7 +27,7 @@ type CredentialSignature struct {
 	Signature      [crypto.Ed25519SignatureSize]byte // The Ed25519 signature
 }
 
-// WorkReport represents a work report in the JAM state
+// WorkReport represents a work report in the JAM state (equation 118 v0.4.5)
 // TODO: The total serialized size of a work-report may be no greater than MaxWorkPackageSizeBytes.
 type WorkReport struct {
 	WorkPackageSpecification WorkPackageSpecification // Work-package specification (s)
@@ -36,6 +36,8 @@ type WorkReport struct {
 	AuthorizerHash           crypto.Hash              // HeaderHash of the authorizer (a)
 	Output                   []byte                   // Output of the work report (o)
 	WorkResults              []WorkResult             // Results of the evaluation of each of the items in the work-package (r) - Min value: MinWorkPackageResultsSize. Max value: MaxWorkPackageResultsSize.
+
+	SegmentRootLookup map[crypto.Hash]crypto.Hash // A segment-root lookup dictionary (l ∈ D⟨H → H⟩)
 }
 
 type WorkPackageSpecification struct {
@@ -156,7 +158,7 @@ func NewErrorWorkResult(serviceId ServiceId, serviceHashCode, payloadHash crypto
 	}
 }
 
-func (w *WorkReport)Hash()(crypto.Hash, error) {
+func (w *WorkReport) Hash() (crypto.Hash, error) {
 	if w == nil {
 		return crypto.Hash{}, nil
 	}
