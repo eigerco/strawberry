@@ -13,9 +13,9 @@ type DisputeExtrinsic struct {
 }
 
 type Verdict struct {
-	ReportHash crypto.Hash                       // H, hash of the work report
-	EpochIndex uint32                            // ⌊τ/E⌋ - N2, epoch index
-	Judgements  [common.ValidatorsSuperMajority]Judgement // ⟦{⊺,⊥},NV,E⟧⌊2/3V⌋+1
+	ReportHash crypto.Hash                               // H, hash of the work report
+	EpochIndex uint32                                    // ⌊τ/E⌋ - N2, epoch index
+	Judgements [common.ValidatorsSuperMajority]Judgement // ⟦{⊺,⊥},NV,E⟧⌊2/3V⌋+1
 }
 
 type Culprit struct {

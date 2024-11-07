@@ -1021,16 +1021,16 @@ func wrangleAccumulationOperands(assignment state.CoreAssignments) map[block.Ser
 // C ≡ {(s, A(s)r) | s ∈ S, A(s)r ≠ ∅}
 // Maps accumulated services to their accumulation result hashes
 func buildServiceAccumulationCommitments(accumResults map[block.ServiceId]state.AccumulationResult) map[block.ServiceId]crypto.Hash {
-    commitments := make(map[block.ServiceId]crypto.Hash)
-    
-    for serviceId, result := range accumResults {
-        // Only include services that have a non-empty accumulation root
-        if result.AccumulationRoot != nil {
-            commitments[serviceId] = *result.AccumulationRoot
-        }
-    }
-    
-    return commitments
+	commitments := make(map[block.ServiceId]crypto.Hash)
+
+	for serviceId, result := range accumResults {
+		// Only include services that have a non-empty accumulation root
+		if result.AccumulationRoot != nil {
+			commitments[serviceId] = *result.AccumulationRoot
+		}
+	}
+
+	return commitments
 }
 
 // calculateNewValidatorStatistics implements equation 30:

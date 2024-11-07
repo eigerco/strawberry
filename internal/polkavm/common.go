@@ -178,13 +178,13 @@ type Mutator interface {
 
 // AccumulateContext Equation 254
 type AccumulateContext struct {
-	ServiceAccount      *service.ServiceAccount          // s
+	ServiceAccount      *service.ServiceAccount        // s
 	AuthorizationsQueue state.PendingAuthorizersQueues // c
 	ValidatorKeys       safrole.ValidatorsData         // v
 	ServiceID           block.ServiceId                // i
-	DeferredTransfers   []service.DeferredTransfer       // t
-	ServicesState       service.ServiceState             // n
-	PrivilegedServices  service.PrivilegedServices       // p
+	DeferredTransfers   []service.DeferredTransfer     // t
+	ServicesState       service.ServiceState           // n
+	PrivilegedServices  service.PrivilegedServices     // p
 }
 
 type AccumulateContextPair struct {

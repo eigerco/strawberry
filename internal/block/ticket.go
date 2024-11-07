@@ -26,12 +26,12 @@ type TicketExtrinsic struct {
 
 // TODO: Bandersnatch. This is just a mock.
 func ExtractTicketFromProof(proofs []TicketProof) []Ticket {
-	result:= make([]Ticket, len(proofs))
+	result := make([]Ticket, len(proofs))
 	for i, proof := range proofs {
 		result[i] = Ticket{
-			EntryIndex: proof.EntryIndex, 
+			EntryIndex: proof.EntryIndex,
 			Identifier: crypto.Hash(proof.Proof[:32]),
-			}
+		}
 	}
 	return result
 }
