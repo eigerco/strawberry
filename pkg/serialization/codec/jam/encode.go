@@ -320,6 +320,11 @@ func (bw *byteWriter) encodeStruct(in interface{}) error {
 		if !field.CanInterface() {
 			continue
 		}
+		if tag, ok := fieldType.Tag.Lookup("jam"); ok {
+			if tag == "-" {
+				continue
+			}
+		}
 
 		// Marshal and encode the field value
 		err := bw.marshal(field.Interface())

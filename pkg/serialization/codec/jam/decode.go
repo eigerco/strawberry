@@ -287,6 +287,11 @@ func (br *byteReader) decodeStruct(value reflect.Value) error {
 		if !field.CanSet() {
 			continue
 		}
+		if tag, ok := fieldType.Tag.Lookup("jam"); ok {
+			if tag == "-" {
+				continue
+			}
+		}
 
 		// Decode the field value
 		err := br.unmarshal(field)
