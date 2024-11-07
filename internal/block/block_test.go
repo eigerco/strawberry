@@ -157,6 +157,9 @@ func Test_BlockEncodeDecode(t *testing.T) {
 							Output:                 WorkResultOutputOrError{CodeTooLarge},
 						},
 					},
+					SegmentRootLookup: map[crypto.Hash]crypto.Hash{
+						testutils.RandomHash(t): testutils.RandomHash(t),
+					},
 				},
 				Credentials: []CredentialSignature{
 					{

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"log"
 	"sort"
 
@@ -321,7 +322,8 @@ func calculateWorkReportHashes(guarantees block.GuaranteesExtrinsic) ([common.To
 	for _, guarantee := range guarantees.Guarantees {
 		// Assuming CoreIndex is part of the WorkReport struct
 		coreIndex := guarantee.WorkReport.CoreIndex
-		reportBytes, err := json.Marshal(guarantee.WorkReport)
+		// TODO encode as JAM instead of json due to impossibility to marshal Hash keys
+		reportBytes, err := jam.Marshal(guarantee.WorkReport)
 		if err != nil {
 			return [common.TotalNumberOfCores]crypto.Hash{}, err
 		}
@@ -641,7 +643,7 @@ func verifyGuaranteeCredentials(guarantee block.Guarantee, validators safrole.Va
 		if len(validatorKey.Ed25519) != ed25519.PublicKeySize {
 			return false
 		}
-		reportBytes, err := json.Marshal(guarantee.WorkReport)
+		reportBytes, err := jam.Marshal(guarantee.WorkReport)
 		if err != nil {
 			return false
 		}
@@ -1021,16 +1023,16 @@ func wrangleAccumulationOperands(assignment state.CoreAssignments) map[block.Ser
 // C ≡ {(s, A(s)r) | s ∈ S, A(s)r ≠ ∅}
 // Maps accumulated services to their accumulation result hashes
 func buildServiceAccumulationCommitments(accumResults map[block.ServiceId]state.AccumulationResult) map[block.ServiceId]crypto.Hash {
-    commitments := make(map[block.ServiceId]crypto.Hash)
-    
-    for serviceId, result := range accumResults {
-        // Only include services that have a non-empty accumulation root
-        if result.AccumulationRoot != nil {
-            commitments[serviceId] = *result.AccumulationRoot
-        }
-    }
-    
-    return commitments
+	commitments := make(map[block.ServiceId]crypto.Hash)
+
+	for serviceId, result := range accumResults {
+		// Only include services that have a non-empty accumulation root
+		if result.AccumulationRoot != nil {
+			commitments[serviceId] = *result.AccumulationRoot
+		}
+	}
+
+	return commitments
 }
 
 // calculateNewValidatorStatistics implements equation 30:
