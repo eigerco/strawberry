@@ -14,6 +14,11 @@ help: Makefile
 	@sed -n 's/^##//p' $< | column -t -s ':' |  sed -e 's/^/ /'
 	@echo
 
+.PHONY: fmt
+## fmt: Formats the Go code.
+fmt:
+	go fmt ./...
+
 .PHONY: lint
 ## lint: Runs golangci-lint run
 lint:
