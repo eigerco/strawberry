@@ -37,7 +37,8 @@ type WorkReport struct {
 	Output                   []byte                   // Output of the work report (o)
 	WorkResults              []WorkResult             // Results of the evaluation of each of the items in the work-package (r) - Min value: MinWorkPackageResultsSize. Max value: MaxWorkPackageResultsSize.
 
-	SegmentRootLookup map[crypto.Hash]crypto.Hash // A segment-root lookup dictionary (l ∈ D⟨H → H⟩)
+	// TODO ignore this field for now as the test vectors still do not include it
+	SegmentRootLookup map[crypto.Hash]crypto.Hash `json:"-" jam:"-"` // A segment-root lookup dictionary (l ∈ D⟨H → H⟩)
 }
 
 type WorkPackageSpecification struct {
