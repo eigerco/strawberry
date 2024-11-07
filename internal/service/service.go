@@ -11,6 +11,8 @@ const (
 	AdditionalMinimumBalancePerItem       = 10        // (BI) The additional minimum balance required per item of elective service state.
 	AdditionalMinimumBalancePerOctet      = 1         // (BL) The additional minimum balance required per octet of elective service state.
 	TransferMemoSizeBytes                 = 128       // (M) Size of the transfer memo in bytes.
+	// TODO: This isn't defined in the GP as a const. Can't find the value.
+	MaximumAccumulationGas                = 50000     // (GA) Maximum total gas that can be consumed by accumulation operations.
 )
 
 

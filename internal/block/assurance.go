@@ -23,3 +23,9 @@ type Assurance struct {
 }
 
 type AssurancesExtrinsic []Assurance
+
+func HasAssuranceForCore(a Assurance, coreIndex uint16) bool {
+	byteIndex := coreIndex / 8
+	bitIndex := coreIndex % 8
+	return (a.Bitfield[byteIndex] & (1 << bitIndex)) != 0
+}
