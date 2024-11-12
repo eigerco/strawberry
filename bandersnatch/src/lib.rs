@@ -472,9 +472,18 @@ pub unsafe extern "C" fn new_ring_vrf_verifier(
     let public_keys_slice = std::slice::from_raw_parts(public_keys, public_keys_len);
     let num_keys = public_keys_len / PUBLIC_KEY_LENGTH;
 
+    let padding_point = ring_context().padding_point();
+    let zero_chunk = [0u8; PUBLIC_KEY_LENGTH];
     let ring: Vec<Public> = public_keys_slice
         .chunks(PUBLIC_KEY_LENGTH)
-        .filter_map(|chunk| Public::deserialize_compressed(chunk).ok())
+        .map(|chunk| {
+            // Replace any zero'd out public keys with a padding point.
+            if chunk == zero_chunk {
+                Public::from(padding_point)
+            } else {
+                Public::deserialize_compressed(chunk).unwrap()
+            }
+        })
         .collect();
 
     if ring.len() != num_keys {
@@ -655,9 +664,18 @@ pub unsafe extern "C" fn new_ring_vrf_prover(
 
     let num_keys = public_keys_len / PUBLIC_KEY_LENGTH;
 
+    let padding_point = ring_context().padding_point();
+    let zero_chunk = [0u8; PUBLIC_KEY_LENGTH];
     let ring: Vec<Public> = public_keys_slice
         .chunks(PUBLIC_KEY_LENGTH)
-        .filter_map(|chunk| Public::deserialize_compressed(chunk).ok())
+        .map(|chunk| {
+            // Replace any zero'd out public keys with a padding point.
+            if chunk == zero_chunk {
+                Public::from(padding_point)
+            } else {
+                Public::deserialize_compressed(chunk).unwrap()
+            }
+        })
         .collect();
 
     if ring.len() != num_keys {
