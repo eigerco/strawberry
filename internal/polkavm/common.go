@@ -2,7 +2,6 @@ package polkavm
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 )
@@ -178,13 +177,16 @@ type Mutator interface {
 
 // AccumulateContext Equation 254
 type AccumulateContext struct {
-	ServiceAccount      *service.ServiceAccount        // s
-	AuthorizationsQueue state.PendingAuthorizersQueues // c
-	ValidatorKeys       safrole.ValidatorsData         // v
-	ServiceID           block.ServiceId                // i
-	DeferredTransfers   []service.DeferredTransfer     // t
-	ServicesState       service.ServiceState           // n
-	PrivilegedServices  service.PrivilegedServices     // p
+	ServiceState      service.ServiceState       // d
+	ServiceId         block.ServiceId            // s
+	AccumulationState state.AccumulationState    // u
+	NewServiceId      block.ServiceId            // i
+	DeferredTransfers []service.DeferredTransfer // t
+}
+
+// ServiceAccount x_s
+func (s *AccumulateContext) ServiceAccount() service.ServiceAccount {
+	return s.ServiceState[s.ServiceId]
 }
 
 type AccumulateContextPair struct {

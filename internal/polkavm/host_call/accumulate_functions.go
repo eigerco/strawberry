@@ -14,17 +14,16 @@ import (
 	"github.com/eigerco/strawberry/internal/state"
 )
 
-// Empower ΩE (ξ, ω, μ, (X, Y))
+// Empower ΩE(ϱ, ω, μ, (x, y))
 func Empower(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < EmpowerCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= EmpowerCost
 
-	// let [m, a, v, o, n] = ω0...5
+	// let [m, a, v, o, n] = ω7...12
 	managerServiceId, assignServiceId, designateServiceId, addr, servicesNr := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
-
-	// let g = {(s ↦ g) where E4(s) ⌢ E8(g) = do+12i⋅⋅⋅+12 | i ∈ Nn} if Zo⋅⋅⋅+12n ⊂ Vμ otherwise ∇
+	// let g = {(s ↦ g) where E4(s) ⌢ E8(g) = μ_o+12i⋅⋅⋅+12 | i ∈ Nn} if Zo⋅⋅⋅+12n ⊂ Vμ otherwise ∇
 	for i := range servicesNr {
 		serviceId, err := readNumber[block.ServiceId](mem, addr+(12*i), 4)
 		if err != nil {
@@ -35,25 +34,25 @@ func Empower(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair)
 			return gas, withCode(regs, OOB), mem, ctxPair, err
 		}
 
-		if ctxPair.RegularCtx.PrivilegedServices.AmountOfGasPerServiceId == nil {
-			ctxPair.RegularCtx.PrivilegedServices.AmountOfGasPerServiceId = make(map[block.ServiceId]uint64)
+		if ctxPair.RegularCtx.AccumulationState.PrivilegedServices.AmountOfGasPerServiceId == nil {
+			ctxPair.RegularCtx.AccumulationState.PrivilegedServices.AmountOfGasPerServiceId = make(map[block.ServiceId]uint64)
 		}
-		ctxPair.RegularCtx.PrivilegedServices.AmountOfGasPerServiceId[serviceId] = serviceGas
+		ctxPair.RegularCtx.AccumulationState.PrivilegedServices.AmountOfGasPerServiceId[serviceId] = serviceGas
 	}
-	ctxPair.RegularCtx.PrivilegedServices.ManagerServiceId = block.ServiceId(managerServiceId)
-	ctxPair.RegularCtx.PrivilegedServices.AssignServiceId = block.ServiceId(assignServiceId)
-	ctxPair.RegularCtx.PrivilegedServices.DesignateServiceId = block.ServiceId(designateServiceId)
+	ctxPair.RegularCtx.AccumulationState.PrivilegedServices.ManagerServiceId = block.ServiceId(managerServiceId)
+	ctxPair.RegularCtx.AccumulationState.PrivilegedServices.AssignServiceId = block.ServiceId(assignServiceId)
+	ctxPair.RegularCtx.AccumulationState.PrivilegedServices.DesignateServiceId = block.ServiceId(designateServiceId)
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Assign ΩA(ξ, ω, μ, (X, Y))
+// Assign ΩA(ϱ, ω, μ, (x, y))
 func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < AssignCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= AssignCost
 
-	// let o = ω1
+	// let o = ω8
 	addr := regs[A1]
 	core := regs[A0]
 	if core >= uint32(common.TotalNumberOfCores) {
@@ -64,12 +63,12 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 		if err := mem.Read(addr+uint32(32*i), bytes); err != nil {
 			return gas, withCode(regs, OOB), mem, ctxPair, nil
 		}
-		ctxPair.RegularCtx.AuthorizationsQueue[core][i] = crypto.Hash(bytes)
+		ctxPair.RegularCtx.AccumulationState.WorkReportsQueue[core][i] = crypto.Hash(bytes)
 	}
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Designate ΩD (ξ, ω, μ, (X, Y))
+// Designate ΩD (ϱ, ω, μ, (x, y))
 func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < DesignateCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -82,7 +81,7 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 		bls          = ed25519 + crypto.BLSSize
 		metadata     = bls + crypto.MetadataSize
 	)
-	// let o = ω0
+	// let o = ω7
 	addr := regs[A0]
 	for i := 0; i < common.NumberOfValidators; i++ {
 		bytes := make([]byte, 336)
@@ -90,7 +89,7 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 			return gas, withCode(regs, OOB), mem, ctxPair, nil
 		}
 
-		ctxPair.RegularCtx.ValidatorKeys[i] = crypto.ValidatorKey{
+		ctxPair.RegularCtx.AccumulationState.ValidatorKeys[i] = crypto.ValidatorKey{
 			Bandersnatch: crypto.BandersnatchPublicKey(bytes[:bandersnatch]),
 			Ed25519:      bytes[bandersnatch:ed25519],
 			Bls:          crypto.BlsKey(bytes[ed25519:bls]),
@@ -101,7 +100,7 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Checkpoint ΩC (ξ, ω, μ, (X, Y))
+// Checkpoint ΩC(ϱ, ω, μ, (x, y))
 func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < CheckpointCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -110,21 +109,21 @@ func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPa
 
 	ctxPair.ExceptionalCtx = ctxPair.RegularCtx
 
-	// Split the new ξ' value into its lower and upper parts.
+	// Split the new ϱ' value into its lower and upper parts.
 	regs[A0] = uint32(gas & ((1 << 32) - 1))
 	regs[A1] = uint32(gas >> 32)
 
 	return gas, regs, mem, ctxPair, nil
 }
 
-// New ΩN (ξ, ω, μ, (X, Y))
+// New ΩN(ϱ, ω, μ, (x, y))
 func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < NewCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= NewCost
 
-	// let [o, l, gl, gh, ml, mh] = ω0..6
+	// let [o, l, gl, gh, ml, mh] = ω7..13
 	addr, preimageLength, gl, gh, ml, mh := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4], regs[A5]
 
 	// c = μo⋅⋅⋅+32 if No⋅⋅⋅+32 ⊂ Vμ otherwise ∇
@@ -153,14 +152,19 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Ga
 	account.Balance = account.ThresholdBalance()
 
 	// let b = (Xs)b − at
-	b := ctxPair.RegularCtx.ServiceAccount.Balance - account.ThresholdBalance()
+	b := ctxPair.RegularCtx.ServiceAccount().Balance - account.ThresholdBalance()
 
 	// if a ≠ ∇ ∧ b ≥ (xs)t
-	if b >= ctxPair.RegularCtx.ServiceAccount.ThresholdBalance() {
-		ctxPair.RegularCtx.ServiceID = Check(Bump(ctxPair.RegularCtx.ServiceID), ctxPair.RegularCtx.ServicesState)
-		ctxPair.RegularCtx.ServicesState[ctxPair.RegularCtx.ServiceID] = account
-		ctxPair.RegularCtx.ServiceAccount.Balance = b
-		regs[A0] = uint32(ctxPair.RegularCtx.ServiceID)
+	if b >= ctxPair.RegularCtx.ServiceAccount().ThresholdBalance() {
+		regs[A0] = uint32(ctxPair.RegularCtx.ServiceId)
+		currentAccount := ctxPair.RegularCtx.ServiceAccount()
+		currentAccount.Balance = b
+		ctxPair.RegularCtx.ServiceState[ctxPair.RegularCtx.ServiceId] = currentAccount
+
+		// check(bump(xi))
+		ctxPair.RegularCtx.ServiceId = Check(Bump(ctxPair.RegularCtx.NewServiceId), ctxPair.RegularCtx.AccumulationState.ServiceState)
+		//(xu)d ∪ {xi ↦ a, xs ↦ s}, b
+		ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = account
 		return gas, regs, mem, ctxPair, nil
 	}
 
@@ -168,13 +172,13 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Ga
 	return gas, withCode(regs, CASH), mem, ctxPair, nil
 }
 
-// Upgrade ΩU (ξ, ω, μ, (X, Y))
+// Upgrade ΩU(ϱ, ω, μ, (x, y))
 func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < UpgradeCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= UpgradeCost
-	// let [o, gh, gl, mh, ml] = ω0..5
+	// let [o, gh, gl, mh, ml] = ω7...12
 	addr, gl, gh, ml, mh := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
 
 	// c = μo⋅⋅⋅+32 if No⋅⋅⋅+32 ⊂ Vμ otherwise ∇
@@ -190,15 +194,17 @@ func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair)
 	gasLimitTransfer := uint64(mh)<<32 | uint64(ml)
 
 	// (ω′7, (X′s)c, (X′s)g , (X′s)m) = (OK, c, g, m) if c ≠ ∇
-	ctxPair.RegularCtx.ServiceAccount.CodeHash = crypto.Hash(codeHash)
-	ctxPair.RegularCtx.ServiceAccount.GasLimitForAccumulator = gasLimitAccumulator
-	ctxPair.RegularCtx.ServiceAccount.GasLimitOnTransfer = gasLimitTransfer
+	currentService := ctxPair.RegularCtx.ServiceAccount()
+	currentService.CodeHash = crypto.Hash(codeHash)
+	currentService.GasLimitForAccumulator = gasLimitAccumulator
+	currentService.GasLimitOnTransfer = gasLimitTransfer
+	ctxPair.RegularCtx.ServiceState[ctxPair.RegularCtx.ServiceId] = currentService
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Transfer ΩT (ξ, ω, μ, (X, Y), s, δ)
-func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceIndex block.ServiceId, serviceState service.ServiceState) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	// let (d, al, ah, gl, gh, o) = ω0..6
+// Transfer ΩT(ϱ, ω, μ, (x, y))
+func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
+	// let (d, al, ah, gl, gh, o) = ω7..13
 	receiverId, al, ah, gl, gh, o := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4], regs[A5]
 
 	// let a = 2^32 ⋅ ah + al
@@ -221,24 +227,25 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 
 	// let t ∈ T = (s, d, a, m, g)
 	deferredTransfer := service.DeferredTransfer{
-		SenderServiceIndex:   serviceIndex,
+		SenderServiceIndex:   ctxPair.RegularCtx.ServiceId,
 		ReceiverServiceIndex: block.ServiceId(receiverId),
 		Balance:              newBalance,
 		Memo:                 service.Memo(m),
 		GasLimit:             gasLimit,
 	}
 
-	allServices := maps.Clone(serviceState)
-	maps.Copy(allServices, ctxPair.RegularCtx.ServicesState)
+	// let d = xd ∪ (xu)d
+	allServices := maps.Clone(ctxPair.RegularCtx.ServiceState)
+	maps.Copy(allServices, ctxPair.RegularCtx.AccumulationState.ServiceState)
 
-	service, ok := allServices[block.ServiceId(receiverId)]
+	receiverService, ok := allServices[block.ServiceId(receiverId)]
 	// if d !∈ K(δ ∪ xn)
 	if !ok {
 		return gas, withCode(regs, WHO), mem, ctxPair, nil
 	}
 
 	// if g < (δ ∪ xn)[d]m
-	if gasLimit < service.GasLimitOnTransfer {
+	if gasLimit < receiverService.GasLimitOnTransfer {
 		return gas, withCode(regs, LOW), mem, ctxPair, nil
 	}
 
@@ -249,7 +256,7 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 
 	// let b = (xs)b − a
 	// if b < (xs)t
-	if ctxPair.RegularCtx.ServiceAccount.Balance-newBalance < ctxPair.RegularCtx.ServiceAccount.ThresholdBalance() {
+	if ctxPair.RegularCtx.ServiceAccount().Balance-newBalance < ctxPair.RegularCtx.ServiceAccount().ThresholdBalance() {
 		return gas, withCode(regs, CASH), mem, ctxPair, nil
 	}
 
@@ -257,18 +264,18 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Quit ΩQ(ξ, ω, μ, (X, Y), s, δ)
-func Quit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceIndex block.ServiceId, serviceState service.ServiceState) (Gas, Registers, Memory, AccumulateContextPair, error) {
+// Quit ΩQ(ϱ, ω, μ, (x, y))
+func Quit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < QuitCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= QuitCost
 
-	// let [d, o] = ω0,1
+	// let [d, o] = ω7,8
 	receiverId, addr := regs[A0], regs[A1]
 
 	//let a = (xs)b − (xs)t + BS
-	newBalance := ctxPair.RegularCtx.ServiceAccount.Balance - ctxPair.RegularCtx.ServiceAccount.ThresholdBalance() + service.BasicMinimumBalance
+	newBalance := ctxPair.RegularCtx.ServiceAccount().Balance - ctxPair.RegularCtx.ServiceAccount().ThresholdBalance() + service.BasicMinimumBalance
 
 	//let g = ξ
 	gasLimit := uint64(gas)
@@ -280,29 +287,29 @@ func Quit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, se
 	}
 
 	// if d ∈ {s, 2^32 − 1}
-	if block.ServiceId(receiverId) == serviceIndex || receiverId == math.MaxUint32 {
-		// TODO v0.4.5 requires to remove the deferred transfer
+	if block.ServiceId(receiverId) == ctxPair.RegularCtx.ServiceId || receiverId == math.MaxUint32 {
+		delete(ctxPair.RegularCtx.AccumulationState.ServiceState, ctxPair.RegularCtx.ServiceId)
 		return gas, withCode(regs, OK), mem, ctxPair, ErrHalt
 	}
 	// let t ∈ T ≡ (s, d, a, m, g)
 	deferredTransfer := service.DeferredTransfer{
-		SenderServiceIndex:   serviceIndex,
+		SenderServiceIndex:   ctxPair.RegularCtx.ServiceId,
 		ReceiverServiceIndex: block.ServiceId(receiverId),
 		Balance:              newBalance,
 		Memo:                 service.Memo(memo),
 		GasLimit:             gasLimit,
 	}
-	allServices := maps.Clone(serviceState)
-	maps.Copy(allServices, ctxPair.RegularCtx.ServicesState)
+	// let d = xd ∪ (xu)d
+	allServices := maps.Clone(ctxPair.RegularCtx.ServiceState)
+	maps.Copy(allServices, ctxPair.RegularCtx.AccumulationState.ServiceState)
 
-	service, ok := allServices[block.ServiceId(receiverId)]
-	// if d !∈ K(δ ∪ xn)
+	receiverService, ok := allServices[block.ServiceId(receiverId)]
+	// if d !∈ K(d)
 	if !ok {
 		return gas, withCode(regs, WHO), mem, ctxPair, nil
 	}
-
-	//if g < (δ ∪ xn)[d]m
-	if gasLimit < service.GasLimitOnTransfer {
+	//if g < d[d]m
+	if gasLimit < receiverService.GasLimitOnTransfer {
 		return gas, withCode(regs, LOW), mem, ctxPair, nil
 	}
 
@@ -310,14 +317,14 @@ func Quit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, se
 	return gas, withCode(regs, OK), mem, ctxPair, ErrHalt
 }
 
-// Solicit ΩS (ξ, ω, μ, (X, Y), t)
+// Solicit ΩS(ϱ, ω, μ, (x, y), t)
 func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < SolicitCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= SolicitCost
 
-	// let [o, z] = ω0,1
+	// let [o, z] = ω7,8
 	addr, preimageLength := regs[A0], regs[A1]
 	// let h = μo⋅⋅⋅+32 if Zo⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	preimageHashBytes := make([]byte, 32)
@@ -326,7 +333,7 @@ func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	}
 
 	// let a = xs
-	serviceAccount := *ctxPair.RegularCtx.ServiceAccount
+	serviceAccount := ctxPair.RegularCtx.ServiceAccount()
 	preimageHash := crypto.Hash(preimageHashBytes)
 	// (h, z)
 	key := service.PreImageMetaKey{Hash: preimageHash, Length: service.PreimageLength(preimageLength)}
@@ -346,11 +353,11 @@ func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 		return gas, withCode(regs, FULL), mem, ctxPair, nil
 	}
 
-	ctxPair.RegularCtx.ServiceAccount = &serviceAccount
+	ctxPair.RegularCtx.ServiceState[ctxPair.RegularCtx.ServiceId] = serviceAccount
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Forget ΩF (ξ, ω, μ, (X, Y), Ht)
+// Forget ΩF(ϱ, ω, μ, (x, y), t)
 func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < ForgetCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -367,7 +374,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 	}
 
 	// let a = xs
-	serviceAccount := *ctxPair.RegularCtx.ServiceAccount
+	serviceAccount := ctxPair.RegularCtx.ServiceAccount()
 	preimageHash := crypto.Hash(preimageHashBytes)
 
 	// (h, z)
@@ -381,7 +388,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 		delete(serviceAccount.PreimageMeta, key)
 		delete(serviceAccount.PreimageLookup, preimageHash)
 
-		ctxPair.RegularCtx.ServiceAccount = &serviceAccount
+		ctxPair.RegularCtx.ServiceState[ctxPair.RegularCtx.ServiceId] = serviceAccount
 		return gas, withCode(regs, OK), mem, ctxPair, nil
 
 	case 2: // if (xs)l[h, z] ∈ {[], [X, Y]}, Y < t − D
@@ -392,7 +399,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 			delete(serviceAccount.PreimageMeta, key)
 			delete(serviceAccount.PreimageLookup, preimageHash)
 
-			ctxPair.RegularCtx.ServiceAccount = &serviceAccount
+			ctxPair.RegularCtx.ServiceState[ctxPair.RegularCtx.ServiceId] = serviceAccount
 			return gas, withCode(regs, OK), mem, ctxPair, nil
 		}
 
@@ -401,7 +408,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 		// except: al[h, z] = (xs)l[h, z] ++ t
 		serviceAccount.PreimageMeta[key] = append(serviceAccount.PreimageMeta[key], timeslot)
 
-		ctxPair.RegularCtx.ServiceAccount = &serviceAccount
+		ctxPair.RegularCtx.ServiceState[ctxPair.RegularCtx.ServiceId] = serviceAccount
 		return gas, withCode(regs, OK), mem, ctxPair, nil
 
 	case 3: // if (xs)l[h, z] = [X, Y, w]

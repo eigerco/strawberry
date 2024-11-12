@@ -2,6 +2,8 @@ package invocations
 
 import (
 	"errors"
+	"log"
+	"maps"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -16,48 +18,71 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-// InvokeAccumulate ΨA(δ†, s, g, o) Equation 255 the paper assumes access to the state and header variables while in go we also need to pass it explicitly as 'state' and 'header'
-func InvokeAccumulate(currentState state.State, header *block.Header, serviceState service.ServiceState, serviceIndex block.ServiceId, gas polkavm.Gas, accOperand []state.AccumulationOperand) (x polkavm.AccumulateContext, r *crypto.Hash, err error) {
-	s := serviceState[serviceIndex]
-	serviceCode := s.PreimageLookup[s.CodeHash]
-	serializer := serialization.NewSerializer(&codec.JAMCodec{})
+func NewAccumulator(state *state.State, header *block.Header) *Accumulator {
+	return &Accumulator{
+		header:     header,
+		state:      state,
+		serializer: serialization.NewSerializer(&codec.JAMCodec{}),
+	}
+}
 
-	// if δ†[s]c = ∅
-	if serviceCode == nil {
-		return newCtx(currentState, &s, 0), nil, nil
+type Accumulator struct {
+	header     *block.Header
+	state      *state.State
+	serializer *serialization.Serializer
+}
+
+// Invoke ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G) Equation 280
+func (a *Accumulator) Invoke(accState state.AccumulationState, serviceIndex block.ServiceId, gas polkavm.Gas, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, polkavm.Gas) {
+	// if d[s]c = ∅
+	if accState.ServiceState[serviceIndex].Code() == nil {
+		ctx, err := a.newCtx(accState, serviceIndex)
+		if err != nil {
+			log.Println("error creating context", "err", err)
+		}
+		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0
 	}
 
-	theNewServiceID, err := newServiceID(serializer, serviceIndex, currentState, header)
+	ctx, err := a.newCtx(accState, serviceIndex)
 	if err != nil {
-		return newCtx(currentState, &s, 0), nil, err
+		log.Println("error creating context", "err", err)
+		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0
 	}
-	// Equation 256: I (a ∈ A, s ∈ NS)
-	ctx := newCtx(currentState, &s, Check((theNewServiceID-(Bit8)+1)%(Bit32-Bit9)+Bit8, serviceState))
+
+	// I(u, s), I(u, s)
 	ctxPair := polkavm.AccumulateContextPair{
 		RegularCtx:     ctx,
 		ExceptionalCtx: ctx,
 	}
 
-	args, err := serializer.Encode(accOperand)
+	// E(↕o)
+	args, err := a.serializer.Encode(accOperand)
 	if err != nil {
-		return newCtx(currentState, &s, 0), nil, err
+		log.Println("error encoding arguments", "err", err)
+		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0
 	}
 
+	// F (equation 283)
 	hostCallFunc := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctx polkavm.AccumulateContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.AccumulateContextPair, error) {
+		// s
+		currentService := accState.ServiceState[serviceIndex]
 		var err error
 		switch hostCall {
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
+			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
 		case host_call.LookupID:
-			gasCounter, regs, mem, err = host_call.Lookup(gasCounter, regs, mem, s, serviceIndex, serviceState)
+			gasCounter, regs, mem, err = host_call.Lookup(gasCounter, regs, mem, currentService, serviceIndex, ctx.RegularCtx.AccumulationState.ServiceState)
+			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
 		case host_call.ReadID:
-			gasCounter, regs, mem, err = host_call.Read(gasCounter, regs, mem, s, serviceIndex, serviceState)
+			gasCounter, regs, mem, err = host_call.Read(gasCounter, regs, mem, currentService, serviceIndex, ctx.RegularCtx.AccumulationState.ServiceState)
+			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
 		case host_call.WriteID:
-			var s service.ServiceAccount
-			gasCounter, regs, mem, s, err = host_call.Write(gasCounter, regs, mem, s, serviceIndex)
-			ctx.RegularCtx.ServiceAccount = &s
+			gasCounter, regs, mem, currentService, err = host_call.Write(gasCounter, regs, mem, currentService, serviceIndex)
+			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
 		case host_call.InfoID:
-			gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, s, serviceIndex, serviceState)
+			gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, currentService, serviceIndex, ctx.RegularCtx.AccumulationState.ServiceState)
+			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
 		case host_call.EmpowerID:
 			gasCounter, regs, mem, ctx, err = host_call.Empower(gasCounter, regs, mem, ctx)
 		case host_call.AssignID:
@@ -71,13 +96,13 @@ func InvokeAccumulate(currentState state.State, header *block.Header, serviceSta
 		case host_call.UpgradeID:
 			gasCounter, regs, mem, ctx, err = host_call.Upgrade(gasCounter, regs, mem, ctx)
 		case host_call.TransferID:
-			gasCounter, regs, mem, ctx, err = host_call.Transfer(gasCounter, regs, mem, ctx, serviceIndex, serviceState)
+			gasCounter, regs, mem, ctx, err = host_call.Transfer(gasCounter, regs, mem, ctx)
 		case host_call.QuitID:
-			gasCounter, regs, mem, ctx, err = host_call.Quit(gasCounter, regs, mem, ctx, serviceIndex, serviceState)
+			gasCounter, regs, mem, ctx, err = host_call.Quit(gasCounter, regs, mem, ctx)
 		case host_call.SolicitID:
-			gasCounter, regs, mem, ctx, err = host_call.Solicit(gasCounter, regs, mem, ctx, header.TimeSlotIndex)
+			gasCounter, regs, mem, ctx, err = host_call.Solicit(gasCounter, regs, mem, ctx, a.header.TimeSlotIndex)
 		case host_call.ForgetID:
-			gasCounter, regs, mem, ctx, err = host_call.Forget(gasCounter, regs, mem, ctx, header.TimeSlotIndex)
+			gasCounter, regs, mem, ctx, err = host_call.Forget(gasCounter, regs, mem, ctx, a.header.TimeSlotIndex)
 		default:
 			regs[polkavm.A0] = uint32(host_call.WHAT)
 			gasCounter -= AccumulateCost
@@ -86,51 +111,65 @@ func InvokeAccumulate(currentState state.State, header *block.Header, serviceSta
 	}
 
 	var ret []byte
-	_, ret, ctxPair, err = interpreter.InvokeWholeProgram(serviceCode, 10, gas, args, hostCallFunc, ctxPair)
+	_, ret, ctxPair, err = interpreter.InvokeWholeProgram(accState.ServiceState[serviceIndex].Code(), 10, gas, args, hostCallFunc, ctxPair)
 	if err != nil {
 		errPanic := &polkavm.ErrPanic{}
 		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {
-			return ctxPair.ExceptionalCtx, nil, nil
+			return ctxPair.ExceptionalCtx.AccumulationState, ctxPair.ExceptionalCtx.DeferredTransfers, nil, gas
 		}
-		return ctxPair.ExceptionalCtx, nil, err
+		return ctxPair.ExceptionalCtx.AccumulationState, ctxPair.ExceptionalCtx.DeferredTransfers, nil, gas
 	}
-	// if accOperand ∈ Y ∖ H. There is no sure way to check that a byte array is a hash
+	// if o ∈ Y ∖ H. There is no sure way to check that a byte array is a hash
 	// one way would be to check the shannon entropy but this also not a guarantee, so we just limit to checking the size
 	if len(ret) == crypto.HashSize {
 		h := crypto.Hash(ret)
-		return ctxPair.RegularCtx, &h, nil
+		return ctxPair.RegularCtx.AccumulationState, ctxPair.RegularCtx.DeferredTransfers, &h, gas
 	}
 
-	return ctxPair.RegularCtx, nil, nil
+	return ctxPair.RegularCtx.AccumulationState, ctxPair.RegularCtx.DeferredTransfers, nil, gas
 }
 
-func newCtx(currentState state.State, serviceAccount *service.ServiceAccount, serviceIndex block.ServiceId) polkavm.AccumulateContext {
-	return polkavm.AccumulateContext{
-		ServiceAccount:      serviceAccount,
-		AuthorizationsQueue: currentState.PendingAuthorizersQueues,
-		ValidatorKeys:       currentState.ValidatorState.QueuedValidators,
-		ServiceID:           serviceIndex,
-		DeferredTransfers:   []service.DeferredTransfer{},
-		ServicesState:       make(service.ServiceState),
-		PrivilegedServices:  currentState.PrivilegedServices,
+// newCtx (281)
+func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.ServiceId) (polkavm.AccumulateContext, error) {
+	serviceState := maps.Clone(u.ServiceState)
+	delete(serviceState, serviceIndex)
+	ctx := polkavm.AccumulateContext{
+		ServiceState: serviceState,
+		ServiceId:    serviceIndex,
+		AccumulationState: state.AccumulationState{
+			ServiceState: map[block.ServiceId]service.ServiceAccount{
+				serviceIndex: u.ServiceState[serviceIndex],
+			},
+			ValidatorKeys:      u.ValidatorKeys,
+			WorkReportsQueue:   u.WorkReportsQueue,
+			PrivilegedServices: u.PrivilegedServices,
+		},
+		DeferredTransfers: []service.DeferredTransfer{},
 	}
+
+	newServiceID, err := a.newServiceID(serviceIndex)
+	if err != nil {
+		return polkavm.AccumulateContext{}, err
+	}
+	ctx.NewServiceId = Check((newServiceID-(Bit8)+1)%(Bit32-Bit9)+Bit8, u.ServiceState)
+	return ctx, nil
 }
 
-func newServiceID(serializer *serialization.Serializer, serviceIndex block.ServiceId, currentState state.State, header *block.Header) (block.ServiceId, error) {
+func (a *Accumulator) newServiceID(serviceIndex block.ServiceId) (block.ServiceId, error) {
 	var hashBytes []byte
-	bb, err := serializer.Encode(serviceIndex)
+	bb, err := a.serializer.Encode(serviceIndex)
 	if err != nil {
 		return 0, err
 	}
 	hashBytes = append(hashBytes, bb...)
 
-	bb, err = serializer.Encode(currentState.EntropyPool[0])
+	bb, err = a.serializer.Encode(a.state.EntropyPool[0])
 	if err != nil {
 		return 0, err
 	}
 	hashBytes = append(hashBytes, bb...)
 
-	bb, err = serializer.Encode(header.TimeSlotIndex)
+	bb, err = a.serializer.Encode(a.header.TimeSlotIndex)
 	if err != nil {
 		return 0, err
 	}
