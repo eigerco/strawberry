@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"sync"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -952,10 +953,10 @@ func calculateGasAllocations(
 	}
 
 	// Calculate remaining gas after minimum allocations
-	if totalMinGas >= service.MaximumAccumulationGas {
+	if totalMinGas >= service.CoreGasAccumulation {
 		return allocations
 	}
-	remainingGas := service.MaximumAccumulationGas - totalMinGas
+	remainingGas := service.CoreGasAccumulation - totalMinGas
 
 	// Calculate sum of gas ratios for all work results
 	totalGasRatios := uint64(0)
@@ -1088,4 +1089,290 @@ func calculateNewValidatorStatistics(block block.Block, currentTime jamtime.Time
 	}
 
 	return newStats
+}
+
+// ServiceHashPairs (176) B ≡ {(NS , H)}
+type ServiceHashPairs []ServiceHashPair
+
+type ServiceHashPair struct {
+	ServiceId block.ServiceId
+	Hash      crypto.Hash
+}
+
+// SequentialDelta implements equation 177 (∆+)
+func SequentialDelta(
+	gasLimit uint64,
+	workReports []block.WorkReport,
+	ctx state.AccumulationState,
+	privileged service.PrivilegedServices,
+) (
+	uint32,
+	state.AccumulationState,
+	[]service.DeferredTransfer,
+	ServiceHashPairs,
+	error,
+) {
+	// If no work reports, return early
+	if len(workReports) == 0 {
+		return 0, ctx, nil, ServiceHashPairs{}, nil
+	}
+
+	// Calculate i = max(N|w|+1) : ∑w∈w...i∑r∈wr(rg) ≤ g
+	maxReports := 0
+	totalGas := uint64(0)
+
+	// Sum up gas requirements until we exceed limit
+	for i, report := range workReports {
+		reportGas := uint64(0)
+		for _, result := range report.WorkResults {
+			reportGas += result.GasPrioritizationRatio
+		}
+
+		if totalGas+reportGas > gasLimit {
+			break
+		}
+
+		totalGas += reportGas
+		maxReports = i + 1
+	}
+
+	// If no reports can be processed, return early
+	if maxReports == 0 {
+		return 0, ctx, nil, ServiceHashPairs{}, nil
+	}
+
+	// Process maxReports using ParallelDelta (∆*)
+	gasUsed, newCtx, transfers, hashPairs, err := ParallelDelta(
+		ctx,
+		workReports[:maxReports],
+		privileged,
+	)
+	if err != nil {
+		return 0, ctx, nil, nil, fmt.Errorf("parallel processing failed: %w", err)
+	}
+
+	// If we have remaining reports and gas, process recursively (∆+)
+	if maxReports < len(workReports) {
+		remainingGas := gasLimit - gasUsed
+		if remainingGas > 0 {
+			moreItems, finalCtx, moreTransfers, moreHashPairs, err := SequentialDelta(
+				remainingGas,
+				workReports[maxReports:],
+				newCtx,
+				privileged,
+			)
+			if err != nil {
+				return uint32(maxReports), newCtx, transfers, hashPairs, nil
+			}
+
+			return uint32(maxReports) + moreItems,
+				finalCtx,
+				append(transfers, moreTransfers...),
+				append(hashPairs, moreHashPairs...),
+				nil
+		}
+	}
+
+	return uint32(maxReports), newCtx, transfers, hashPairs, nil
+}
+
+// ParallelDelta implements equation 178 (∆*)
+func ParallelDelta(
+	ctx state.AccumulationState,
+	workReports []block.WorkReport,
+	privileged service.PrivilegedServices,
+) (
+	uint64, // total gas used
+	state.AccumulationState, // updated context
+	[]service.DeferredTransfer, // all transfers
+	ServiceHashPairs, // accumulation outputs
+	error,
+) {
+	// Get all unique service indices involved (s)
+	serviceIndices := make(map[block.ServiceId]struct{})
+
+	// From work reports
+	for _, report := range workReports {
+		for _, result := range report.WorkResults {
+			serviceIndices[result.ServiceId] = struct{}{}
+		}
+	}
+
+	// From privileged gas assignments
+	for svcId := range privileged.AmountOfGasPerServiceId {
+		serviceIndices[svcId] = struct{}{}
+	}
+
+	var totalGasUsed uint64
+	var allTransfers []service.DeferredTransfer
+	accumHashPairs := make(ServiceHashPairs, 0)
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	var firstError error
+
+	for svcId := range serviceIndices {
+		wg.Add(1)
+		go func(serviceId block.ServiceId) {
+			defer wg.Done()
+
+			// Process single service using Delta1
+			result, gasUsed, err := Delta1(&ctx, workReports, privileged.AmountOfGasPerServiceId, serviceId)
+			if err != nil {
+				mu.Lock()
+				if firstError == nil {
+					firstError = fmt.Errorf("service %d processing failed: %w", serviceId, err)
+				}
+				mu.Unlock()
+				return
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			// Update total gas used
+			totalGasUsed += gasUsed
+
+			// Collect transfers
+			if len(result.DeferredTransfers) > 0 {
+				allTransfers = append(allTransfers, result.DeferredTransfers...)
+			}
+
+			// Store accumulation result if present
+			if result.AccumulationRoot != nil {
+				accumHashPairs = append(accumHashPairs, ServiceHashPair{
+					ServiceId: serviceId,
+					Hash:      *result.AccumulationRoot,
+				})
+			}
+
+			// Update state context components
+			if result.ServiceState != nil {
+				if ctx.ServiceState == nil {
+					ctx.ServiceState = make(service.ServiceState)
+				}
+				ctx.ServiceState[serviceId] = *result.ServiceState
+			}
+
+			// Update validator keys if needed
+			if len(result.ValidatorUpdates) > 0 {
+				ctx.ValidatorKeys = result.ValidatorUpdates
+			}
+
+			// Update work reports queue
+			for coreIdx := range result.CoreAssignments {
+				copy(ctx.WorkReportsQueue[coreIdx][:], result.CoreAssignments[coreIdx][:])
+			}
+
+			// Update privileged services
+			if result.PrivilegedUpdates.ManagerServiceId != 0 {
+				ctx.PrivilegedServices.ManagerServiceId = result.PrivilegedUpdates.ManagerServiceId
+			}
+			if result.PrivilegedUpdates.AssignServiceId != 0 {
+				ctx.PrivilegedServices.AssignServiceId = result.PrivilegedUpdates.AssignServiceId
+			}
+			if result.PrivilegedUpdates.DesignateServiceId != 0 {
+				ctx.PrivilegedServices.DesignateServiceId = result.PrivilegedUpdates.DesignateServiceId
+			}
+			if len(result.PrivilegedUpdates.GasAssignments) > 0 {
+				if ctx.PrivilegedServices.AmountOfGasPerServiceId == nil {
+					ctx.PrivilegedServices.AmountOfGasPerServiceId = make(map[block.ServiceId]uint64)
+				}
+				for svcId, gas := range result.PrivilegedUpdates.GasAssignments {
+					ctx.PrivilegedServices.AmountOfGasPerServiceId[svcId] = gas
+				}
+			}
+
+		}(svcId)
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+
+	if firstError != nil {
+		return 0, ctx, nil, nil, firstError
+	}
+
+	// Sort accumulation pairs by service ID to ensure deterministic output
+	sort.Slice(accumHashPairs, func(i, j int) bool {
+		return accumHashPairs[i].ServiceId < accumHashPairs[j].ServiceId
+	})
+
+	return totalGasUsed, ctx, allTransfers, accumHashPairs, nil
+}
+
+// Delta1 implements equation 180 (∆1)
+func Delta1(
+	ctx *state.AccumulationState,
+	workReports []block.WorkReport,
+	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
+	serviceIndex block.ServiceId, // NS
+) (*state.AccumulationResult, uint64, error) {
+	// Calculate gas limit (g)
+	gasLimit := uint64(0)
+	if gas, exists := privilegedGas[serviceIndex]; exists {
+		gasLimit = gas
+	}
+
+	// Add gas from all relevant work items for this service
+	for _, report := range workReports {
+		for _, result := range report.WorkResults {
+			if result.ServiceId == serviceIndex {
+				gasLimit += result.GasPrioritizationRatio
+			}
+		}
+	}
+
+	// Collect work item operands (p)
+	var operands []state.AccumulationOperand
+	for _, report := range workReports {
+		for _, result := range report.WorkResults {
+			if result.ServiceId == serviceIndex {
+				operand := state.AccumulationOperand{
+					Output:              result.Output,
+					PayloadHash:         result.PayloadHash,
+					WorkPackageHash:     report.WorkPackageSpecification.WorkPackageHash,
+					AuthorizationOutput: report.Output,
+				}
+				operands = append(operands, operand)
+			}
+		}
+	}
+
+	// Ensure all service code hashes match
+	var expectedCodeHash *crypto.Hash
+	for _, report := range workReports {
+		for _, result := range report.WorkResults {
+			if result.ServiceId == serviceIndex {
+				if expectedCodeHash == nil {
+					expectedCodeHash = &result.ServiceHashCode
+				} else if *expectedCodeHash != result.ServiceHashCode {
+					return nil, 0, fmt.Errorf("inconsistent service code hash for service %d", serviceIndex)
+				}
+			}
+		}
+	}
+
+	// Invoke VM for accumulation (ΨA)
+	result, gasUsed, err := InvokeAccumulate(
+		ctx,
+		serviceIndex,
+		gasLimit,
+		operands,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("VM invocation failed: %w", err)
+	}
+
+	return result, gasUsed, nil
+}
+
+// TODO Implement InvokeAccumulate
+func InvokeAccumulate(
+	ctx *state.AccumulationState,
+	serviceIndex block.ServiceId,
+	gasLimit uint64,
+	operands []state.AccumulationOperand,
+) (*state.AccumulationResult, uint64, error) {
+	return nil, 0, nil
 }
