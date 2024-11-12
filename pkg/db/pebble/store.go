@@ -1,82 +1,76 @@
-package kv_store
+package pebble
 
 import (
+	"errors"
+	"fmt"
 	"github.com/cockroachdb/pebble"
-	"sync"
+	"github.com/cockroachdb/pebble/vfs"
+	"sync/atomic"
 )
 
-type PebbleStore struct {
+type KVStore struct {
 	db     *pebble.DB
-	closed bool
-	mu     sync.RWMutex
+	closed atomic.Bool
 }
 
-func NewPebbleStore(path string) (*PebbleStore, error) {
+// NewKVStore initializes a new in-memory key-value store using Pebble.
+func NewKVStore() (*KVStore, error) {
 	opts := &pebble.Options{
-		Cache:            pebble.NewCache(64 * 1024 * 1024), // 64MB
-		MemTableSize:     32 * 1024 * 1024,                  // 32MB
-		MaxMemTableTotal: 128 * 1024 * 1024,                 // 128MB
+		FS:                          vfs.NewMem(), // Use in-memory filesystem
+		Cache:                       pebble.NewCache(64 * 1024 * 1024),
+		MemTableSize:                32 * 1024 * 1024,
+		MemTableStopWritesThreshold: 4,
 	}
 
-	db, err := pebble.Open(path, opts)
+	db, err := pebble.Open("", opts) // Empty string for path when using in-memory FS
 	if err != nil {
 		return nil, err
 	}
 
-	return &PebbleStore{db: db}, nil
+	return &KVStore{db: db}, nil
 }
 
-func (p *PebbleStore) Get(key []byte) ([]byte, error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	if p.closed {
+func (p *KVStore) Get(key []byte) ([]byte, error) {
+	if p.closed.Load() {
 		return nil, ErrClosed
 	}
 
 	value, closer, err := p.db.Get(key)
-	if err == pebble.ErrNotFound {
-		return nil, ErrNotFound
-	}
 	if err != nil {
-		return nil, err
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("pebble get failed: %w", err)
 	}
-	defer closer.Close()
 
+	// Make a copy of the value since it's only valid while closer is open
 	result := make([]byte, len(value))
 	copy(result, value)
+
+	if err := closer.Close(); err != nil {
+		return result, nil
+	}
+
 	return result, nil
 }
 
-func (p *PebbleStore) Put(key, value []byte) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.closed {
+func (p *KVStore) Put(key, value []byte) error {
+	if p.closed.Load() {
 		return ErrClosed
 	}
-
 	return p.db.Set(key, value, pebble.Sync)
 }
 
-func (p *PebbleStore) Delete(key []byte) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.closed {
+func (p *KVStore) Delete(key []byte) error {
+	if p.closed.Load() {
 		return ErrClosed
 	}
-
 	return p.db.Delete(key, pebble.Sync)
 }
 
-func (p *PebbleStore) Close() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.closed {
+func (p *KVStore) Close() error {
+	if !p.closed.CompareAndSwap(false, true) {
 		return nil
 	}
-	p.closed = true
 	return p.db.Close()
 }

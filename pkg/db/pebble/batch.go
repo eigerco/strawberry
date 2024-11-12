@@ -1,41 +1,50 @@
-package kv_store
+package pebble
 
 import (
 	"github.com/cockroachdb/pebble"
-	"sync"
+	"github.com/eigerco/strawberry/pkg/db"
+	"sync/atomic"
 )
 
-type PebbleBatch struct {
+type Batch struct {
 	batch *pebble.Batch
-	mu    sync.Mutex
+	done  atomic.Bool
 }
 
-func (p *PebbleStore) NewBatch() Batch {
-	return &PebbleBatch{
+func (p *KVStore) NewBatch() db.Batch {
+	return &Batch{
 		batch: p.db.NewBatch(),
 	}
 }
 
-func (b *PebbleBatch) Put(key, value []byte) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (b *Batch) Put(key, value []byte) error {
+	if b.done.Load() {
+		return ErrBatchDone
+	}
 	return b.batch.Set(key, value, nil)
 }
 
-func (b *PebbleBatch) Delete(key []byte) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (b *Batch) Delete(key []byte) error {
+	if b.done.Load() {
+		return ErrBatchDone
+	}
 	return b.batch.Delete(key, nil)
 }
 
-func (b *PebbleBatch) Commit() error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.batch.Commit(pebble.Sync)
+func (b *Batch) Commit() error {
+	if b.done.Load() {
+		return ErrBatchDone
+	}
+	if err := b.batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	b.done.Store(true)
+	return nil
 }
 
-func (b *PebbleBatch) Close() error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (b *Batch) Close() error {
+	if !b.done.CompareAndSwap(false, true) {
+		return nil
+	}
 	return b.batch.Close()
 }

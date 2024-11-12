@@ -1,42 +1,61 @@
-package kv_store
+package pebble
 
-import "github.com/cockroachdb/pebble"
+import (
+	"fmt"
+	"github.com/cockroachdb/pebble"
+	"github.com/eigerco/strawberry/pkg/db"
+)
 
-type PebbleIterator struct {
+type Iterator struct {
 	iter *pebble.Iterator
 }
 
-func (p *PebbleStore) NewIterator(start, end []byte) Iterator {
-	return &PebbleIterator{
-		iter: p.db.NewIter(&pebble.IterOptions{
-			LowerBound: start,
-			UpperBound: end,
-		}),
+func (p *KVStore) NewIterator(start, end []byte) (db.Iterator, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: start,
+		UpperBound: end,
+	})
+	if err != nil {
+		return nil, fmt.Errorf(ErrInIteratorCreation, err)
 	}
+	return &Iterator{iter: iter}, nil
 }
 
-func (it *PebbleIterator) Next() bool {
+func (it *Iterator) Next() bool {
+	// If the iterator is un-positioned, position it at the first key
+	if !it.iter.Valid() {
+		return it.iter.First()
+	}
+	// Otherwise, move to the next key
 	return it.iter.Next()
 }
 
-func (it *PebbleIterator) Key() []byte {
+func (it *Iterator) Key() []byte {
 	key := it.iter.Key()
 	result := make([]byte, len(key))
 	copy(result, key)
 	return result
 }
 
-func (it *PebbleIterator) Value() []byte {
-	val := it.iter.Value()
+func (it *Iterator) Value() ([]byte, error) {
+	if !it.iter.Valid() {
+		return nil, ErrIteratorInvalid
+	}
+
+	val, err := it.iter.ValueAndErr()
+	if err != nil {
+		return nil, fmt.Errorf(ErrIteratorValue, err)
+	}
+
 	result := make([]byte, len(val))
 	copy(result, val)
-	return result
+	return result, nil
 }
 
-func (it *PebbleIterator) Valid() bool {
+func (it *Iterator) Valid() bool {
 	return it.iter.Valid()
 }
 
-func (it *PebbleIterator) Close() error {
+func (it *Iterator) Close() error {
 	return it.iter.Close()
 }
