@@ -28,8 +28,12 @@ type ServiceAccount struct {
 	GasLimitOnTransfer     uint64                                          // Gas limit for on_transfer (m)
 }
 
+func (sa ServiceAccount) Code() []byte {
+	return sa.PreimageLookup[sa.CodeHash]
+}
+
 // TotalItems (94) ∀a ∈ V(δ): ai
-func (sa *ServiceAccount) TotalItems() uint32 {
+func (sa ServiceAccount) TotalItems() uint32 {
 	totalPreimages := len(sa.PreimageLookup)
 	totalStorageItems := len(sa.Storage)
 	ai := 2*totalPreimages + totalStorageItems
@@ -38,7 +42,7 @@ func (sa *ServiceAccount) TotalItems() uint32 {
 }
 
 // TotalStorageSize (94) ∀a ∈ V(δ): al
-func (sa *ServiceAccount) TotalStorageSize() uint64 {
+func (sa ServiceAccount) TotalStorageSize() uint64 {
 	var al uint64 = 0
 
 	// PreimageLookup sizes
@@ -57,7 +61,7 @@ func (sa *ServiceAccount) TotalStorageSize() uint64 {
 }
 
 // ThresholdBalance (94) ∀a ∈ V(δ): at
-func (sa *ServiceAccount) ThresholdBalance() uint64 {
+func (sa ServiceAccount) ThresholdBalance() uint64 {
 	ai := uint64(sa.TotalItems())
 	al := sa.TotalStorageSize()
 

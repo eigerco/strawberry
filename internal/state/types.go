@@ -39,8 +39,8 @@ type AccumulationQueue [jamtime.TimeslotsPerEpoch][]WorkReportWithUnAccumulatedD
 
 type AccumulationHistory [jamtime.TimeslotsPerEpoch]map[crypto.Hash]struct{} // (equation 162 v0.4.5)
 
-// AccumulationStateContext characterization of state components (equation 174 v0.4.5)
-type AccumulationStateContext struct {
+// AccumulationState characterization of state components (equation 174 v0.4.5)
+type AccumulationState struct {
 	ServiceState       service.ServiceState                                                // Service accounts δ (d ∈ D⟨NS → A⟩)
 	ValidatorKeys      safrole.ValidatorsData                                              // Validator keys ι (i ∈ ⟦K⟧V)
 	WorkReportsQueue   [common.TotalNumberOfCores][PendingAuthorizersQueueSize]crypto.Hash // Queue of work-reports (q ∈ C⟦H⟧QHC)

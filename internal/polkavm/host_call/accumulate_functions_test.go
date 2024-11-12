@@ -38,20 +38,19 @@ func TestAccumulate(t *testing.T) {
 	authHashes := generate(t, testutils.RandomHash, state.PendingAuthorizersQueueSize)
 	validatorKeys := generate(t, testutils.RandomValidatorKey, common.NumberOfValidators)
 	checkpointCtx := AccumulateContext{
-		ServiceAccount: nil,
-		AuthorizationsQueue: state.PendingAuthorizersQueues{
-			0: [state.PendingAuthorizersQueueSize]crypto.Hash(
-				generate(t, testutils.RandomHash, state.PendingAuthorizersQueueSize),
-			),
+		AccumulationState: state.AccumulationState{
+			WorkReportsQueue: state.PendingAuthorizersQueues{
+				0: [state.PendingAuthorizersQueueSize]crypto.Hash(
+					generate(t, testutils.RandomHash, state.PendingAuthorizersQueueSize),
+				),
+			},
+			ValidatorKeys:      safrole.ValidatorsData(generate(t, testutils.RandomValidatorKey, common.NumberOfValidators)),
+			PrivilegedServices: service.PrivilegedServices{},
 		},
-		ValidatorKeys:      safrole.ValidatorsData(generate(t, testutils.RandomValidatorKey, common.NumberOfValidators)),
-		ServiceID:          123,
-		DeferredTransfers:  nil,
-		ServicesState:      nil,
-		PrivilegedServices: service.PrivilegedServices{},
+		ServiceId: 123,
 	}
-	var oldServiceID block.ServiceId = 123123
-	var newServiceID = pvmutil.Check(pvmutil.Bump(oldServiceID), make(service.ServiceState))
+	var currentServiceID block.ServiceId = 123123
+	var newServiceID block.ServiceId = 123124
 	randomHash := testutils.RandomHash(t)
 	randomHash2 := testutils.RandomHash(t)
 	randomTimeslot1 := testutils.RandomTimeslot()
@@ -65,10 +64,9 @@ func TestAccumulate(t *testing.T) {
 		initialGas  Gas
 		fn          hostCall
 
-		serviceId block.ServiceId
-		timeslot  jamtime.Timeslot
-		X         AccumulateContext
-		Y         AccumulateContext
+		timeslot jamtime.Timeslot
+		X        AccumulateContext
+		Y        AccumulateContext
 
 		expectedDeltaRegs deltaRegs
 		expectedGas       Gas
@@ -102,14 +100,16 @@ func TestAccumulate(t *testing.T) {
 			initialGas:  100,
 			expectedGas: 88,
 			expectedX: AccumulateContext{
-				PrivilegedServices: service.PrivilegedServices{
-					ManagerServiceId:   111,
-					AssignServiceId:    222,
-					DesignateServiceId: 333,
-					AmountOfGasPerServiceId: map[block.ServiceId]uint64{
-						123: 12341234,
-						234: 23452345,
-						345: 34563456,
+				AccumulationState: state.AccumulationState{
+					PrivilegedServices: service.PrivilegedServices{
+						ManagerServiceId:   111,
+						AssignServiceId:    222,
+						DesignateServiceId: 333,
+						AmountOfGasPerServiceId: map[block.ServiceId]uint64{
+							123: 12341234,
+							234: 23452345,
+							345: 34563456,
+						},
 					},
 				},
 			},
@@ -128,8 +128,10 @@ func TestAccumulate(t *testing.T) {
 				A0: uint32(OK),
 			},
 			expectedX: AccumulateContext{
-				AuthorizationsQueue: state.PendingAuthorizersQueues{
-					1: [state.PendingAuthorizersQueueSize]crypto.Hash(authHashes),
+				AccumulationState: state.AccumulationState{
+					WorkReportsQueue: state.PendingAuthorizersQueues{
+						1: [state.PendingAuthorizersQueueSize]crypto.Hash(authHashes),
+					},
 				},
 			},
 		}, {
@@ -145,7 +147,9 @@ func TestAccumulate(t *testing.T) {
 				A0: uint32(OK),
 			},
 			expectedX: AccumulateContext{
-				ValidatorKeys: safrole.ValidatorsData(validatorKeys),
+				AccumulationState: state.AccumulationState{
+					ValidatorKeys: safrole.ValidatorsData(validatorKeys),
+				},
 			},
 		}, {
 			name:              "checkpoint",
@@ -168,33 +172,43 @@ func TestAccumulate(t *testing.T) {
 				storeUint64(756846353, A4, A5),
 			),
 			expectedDeltaRegs: deltaRegs{
-				A0: uint32(newServiceID),
+				A0: uint32(currentServiceID),
 			},
 			initialGas:  100,
 			expectedGas: 88,
 			X: AccumulateContext{
-				ServiceID: oldServiceID,
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 123123123,
-				},
-				ServicesState: service.ServiceState{},
-			},
-			expectedX: AccumulateContext{
-				ServicesState: service.ServiceState{
-					newServiceID: service.ServiceAccount{
-						Storage: make(map[crypto.Hash][]byte),
-						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-							{Hash: randomHash, Length: service.PreimageLength(123123)}: {},
-						},
-						CodeHash:               randomHash,
-						GasLimitForAccumulator: 123124123,
-						GasLimitOnTransfer:     756846353,
-						Balance:                100, // balance of the new service
+				ServiceId:    currentServiceID,
+				NewServiceId: newServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance: 123123123,
 					},
 				},
-				ServiceID: pvmutil.Check(pvmutil.Bump(oldServiceID), make(service.ServiceState)),
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 123123123 - 100, // initial balance minus balance of the new service
+				AccumulationState: state.AccumulationState{
+					ServiceState: make(service.ServiceState),
+				},
+			},
+			expectedX: AccumulateContext{
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						pvmutil.Check(pvmutil.Bump(newServiceID), make(service.ServiceState)): {
+							Storage: make(map[crypto.Hash][]byte),
+							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+								{Hash: randomHash, Length: service.PreimageLength(123123)}: {},
+							},
+							CodeHash:               randomHash,
+							GasLimitForAccumulator: 123124123,
+							GasLimitOnTransfer:     756846353,
+							Balance:                100, // balance of the new service
+						},
+					},
+				},
+				NewServiceId: newServiceID,
+				ServiceId:    pvmutil.Check(pvmutil.Bump(newServiceID), make(service.ServiceState)),
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance: 123123123 - 100, // initial balance minus balance of the new service
+					},
 				},
 			},
 		}, {
@@ -212,17 +226,21 @@ func TestAccumulate(t *testing.T) {
 			},
 			initialGas:  100,
 			expectedGas: 88,
-			X:           AccumulateContext{ServiceAccount: &service.ServiceAccount{}},
+			X: AccumulateContext{
+				ServiceId:    currentServiceID,
+				ServiceState: service.ServiceState{currentServiceID: {}},
+			},
 			expectedX: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{currentServiceID: {
 					CodeHash:               randomHash,
 					GasLimitForAccumulator: 345345345345,
 					GasLimitOnTransfer:     456456456456,
-				},
+				}},
 			},
 		}, {
 			name: "transfer",
-			fn:   fnSvc(Transfer),
+			fn:   fnStd(Transfer),
 			alloc: alloc{
 				A5: fixedSizeBytes(service.TransferMemoSizeBytes, []byte("memo message")),
 			},
@@ -236,27 +254,36 @@ func TestAccumulate(t *testing.T) {
 			expectedDeltaRegs: deltaRegs{
 				A0: uint32(OK),
 			},
-			serviceId:   block.ServiceId(123123123),
 			initialGas:  100000000100,
 			expectedGas: 88,
 			X: AccumulateContext{
-				ServicesState: service.ServiceState{
-					1234: {
-						GasLimitOnTransfer: 1,
+				ServiceId: block.ServiceId(123123123),
+				ServiceState: service.ServiceState{
+					block.ServiceId(123123123): {
+						Balance: 100000000100,
 					},
 				},
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 100000000100,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						1234: {
+							GasLimitOnTransfer: 1,
+						},
+					},
 				},
 			},
 			expectedX: AccumulateContext{
-				ServicesState: service.ServiceState{
-					1234: {
-						GasLimitOnTransfer: 1,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						1234: {
+							GasLimitOnTransfer: 1,
+						},
 					},
 				},
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 100000000100,
+				ServiceId: block.ServiceId(123123123),
+				ServiceState: service.ServiceState{
+					block.ServiceId(123123123): {
+						Balance: 100000000100,
+					},
 				},
 				DeferredTransfers: []service.DeferredTransfer{{
 					SenderServiceIndex:   block.ServiceId(123123123),
@@ -268,7 +295,7 @@ func TestAccumulate(t *testing.T) {
 			},
 		}, {
 			name: "quit",
-			fn:   fnSvc(Quit),
+			fn:   fnStd(Quit),
 			alloc: alloc{
 				A1: fixedSizeBytes(service.TransferMemoSizeBytes, []byte("memo message 2")),
 			},
@@ -278,28 +305,37 @@ func TestAccumulate(t *testing.T) {
 			expectedDeltaRegs: deltaRegs{
 				A0: uint32(OK),
 			},
-			serviceId:   block.ServiceId(123123123),
 			initialGas:  100,
 			expectedGas: 88,
 			X: AccumulateContext{
-				ServicesState: service.ServiceState{
-					1234: {
-						GasLimitOnTransfer: 1,
+				ServiceId: block.ServiceId(123123123),
+				ServiceState: service.ServiceState{
+					block.ServiceId(123123123): {
+						Balance: 100,
 					},
 				},
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 100,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						1234: {
+							GasLimitOnTransfer: 1,
+						},
+					},
 				},
 			},
 			err: ErrHalt,
 			expectedX: AccumulateContext{
-				ServicesState: service.ServiceState{
-					1234: {
-						GasLimitOnTransfer: 1,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						1234: {
+							GasLimitOnTransfer: 1,
+						},
 					},
 				},
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 100,
+				ServiceId: block.ServiceId(123123123),
+				ServiceState: service.ServiceState{
+					block.ServiceId(123123123): {
+						Balance: 100,
+					},
 				},
 				DeferredTransfers: []service.DeferredTransfer{{
 					SenderServiceIndex:   block.ServiceId(123123123),
@@ -321,16 +357,22 @@ func TestAccumulate(t *testing.T) {
 			timeslot:   jamtime.Timeslot(1000),
 			initialGas: 10, // Less than SolicitCost
 			X: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					Balance:      200,
-					PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance:      200,
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
+					},
 				},
 			},
 			expectedGas: 8, // Gas gets decremented by fixed amount (2) when processing instructions even on error
 			expectedX: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					Balance:      200,
-					PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance:      200,
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
+					},
 				},
 			},
 			err: ErrOutOfGas,
@@ -350,16 +392,22 @@ func TestAccumulate(t *testing.T) {
 				A0: uint32(OK),
 			},
 			X: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					Balance:      200,
-					PreimageMeta: make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance:      200,
+						PreimageMeta: make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
+					},
 				},
 			},
 			expectedX: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 200,
-					PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-						{Hash: randomHash, Length: service.PreimageLength(256)}: {},
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance: 200,
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: service.PreimageLength(256)}: {},
+						},
 					},
 				},
 			},
@@ -379,18 +427,24 @@ func TestAccumulate(t *testing.T) {
 				A0: uint32(OK),
 			},
 			X: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 200,
-					PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-						{Hash: randomHash, Length: service.PreimageLength(256)}: {800, 900}, // Exactly 2 timeslots
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance: 200,
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: service.PreimageLength(256)}: {800, 900}, // Exactly 2 timeslots
+						},
 					},
 				},
 			},
 			expectedX: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 200,
-					PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-						{Hash: randomHash, Length: service.PreimageLength(256)}: {800, 900, 1000}, // Appended current timeslot
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance: 200,
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: service.PreimageLength(256)}: {800, 900, 1000}, // Appended current timeslot
+						},
 					},
 				},
 			},
@@ -410,18 +464,24 @@ func TestAccumulate(t *testing.T) {
 				A0: uint32(HUH),
 			},
 			X: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 200,
-					PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-						{Hash: randomHash, Length: service.PreimageLength(256)}: {800}, // Invalid: not 2 timeslots
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance: 200,
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: service.PreimageLength(256)}: {800}, // Invalid: not 2 timeslots
+						},
 					},
 				},
 			},
 			expectedX: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 200,
-					PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-						{Hash: randomHash, Length: service.PreimageLength(256)}: {800}, // State unchanged
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance: 200,
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: service.PreimageLength(256)}: {800}, // State unchanged
+						},
 					},
 				},
 			},
@@ -441,16 +501,22 @@ func TestAccumulate(t *testing.T) {
 				A0: uint32(FULL),
 			},
 			X: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					Balance:      50, // Less than threshold
-					PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance:      50, // Less than threshold
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
+					},
 				},
 			},
 			expectedX: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					Balance: 50,
-					PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-						{Hash: randomHash, Length: service.PreimageLength(256)}: {},
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						Balance: 50,
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: service.PreimageLength(256)}: {},
+						},
 					},
 				},
 			},
@@ -462,20 +528,28 @@ func TestAccumulate(t *testing.T) {
 			expectedDeltaRegs: deltaRegs{A0: uint32(OK)},
 			initialGas:        100,
 			expectedGas:       88,
-			X: AccumulateContext{ServiceAccount: &service.ServiceAccount{
-				PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-					{Hash: randomHash, Length: 123}: {},
+			X: AccumulateContext{
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: 123}: {},
+						},
+						PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+						CodeHash:       randomHash2,
+						Balance:        111,
+					},
 				},
-				PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
-				CodeHash:       randomHash2,
-				Balance:        111,
-			}},
+			},
 			expectedX: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					PreimageMeta:   map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
-					PreimageLookup: map[crypto.Hash][]byte{},
-					CodeHash:       randomHash2,
-					Balance:        111,
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						PreimageMeta:   map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
+						PreimageLookup: map[crypto.Hash][]byte{},
+						CodeHash:       randomHash2,
+						Balance:        111,
+					},
 				},
 			},
 		}, {
@@ -487,22 +561,30 @@ func TestAccumulate(t *testing.T) {
 			initialGas:        100,
 			expectedGas:       88,
 			timeslot:          randomTimeslot2,
-			X: AccumulateContext{ServiceAccount: &service.ServiceAccount{
-				PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-					{Hash: randomHash, Length: 123}: {randomTimeslot1},
-				},
-				PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
-				CodeHash:       randomHash2,
-				Balance:        111,
-			}},
-			expectedX: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-						{Hash: randomHash, Length: 123}: {randomTimeslot1, randomTimeslot2},
+			X: AccumulateContext{
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: 123}: {randomTimeslot1},
+						},
+						PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+						CodeHash:       randomHash2,
+						Balance:        111,
 					},
-					PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
-					CodeHash:       randomHash2,
-					Balance:        111,
+				},
+			},
+			expectedX: AccumulateContext{
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: 123}: {randomTimeslot1, randomTimeslot2},
+						},
+						PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+						CodeHash:       randomHash2,
+						Balance:        111,
+					},
 				},
 			},
 		}, {
@@ -514,20 +596,28 @@ func TestAccumulate(t *testing.T) {
 			initialGas:        100,
 			expectedGas:       88,
 			timeslot:          randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1,
-			X: AccumulateContext{ServiceAccount: &service.ServiceAccount{
-				PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-					{Hash: randomHash, Length: 123}: {randomTimeslot1, randomTimeslot2},
+			X: AccumulateContext{
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: 123}: {randomTimeslot1, randomTimeslot2},
+						},
+						PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+						CodeHash:       randomHash2,
+						Balance:        111,
+					},
 				},
-				PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
-				CodeHash:       randomHash2,
-				Balance:        111,
-			}},
+			},
 			expectedX: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					PreimageMeta:   map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
-					PreimageLookup: map[crypto.Hash][]byte{},
-					CodeHash:       randomHash2,
-					Balance:        111,
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						PreimageMeta:   map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
+						PreimageLookup: map[crypto.Hash][]byte{},
+						CodeHash:       randomHash2,
+						Balance:        111,
+					},
 				},
 			},
 		}, {
@@ -539,22 +629,30 @@ func TestAccumulate(t *testing.T) {
 			initialGas:        100,
 			expectedGas:       88,
 			timeslot:          randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1,
-			X: AccumulateContext{ServiceAccount: &service.ServiceAccount{
-				PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-					{Hash: randomHash, Length: 123}: {randomTimeslot1, randomTimeslot2, randomTimeslot3},
-				},
-				PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
-				CodeHash:       randomHash2,
-				Balance:        111,
-			}},
-			expectedX: AccumulateContext{
-				ServiceAccount: &service.ServiceAccount{
-					PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-						{Hash: randomHash, Length: 123}: {randomTimeslot3, randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1},
+			X: AccumulateContext{
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: 123}: {randomTimeslot1, randomTimeslot2, randomTimeslot3},
+						},
+						PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+						CodeHash:       randomHash2,
+						Balance:        111,
 					},
-					PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
-					CodeHash:       randomHash2,
-					Balance:        111,
+				},
+			},
+			expectedX: AccumulateContext{
+				ServiceId: currentServiceID,
+				ServiceState: service.ServiceState{
+					currentServiceID: {
+						PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+							{Hash: randomHash, Length: 123}: {randomTimeslot3, randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1},
+						},
+						PreimageLookup: map[crypto.Hash][]byte{randomHash: {1, 2, 3, 4, 5, 6, 7}},
+						CodeHash:       randomHash2,
+						Balance:        111,
+					},
 				},
 			},
 		},
@@ -582,7 +680,7 @@ func TestAccumulate(t *testing.T) {
 				initialRegs[i] = v
 			}
 			hostCall := func(hostCall uint32, gasCounter Gas, regs Registers, mem Memory, x AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-				gasCounter, regs, mem, x, err = tc.fn(gasCounter, regs, mem, x, tc.serviceId, make(service.ServiceState), tc.timeslot)
+				gasCounter, regs, mem, x, err = tc.fn(gasCounter, regs, mem, x, tc.timeslot)
 				require.ErrorIs(t, err, tc.err)
 				return gasCounter, regs, mem, x, nil
 			}
@@ -607,7 +705,7 @@ func TestAccumulate(t *testing.T) {
 	}
 }
 
-type hostCall func(Gas, Registers, Memory, AccumulateContextPair, block.ServiceId, service.ServiceState, jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error)
+type hostCall func(Gas, Registers, Memory, AccumulateContextPair, jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error)
 type alloc map[Reg][]byte
 type deltaRegs map[Reg]uint32
 
@@ -643,19 +741,13 @@ func merge[M ~map[K]V, K comparable, V any](dd ...M) M {
 }
 
 func fnStd(fn func(Gas, Registers, Memory, AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error)) hostCall {
-	return func(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceIndex block.ServiceId, serviceState service.ServiceState, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
+	return func(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 		return fn(gas, regs, mem, ctxPair)
 	}
 }
 
-func fnSvc(fn func(Gas, Registers, Memory, AccumulateContextPair, block.ServiceId, service.ServiceState) (Gas, Registers, Memory, AccumulateContextPair, error)) hostCall {
-	return func(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceIndex block.ServiceId, serviceState service.ServiceState, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
-		return fn(gas, regs, mem, ctxPair, serviceIndex, serviceState)
-	}
-}
-
 func fnTms(fn func(Gas, Registers, Memory, AccumulateContextPair, jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error)) hostCall {
-	return func(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceIndex block.ServiceId, serviceState service.ServiceState, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
+	return func(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 		return fn(gas, regs, mem, ctxPair, timeslot)
 	}
 }
