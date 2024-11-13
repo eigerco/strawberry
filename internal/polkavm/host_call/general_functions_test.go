@@ -35,7 +35,7 @@ func TestGasRemaining(t *testing.T) {
 		polkavm.RA: polkavm.VmAddressReturnToHost,
 		polkavm.SP: memoryMap.StackAddressHigh,
 	}
-	initialGas := polkavm.Gas(100)
+	initialGas := uint64(100)
 	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x struct{}) (polkavm.Gas, polkavm.Registers, polkavm.Memory, struct{}, error) {
 		gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
 		require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestGasRemaining(t *testing.T) {
 	gas, regs, _, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, struct{}{})
 	require.ErrorIs(t, err, polkavm.ErrHalt)
 
-	expectedGas := initialGas - host_call.GasRemainingCost - polkavm.GasCosts[polkavm.Ecalli]
+	expectedGas := polkavm.Gas(initialGas) - host_call.GasRemainingCost - polkavm.GasCosts[polkavm.Ecalli]
 
 	assert.Equal(t, int64(expectedGas), (int64(regs[polkavm.A1])<<32)|int64(regs[polkavm.A0]))
 	assert.Equal(t, expectedGas-polkavm.GasCosts[polkavm.JumpIndirect], gas)
@@ -72,7 +72,7 @@ func TestLookup(t *testing.T) {
 			polkavm.SP: memoryMap.StackAddressHigh,
 		}
 		mem := memoryMap.NewMemory(nil, nil, nil)
-		initialGas := polkavm.Gas(100)
+		initialGas := uint64(100)
 		hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 			gasCounter, regs, mem, err = host_call.Lookup(gasCounter, regs, mem, service.ServiceAccount{}, 1, make(service.ServiceState))
 			require.NoError(t, err)
@@ -82,12 +82,12 @@ func TestLookup(t *testing.T) {
 		require.ErrorIs(t, err, polkavm.ErrHalt)
 
 		assert.Equal(t, uint32(host_call.NONE), regs[polkavm.A0])
-		assert.Equal(t, initialGas-host_call.LookupCost-polkavm.GasCosts[polkavm.JumpIndirect]-polkavm.GasCosts[polkavm.Ecalli], gasRemaining)
+		assert.Equal(t, polkavm.Gas(initialGas)-host_call.LookupCost-polkavm.GasCosts[polkavm.JumpIndirect]-polkavm.GasCosts[polkavm.Ecalli], gasRemaining)
 	})
 
 	t.Run("successful_key_lookup", func(t *testing.T) {
 		mem := memoryMap.NewMemory(nil, nil, nil)
-		initialGas := polkavm.Gas(100)
+		initialGas := uint64(100)
 		serviceId := block.ServiceId(1)
 		val := []byte("value to store")
 		ho := memoryMap.RWDataAddress
@@ -129,7 +129,7 @@ func TestLookup(t *testing.T) {
 
 		assert.Equal(t, val, actualValue)
 		assert.Equal(t, uint32(len(val)), regs[polkavm.A0])
-		assert.Equal(t, initialGas-host_call.LookupCost-polkavm.GasCosts[polkavm.Ecalli]-polkavm.GasCosts[polkavm.JumpIndirect], gasRemaining)
+		assert.Equal(t, polkavm.Gas(initialGas)-host_call.LookupCost-polkavm.GasCosts[polkavm.Ecalli]-polkavm.GasCosts[polkavm.JumpIndirect], gasRemaining)
 	})
 }
 
@@ -167,7 +167,7 @@ func TestRead(t *testing.T) {
 		serviceId: sa,
 	}
 
-	initialGas := polkavm.Gas(100)
+	initialGas := uint64(100)
 
 	ko := memoryMap.RWDataAddress
 	bo := memoryMap.RWDataAddress + 100
@@ -201,7 +201,7 @@ func TestRead(t *testing.T) {
 
 	require.Equal(t, uint32(len(value)), regs[polkavm.A0])
 
-	expectedGasRemaining := initialGas - host_call.ReadCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
+	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.ReadCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
 	require.Equal(t, expectedGasRemaining, gasRemaining)
 }
 
@@ -234,7 +234,7 @@ func TestWrite(t *testing.T) {
 		},
 	}
 
-	initialGas := polkavm.Gas(100)
+	initialGas := uint64(100)
 
 	ko := memoryMap.RWDataAddress
 	kz := uint32(len(keyData))
@@ -279,7 +279,7 @@ func TestWrite(t *testing.T) {
 	require.True(t, keyExists)
 	require.Equal(t, value, storedValue)
 
-	expectedGasRemaining := initialGas - host_call.WriteCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
+	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.WriteCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
 	require.Equal(t, expectedGasRemaining, gasRemaining)
 }
 
@@ -317,7 +317,7 @@ func TestInfo(t *testing.T) {
 		serviceId: sampleAccount,
 	}
 
-	initialGas := polkavm.Gas(100)
+	initialGas := uint64(100)
 
 	omega1 := memoryMap.RWDataAddress
 	mem := memoryMap.NewMemory(nil, nil, nil)
@@ -328,7 +328,7 @@ func TestInfo(t *testing.T) {
 		polkavm.A1: omega1,
 	}
 	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-		gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, x, serviceId, serviceState)
+		gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, serviceId, serviceState)
 		require.NoError(t, err)
 		return gasCounter, regs, mem, x, nil
 	}
@@ -362,6 +362,6 @@ func TestInfo(t *testing.T) {
 
 	require.Equal(t, expectedAccountInfo, receivedAccountInfo)
 
-	expectedGasRemaining := initialGas - host_call.InfoCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
+	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.InfoCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
 	require.Equal(t, expectedGasRemaining, gasRemaining)
 }

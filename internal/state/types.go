@@ -71,10 +71,3 @@ type AccumulationResult struct {
 		GasAssignments     map[block.ServiceId]uint64 // g - Gas assignments
 	}
 }
-
-// Context is an intermediate value for state transition calculations
-// TODO: Add relevant fields when state transitions are implemented
-type Context struct {
-	// Add relevant fields
-	Accumulations map[block.ServiceId]crypto.Hash
-}

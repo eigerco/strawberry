@@ -33,7 +33,7 @@ type Accumulator struct {
 }
 
 // Invoke ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G) Equation 280
-func (a *Accumulator) Invoke(accState state.AccumulationState, serviceIndex block.ServiceId, gas polkavm.Gas, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, polkavm.Gas) {
+func (a *Accumulator) Invoke(accState state.AccumulationState, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// if d[s]c = ∅
 	if accState.ServiceState[serviceIndex].Code() == nil {
 		ctx, err := a.newCtx(accState, serviceIndex)
@@ -50,7 +50,7 @@ func (a *Accumulator) Invoke(accState state.AccumulationState, serviceIndex bloc
 	}
 
 	// I(u, s), I(u, s)
-	ctxPair := polkavm.AccumulateContextPair{
+	newCtxPair := polkavm.AccumulateContextPair{
 		RegularCtx:     ctx,
 		ExceptionalCtx: ctx,
 	}
@@ -81,7 +81,7 @@ func (a *Accumulator) Invoke(accState state.AccumulationState, serviceIndex bloc
 			gasCounter, regs, mem, currentService, err = host_call.Write(gasCounter, regs, mem, currentService, serviceIndex)
 			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
 		case host_call.InfoID:
-			gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, currentService, serviceIndex, ctx.RegularCtx.AccumulationState.ServiceState)
+			gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, serviceIndex, ctx.RegularCtx.AccumulationState.ServiceState)
 			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
 		case host_call.EmpowerID:
 			gasCounter, regs, mem, ctx, err = host_call.Empower(gasCounter, regs, mem, ctx)
@@ -110,23 +110,22 @@ func (a *Accumulator) Invoke(accState state.AccumulationState, serviceIndex bloc
 		return gasCounter, regs, mem, ctx, err
 	}
 
-	var ret []byte
-	_, ret, ctxPair, err = interpreter.InvokeWholeProgram(accState.ServiceState[serviceIndex].Code(), 10, gas, args, hostCallFunc, ctxPair)
+	remainingGas, ret, newCtxPair, err := interpreter.InvokeWholeProgram(accState.ServiceState[serviceIndex].Code(), 10, gas, args, hostCallFunc, newCtxPair)
 	if err != nil {
 		errPanic := &polkavm.ErrPanic{}
 		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {
-			return ctxPair.ExceptionalCtx.AccumulationState, ctxPair.ExceptionalCtx.DeferredTransfers, nil, gas
+			return newCtxPair.ExceptionalCtx.AccumulationState, newCtxPair.ExceptionalCtx.DeferredTransfers, nil, uint64(remainingGas)
 		}
-		return ctxPair.ExceptionalCtx.AccumulationState, ctxPair.ExceptionalCtx.DeferredTransfers, nil, gas
+		return newCtxPair.ExceptionalCtx.AccumulationState, newCtxPair.ExceptionalCtx.DeferredTransfers, nil, uint64(remainingGas)
 	}
 	// if o ∈ Y ∖ H. There is no sure way to check that a byte array is a hash
 	// one way would be to check the shannon entropy but this also not a guarantee, so we just limit to checking the size
 	if len(ret) == crypto.HashSize {
 		h := crypto.Hash(ret)
-		return ctxPair.RegularCtx.AccumulationState, ctxPair.RegularCtx.DeferredTransfers, &h, gas
+		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, &h, uint64(remainingGas)
 	}
 
-	return ctxPair.RegularCtx.AccumulationState, ctxPair.RegularCtx.DeferredTransfers, nil, gas
+	return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(remainingGas)
 }
 
 // newCtx (281)

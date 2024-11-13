@@ -23,21 +23,21 @@ type AccountInfo struct {
 	TotalItems             uint32      // ti
 }
 
-// GasRemaining ΩG(ξ, ω, ...)
+// GasRemaining ΩG(ϱ, ω, ...)
 func GasRemaining(gas polkavm.Gas, regs polkavm.Registers) (polkavm.Gas, polkavm.Registers, error) {
 	if gas < GasRemainingCost {
 		return gas, regs, polkavm.ErrOutOfGas
 	}
 	gas -= GasRemainingCost
 
-	// Split the new ξ' value into its lower and upper parts.
+	// Split the new ϱ' value into its lower and upper parts.
 	regs[polkavm.A0] = uint32(gas & ((1 << 32) - 1))
 	regs[polkavm.A1] = uint32(gas >> 32)
 
 	return gas, regs, nil
 }
 
-// Lookup ΩL(ξ, ω, μ, s, s, d)
+// Lookup ΩL(ϱ, ω, μ, s, s, d)
 func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < LookupCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
@@ -96,7 +96,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 	return gas, regs, mem, err
 }
 
-// Read ΩR(ξ, ω, μ, s, s, d)
+// Read ΩR(ϱ, ω, μ, s, s, d)
 func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < ReadCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
@@ -162,7 +162,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 	return gas, regs, mem, nil
 }
 
-// Write ΩW (ξ, ω, μ, s, s)
+// Write ΩW(ϱ, ω, μ, s, s)
 func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 	if gas < WriteCost {
 		return gas, regs, mem, s, polkavm.ErrOutOfGas
@@ -218,8 +218,8 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 	return gas, regs, mem, a, err               // return service account 'a' as opposed to 's' for not successful paths
 }
 
-// Info ΩI(ξ, ω, μ, s, s, d)
-func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+// Info ΩI(ϱ, ω, μ, s, d)
+func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < InfoCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
 	}
@@ -228,8 +228,8 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 	sID := regs[polkavm.A0]
 	omega1 := regs[polkavm.A1]
 
-	t := s
-	if sID != math.MaxUint32 && sID != uint32(serviceId) {
+	t := serviceState[serviceId]
+	if sID != math.MaxUint32 {
 		var exists bool
 		t, exists = serviceState[block.ServiceId(sID)]
 		if !exists {

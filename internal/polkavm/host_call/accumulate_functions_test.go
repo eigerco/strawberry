@@ -61,7 +61,7 @@ func TestAccumulate(t *testing.T) {
 		name        string
 		alloc       alloc
 		initialRegs deltaRegs
-		initialGas  Gas
+		initialGas  uint64
 		fn          hostCall
 
 		timeslot jamtime.Timeslot
