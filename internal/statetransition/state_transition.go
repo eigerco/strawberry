@@ -706,6 +706,20 @@ func calculateWorkReportsAndAccumulate(
 	newWorkReportsQueue state.PendingAuthorizersQueues,
 	hashPairs ServiceHashPairs,
 ) {
+	// TODO (156) ∀w ∈ w, ∀r ∈ wr ∶ rc = δ[rs]c
+	// Ensure all service code hashes match
+	//var expectedCodeHash *crypto.Hash
+	//for _, report := range workReports {
+	//	for _, result := range report.WorkResults {
+	//		if result.ServiceId == serviceIndex {
+	//			if expectedCodeHash == nil {
+	//				expectedCodeHash = &result.ServiceHashCode
+	//			} else if *expectedCodeHash != result.ServiceHashCode {
+	//				return nil, 0, fmt.Errorf("inconsistent service code hash for service %d", serviceIndex)
+	//			}
+	//		}
+	//	}
+	//}
 
 	//TODO (166) WQ ≡ E([D(w) S w <− W, (wx)p ≠ ∅ ∨ wl ≠ {}], {ξ)
 	var queuedWorkReports []state.WorkReportWithUnAccumulatedDependencies
@@ -1257,7 +1271,7 @@ func SequentialDelta(
 	gasUsed, newCtx, transfers, hashPairs := ParallelDelta(
 		ctx,
 		workReports[:maxReports],
-		privileged,
+		privileged.AmountOfGasPerServiceId,
 	)
 
 	// If we have remaining reports and gas, process recursively (∆+)
@@ -1285,7 +1299,7 @@ func SequentialDelta(
 func ParallelDelta(
 	initialAccState state.AccumulationState,
 	workReports []block.WorkReport,
-	privileged service.PrivilegedServices,
+	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
 	uint64, // total gas used
 	state.AccumulationState, // updated context
@@ -1303,16 +1317,17 @@ func ParallelDelta(
 		}
 	}
 
-	// TODO where is it described in the paper?
 	// From privileged gas assignments
-	//for svcId := range privileged.AmountOfGasPerServiceId {
-	//	serviceIndices[svcId] = struct{}{}
-	//}
+	for svcId := range privilegedGas {
+		serviceIndices[svcId] = struct{}{}
+	}
 
 	var totalGasUsed uint64
 	var allTransfers []service.DeferredTransfer
 	accumHashPairs := make(ServiceHashPairs, 0)
-	newAccState := state.AccumulationState{}
+	newAccState := state.AccumulationState{
+		ServiceState: make(service.ServiceState),
+	}
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -1323,7 +1338,7 @@ func ParallelDelta(
 			defer wg.Done()
 
 			// Process single service using Delta1
-			accState, deferredTransfers, resultHash, gasUsed := Delta1(initialAccState, workReports, privileged.AmountOfGasPerServiceId, serviceId)
+			accState, deferredTransfers, resultHash, gasUsed := Delta1(initialAccState, workReports, privilegedGas, serviceId)
 			mu.Lock()
 			defer mu.Unlock()
 
@@ -1349,11 +1364,13 @@ func ParallelDelta(
 			}
 		}(svcId)
 	}
+
+	wg.Add(1)
 	go func(serviceId block.ServiceId) {
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _ := Delta1(initialAccState, workReports, privileged.AmountOfGasPerServiceId, serviceId)
+		accState, _, _, _ := Delta1(initialAccState, workReports, privilegedGas, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -1361,11 +1378,12 @@ func ParallelDelta(
 
 	}(initialAccState.PrivilegedServices.ManagerServiceId)
 
+	wg.Add(1)
 	go func(serviceId block.ServiceId) {
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _ := Delta1(initialAccState, workReports, privileged.AmountOfGasPerServiceId, serviceId)
+		accState, _, _, _ := Delta1(initialAccState, workReports, privilegedGas, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -1373,11 +1391,12 @@ func ParallelDelta(
 
 	}(initialAccState.PrivilegedServices.AssignServiceId)
 
+	wg.Add(1)
 	go func(serviceId block.ServiceId) {
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _ := Delta1(initialAccState, workReports, privileged.AmountOfGasPerServiceId, serviceId)
+		accState, _, _, _ := Delta1(initialAccState, workReports, privilegedGas, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -1433,21 +1452,6 @@ func Delta1(
 			}
 		}
 	}
-
-	// TODO clarify why is it needed and where is it described in the paper
-	// Ensure all service code hashes match
-	//var expectedCodeHash *crypto.Hash
-	//for _, report := range workReports {
-	//	for _, result := range report.WorkResults {
-	//		if result.ServiceId == serviceIndex {
-	//			if expectedCodeHash == nil {
-	//				expectedCodeHash = &result.ServiceHashCode
-	//			} else if *expectedCodeHash != result.ServiceHashCode {
-	//				return nil, 0, fmt.Errorf("inconsistent service code hash for service %d", serviceIndex)
-	//			}
-	//		}
-	//	}
-	//}
 
 	// TODO pass in state and header
 	// Invoke VM for accumulation (ΨA)

@@ -228,14 +228,12 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 	sID := regs[polkavm.A0]
 	omega1 := regs[polkavm.A1]
 
-	t := serviceState[serviceId]
+	t, exists := serviceState[serviceId]
 	if sID != math.MaxUint32 {
-		var exists bool
 		t, exists = serviceState[block.ServiceId(sID)]
-		if !exists {
-			regs[polkavm.A0] = uint32(NONE)
-			return gas, regs, mem, nil
-		}
+	}
+	if !exists {
+		return gas, withCode(regs, NONE), mem, nil
 	}
 
 	accountInfo := AccountInfo{
