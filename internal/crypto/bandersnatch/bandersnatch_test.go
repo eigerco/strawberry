@@ -54,6 +54,11 @@ func TestRingSignAndVerify(t *testing.T) {
 		ring = append(ring, pk)
 	}
 
+	// Including some zero'd out public keys that should be replaced with
+	// padding points.
+	ring[4] = crypto.BandersnatchPublicKey{}
+	ring[5] = crypto.BandersnatchPublicKey{}
+
 	var proverIdx uint = 3
 	proverSk, err := NewPrivateKeyFromSeed(uintToSeed(proverIdx))
 	require.NoError(t, err)
