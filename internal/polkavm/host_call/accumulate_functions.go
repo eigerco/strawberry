@@ -249,7 +249,7 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 		return gas, withCode(regs, LOW), mem, ctxPair, nil
 	}
 
-	// if ξ < g
+	// if ϱ < g
 	if gas < Gas(gasLimit) {
 		return gas, withCode(regs, HIGH), mem, ctxPair, nil
 	}
@@ -274,10 +274,10 @@ func Quit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (G
 	// let [d, o] = ω7,8
 	receiverId, addr := regs[A0], regs[A1]
 
-	//let a = (xs)b − (xs)t + BS
+	// let a = (xs)b − (xs)t + BS
 	newBalance := ctxPair.RegularCtx.ServiceAccount().Balance - ctxPair.RegularCtx.ServiceAccount().ThresholdBalance() + service.BasicMinimumBalance
 
-	//let g = ξ
+	// let g = ϱ
 	gasLimit := uint64(gas)
 
 	// m = E−1(μo⋅⋅⋅+M)

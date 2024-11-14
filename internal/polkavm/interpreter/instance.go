@@ -4,7 +4,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
-// InitRegs Equation 246: standard program initialization, registers
+// InitRegs Equation 270 v0.4.5: standard program initialization, registers
 func InitRegs(args []byte) polkavm.Registers {
 	regs := polkavm.Registers{}
 	regs[polkavm.RA] = 1<<32 - 1<<16

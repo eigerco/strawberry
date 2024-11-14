@@ -53,12 +53,12 @@ func TestInstance_Execute(t *testing.T) {
 		return gasCounter, regs, mem, struct{}{}, nil
 	}
 	t.Run("1 + 10 + 100 = 111", func(t *testing.T) {
-		gasLimit := polkavm.Gas(1000)
+		gasLimit := uint64(1000)
 		gas, regs, _, _, err := InvokeHostCall(pp, memoryMap, entryPoint, gasLimit, initialRegs, memory, hostCall, nothing{})
 
 		require.ErrorIs(t, err, polkavm.ErrHalt)
 		assert.Equal(t, uint32(111), regs[polkavm.A0])
-		assert.Equal(t, gasLimit-polkavm.Gas(len(pp.Instructions)), gas)
+		assert.Equal(t, polkavm.Gas(gasLimit)-polkavm.Gas(len(pp.Instructions)), gas)
 	})
 
 	t.Run("not enough gas", func(t *testing.T) {

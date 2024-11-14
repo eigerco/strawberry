@@ -82,7 +82,7 @@ type Registers [13]uint32
 
 type Gas int64
 
-// HostCall the generic Ω function definition Ωx(n, ξ, ω, μ, x) defined in section A.6
+// HostCall the generic Ω function definition Ωx(n, ϱ, ω, μ, x) defined in section A.6
 type HostCall[X any] func(hostCall uint32, gasCounter Gas, regs Registers, mem Memory, x X) (Gas, Registers, Memory, X, error)
 
 type Mutator interface {

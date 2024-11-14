@@ -121,7 +121,8 @@ func leDecode(memLen int, src []byte) (uint32, error) {
 	}
 }
 
-func (m *Mutator) jumpIndirectImpl(target uint32) error {
+// djump Equation 249 v0.4.5
+func (m *Mutator) djump(target uint32) error {
 	if target == polkavm.VmAddressReturnToHost {
 		return polkavm.ErrHalt
 	}
@@ -441,7 +442,7 @@ func (m *Mutator) LoadImmAndJump(ra polkavm.Reg, value uint32, target uint32) {
 func (m *Mutator) LoadImmAndJumpIndirect(ra polkavm.Reg, base polkavm.Reg, value, offset uint32) error {
 	target := m.get(base) + offset
 	m.set(ra, value)
-	return m.jumpIndirectImpl(target)
+	return m.djump(target)
 }
 func (m *Mutator) Jump(target uint32) {
 	m.instance.instructionOffset = target
@@ -449,7 +450,7 @@ func (m *Mutator) Jump(target uint32) {
 }
 
 func (m *Mutator) JumpIndirect(base polkavm.Reg, offset uint32) error {
-	return m.jumpIndirectImpl(m.get(base) + offset)
+	return m.djump(m.get(base) + offset)
 }
 
 func divUnsigned(lhs uint32, rhs uint32) uint32 {

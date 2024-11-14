@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/eigerco/strawberry/internal/polkavm/invocations"
 	"log"
+	"maps"
+	"slices"
 	"sort"
 	"sync"
 
@@ -15,7 +18,6 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/polkavm"
-	"github.com/eigerco/strawberry/internal/polkavm/invocations"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
@@ -42,11 +44,21 @@ func UpdateState(s *state.State, newBlock block.Block) {
 	newCoreAssignments := calculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState, newTimeState)
 
 	intermediateServiceState := calculateIntermediateServiceState(newBlock.Extrinsic.EP, s.Services, newTimeState)
-	newServices, newPrivilegedServices, newQueuedValidators, newPendingCoreAuthorizations, context := calculateServiceState(
-		*s,
+
+	newAccumulationQueue,
+		newAccumulationHistory,
+		newServices,
+		newPrivilegedServices,
+		newQueuedValidators,
+		newPendingCoreAuthorizations,
+		serviceHashPairs := calculateWorkReportsAndAccumulate(
 		newBlock.Header,
+		s.TimeslotIndex,
+		newTimeState,
 		newBlock.Extrinsic.EA,
 		newCoreAssignments,
+		s.AccumulationQueue,
+		s.AccumulationHistory,
 		intermediateServiceState,
 		s.PrivilegedServices,
 		s.ValidatorState.QueuedValidators,
@@ -54,7 +66,7 @@ func UpdateState(s *state.State, newBlock block.Block) {
 	)
 
 	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
-	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, context)
+	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, serviceHashPairs)
 	if err != nil {
 		// TODO handle error
 		log.Printf("Error calculating new Recent Blocks: %v", err)
@@ -106,6 +118,8 @@ func UpdateState(s *state.State, newBlock block.Block) {
 	s.ValidatorState.QueuedValidators = newQueuedValidators
 	s.Services = newServices
 	s.PrivilegedServices = newPrivilegedServices
+	s.AccumulationQueue = newAccumulationQueue
+	s.AccumulationHistory = newAccumulationHistory
 }
 
 // Intermediate State Calculation Functions
@@ -267,9 +281,9 @@ func calculateNewTimeState(header block.Header) jamtime.Timeslot {
 }
 
 // calculateNewRecentBlocks Equation 18: β′ ≺ (H, EG, β†, C)
-func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentBlocks []state.BlockState, context state.Context) ([]state.BlockState, error) {
+func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentBlocks []state.BlockState, serviceHashPairs ServiceHashPairs) ([]state.BlockState, error) {
 	// Calculate accumulation-result Merkle tree root (r)
-	accumulationRoot := calculateAccumulationRoot(context.Accumulations)
+	accumulationRoot := calculateAccumulationRoot(serviceHashPairs)
 
 	// Append to the previous block's Merkle mountain range (b)
 	var lastBlockMMR crypto.Hash
@@ -313,7 +327,7 @@ func AppendToMMR(lastBlockMMR crypto.Hash, accumulationRoot crypto.Hash) crypto.
 
 // TODO: this is just a mock implementation
 // This should create a Merkle tree from the accumulations and return the root
-func calculateAccumulationRoot(accumulations map[block.ServiceId]crypto.Hash) crypto.Hash {
+func calculateAccumulationRoot(accumulations ServiceHashPairs) crypto.Hash {
 	return crypto.Hash{}
 }
 
@@ -670,75 +684,173 @@ func calculateNewArchivedValidators(header block.Header, timeslot jamtime.Timesl
 	return validators, nil
 }
 
-// calculateServiceState Equation 28: δ′, 𝝌′, ι′, φ′, C ≺ (EA, ρ′, δ†, 𝝌, ι, φ)
-func calculateServiceState(currentState state.State, header block.Header, assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments, intermediateServiceState service.ServiceState, privilegedServices service.PrivilegedServices,
-	queuedValidators safrole.ValidatorsData, coreAuthorizationQueue state.PendingAuthorizersQueues) (service.ServiceState, service.PrivilegedServices, safrole.ValidatorsData, state.PendingAuthorizersQueues, state.Context) {
-	// Verify availability from assurances
-	availableCores := verifyAvailability(assurances, coreAssignments)
+// calculateWorkReportsAndAccumulate Equation 28: W* ≺ (EA, ρ′) and Equation 29: δ′, 𝝌′, ι′, φ′, C ≺ (EA, ρ′, δ†, 𝝌, ι, φ)
+func calculateWorkReportsAndAccumulate(
+	header block.Header,
+	currentTimeslot jamtime.Timeslot,
+	newTimeslot jamtime.Timeslot,
+	assurances block.AssurancesExtrinsic,
+	coreAssignments state.CoreAssignments,
+	accQueue state.AccumulationQueue,
+	accHistory state.AccumulationHistory,
+	intermediateServiceState service.ServiceState,
+	privilegedServices service.PrivilegedServices,
+	queuedValidators safrole.ValidatorsData,
+	coreAuthorizationQueue state.PendingAuthorizersQueues,
+) (
+	newAccumulationQueue state.AccumulationQueue,
+	newAccumulationHistory state.AccumulationHistory,
+	newServiceState service.ServiceState,
+	newPrivilegedServices service.PrivilegedServices,
+	newValidatorKeys safrole.ValidatorsData,
+	newWorkReportsQueue state.PendingAuthorizersQueues,
+	hashPairs ServiceHashPairs,
+) {
+	// TODO (156) ∀w ∈ w, ∀r ∈ wr ∶ rc = δ[rs]c
+	// Ensure all service code hashes match
+	//var expectedCodeHash *crypto.Hash
+	//for _, report := range workReports {
+	//	for _, result := range report.WorkResults {
+	//		if result.ServiceId == serviceIndex {
+	//			if expectedCodeHash == nil {
+	//				expectedCodeHash = &result.ServiceHashCode
+	//			} else if *expectedCodeHash != result.ServiceHashCode {
+	//				return nil, 0, fmt.Errorf("inconsistent service code hash for service %d", serviceIndex)
+	//			}
+	//		}
+	//	}
+	//}
 
-	// 1. Determine services to accumulate (equation 157)
-	servicesToAccumulate := determineServicesToAccumulate(availableCores, privilegedServices)
+	//TODO (166) WQ ≡ E([D(w) S w <− W, (wx)p ≠ ∅ ∨ wl ≠ {}], {ξ)
+	var queuedWorkReports []state.WorkReportWithUnAccumulatedDependencies
 
-	// 2. Calculate gas allocations (equation 158)
-	gasAllocations := calculateGasAllocations(servicesToAccumulate, intermediateServiceState, availableCores)
+	//TODO (165) W! ≡ [w S w <− W, (wx)p = ∅ ∧ wl = {}]
+	// var immediatelyAccWorkReports []block.WorkReport
 
-	// 3. Prepare accumulation operands (equations 159-160)
-	operands := wrangleAccumulationOperands(coreAssignments)
+	// let m = Ht mod E
+	timeslotPerEpoch := header.TimeSlotIndex % jamtime.TimeslotsPerEpoch
 
-	// 4. Perform accumulation for each service
-	accumResults := make(map[block.ServiceId]state.AccumulationResult)
-	accumRoots := make(map[block.ServiceId]crypto.Hash)
+	//TODO (172) W* ≡ W! ⌢ Q(q)
+	// (173) where q = E(ϑm... ⌢ ϑ...m ⌢ WQ, P(W!))
+	var accumulatableWorkReports []block.WorkReport
 
-	for _, serviceId := range servicesToAccumulate {
-		gas := gasAllocations[serviceId]
-		privilegedGas := uint64(0)
-		if pgAmount, ok := privilegedServices.AmountOfGasPerServiceId[serviceId]; ok {
-			privilegedGas = pgAmount
-		}
+	// TODO let g = max(GT , GA ⋅ C + [∑ x∈V](χg)(x))
+	gasLimit := uint64(0)
 
-		context, root, err := invocations.InvokeAccumulate(
-			currentState,
-			&header,
-			intermediateServiceState,
+	// (182) let (n, o, t, C) = ∆+(g, W∗, (χ, δ†, ι, φ), χg )
+	maxReports, newAccumulationState, transfers, hashPairs := SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
+		PrivilegedServices: privilegedServices,
+		ServiceState:       intermediateServiceState,
+		ValidatorKeys:      queuedValidators,
+		WorkReportsQueue:   coreAuthorizationQueue,
+	}, privilegedServices)
+
+	// (183) (χ′, δ‡, ι′, φ′) ≡ o
+	postAccumulationServiceState := newAccumulationState.ServiceState
+	newPrivilegedServices = newAccumulationState.PrivilegedServices
+	newValidatorKeys = newAccumulationState.ValidatorKeys
+	newWorkReportsQueue = newAccumulationState.WorkReportsQueue
+
+	// (185) δ′ = {s ↦ ΨT (δ‡, s, R(t, s)) S (s ↦ a) ∈ δ‡}
+	newServiceState = make(service.ServiceState)
+	for serviceId := range postAccumulationServiceState {
+		newService := invocations.InvokeOnTransfer(
+			postAccumulationServiceState,
 			serviceId,
-			polkavm.Gas(gas+privilegedGas),
-			operands[serviceId],
+			transfersForReceiver(transfers, serviceId),
 		)
-		if err != nil {
-			// Handle error appropriately
-			continue
-		}
+		newServiceState[serviceId] = newService
+	}
 
-		// Translate PVM context to accumulation result
-		accumResults[serviceId] = translatePVMContext(context, root)
-		if root != nil {
-			accumRoots[serviceId] = *root
+	// (186) ξ′E−1 = P(W*...n)
+	// (187) ∀i ∈ NE−1 ∶ ξ′i ≡ ξi+1
+	newAccumulationHistory = state.AccumulationHistory(append(
+		accHistory[1:],
+		getWorkPackageHashes(accumulatableWorkReports[:maxReports]),
+	))
+
+	// ξ′E−1
+	lastAccumulation := newAccumulationHistory[jamtime.TimeslotsPerEpoch-1]
+
+	// (188) ∀i ∈ N_E
+	for i := range jamtime.TimeslotsPerEpoch {
+		indexPerEpoch := (timeslotPerEpoch - jamtime.Timeslot(i)) % jamtime.TimeslotsPerEpoch
+
+		if i == 0 { // if i = 0
+			// ϑ′↺m−i ≡ E(WQ, ξ′E−1)
+			newAccumulationQueue[indexPerEpoch] = updateQueue(queuedWorkReports, lastAccumulation)
+		} else if 1 <= i && jamtime.Timeslot(i) < newTimeslot-currentTimeslot { // if 1 ≤ i < τ ′ − τ
+			// ϑ′↺m−i ≡ []
+			newAccumulationQueue[indexPerEpoch] = []state.WorkReportWithUnAccumulatedDependencies{}
+		} else if jamtime.Timeslot(i) >= newTimeslot-currentTimeslot { // if i ≥ τ ′ − τ
+			// ϑ′↺m−i ≡ E(ϑ↺m−i, ξ′E−1)
+			newAccumulationQueue[indexPerEpoch] = updateQueue(accQueue[indexPerEpoch], lastAccumulation)
 		}
 	}
 
-	// 5. Process service account transitions (equations 165-168)
-	newServiceState := processServiceTransitions(accumResults, intermediateServiceState)
+	return newAccumulationQueue,
+		newAccumulationHistory,
+		newServiceState,
+		newPrivilegedServices,
+		newValidatorKeys,
+		newWorkReportsQueue,
+		hashPairs
+}
 
-	// 6. Process privileged transitions (equation 164)
-	// Process privileged transitions considering all state components
-	newPrivileged, newValidators, newAuth := processPrivilegedTransitions(
-		accumResults,
-		privilegedServices,
-		queuedValidators,
-		coreAuthorizationQueue,
-	)
+// updateQueue (168) E(r ⟦(W, {H})⟧, x {H}) → ⟦(W, {H})⟧
+func updateQueue(workRepAndDep []state.WorkReportWithUnAccumulatedDependencies, hashSet map[crypto.Hash]struct{}) []state.WorkReportWithUnAccumulatedDependencies {
+	var newWorkRepsAndDeps []state.WorkReportWithUnAccumulatedDependencies
+	for _, wd := range workRepAndDep {
+		if _, ok := hashSet[wd.WorkReport.WorkPackageSpecification.WorkPackageHash]; !ok {
+			dependencies := maps.Clone(wd.Dependencies)
+			for hash := range hashSet {
+				delete(dependencies, hash)
+			}
+			newWorkRepsAndDeps = append(newWorkRepsAndDeps, state.WorkReportWithUnAccumulatedDependencies{
+				WorkReport:   wd.WorkReport,
+				Dependencies: dependencies,
+			})
+		}
+	}
+	return newWorkRepsAndDeps
+}
 
-	// 7. Create final context
-	context := state.Context{
-		Accumulations: buildServiceAccumulationCommitments(accumResults),
+// (170) P(w {W}) → {H}
+func getWorkPackageHashes(workReports []block.WorkReport) (hashes map[crypto.Hash]struct{}) {
+	hashes = make(map[crypto.Hash]struct{})
+	// {(ws)h S w ∈ w}
+	for _, workReport := range workReports {
+		hashes[workReport.WorkPackageSpecification.WorkPackageHash] = struct{}{}
+	}
+	return hashes
+}
+
+// transfersForReceiver (184) R(t ⟦T⟧, d NS ) → ⟦T⟧
+func transfersForReceiver(transfers []service.DeferredTransfer, serviceId block.ServiceId) (transfersForReceiver []service.DeferredTransfer) {
+	// [ t | t <− t, t_d = d ]
+	for _, transfer := range transfers {
+		if transfer.ReceiverServiceIndex == serviceId {
+			transfersForReceiver = append(transfersForReceiver, transfer)
+		}
 	}
 
-	return newServiceState, newPrivileged, newValidators, newAuth, context
+	// [ t | s <− N_S, t_s = s ]
+	slices.SortStableFunc(transfersForReceiver, func(a, b service.DeferredTransfer) int {
+		if a.SenderServiceIndex < b.SenderServiceIndex {
+			return -1
+		} else if a.SenderServiceIndex > b.SenderServiceIndex {
+			return 1
+		}
+		return 0
+	})
+	return transfersForReceiver
 }
 
 // verifyAvailability implements availability verification part of equations 29-30:
 // This function ensures cores have sufficient availability (>2/3 validators)
 // before allowing accumulation
+//
+//lint:ignore U1000
 func verifyAvailability(assurances block.AssurancesExtrinsic, assignments state.CoreAssignments) state.CoreAssignments {
 	var availableCores state.CoreAssignments
 
@@ -787,6 +899,8 @@ func verifyAvailability(assurances block.AssurancesExtrinsic, assignments state.
 // Equation 168: Final state after applying deferred transfers
 //
 //	δ′ = {s ↦ ΨT(δ‡, a, R(a)) | (s ↦ a) ∈ δ‡}
+//
+//lint:ignore U1000
 func processServiceTransitions(accumResults map[block.ServiceId]state.AccumulationResult,
 	intermediateState service.ServiceState) service.ServiceState {
 
@@ -822,6 +936,8 @@ func processServiceTransitions(accumResults map[block.ServiceId]state.Accumulati
 // - Manager service (χm)
 // - Authorizer service (χa)
 // - Validator service (χv)
+//
+//lint:ignore U1000
 func processPrivilegedTransitions(
 	accumResults map[block.ServiceId]state.AccumulationResult,
 	privileged service.PrivilegedServices,
@@ -862,24 +978,27 @@ func processPrivilegedTransitions(
 // translatePVMContext translates between PVM context and accumulation results
 // Implements structure defined in equation 254 (AccumulateContext) and
 // equation 162 (A: result mapping function)
+//
+//lint:ignore U1000
 func translatePVMContext(ctx polkavm.AccumulateContext, root *crypto.Hash) state.AccumulationResult {
+	sa := ctx.ServiceAccount()
 	return state.AccumulationResult{
-		ServiceState:      ctx.ServiceAccount,
-		ValidatorUpdates:  ctx.ValidatorKeys,
+		ServiceState:      &sa,
+		ValidatorUpdates:  ctx.AccumulationState.ValidatorKeys,
 		DeferredTransfers: ctx.DeferredTransfers,
 		AccumulationRoot:  root,
-		CoreAssignments:   ctx.AuthorizationsQueue,
-		NewServices:       ctx.ServicesState,
+		CoreAssignments:   ctx.AccumulationState.WorkReportsQueue,
+		NewServices:       ctx.AccumulationState.ServiceState,
 		PrivilegedUpdates: struct {
 			ManagerServiceId   block.ServiceId
 			AssignServiceId    block.ServiceId
 			DesignateServiceId block.ServiceId
 			GasAssignments     map[block.ServiceId]uint64
 		}{
-			ManagerServiceId:   ctx.PrivilegedServices.ManagerServiceId,
-			AssignServiceId:    ctx.PrivilegedServices.AssignServiceId,
-			DesignateServiceId: ctx.PrivilegedServices.DesignateServiceId,
-			GasAssignments:     ctx.PrivilegedServices.AmountOfGasPerServiceId,
+			ManagerServiceId:   ctx.AccumulationState.PrivilegedServices.ManagerServiceId,
+			AssignServiceId:    ctx.AccumulationState.PrivilegedServices.AssignServiceId,
+			DesignateServiceId: ctx.AccumulationState.PrivilegedServices.DesignateServiceId,
+			GasAssignments:     ctx.AccumulationState.PrivilegedServices.AmountOfGasPerServiceId,
 		},
 	}
 }
@@ -902,6 +1021,8 @@ func getAvailableWorkReports(coreAssignments state.CoreAssignments) []block.Work
 // Determines set of services to accumulate from:
 // - Work reports that became available
 // - Privileged services
+//
+//lint:ignore U1000
 func determineServicesToAccumulate(assignments state.CoreAssignments, privileged service.PrivilegedServices) []block.ServiceId {
 	services := make(map[block.ServiceId]struct{})
 
@@ -935,6 +1056,8 @@ func determineServicesToAccumulate(assignments state.CoreAssignments, privileged
 // Calculates gas allocations for each service based on:
 // - Minimum required gas from service state
 // - Proportional share of remaining gas based on work results
+//
+//lint:ignore U1000
 func calculateGasAllocations(
 	services []block.ServiceId,
 	state service.ServiceState,
@@ -995,6 +1118,8 @@ func calculateGasAllocations(
 // - Payload hashes
 // - Work package hashes
 // - Authorization outputs
+//
+//lint:ignore U1000
 func wrangleAccumulationOperands(assignment state.CoreAssignments) map[block.ServiceId][]state.AccumulationOperand {
 	mapping := make(map[block.ServiceId][]state.AccumulationOperand)
 
@@ -1021,6 +1146,8 @@ func wrangleAccumulationOperands(assignment state.CoreAssignments) map[block.Ser
 // buildServiceAccumulationCommitments implements equation 163:
 // C ≡ {(s, A(s)r) | s ∈ S, A(s)r ≠ ∅}
 // Maps accumulated services to their accumulation result hashes
+//
+//lint:ignore U1000
 func buildServiceAccumulationCommitments(accumResults map[block.ServiceId]state.AccumulationResult) map[block.ServiceId]crypto.Hash {
 	commitments := make(map[block.ServiceId]crypto.Hash)
 
@@ -1110,11 +1237,10 @@ func SequentialDelta(
 	state.AccumulationState,
 	[]service.DeferredTransfer,
 	ServiceHashPairs,
-	error,
 ) {
 	// If no work reports, return early
 	if len(workReports) == 0 {
-		return 0, ctx, nil, ServiceHashPairs{}, nil
+		return 0, ctx, nil, ServiceHashPairs{}
 	}
 
 	// Calculate i = max(N|w|+1) : ∑w∈w...i∑r∈wr(rg) ≤ g
@@ -1138,57 +1264,50 @@ func SequentialDelta(
 
 	// If no reports can be processed, return early
 	if maxReports == 0 {
-		return 0, ctx, nil, ServiceHashPairs{}, nil
+		return 0, ctx, nil, ServiceHashPairs{}
 	}
 
 	// Process maxReports using ParallelDelta (∆*)
-	gasUsed, newCtx, transfers, hashPairs, err := ParallelDelta(
+	gasUsed, newCtx, transfers, hashPairs := ParallelDelta(
 		ctx,
 		workReports[:maxReports],
-		privileged,
+		privileged.AmountOfGasPerServiceId,
 	)
-	if err != nil {
-		return 0, ctx, nil, nil, fmt.Errorf("parallel processing failed: %w", err)
-	}
 
 	// If we have remaining reports and gas, process recursively (∆+)
 	if maxReports < len(workReports) {
 		remainingGas := gasLimit - gasUsed
 		if remainingGas > 0 {
-			moreItems, finalCtx, moreTransfers, moreHashPairs, err := SequentialDelta(
+			moreItems, finalCtx, moreTransfers, moreHashPairs := SequentialDelta(
 				remainingGas,
 				workReports[maxReports:],
 				newCtx,
 				privileged,
 			)
-			if err != nil {
-				return uint32(maxReports), newCtx, transfers, hashPairs, nil
-			}
 
 			return uint32(maxReports) + moreItems,
 				finalCtx,
 				append(transfers, moreTransfers...),
-				append(hashPairs, moreHashPairs...),
-				nil
+				append(hashPairs, moreHashPairs...)
 		}
 	}
 
-	return uint32(maxReports), newCtx, transfers, hashPairs, nil
+	return uint32(maxReports), newCtx, transfers, hashPairs
 }
 
 // ParallelDelta implements equation 178 (∆*)
 func ParallelDelta(
-	ctx state.AccumulationState,
+	initialAccState state.AccumulationState,
 	workReports []block.WorkReport,
-	privileged service.PrivilegedServices,
+	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
 	uint64, // total gas used
 	state.AccumulationState, // updated context
 	[]service.DeferredTransfer, // all transfers
 	ServiceHashPairs, // accumulation outputs
-	error,
 ) {
 	// Get all unique service indices involved (s)
+	// s = {rs S w ∈ w, r ∈ wr} ∪ K(f)
 	serviceIndices := make(map[block.ServiceId]struct{})
 
 	// From work reports
@@ -1199,17 +1318,19 @@ func ParallelDelta(
 	}
 
 	// From privileged gas assignments
-	for svcId := range privileged.AmountOfGasPerServiceId {
+	for svcId := range privilegedGas {
 		serviceIndices[svcId] = struct{}{}
 	}
 
 	var totalGasUsed uint64
 	var allTransfers []service.DeferredTransfer
 	accumHashPairs := make(ServiceHashPairs, 0)
+	newAccState := state.AccumulationState{
+		ServiceState: make(service.ServiceState),
+	}
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	var firstError error
 
 	for svcId := range serviceIndices {
 		wg.Add(1)
@@ -1217,16 +1338,7 @@ func ParallelDelta(
 			defer wg.Done()
 
 			// Process single service using Delta1
-			result, gasUsed, err := Delta1(&ctx, workReports, privileged.AmountOfGasPerServiceId, serviceId)
-			if err != nil {
-				mu.Lock()
-				if firstError == nil {
-					firstError = fmt.Errorf("service %d processing failed: %w", serviceId, err)
-				}
-				mu.Unlock()
-				return
-			}
-
+			accState, deferredTransfers, resultHash, gasUsed := Delta1(initialAccState, workReports, privilegedGas, serviceId)
 			mu.Lock()
 			defer mu.Unlock()
 
@@ -1234,80 +1346,82 @@ func ParallelDelta(
 			totalGasUsed += gasUsed
 
 			// Collect transfers
-			if len(result.DeferredTransfers) > 0 {
-				allTransfers = append(allTransfers, result.DeferredTransfers...)
+			if len(deferredTransfers) > 0 {
+				allTransfers = append(allTransfers, deferredTransfers...)
 			}
 
 			// Store accumulation result if present
-			if result.AccumulationRoot != nil {
+			if resultHash != nil {
 				accumHashPairs = append(accumHashPairs, ServiceHashPair{
 					ServiceId: serviceId,
-					Hash:      *result.AccumulationRoot,
+					Hash:      *resultHash,
 				})
 			}
 
-			// Update state context components
-			if result.ServiceState != nil {
-				if ctx.ServiceState == nil {
-					ctx.ServiceState = make(service.ServiceState)
-				}
-				ctx.ServiceState[serviceId] = *result.ServiceState
+			// d′ = {s ↦ ds S s ∈ K(d) ∖ s} ∪ [⋃ s∈s] ((∆1(o, w, f , s)o)d
+			for serviceId, serviceAccount := range accState.ServiceState {
+				newAccState.ServiceState[serviceId] = serviceAccount
 			}
-
-			// Update validator keys if needed
-			if len(result.ValidatorUpdates) > 0 {
-				ctx.ValidatorKeys = result.ValidatorUpdates
-			}
-
-			// Update work reports queue
-			for coreIdx := range result.CoreAssignments {
-				copy(ctx.WorkReportsQueue[coreIdx][:], result.CoreAssignments[coreIdx][:])
-			}
-
-			// Update privileged services
-			if result.PrivilegedUpdates.ManagerServiceId != 0 {
-				ctx.PrivilegedServices.ManagerServiceId = result.PrivilegedUpdates.ManagerServiceId
-			}
-			if result.PrivilegedUpdates.AssignServiceId != 0 {
-				ctx.PrivilegedServices.AssignServiceId = result.PrivilegedUpdates.AssignServiceId
-			}
-			if result.PrivilegedUpdates.DesignateServiceId != 0 {
-				ctx.PrivilegedServices.DesignateServiceId = result.PrivilegedUpdates.DesignateServiceId
-			}
-			if len(result.PrivilegedUpdates.GasAssignments) > 0 {
-				if ctx.PrivilegedServices.AmountOfGasPerServiceId == nil {
-					ctx.PrivilegedServices.AmountOfGasPerServiceId = make(map[block.ServiceId]uint64)
-				}
-				for svcId, gas := range result.PrivilegedUpdates.GasAssignments {
-					ctx.PrivilegedServices.AmountOfGasPerServiceId[svcId] = gas
-				}
-			}
-
 		}(svcId)
 	}
 
+	wg.Add(1)
+	go func(serviceId block.ServiceId) {
+		defer wg.Done()
+
+		// Process single service using Delta1
+		accState, _, _, _ := Delta1(initialAccState, workReports, privilegedGas, serviceId)
+		mu.Lock()
+		defer mu.Unlock()
+
+		newAccState.PrivilegedServices = accState.PrivilegedServices
+
+	}(initialAccState.PrivilegedServices.ManagerServiceId)
+
+	wg.Add(1)
+	go func(serviceId block.ServiceId) {
+		defer wg.Done()
+
+		// Process single service using Delta1
+		accState, _, _, _ := Delta1(initialAccState, workReports, privilegedGas, serviceId)
+		mu.Lock()
+		defer mu.Unlock()
+
+		newAccState.ValidatorKeys = accState.ValidatorKeys
+
+	}(initialAccState.PrivilegedServices.AssignServiceId)
+
+	wg.Add(1)
+	go func(serviceId block.ServiceId) {
+		defer wg.Done()
+
+		// Process single service using Delta1
+		accState, _, _, _ := Delta1(initialAccState, workReports, privilegedGas, serviceId)
+		mu.Lock()
+		defer mu.Unlock()
+
+		newAccState.WorkReportsQueue = accState.WorkReportsQueue
+
+	}(initialAccState.PrivilegedServices.DesignateServiceId)
+
 	// Wait for all goroutines to complete
 	wg.Wait()
-
-	if firstError != nil {
-		return 0, ctx, nil, nil, firstError
-	}
 
 	// Sort accumulation pairs by service ID to ensure deterministic output
 	sort.Slice(accumHashPairs, func(i, j int) bool {
 		return accumHashPairs[i].ServiceId < accumHashPairs[j].ServiceId
 	})
 
-	return totalGasUsed, ctx, allTransfers, accumHashPairs, nil
+	return totalGasUsed, newAccState, allTransfers, accumHashPairs
 }
 
 // Delta1 implements equation 180 (∆1)
 func Delta1(
-	ctx *state.AccumulationState,
+	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
 	serviceIndex block.ServiceId, // NS
-) (*state.AccumulationResult, uint64, error) {
+) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)
 	if gas, exists := privilegedGas[serviceIndex]; exists {
@@ -1339,40 +1453,12 @@ func Delta1(
 		}
 	}
 
-	// Ensure all service code hashes match
-	var expectedCodeHash *crypto.Hash
-	for _, report := range workReports {
-		for _, result := range report.WorkResults {
-			if result.ServiceId == serviceIndex {
-				if expectedCodeHash == nil {
-					expectedCodeHash = &result.ServiceHashCode
-				} else if *expectedCodeHash != result.ServiceHashCode {
-					return nil, 0, fmt.Errorf("inconsistent service code hash for service %d", serviceIndex)
-				}
-			}
-		}
-	}
-
+	// TODO pass in state and header
 	// Invoke VM for accumulation (ΨA)
-	result, gasUsed, err := InvokeAccumulate(
-		ctx,
+	return invocations.NewAccumulator(nil, nil).Invoke(
+		accumulationState,
 		serviceIndex,
 		gasLimit,
 		operands,
 	)
-	if err != nil {
-		return nil, 0, fmt.Errorf("VM invocation failed: %w", err)
-	}
-
-	return result, gasUsed, nil
-}
-
-// TODO Implement InvokeAccumulate
-func InvokeAccumulate(
-	ctx *state.AccumulationState,
-	serviceIndex block.ServiceId,
-	gasLimit uint64,
-	operands []state.AccumulationOperand,
-) (*state.AccumulationResult, uint64, error) {
-	return nil, 0, nil
 }
