@@ -1,4 +1,4 @@
-package invocations
+package statetransition
 
 import (
 	"errors"
@@ -10,12 +10,16 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
-	. "github.com/eigerco/strawberry/internal/polkavm/util"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+)
+
+const (
+	OnTransferCost = 10
+	AccumulateCost = 10
 )
 
 func NewAccumulator(state *state.State, header *block.Header) *Accumulator {
@@ -32,8 +36,8 @@ type Accumulator struct {
 	serializer *serialization.Serializer
 }
 
-// Invoke ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G) Equation 280
-func (a *Accumulator) Invoke(accState state.AccumulationState, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
+// InvokePVM ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G) Equation 280
+func (a *Accumulator) InvokePVM(accState state.AccumulationState, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// if d[s]c = ∅
 	if accState.ServiceState[serviceIndex].Code() == nil {
 		ctx, err := a.newCtx(accState, serviceIndex)
@@ -150,7 +154,7 @@ func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.Servi
 	if err != nil {
 		return polkavm.AccumulateContext{}, err
 	}
-	ctx.NewServiceId = Check((newServiceID-(Bit8)+1)%(Bit32-Bit9)+Bit8, u.ServiceState)
+	ctx.NewServiceId = service.DeriveIndex(newServiceID, u.ServiceState)
 	return ctx, nil
 }
 
