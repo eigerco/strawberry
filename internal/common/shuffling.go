@@ -4,7 +4,6 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
-	"golang.org/x/crypto/blake2b"
 )
 
 var serializer = serialization.NewSerializer(codec.NewJamCodec())
@@ -53,7 +52,7 @@ func generateRandomNumbers(h crypto.Hash, l uint32) ([]uint32, error) {
 		}
 
 		input := append(h[:], kBytes...)
-		hash := blake2b.Sum256(input)
+		hash := crypto.HashData(input)
 
 		p := (4 * i) % 32
 		var b [4]byte
