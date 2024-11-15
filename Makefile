@@ -22,7 +22,7 @@ fmt:
 .PHONY: lint
 ## lint: Runs golangci-lint run
 lint:
-	golangci-lint run
+	golangci-lint run --timeout=5m
 
 .PHONY: build-bandersnatch
 ## build-bandersnatch: Builds the bandersnatch library
