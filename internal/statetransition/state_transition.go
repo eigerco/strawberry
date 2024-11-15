@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	signatureContextGuarantee = "$jam_guarantee"
+	signatureContextGuarantee = "$jam_guarantee" // X_G (141 v0.4.5)
 )
 
 // UpdateState updates the state
@@ -44,15 +44,17 @@ func UpdateState(s *state.State, newBlock block.Block) {
 
 	intermediateServiceState := calculateIntermediateServiceState(newBlock.Extrinsic.EP, s.Services, newTimeState)
 
+	workReports := getAvailableWorkReports(newBlock.Extrinsic.EA, newCoreAssignments)
+
 	newAccumulationQueue,
 		newAccumulationHistory,
 		newServices,
 		newPrivilegedServices,
 		newQueuedValidators,
 		newPendingCoreAuthorizations,
-		serviceHashPairs := calculateWorkReportsAndAccumulate(&newBlock, s,
+		serviceHashPairs := calculateWorkReportsAndAccumulate(&newBlock.Header, s,
 		newTimeState,
-		newCoreAssignments,
+		workReports,
 		s.AccumulationQueue,
 		s.AccumulationHistory,
 		intermediateServiceState,
@@ -680,12 +682,13 @@ func calculateNewArchivedValidators(header block.Header, timeslot jamtime.Timesl
 	return validators, nil
 }
 
-// calculateWorkReportsAndAccumulate Equation 28: W* ≺ (EA, ρ′) and Equation 29: δ′, 𝝌′, ι′, φ′, C ≺ (EA, ρ′, δ†, 𝝌, ι, φ)
+// calculateWorkReportsAndAccumulate implements equation 29: (ϑ′, ξ′, δ′, χ′, ι′, φ′, C) ≺ (W*, ϑ, ξ, δ†, χ, ι, φ)
+// with the only difference that we take in available work reports and calculate the accumulatable WR
 func calculateWorkReportsAndAccumulate(
-	newBlock *block.Block,
+	header *block.Header,
 	currentState *state.State,
 	newTimeslot jamtime.Timeslot,
-	coreAssignments state.CoreAssignments,
+	workReports []block.WorkReport,
 	accQueue state.AccumulationQueue,
 	accHistory state.AccumulationHistory,
 	intermediateServiceState service.ServiceState,
@@ -701,25 +704,6 @@ func calculateWorkReportsAndAccumulate(
 	newWorkReportsQueue state.PendingAuthorizersQueues,
 	hashPairs ServiceHashPairs,
 ) {
-	coreAssignments = verifyAvailability(newBlock.Extrinsic.EA, coreAssignments)
-
-	workReports := getAvailableWorkReports(coreAssignments)
-
-	// TODO (156) ∀w ∈ w, ∀r ∈ wr ∶ rc = δ[rs]c
-	// Ensure all service code hashes match
-	//var expectedCodeHash *crypto.Hash
-	//for _, report := range workReports {
-	//	for _, result := range report.WorkResults {
-	//		if result.ServiceId == serviceIndex {
-	//			if expectedCodeHash == nil {
-	//				expectedCodeHash = &result.ServiceHashCode
-	//			} else if *expectedCodeHash != result.ServiceHashCode {
-	//				return nil, 0, fmt.Errorf("inconsistent service code hash for service %d", serviceIndex)
-	//			}
-	//		}
-	//	}
-	//}
-
 	// (165) W! ≡ [w S w <− W, (wx)p = ∅ ∧ wl = {}]
 	var immediatelyAccWorkReports []block.WorkReport
 	var workReportWithDeps []state.WorkReportWithUnAccumulatedDependencies
@@ -736,7 +720,7 @@ func calculateWorkReportsAndAccumulate(
 	var queuedWorkReports = updateQueue(workReportWithDeps, flattenAccumulationHistory(accHistory))
 
 	// let m = Ht mod E
-	timeslotPerEpoch := newBlock.Header.TimeSlotIndex % jamtime.TimeslotsPerEpoch
+	timeslotPerEpoch := header.TimeSlotIndex % jamtime.TimeslotsPerEpoch
 
 	// (173) q = E(⋃(ϑm...) ⌢ ⋃(ϑ...m) ⌢ WQ, P(W!))
 	workReportsFromQueueDeps := updateQueue(
@@ -758,7 +742,7 @@ func calculateWorkReportsAndAccumulate(
 	gasLimit := max(service.TotalGasAccumulation, service.CoreGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
 
 	// (182) let (n, o, t, C) = ∆+(g, W∗, (χ, δ†, ι, φ), χg )
-	maxReports, newAccumulationState, transfers, hashPairs := NewAccumulator(currentState, &newBlock.Header).SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
+	maxReports, newAccumulationState, transfers, hashPairs := NewAccumulator(currentState, header).SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
 		PrivilegedServices: privilegedServices,
 		ServiceState:       intermediateServiceState,
 		ValidatorKeys:      queuedValidators,
@@ -904,9 +888,11 @@ func transfersForReceiver(transfers []service.DeferredTransfer, serviceId block.
 	return transfersForReceiver
 }
 
-// verifyAvailability implements availability verification part of equations 29-30:
+// verifyAvailability (129) implements availability verification part of equations 29-30:
 // This function ensures cores have sufficient availability (>2/3 validators)
 // before allowing accumulation
+//
+//lint:ignore U1000
 func verifyAvailability(assurances block.AssurancesExtrinsic, assignments state.CoreAssignments) state.CoreAssignments {
 	var availableCores state.CoreAssignments
 
@@ -1059,17 +1045,34 @@ func translatePVMContext(ctx polkavm.AccumulateContext, root *crypto.Hash) state
 	}
 }
 
-// getAvailableWorkReports is a helper function to extract available work reports
-// from core assignments. This implements part of W set extraction from equation 129:
-// W ≡ [ρ†[c]w | c <- NC, Σa∈EA av[c] > 2/3 V]
-func getAvailableWorkReports(coreAssignments state.CoreAssignments) []block.WorkReport {
-	var reports []block.WorkReport
-	for _, assignment := range coreAssignments {
-		if assignment.WorkReport != nil {
-			reports = append(reports, *assignment.WorkReport)
+// getAvailableWorkReports partially implements equation 28: W* ≺ (EA, ρ′) and 130: W ≡ [ρ†[c]w | c <- NC, ∑a∈EA af[c] > 2/3 V]
+// we diverge from equation 28 and return available work reports instead of accumulatable
+func getAvailableWorkReports(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments) []block.WorkReport {
+	// Count assurances per core
+	assuranceCounts := make([]int, common.TotalNumberOfCores)
+
+	// Process each assurance
+	for _, assurance := range assurances {
+		for coreIndex := uint16(0); coreIndex < common.TotalNumberOfCores; coreIndex++ {
+			if block.HasAssuranceForCore(assurance, coreIndex) {
+				assuranceCounts[coreIndex]++
+			}
 		}
 	}
-	return reports
+
+	// Collect work reports that have sufficient assurances
+	var availableReports []block.WorkReport
+	threshold := (2 * common.NumberOfValidators) / 3 // 2/3 V
+
+	for coreIndex := uint16(0); coreIndex < common.TotalNumberOfCores; coreIndex++ {
+		if assuranceCounts[coreIndex] > threshold {
+			if assignment := coreAssignments[coreIndex]; assignment.WorkReport != nil {
+				availableReports = append(availableReports, *assignment.WorkReport)
+			}
+		}
+	}
+
+	return availableReports
 }
 
 // determineServicesToAccumulate implements equation 157:
@@ -1164,39 +1167,6 @@ func calculateGasAllocations(
 	}
 
 	return allocations
-}
-
-// wrangleAccumulationOperands implements equations 159-160:
-// Equation 159: O ≡ {o ∈ Y ∪ J, l ∈ H, k ∈ H, a ∈ Y}
-// Equation 160: M: NS → ⟦O⟧
-// Prepares accumulation operands from work reports by collecting:
-// - Outputs or errors
-// - Payload hashes
-// - Work package hashes
-// - Authorization outputs
-//
-//lint:ignore U1000
-func wrangleAccumulationOperands(assignment state.CoreAssignments) map[block.ServiceId][]state.AccumulationOperand {
-	mapping := make(map[block.ServiceId][]state.AccumulationOperand)
-
-	// Process each work report
-	for _, report := range getAvailableWorkReports(assignment) {
-		// Process each work result in the report
-		for _, result := range report.WorkResults {
-			operand := state.AccumulationOperand{
-				Output:              result.Output,
-				PayloadHash:         result.PayloadHash,
-				WorkPackageHash:     report.WorkPackageSpecification.WorkPackageHash,
-				AuthorizationOutput: report.Output,
-			}
-
-			// Append to the service's operands sequence
-			serviceId := result.ServiceId
-			mapping[serviceId] = append(mapping[serviceId], operand)
-		}
-	}
-
-	return mapping
 }
 
 // buildServiceAccumulationCommitments implements equation 163:
