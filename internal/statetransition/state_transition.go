@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"log"
 	"maps"
 	"slices"
@@ -24,7 +25,8 @@ import (
 )
 
 const (
-	signatureContextGuarantee = "$jam_guarantee" // X_G (141 v0.4.5)
+	signatureContextGuarantee = "$jam_guarantee"  // X_G ≡ $jam_guarantee (141 v0.4.5)
+	signatureContextAvailable = "$jam_available " // X_A ≡ $jam_available (128 v0.4.5)
 )
 
 // UpdateState updates the state
@@ -33,6 +35,13 @@ const (
 //	it might be worth making State immutable and make it so that UpdateState returns a new State with all the updated fields
 func UpdateState(s *state.State, newBlock block.Block) {
 	// Calculate newSafroleState state values
+
+	if !assuranceIsAnchoredOnParent(newBlock.Header, newBlock.Extrinsic.EA) {
+		log.Printf("Invalid block, the assurance is not anchored on parent")
+	}
+	if !assuranceIsOrderedByValidatorIndex(newBlock.Extrinsic.EA) {
+		log.Printf("Invalid block, the assurance is not ordered by validator index")
+	}
 
 	newTimeState := calculateNewTimeState(newBlock.Header)
 
@@ -88,6 +97,10 @@ func UpdateState(s *state.State, newBlock block.Block) {
 		log.Printf("Error calculating new Validators: %v", err)
 	} else {
 		s.ValidatorState.CurrentValidators = newValidators
+	}
+
+	if assurancesSignatureIsInvalid(newValidators, newBlock.Header, newBlock.Extrinsic.EA) {
+		log.Printf("extrinsic assurance signature is invalid")
 	}
 
 	newArchivedValidators, err := calculateNewArchivedValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.CurrentValidators)
@@ -1039,6 +1052,52 @@ func translatePVMContext(ctx polkavm.AccumulateContext, root *crypto.Hash) state
 			GasAssignments:     ctx.AccumulationState.PrivilegedServices.AmountOfGasPerServiceId,
 		},
 	}
+}
+
+// assuranceIsAnchoredOnParent (125) ∀a ∈ EA ∶ a_a = Hp
+func assuranceIsAnchoredOnParent(header block.Header, assurances block.AssurancesExtrinsic) bool {
+	for _, assurance := range assurances {
+		if assurance.Anchor != header.ParentHash {
+			return false
+		}
+	}
+	return true
+}
+
+// assuranceIsOrderedByValidatorIndex (126) ∀i ∈ {1 . . . SEAS} ∶ EA[i − 1]v < EA[i]v
+func assuranceIsOrderedByValidatorIndex(assurances block.AssurancesExtrinsic) bool {
+	return slices.IsSortedFunc(assurances, func(a, b block.Assurance) int {
+		if a.ValidatorIndex < b.ValidatorIndex {
+			return -1
+		} else if a.ValidatorIndex > b.ValidatorIndex {
+			return 1
+		}
+		return 0
+	})
+}
+
+// assurancesSignatureIsInvalid (127) ∀a ∈ EA ∶ as ∈ Eκ′[av ]e ⟨XA ⌢ H(E(Hp, af ))⟩
+func assurancesSignatureIsInvalid(validators safrole.ValidatorsData, header block.Header, assurances block.AssurancesExtrinsic) bool {
+	for _, assurance := range assurances {
+		var message []byte
+		b, err := jam.Marshal(header.ParentHash)
+		if err != nil {
+			log.Println("error encoding header parent hash", err)
+			return false
+		}
+		message = append(message, b...)
+		b, err = jam.Marshal(assurance.Bitfield)
+		if err != nil {
+			log.Println("error encoding assurance bitfield", err)
+			return false
+		}
+		message = append(message, b...)
+		messageHash := crypto.HashData(message)
+		if !ed25519.Verify(validators[assurance.ValidatorIndex].Ed25519, append([]byte(signatureContextAvailable), messageHash[:]...), assurance.Signature[:]) {
+			return false
+		}
+	}
+	return true
 }
 
 // getAvailableWorkReports partially implements equation 28: W* ≺ (EA, ρ′) and 130: W ≡ [ρ†[c]w | c <- NC, ∑a∈EA af[c] > 2/3 V]
