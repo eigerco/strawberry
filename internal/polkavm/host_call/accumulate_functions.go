@@ -9,7 +9,6 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	. "github.com/eigerco/strawberry/internal/polkavm"
-	. "github.com/eigerco/strawberry/internal/polkavm/util"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 )
@@ -162,7 +161,7 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Ga
 		ctxPair.RegularCtx.ServiceState[ctxPair.RegularCtx.ServiceId] = currentAccount
 
 		// check(bump(xi))
-		ctxPair.RegularCtx.ServiceId = Check(Bump(ctxPair.RegularCtx.NewServiceId), ctxPair.RegularCtx.AccumulationState.ServiceState)
+		ctxPair.RegularCtx.ServiceId = service.CheckIndex(service.BumpIndex(ctxPair.RegularCtx.NewServiceId), ctxPair.RegularCtx.AccumulationState.ServiceState)
 		//(xu)d ∪ {xi ↦ a, xs ↦ s}, b
 		ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = account
 		return gas, regs, mem, ctxPair, nil

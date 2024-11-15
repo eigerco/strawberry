@@ -16,7 +16,6 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	. "github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
-	pvmutil "github.com/eigerco/strawberry/internal/polkavm/util"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
@@ -191,7 +190,7 @@ func TestAccumulate(t *testing.T) {
 			expectedX: AccumulateContext{
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
-						pvmutil.Check(pvmutil.Bump(newServiceID), make(service.ServiceState)): {
+						service.CheckIndex(service.BumpIndex(newServiceID), make(service.ServiceState)): {
 							Storage: make(map[crypto.Hash][]byte),
 							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 								{Hash: randomHash, Length: service.PreimageLength(123123)}: {},
@@ -204,7 +203,7 @@ func TestAccumulate(t *testing.T) {
 					},
 				},
 				NewServiceId: newServiceID,
-				ServiceId:    pvmutil.Check(pvmutil.Bump(newServiceID), make(service.ServiceState)),
+				ServiceId:    service.CheckIndex(service.BumpIndex(newServiceID), make(service.ServiceState)),
 				ServiceState: service.ServiceState{
 					currentServiceID: {
 						Balance: 123123123 - 100, // initial balance minus balance of the new service

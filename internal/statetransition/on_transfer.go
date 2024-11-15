@@ -1,4 +1,4 @@
-package invocations
+package statetransition
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
@@ -11,9 +11,9 @@ import (
 	"log"
 )
 
-// InvokeOnTransfer On-Transfer service-account invocation (ΨT).
+// InvokePVMOnTransfer On-Transfer service-account invocation (ΨT).
 // The only state alteration it facilitates are basic alteration to the storage of the subject account
-func InvokeOnTransfer(serviceState service.ServiceState, serviceIndex block.ServiceId, transfers []service.DeferredTransfer) service.ServiceAccount {
+func InvokePVMOnTransfer(serviceState service.ServiceState, serviceIndex block.ServiceId, transfers []service.DeferredTransfer) service.ServiceAccount {
 	serviceAccount := serviceState[serviceIndex]
 	serviceCode := serviceAccount.PreimageLookup[serviceAccount.CodeHash]
 	if serviceCode == nil || len(transfers) == 0 {
