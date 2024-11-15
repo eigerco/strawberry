@@ -278,39 +278,38 @@ func calculateNewTimeState(header block.Header) jamtime.Timeslot {
 	return header.TimeSlotIndex
 }
 
-// calculateNewRecentBlocks Equation 18: β′ ≺ (H, EG, β†, C)
+// calculateNewRecentBlocks Equation 18: β′ ≺ (H, EG, β†, C) v0.4.5
 func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentBlocks []state.BlockState, serviceHashPairs ServiceHashPairs) ([]state.BlockState, error) {
-	// Calculate accumulation-result Merkle tree root (r)
+	// Equation 83: let r = M_B([s ^^ E_4(s) ⌢ E(h) | (s, h) ∈ C], H_K)
 	accumulationRoot := calculateAccumulationRoot(serviceHashPairs)
 
-	// Append to the previous block's Merkle mountain range (b)
+	// Equation 83: let b = A(last([[]] ⌢ [x_b | x <− β]), r, H_K)
 	var lastBlockMMR crypto.Hash
 	if len(intermediateRecentBlocks) > 0 {
 		lastBlockMMR = intermediateRecentBlocks[len(intermediateRecentBlocks)-1].AccumulationResultMMR
 	}
 	newMMR := AppendToMMR(lastBlockMMR, accumulationRoot)
+
+	// Equation 83: p = {((g_w)_s)_h ↦ ((g_w)_s)_e | g ∈ E_G}
+	workPackageMapping := buildWorkPackageMapping(guarantees.Guarantees)
+
+	// Equation 83: let n = {p, h ▸▸ H(H), b, s ▸▸ H_0}
 	headerBytes, err := json.Marshal(header)
 	if err != nil {
 		return nil, err
 	}
-
-	// Create new block state (n)
-	reportHashes, err := calculateWorkReportHashes(guarantees)
-	if err != nil {
-		return nil, err
-	}
-
 	newBlockState := state.BlockState{
-		HeaderHash:            crypto.HashData(headerBytes),
-		StateRoot:             header.PriorStateRoot,
-		AccumulationResultMMR: newMMR,
-		WorkReportHashes:      reportHashes,
+		HeaderHash:            crypto.HashData(headerBytes), // h ▸▸ H(H)
+		StateRoot:             crypto.Hash{},                // s ▸▸ H_0
+		AccumulationResultMMR: newMMR,                       // b
+		WorkReportHashes:      workPackageMapping,           // p
 	}
 
-	// Update β† with the new block state (Equation 83)
+	// Equation 84: β′ ≡ ←────── β† n_H
+	// First append new block state
 	newRecentBlocks := append(intermediateRecentBlocks, newBlockState)
 
-	// Ensure we only keep the most recent H blocks
+	// Then keep only last H blocks
 	if len(newRecentBlocks) > state.MaxRecentBlocks {
 		newRecentBlocks = newRecentBlocks[len(newRecentBlocks)-state.MaxRecentBlocks:]
 	}
@@ -329,18 +328,15 @@ func calculateAccumulationRoot(accumulations ServiceHashPairs) crypto.Hash {
 	return crypto.Hash{}
 }
 
-func calculateWorkReportHashes(guarantees block.GuaranteesExtrinsic) ([common.TotalNumberOfCores]crypto.Hash, error) {
-	var hashes [common.TotalNumberOfCores]crypto.Hash
-	for _, guarantee := range guarantees.Guarantees {
-		// Assuming CoreIndex is part of the WorkReport struct
-		coreIndex := guarantee.WorkReport.CoreIndex
-		reportBytes, err := json.Marshal(guarantee.WorkReport)
-		if err != nil {
-			return [common.TotalNumberOfCores]crypto.Hash{}, err
-		}
-		hashes[coreIndex] = crypto.HashData(reportBytes)
+// buildWorkPackageMapping creates the work package mapping p from equation 83:
+// p = {((gw)s)h ↦ ((gw)s)e | g ∈ EG}
+func buildWorkPackageMapping(guarantees []block.Guarantee) map[crypto.Hash]crypto.Hash {
+	workPackages := make(map[crypto.Hash]crypto.Hash)
+	for _, g := range guarantees {
+		workPackages[g.WorkReport.WorkPackageSpecification.WorkPackageHash] =
+			g.WorkReport.WorkPackageSpecification.SegmentRoot
 	}
-	return hashes, nil
+	return workPackages
 }
 
 // calculateNewSafroleState Equation 19: γ′ ≺ (H, τ, ET , γ, ι, η′, κ′)
