@@ -35,7 +35,7 @@ func RandomValidatorsData(t *testing.T) safrole.ValidatorsData {
 func RandomTickets(t *testing.T) []block.Ticket {
 	var tickets []block.Ticket
 	for i := 0; i < 10; i++ {
-		tickets = append(tickets, block.Ticket{Identifier: testutils.RandomHash(t)})
+		tickets = append(tickets, block.Ticket{Identifier: testutils.RandomBandersnatchOutputHash(t)})
 	}
 	return tickets
 }
@@ -43,7 +43,7 @@ func RandomTickets(t *testing.T) []block.Ticket {
 func RandomTicketBodies(t *testing.T) safrole.TicketsBodies {
 	var tickets safrole.TicketsBodies
 	for i := 0; i < 10; i++ {
-		tickets[i] = block.Ticket{Identifier: testutils.RandomHash(t)}
+		tickets[i] = block.Ticket{Identifier: testutils.RandomBandersnatchOutputHash(t)}
 	}
 	return tickets
 }

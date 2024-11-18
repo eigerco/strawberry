@@ -4,6 +4,7 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
@@ -19,36 +20,31 @@ type State struct {
 
 type ValidatorsData [common.NumberOfValidators]crypto.ValidatorKey
 
-// DetermineNewSealingKeys determines the new sealing keys for an epoch
-func DetermineNewSealingKeys(currentTimeslot jamtime.Timeslot, ticketAccumulator []block.Ticket, currentSealingKeys TicketsOrKeys, epochMarker *block.EpochMarker) (TicketsOrKeys, error) {
-	// If this is not the first timeslot in the epoch, return current keys
-	if !currentTimeslot.IsFirstTimeslotInEpoch() {
-		return currentSealingKeys, nil
+// Returns the RingCommitment for this state i.e. γz.
+func (state State) CalculateRingCommitment() (crypto.RingCommitment, error) {
+	ringVerifier, err := state.RingVerifier()
+	if err != nil {
+		return crypto.RingCommitment{}, err
 	}
-	var ticketsOrKeys TicketsOrKeys
-	// If we don't have the correct number of tickets, proceed with the F function
-	if len(ticketAccumulator) != int(jamtime.TimeslotsPerEpoch) {
-		fallbackKeys, err := selectFallbackKeys(epochMarker)
-		if err != nil {
-			return TicketsOrKeys{}, err
-		}
-		err = ticketsOrKeys.SetValue(fallbackKeys)
-		if err != nil {
-			return TicketsOrKeys{}, err
-		}
-	} else {
-		// Everything is in order, proceed with the outside-in sequencer function Z
-		orderedTickets := outsideInSequence(ticketAccumulator)
-		err := ticketsOrKeys.SetValue(TicketsBodies(orderedTickets))
-		if err != nil {
-			return TicketsOrKeys{}, err
-		}
-	}
-	return ticketsOrKeys, nil
+	return ringVerifier.Commitment()
 }
 
-// selectFallbackKeys selects the fallback keys for the sealing key series. Implements the F function from the graypaper
-func selectFallbackKeys(em *block.EpochMarker) (crypto.EpochKeys, error) {
+// Returns a new RingVrfVerifier for this state.
+func (state State) RingVerifier() (*bandersnatch.RingVrfVerifier, error) {
+	ring := make([]crypto.BandersnatchPublicKey, len(state.NextValidators))
+	for i, vd := range state.NextValidators {
+		ring[i] = vd.Bandersnatch
+	}
+	ringVerifier, err := bandersnatch.NewRingVerifier(ring)
+	if err != nil {
+		return nil, err
+	}
+	return ringVerifier, nil
+}
+
+// SelectFallbackKeys selects the fallback keys for the sealing key series.
+// Implements the F function from the graypaper. Equation 71.
+func SelectFallbackKeys(entropy crypto.Hash, currentValidators ValidatorsData) (crypto.EpochKeys, error) {
 	var fallbackKeys crypto.EpochKeys
 	serializer := serialization.NewSerializer(&codec.JAMCodec{})
 	for i := uint32(0); i < jamtime.TimeslotsPerEpoch; i++ {
@@ -58,7 +54,7 @@ func selectFallbackKeys(em *block.EpochMarker) (crypto.EpochKeys, error) {
 			return crypto.EpochKeys{}, err
 		}
 		// r ⌢ E₄(i): Concatenate entropy with encoded i
-		data := append(em.Entropy[:], iBytes...)
+		data := append(entropy[:], iBytes...)
 		// H₄(r ⌢ E₄(i)): Take first 4 bytes of Blake2 hash
 		hash := crypto.HashData(data)
 		// E⁻¹(...): Decode back to a number
@@ -68,13 +64,13 @@ func selectFallbackKeys(em *block.EpochMarker) (crypto.EpochKeys, error) {
 			return crypto.EpochKeys{}, err
 		}
 		// k[...]↺b: Select validator key and wrap around if needed
-		fallbackKeys[i] = em.Keys[index%uint32(len(em.Keys))]
+		fallbackKeys[i] = currentValidators[index%uint32(len(currentValidators))].Bandersnatch
 	}
 	return fallbackKeys, nil
 }
 
-// outsideInSequence implements the Z function from the graypaper
-func outsideInSequence(tickets []block.Ticket) []block.Ticket {
+// OutsideInSequence implements the Z function from the graypaper. Equation 70.
+func OutsideInSequence(tickets []block.Ticket) []block.Ticket {
 	n := len(tickets)
 	result := make([]block.Ticket, n)
 	left, right := 0, n-1

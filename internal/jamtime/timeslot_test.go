@@ -246,3 +246,80 @@ func TestTimeSlot_ToEpoch(t *testing.T) {
 		assert.Equal(t, ts, want)
 	})
 }
+
+func TestTimeSlot_IsTicketSubmissionPeriod(t *testing.T) {
+	tests := []struct {
+		name     string
+		timeslot Timeslot
+		want     bool
+	}{
+		{
+			name:     "First slot in epoch",
+			timeslot: 0,
+			want:     true,
+		},
+		{
+			name:     "Last submission slot",
+			timeslot: TicketSubmissionTimeSlots - 1,
+			want:     true,
+		},
+		{
+			name:     "First non-submission slot",
+			timeslot: TicketSubmissionTimeSlots,
+			want:     false,
+		},
+		{
+			name:     "Last slot in epoch",
+			timeslot: TimeslotsPerEpoch - 1,
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.timeslot.IsTicketSubmissionPeriod()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestIsWinningTicketMarkerPeriod(t *testing.T) {
+	tests := []struct {
+		name     string
+		next     Timeslot
+		previous Timeslot
+		want     bool
+	}{
+		{
+			name:     "First winning marker slot",
+			next:     TicketSubmissionTimeSlots,
+			previous: TicketSubmissionTimeSlots - 1,
+			want:     true,
+		},
+		{
+			name:     "Winning marker slot, early submission slot, late end submission slot",
+			next:     TicketSubmissionTimeSlots + 1,
+			previous: TicketSubmissionTimeSlots - 6,
+			want:     true,
+		},
+		{
+			name:     "Both slots in submission period",
+			next:     TicketSubmissionTimeSlots - 2,
+			previous: TicketSubmissionTimeSlots - 3,
+			want:     false,
+		},
+		{
+			name:     "Both slots after submission period",
+			next:     TicketSubmissionTimeSlots + 1,
+			previous: TicketSubmissionTimeSlots,
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.next.IsWinningTicketMarkerPeriod(tt.previous)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

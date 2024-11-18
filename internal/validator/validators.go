@@ -2,6 +2,7 @@ package validator
 
 import (
 	"crypto/ed25519"
+
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
@@ -27,12 +28,9 @@ type ValidatorStatistics struct {
 	NumOfAvailabilityAssurances uint64 // Number of availability assurances (a) - The number of assurances of availability made by the validator.
 }
 
-// CalculateRingCommitment is a placeholder function for the actual ring commitment calculation.
-// TODO: Bandersnatch Replace with actual implementation
-func CalculateRingCommitment(safrole.ValidatorsData) crypto.RingCommitment {
-	return crypto.RingCommitment{}
-}
-
+// Implements equation 59 from the graypaper, i.e Φ(k). If any of the queued
+// validator data matches the offenders list (ψ′), all the keys for that
+// validator are zero'd out.
 func NullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed25519.PublicKey) safrole.ValidatorsData {
 	offenderMap := make(map[string]struct{})
 	for _, key := range offenders {
@@ -40,7 +38,11 @@ func NullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed255
 	}
 	for i, validator := range queuedValidators {
 		if _, found := offenderMap[string(validator.Ed25519)]; found {
-			queuedValidators[i] = crypto.ValidatorKey{} // Nullify the validator
+			queuedValidators[i] = crypto.ValidatorKey{
+				// Ensure these 32 bytes are zero'd out, and not just nil.  TODO
+				// - maybe use a custom wrapper type for [32]byte ?
+				Ed25519: make([]byte, 32),
+			} // Nullify the validator.
 		}
 	}
 	return queuedValidators

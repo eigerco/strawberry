@@ -10,4 +10,5 @@ const (
 	ValidatorsSuperMajority        = (2 * NumberOfValidators / 3) + 1
 	WorkReportTimeoutPeriod        = jamtime.Timeslot(5)
 	ValidatorRotationPeriod        = jamtime.Timeslot(10)
+	MaxTicketExtrinsicSize         = 16
 )

@@ -203,7 +203,8 @@ func OutputHash(signature crypto.BandersnatchSignature) (outputHash crypto.Bande
 type RingVrfVerifier struct{ ptr unsafe.Pointer }
 
 // Creates a new RingVrfVerifier from a ring of bandersnatch public keys.
-// Returns an opaque pointer from Rust FFI.
+// Returns an opaque pointer from Rust FFI. Invalid bandersnatch public keys
+// will become padding points on the ring.
 func NewRingVerifier(publicKeys []crypto.BandersnatchPublicKey) (*RingVrfVerifier, error) {
 	flatKeys := flattenPublicKeys(publicKeys)
 	ptr := newRingVrfVerifier(flatKeys, C.size_t(len(flatKeys)))
@@ -285,7 +286,8 @@ func (r *RingVrfVerifier) Verify(
 type RingVrfProver struct{ ptr unsafe.Pointer }
 
 // Creates a new RingVrfProver using the given secret key, public key ring, and
-// the position of the secret key's public key within the ring.
+// the position of the secret key's public key within the ring. Invalid
+// bandersnatch public keys will become padding points on the ring.
 func NewRingProver(secret crypto.BandersnatchPrivateKey, publicKeys []crypto.BandersnatchPublicKey, proverIdx uint) (*RingVrfProver, error) {
 	flatKeys := flattenPublicKeys(publicKeys)
 	ptr := newRingVrfProver(secret[:], flatKeys, C.size_t(len(flatKeys)), C.size_t(proverIdx))

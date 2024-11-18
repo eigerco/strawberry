@@ -189,11 +189,11 @@ type expectedBlock struct {
 			Entropy    string   `json:"entropy"`
 			Validators []string `json:"validators"`
 		} `json:"epoch_mark"`
-		TicketsMark   *[jamtime.TimeslotsPerEpoch]block.Ticket `json:"tickets_mark"`
-		OffendersMark []string                                 `json:"offenders_mark"`
-		AuthorIndex   uint16                                   `json:"author_index"`
-		EntropySource string                                   `json:"entropy_source"`
-		Seal          string                                   `json:"seal"`
+		TicketsMark   *block.WinningTicketMarker `json:"tickets_mark"`
+		OffendersMark []string                   `json:"offenders_mark"`
+		AuthorIndex   uint16                     `json:"author_index"`
+		EntropySource string                     `json:"entropy_source"`
+		Seal          string                     `json:"seal"`
 	} `json:"header"`
 	Extrinsic struct {
 		Tickets []struct {
