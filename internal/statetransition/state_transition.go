@@ -33,14 +33,16 @@ const (
 // TODO: all the calculations which are not dependent on intermediate / new state can be done in parallel
 //
 //	it might be worth making State immutable and make it so that UpdateState returns a new State with all the updated fields
-func UpdateState(s *state.State, newBlock block.Block) {
-	// Calculate newSafroleState state values
+func UpdateState(s *state.State, newBlock block.Block) error {
+	if newBlock.Header.TimeSlotIndex.IsInFuture() {
+		return errors.New("invalid block, it is in the future")
+	}
 
 	if !assuranceIsAnchoredOnParent(newBlock.Header, newBlock.Extrinsic.EA) {
-		log.Printf("Invalid block, the assurance is not anchored on parent")
+		return errors.New("invalid block, the assurance is not anchored on parent")
 	}
 	if !assuranceIsOrderedByValidatorIndex(newBlock.Extrinsic.EA) {
-		log.Printf("Invalid block, the assurance is not ordered by validator index")
+		return errors.New("Invalid block, the assurance is not ordered by validator index")
 	}
 
 	newTimeState := calculateNewTimeState(newBlock.Header)
@@ -75,14 +77,12 @@ func UpdateState(s *state.State, newBlock block.Block) {
 	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
 	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, serviceHashPairs)
 	if err != nil {
-		// TODO handle error
-		log.Printf("Error calculating new Recent Blocks: %v", err)
+		return err
 	}
 
 	newEntropyPool, err := calculateNewEntropyPool(newBlock.Header, s.TimeslotIndex, s.EntropyPool)
 	if err != nil {
-		// TODO handle error
-		log.Printf("Error calculating new Entropy pool: %v", err)
+		return err
 	} else {
 		s.EntropyPool = newEntropyPool
 	}
@@ -93,8 +93,7 @@ func UpdateState(s *state.State, newBlock block.Block) {
 
 	newValidators, err := calculateNewValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.CurrentValidators, s.ValidatorState.SafroleState.NextValidators)
 	if err != nil {
-		// TODO handle error
-		log.Printf("Error calculating new Validators: %v", err)
+		return err
 	} else {
 		s.ValidatorState.CurrentValidators = newValidators
 	}
@@ -105,16 +104,14 @@ func UpdateState(s *state.State, newBlock block.Block) {
 
 	newArchivedValidators, err := calculateNewArchivedValidators(newBlock.Header, s.TimeslotIndex, s.ValidatorState.ArchivedValidators, s.ValidatorState.CurrentValidators)
 	if err != nil {
-		// TODO handle error
-		log.Printf("Error calculating new Archived Validators: %v", err)
+		return err
 	} else {
 		s.ValidatorState.ArchivedValidators = newArchivedValidators
 	}
 
 	newSafroleState, err := calculateNewSafroleState(newBlock.Header, s.TimeslotIndex, newBlock.Extrinsic.ET, s.ValidatorState.QueuedValidators)
 	if err != nil {
-		// TODO handle error
-		log.Printf("Error calculating new Safrole state: %v", err)
+		return err
 	} else {
 		s.ValidatorState.SafroleState = newSafroleState
 	}
@@ -131,6 +128,8 @@ func UpdateState(s *state.State, newBlock block.Block) {
 	s.PrivilegedServices = newPrivilegedServices
 	s.AccumulationQueue = newAccumulationQueue
 	s.AccumulationHistory = newAccumulationHistory
+
+	return nil
 }
 
 // Intermediate State Calculation Functions
@@ -379,7 +378,7 @@ func calculateNewEntropyPool(header block.Header, timeslot jamtime.Timeslot, ent
 		return state.EntropyPool{}, err
 	}
 	newEntropy := crypto.Hash(append(entropyPool[0][:], vrfOutput[:]...))
-	if header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
+	if jamtime.IsEpochTransition(timeslot, header.TimeSlotIndex) {
 		newEntropyPool = state.RotateEntropyPool(entropyPool)
 	}
 	newEntropyPool[0] = newEntropy
@@ -1244,14 +1243,14 @@ func buildServiceAccumulationCommitments(accumResults map[block.ServiceId]state.
 
 // calculateNewValidatorStatistics implements equation 30:
 // π′ ≺ (EG, EP, EA, ET, τ, κ′, π, H)
-func calculateNewValidatorStatistics(block block.Block, currentTime jamtime.Timeslot, validatorStatistics validator.ValidatorStatisticsState) validator.ValidatorStatisticsState {
+func calculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslot, validatorStatistics validator.ValidatorStatisticsState) validator.ValidatorStatisticsState {
 	newStats := validatorStatistics
 
 	// Implements equations 170-171:
 	// let e = ⌊τ/E⌋, e′ = ⌊τ′/E⌋
 	// (a, π′₁) ≡ { (π₀, π₁) if e′ = e
 	//              ([{0,...,[0,...]},...], π₀) otherwise
-	if block.Header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
+	if jamtime.IsEpochTransition(timeslot, block.Header.TimeSlotIndex) {
 		// Rotate statistics - completed stats become history, start fresh present stats
 		newStats[0] = newStats[1]                                                // Move current to history
 		newStats[1] = [common.NumberOfValidators]validator.ValidatorStatistics{} // Reset current
