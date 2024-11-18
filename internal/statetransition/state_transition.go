@@ -51,7 +51,15 @@ func UpdateState(s *state.State, newBlock block.Block) error {
 
 	intermediateCoreAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
 	intermediateCoreAssignments = calculateIntermediateCoreAssignmentsFromAvailability(newBlock.Extrinsic.EA, intermediateCoreAssignments)
-	newCoreAssignments := calculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState, newTimeState)
+
+	newEntropyPool, err := calculateNewEntropyPool(newBlock.Header, s.TimeslotIndex, s.EntropyPool)
+	if err != nil {
+		return err
+	} else {
+		s.EntropyPool = newEntropyPool
+	}
+
+	newCoreAssignments := calculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState, newTimeState, s.EntropyPool)
 
 	intermediateServiceState := calculateIntermediateServiceState(newBlock.Extrinsic.EP, s.Services, newTimeState)
 
@@ -78,13 +86,6 @@ func UpdateState(s *state.State, newBlock block.Block) error {
 	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, serviceHashPairs)
 	if err != nil {
 		return err
-	}
-
-	newEntropyPool, err := calculateNewEntropyPool(newBlock.Header, s.TimeslotIndex, s.EntropyPool)
-	if err != nil {
-		return err
-	} else {
-		s.EntropyPool = newEntropyPool
 	}
 
 	newJudgements := calculateNewJudgements(newBlock.Extrinsic.ED, s.PastJudgements)
@@ -544,6 +545,7 @@ func calculateNewCoreAssignments(
 	intermediateAssignments state.CoreAssignments,
 	validatorState validator.ValidatorState,
 	newTimeslot jamtime.Timeslot,
+	entropyPool state.EntropyPool,
 ) state.CoreAssignments {
 	newAssignments := intermediateAssignments
 	sortedGuarantees := sortGuaranteesByCoreIndex(guarantees.Guarantees)
@@ -567,7 +569,7 @@ func calculateNewCoreAssignments(
 				validatorState.ArchivedValidators,
 			)
 
-			if verifyGuaranteeCredentials(guarantee, validators) {
+			if verifyGuaranteeCredentials(guarantee, validators, entropyPool, newTimeslot) {
 				newAssignments[coreIndex] = state.Assignment{
 					WorkReport: &guarantee.WorkReport,
 					Time:       newTimeslot,
@@ -638,7 +640,12 @@ func isAssignmentValid(currentAssignment state.Assignment, newTimeslot jamtime.T
 //	    s ∈ Ek[v]E⟨XG ⌢ H(E(w))⟩
 //	    cv = wc
 //	}
-func verifyGuaranteeCredentials(guarantee block.Guarantee, validators safrole.ValidatorsData) bool {
+func verifyGuaranteeCredentials(
+	guarantee block.Guarantee,
+	validators safrole.ValidatorsData,
+	entropyPool state.EntropyPool,
+	currentTimeslot jamtime.Timeslot,
+) bool {
 	// Verify that credentials are ordered by validator index (equation 138)
 	for i := 1; i < len(guarantee.Credentials); i++ {
 		if guarantee.Credentials[i-1].ValidatorIndex >= guarantee.Credentials[i].ValidatorIndex {
@@ -646,14 +653,29 @@ func verifyGuaranteeCredentials(guarantee block.Guarantee, validators safrole.Va
 		}
 	}
 
-	// Verify the signatures using the correct validator keys (equation 139)
+	// Determine which assignments to use based on timeslots
+	guaranteeRotation := guarantee.Timeslot / common.ValidatorRotationPeriod
+	currentRotation := currentTimeslot / common.ValidatorRotationPeriod
+
+	var coreAssignments []uint32
+	var err error
+
+	if guaranteeRotation == currentRotation {
+		// Use G assignments with η₂
+		coreAssignments, err = PermuteAssignments(entropyPool[2], guarantee.Timeslot)
+	} else {
+		// Use G* assignments with η₃
+		adjustedTimeslot := guarantee.Timeslot - common.ValidatorRotationPeriod
+		coreAssignments, err = PermuteAssignments(entropyPool[3], adjustedTimeslot)
+	}
+
+	if err != nil {
+		return false
+	}
+
+	// Verify the signatures using the correct validator keys (Equation 139)
 	for _, credential := range guarantee.Credentials {
 		if credential.ValidatorIndex >= uint16(len(validators)) {
-			return false
-		}
-
-		// Check if the validator is assigned to the core specified in the work report
-		if !isValidatorAssignedToCore(credential.ValidatorIndex, guarantee.WorkReport.CoreIndex, validators) {
 			return false
 		}
 
@@ -662,6 +684,12 @@ func verifyGuaranteeCredentials(guarantee block.Guarantee, validators safrole.Va
 		if len(validatorKey.Ed25519) != ed25519.PublicKeySize {
 			return false
 		}
+
+		// Check if the validator is assigned to the core specified in the work report
+		if !isValidatorAssignedToCore(credential.ValidatorIndex, guarantee.WorkReport.CoreIndex, coreAssignments) {
+			return false
+		}
+
 		reportBytes, err := json.Marshal(guarantee.WorkReport)
 		if err != nil {
 			return false
@@ -676,10 +704,36 @@ func verifyGuaranteeCredentials(guarantee block.Guarantee, validators safrole.Va
 	return true
 }
 
-// TODO: This function should implement the logic to check if the validator is assigned to the core
-// For now, it's a placeholder implementation
-func isValidatorAssignedToCore(validatorIndex uint16, coreIndex uint16, validators safrole.ValidatorsData) bool {
-	return true
+// isValidatorAssignedToCore checks if a validator is assigned to a specific core.
+func isValidatorAssignedToCore(validatorIndex uint16, coreIndex uint16, coreAssignments []uint32) bool {
+	if int(validatorIndex) >= len(coreAssignments) {
+		return false
+	}
+
+	return coreAssignments[validatorIndex] == uint32(coreIndex)
+}
+
+// RotateSequence rotates the sequence by n positions modulo C.
+func RotateSequence(sequence []uint32, n uint32) []uint32 {
+	rotated := make([]uint32, len(sequence))
+	for i, x := range sequence {
+		rotated[i] = (x + n) % uint32(common.TotalNumberOfCores)
+	}
+	return rotated
+}
+
+// PermuteAssignments generates the core assignments for validators.
+func PermuteAssignments(entropy crypto.Hash, timeslot jamtime.Timeslot) ([]uint32, error) {
+	shuffledSequence, err := common.DeterministicShuffle(uint32(common.NumberOfValidators), entropy)
+	if err != nil {
+		return nil, err
+	}
+
+	rotationAmount := uint32(timeslot / common.ValidatorRotationPeriod)
+
+	rotatedSequence := RotateSequence(shuffledSequence, rotationAmount)
+
+	return rotatedSequence, nil
 }
 
 // calculateNewArchivedValidators Equation 22: λ′ ≺ (H, τ, λ, κ)

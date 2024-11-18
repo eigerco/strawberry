@@ -3,13 +3,13 @@ package statetransition
 import (
 	"crypto/ed25519"
 	"encoding/json"
+	"github.com/eigerco/strawberry/internal/safrole"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
-	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/testutils"
@@ -559,6 +559,7 @@ func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
 
 func TestCalculateNewCoreAssignments(t *testing.T) {
 	t.Run("valid guarantees within rotation period", func(t *testing.T) {
+		// Generate random ED25519 keys for two validators
 		pubKey1, prvKey1, err := testutils.RandomED25519Keys(t)
 		require.NoError(t, err)
 		pubKey2, prvKey2, err := testutils.RandomED25519Keys(t)
@@ -577,8 +578,26 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 		}
 		currentTimeslot := jamtime.Timeslot(100)
 
+		entropyPool := state.EntropyPool{}
+		// Hardcoded entropy that assigns first 2 validators to the same core
+		entropyPool[2] = crypto.Hash{
+			0, 0, 0, 0, 0, 0, 1, 155,
+			0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0,
+		}
+
+		// Compute core assignments based on the suitable entropy and timeslot
+		coreAssignments, err := PermuteAssignments(entropyPool[2], currentTimeslot)
+		require.NoError(t, err)
+
+		// Ensure both validators are assigned to the same core
+		require.Equal(t, coreAssignments[0], coreAssignments[1])
+		selectedCoreIndex := uint16(coreAssignments[0])
+
+		// Create WorkReport assigned to selectedCoreIndex
 		workReport := block.WorkReport{
-			CoreIndex: 0,
+			CoreIndex: selectedCoreIndex,
 		}
 
 		// Marshal and hash the work report for signing
@@ -586,10 +605,11 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 		require.NoError(t, err)
 		reportHash := crypto.HashData(reportBytes)
 		message := append([]byte(signatureContextGuarantee), reportHash[:]...)
+
+		// Sign the message with both validators
 		signature1 := ed25519.Sign(prvKey1, message)
 		signature2 := ed25519.Sign(prvKey2, message)
 
-		// Create credentials with valid signatures
 		credentials := []block.CredentialSignature{
 			{
 				ValidatorIndex: 0,
@@ -605,7 +625,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			Guarantees: []block.Guarantee{
 				{
 					WorkReport:  workReport,
-					Timeslot:    currentTimeslot - 1,
+					Timeslot:    currentTimeslot,
 					Credentials: credentials,
 				},
 			},
@@ -618,12 +638,13 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			intermediateAssignments,
 			validatorState,
 			currentTimeslot,
+			entropyPool,
 		)
 
 		// Assert
-		require.NotNil(t, newAssignments[0].WorkReport)
-		require.Equal(t, workReport, *newAssignments[0].WorkReport)
-		require.Equal(t, currentTimeslot, newAssignments[0].Time)
+		require.NotNil(t, newAssignments[selectedCoreIndex].WorkReport)
+		require.Equal(t, workReport, *newAssignments[selectedCoreIndex].WorkReport)
+		require.Equal(t, currentTimeslot, newAssignments[selectedCoreIndex].Time)
 	})
 
 	t.Run("invalid guarantee due to timeslot too old", func(t *testing.T) {
@@ -686,6 +707,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			intermediateAssignments,
 			validatorState,
 			currentTimeslot,
+			state.EntropyPool{},
 		)
 
 		require.Nil(t, newAssignments[0].WorkReport)
@@ -750,6 +772,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			intermediateAssignments,
 			validatorState,
 			currentTimeslot,
+			state.EntropyPool{},
 		)
 
 		require.Nil(t, newAssignments[0].WorkReport)
@@ -816,6 +839,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			intermediateAssignments,
 			validatorState,
 			currentTimeslot,
+			state.EntropyPool{},
 		)
 
 		require.Nil(t, newAssignments[0].WorkReport)
