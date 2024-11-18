@@ -967,7 +967,7 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 			},
 		}
 
-		newStats := calculateNewValidatorStatistics(block, jamtime.Timeslot(600), initialStats)
+		newStats := calculateNewValidatorStatistics(block, jamtime.Timeslot(599), initialStats)
 
 		// Check that stats were rotated correctly
 		assert.Equal(t, uint32(10), newStats[0][0].NumOfBlocks, "Previous current stats should become history")
