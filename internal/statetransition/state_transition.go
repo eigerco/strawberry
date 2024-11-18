@@ -714,6 +714,7 @@ func isValidatorAssignedToCore(validatorIndex uint16, coreIndex uint16, coreAssi
 }
 
 // RotateSequence rotates the sequence by n positions modulo C.
+// Implements Equation (133 v.0.4.5): R(c, n) ≡ [(x + n) mod C ∣ x ∈ shuffledSequence]
 func RotateSequence(sequence []uint32, n uint32) []uint32 {
 	rotated := make([]uint32, len(sequence))
 	for i, x := range sequence {
@@ -723,6 +724,7 @@ func RotateSequence(sequence []uint32, n uint32) []uint32 {
 }
 
 // PermuteAssignments generates the core assignments for validators.
+// Implements Equation (134 v0.4.5): P(e, t) ≡ R(F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e), ⌊t mod E/R⌋)
 func PermuteAssignments(entropy crypto.Hash, timeslot jamtime.Timeslot) ([]uint32, error) {
 	shuffledSequence, err := common.DeterministicShuffle(uint32(common.NumberOfValidators), entropy)
 	if err != nil {
