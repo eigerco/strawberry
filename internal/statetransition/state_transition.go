@@ -731,7 +731,9 @@ func PermuteAssignments(entropy crypto.Hash, timeslot jamtime.Timeslot) ([]uint3
 		return nil, err
 	}
 
-	rotationAmount := uint32(timeslot / common.ValidatorRotationPeriod)
+	// Calculate rotation amount: ⌊(t mod E) / R⌋
+	timeslotModEpoch := timeslot % jamtime.TimeslotsPerEpoch
+	rotationAmount := uint32(timeslotModEpoch / common.ValidatorRotationPeriod)
 
 	rotatedSequence := RotateSequence(shuffledSequence, rotationAmount)
 
@@ -791,7 +793,7 @@ func calculateWorkReportsAndAccumulate(
 		slices.Concat(
 			slices.Concat(accQueue[timeslotPerEpoch:]...), // ⋃(ϑm...)
 			slices.Concat(accQueue[:timeslotPerEpoch]...), // ⋃(ϑ...m)
-			queuedWorkReports, // WQ
+			queuedWorkReports,                             // WQ
 		),
 		getWorkPackageHashes(immediatelyAccWorkReports), // P(W!)
 	)
@@ -1437,10 +1439,10 @@ func (a *Accumulator) ParallelDelta(
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
-	uint64, // total gas used
-	state.AccumulationState, // updated context
+	uint64,                     // total gas used
+	state.AccumulationState,    // updated context
 	[]service.DeferredTransfer, // all transfers
-	ServiceHashPairs, // accumulation outputs
+	ServiceHashPairs,           // accumulation outputs
 ) {
 	// Get all unique service indices involved (s)
 	// s = {rs S w ∈ w, r ∈ wr} ∪ K(f)
@@ -1556,7 +1558,7 @@ func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
-	serviceIndex block.ServiceId, // NS
+	serviceIndex block.ServiceId,             // NS
 ) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)
