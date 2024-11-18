@@ -673,7 +673,7 @@ func verifyGuaranteeCredentials(
 		return false
 	}
 
-	// Verify the signatures using the correct validator keys (Equation 139)
+	// Verify the signatures using the correct validator keys (Equation 140 v0.4.5)
 	for _, credential := range guarantee.Credentials {
 		if credential.ValidatorIndex >= uint16(len(validators)) {
 			return false
