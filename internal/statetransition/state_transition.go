@@ -6,17 +6,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"log"
 	"maps"
 	"slices"
 	"sort"
 	"sync"
 
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
+	"github.com/eigerco/strawberry/internal/merkle/mountain_ranges"
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
@@ -294,14 +297,22 @@ func calculateNewTimeState(header block.Header) jamtime.Timeslot {
 // calculateNewRecentBlocks Equation 18: β′ ≺ (H, EG, β†, C) v0.4.5
 func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentBlocks []state.BlockState, serviceHashPairs ServiceHashPairs) ([]state.BlockState, error) {
 	// Equation 83: let r = M_B([s ^^ E_4(s) ⌢ E(h) | (s, h) ∈ C], H_K)
-	accumulationRoot := calculateAccumulationRoot(serviceHashPairs)
+	accumulationRoot, err := computeAccumulationRoot(serviceHashPairs)
+	if err != nil {
+		return nil, err
+	}
 
 	// Equation 83: let b = A(last([[]] ⌢ [x_b | x <− β]), r, H_K)
-	var lastBlockMMR crypto.Hash
+	var lastBlockMMR []*crypto.Hash
 	if len(intermediateRecentBlocks) > 0 {
 		lastBlockMMR = intermediateRecentBlocks[len(intermediateRecentBlocks)-1].AccumulationResultMMR
 	}
-	newMMR := AppendToMMR(lastBlockMMR, accumulationRoot)
+	// Create new MMR instance
+	mountainRange := mountain_ranges.New()
+
+	// Append the accumulation root to the MMR using Keccak hash
+	// A(last([[]] ⌢ [x_b | x <− β]), r, H_K)
+	newMMR := mountainRange.Append(lastBlockMMR, accumulationRoot, crypto.KeccakData)
 
 	// Equation 83: p = {((g_w)_s)_h ↦ ((g_w)_s)_e | g ∈ E_G}
 	workPackageMapping := buildWorkPackageMapping(guarantees.Guarantees)
@@ -330,15 +341,43 @@ func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesEx
 	return newRecentBlocks, nil
 }
 
-// TODO: this is just a mock implementation
-func AppendToMMR(lastBlockMMR crypto.Hash, accumulationRoot crypto.Hash) crypto.Hash {
-	return crypto.Hash{}
-}
+// This should create a Merkle tree from the accumulations and return the root ("r" from equation 83, v0.4.5)
+func computeAccumulationRoot(pairs ServiceHashPairs) (crypto.Hash, error) {
+	if len(pairs) == 0 {
+		return crypto.Hash{}, nil
+	}
 
-// TODO: this is just a mock implementation
-// This should create a Merkle tree from the accumulations and return the root
-func calculateAccumulationRoot(accumulations ServiceHashPairs) crypto.Hash {
-	return crypto.Hash{}
+	// Sort pairs to ensure deterministic ordering
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].ServiceId < pairs[j].ServiceId
+	})
+
+	// Create sequence of [s ^^ E_4(s) ⌢ E(h)] for each (s,h) pair
+	items := make([][]byte, len(pairs))
+	for i, pair := range pairs {
+		// Create concatenated item
+		item := make([]byte, 0)
+
+		s, err := jam.Marshal(pair.ServiceId)
+		if err != nil {
+			return crypto.Hash{}, err
+		}
+
+		// Append service ID encoding
+		item = append(item, s...)
+
+		h, err := jam.Marshal(pair.Hash)
+		if err != nil {
+			return crypto.Hash{}, err
+		}
+		// Append hash encoding
+		item = append(item, h...)
+
+		items[i] = item
+	}
+
+	// Compute MB([s ^^ E_4(s) ⌢ E(h)], HK) using well-balanced Merkle tree
+	return binary_tree.ComputeWellBalancedRoot(items, crypto.KeccakData), nil
 }
 
 // buildWorkPackageMapping creates the work package mapping p from equation 83:
