@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -143,7 +144,7 @@ func TestSafrole(t *testing.T) {
 				preValidatorState)
 			if tv.Output.Err != "" {
 				// There was an output error in the test vector, so we should produce a matching error.
-				require.EqualError(t, err, tv.Output.Err)
+				require.EqualError(t, err, strings.ReplaceAll(tv.Output.Err, "_", " "))
 			} else {
 				require.NoError(t, err)
 			}
