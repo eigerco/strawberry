@@ -726,15 +726,23 @@ func RotateSequence(sequence []uint32, n uint32) []uint32 {
 // PermuteAssignments generates the core assignments for validators.
 // Implements Equation (134 v0.4.5): P(e, t) ≡ R(F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e), ⌊t mod E/R⌋)
 func PermuteAssignments(entropy crypto.Hash, timeslot jamtime.Timeslot) ([]uint32, error) {
-	shuffledSequence, err := common.DeterministicShuffle(uint32(common.NumberOfValidators), entropy)
+	// [⌊C ⋅ i/V⌋ ∣i ∈ NV]
+	coreIndices := make([]uint32, common.NumberOfValidators)
+	for i := uint32(0); i < common.NumberOfValidators; i++ {
+		coreIndices[i] = (uint32(common.TotalNumberOfCores) * i) / common.NumberOfValidators
+	}
+
+	// F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e)
+	shuffledSequence, err := common.DeterministicShuffle(coreIndices, entropy)
 	if err != nil {
 		return nil, err
 	}
 
-	// Calculate rotation amount: ⌊(t mod E) / R⌋
+	// ⌊(t mod E) / R⌋
 	timeslotModEpoch := timeslot % jamtime.TimeslotsPerEpoch
 	rotationAmount := uint32(timeslotModEpoch / common.ValidatorRotationPeriod)
 
+	// R(F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e), ⌊t mod E/R⌋)
 	rotatedSequence := RotateSequence(shuffledSequence, rotationAmount)
 
 	return rotatedSequence, nil

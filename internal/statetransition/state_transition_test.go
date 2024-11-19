@@ -581,10 +581,10 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 		entropyPool := state.EntropyPool{}
 		// Hardcoded entropy that assigns first 2 validators to the same core
 		entropyPool[2] = crypto.Hash{
-			0, 0, 0, 0, 0, 0, 1, 155,
-			0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0,
+			205, 167, 205, 130, 4, 58, 89, 170,
+			187, 59, 155, 75, 28, 244, 251, 244,
+			38, 86, 243, 94, 236, 132, 54, 199,
+			105, 143, 117, 14, 216, 45, 68, 156,
 		}
 
 		// Compute core assignments based on the suitable entropy and timeslot
