@@ -2,9 +2,10 @@ package statetransition
 
 import (
 	"crypto/ed25519"
-	"encoding/json"
-	"github.com/eigerco/strawberry/internal/safrole"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/safrole"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -601,7 +602,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 		}
 
 		// Marshal and hash the work report for signing
-		reportBytes, err := json.Marshal(workReport)
+		reportBytes, err := jam.Marshal(workReport)
 		require.NoError(t, err)
 		reportHash := crypto.HashData(reportBytes)
 		message := append([]byte(signatureContextGuarantee), reportHash[:]...)
@@ -670,7 +671,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			CoreIndex: 0,
 		}
 
-		reportBytes, err := json.Marshal(workReport)
+		reportBytes, err := jam.Marshal(workReport)
 		require.NoError(t, err)
 		reportHash := crypto.HashData(reportBytes)
 		message := append([]byte(signatureContextGuarantee), reportHash[:]...)
@@ -736,7 +737,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			CoreIndex: 0,
 		}
 
-		reportBytes, err := json.Marshal(workReport)
+		reportBytes, err := jam.Marshal(workReport)
 		require.NoError(t, err)
 		reportHash := crypto.HashData(reportBytes)
 		message := append([]byte(signatureContextGuarantee), reportHash[:]...)
@@ -804,7 +805,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			CoreIndex: 0,
 		}
 
-		reportBytes, err := json.Marshal(workReport)
+		reportBytes, err := jam.Marshal(workReport)
 		require.NoError(t, err)
 		reportHash := crypto.HashData(reportBytes)
 		message := append([]byte(signatureContextGuarantee), reportHash[:]...)

@@ -3,7 +3,6 @@ package statetransition
 import (
 	"bytes"
 	"crypto/ed25519"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -318,7 +317,7 @@ func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesEx
 	workPackageMapping := buildWorkPackageMapping(guarantees.Guarantees)
 
 	// Equation 83: let n = {p, h ▸▸ H(H), b, s ▸▸ H_0}
-	headerBytes, err := json.Marshal(header)
+	headerBytes, err := jam.Marshal(header)
 	if err != nil {
 		return nil, err
 	}
@@ -729,7 +728,7 @@ func verifyGuaranteeCredentials(
 			return false
 		}
 
-		reportBytes, err := json.Marshal(guarantee.WorkReport)
+		reportBytes, err := jam.Marshal(guarantee.WorkReport)
 		if err != nil {
 			return false
 		}
