@@ -3,11 +3,11 @@ package block
 import (
 	"crypto/ed25519"
 	"crypto/rand"
-	"github.com/eigerco/strawberry/internal/common"
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/common"
+
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/pkg/serialization"
 	"github.com/eigerco/strawberry/pkg/serialization/codec"
@@ -28,12 +28,12 @@ func Test_BlockEncodeDecode(t *testing.T) {
 			},
 			Entropy: testutils.RandomHash(t),
 		},
-		WinningTicketsMarker: &[jamtime.TimeslotsPerEpoch]Ticket{{
-			Identifier: testutils.RandomHash(t),
-			EntryIndex: 112,
-		},
-			{
-				Identifier: testutils.RandomHash(t),
+		WinningTicketsMarker: &WinningTicketMarker{
+			Ticket{
+				Identifier: testutils.RandomBandersnatchOutputHash(t),
+				EntryIndex: 112,
+			}, Ticket{
+				Identifier: testutils.RandomBandersnatchOutputHash(t),
 				EntryIndex: 222,
 			}},
 		OffendersMarkers: []ed25519.PublicKey{

@@ -23,4 +23,7 @@ const (
 	// It is calculated by multiplying TimeslotsPerEpoch by TimeslotDuration,
 	// resulting in a duration of 1 hour per epoch.
 	EpochDuration = TimeslotsPerEpoch * TimeslotDuration
+
+	// The number of slots into an epoch at which ticket-submission ends.
+	TicketSubmissionTimeSlots = 500
 )

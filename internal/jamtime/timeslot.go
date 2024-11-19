@@ -100,3 +100,16 @@ func ValidateTimeslot(ts Timeslot) error {
 	jamTime := FromTimeslot(ts)
 	return ValidateJamTime(jamTime.ToTime())
 }
+
+// IsTicketSubmissionPeriod checks if tickets can still be submitted in the given Timeslot
+func (ts Timeslot) IsTicketSubmissionPeriod() bool {
+	return ts.TimeslotInEpoch() < TicketSubmissionTimeSlots
+}
+
+// IsWinningTicketMarkerPeriod checks if it's the first available Timeslot after
+// the ticket submission lottery ends and where the winning ticket marker can be
+// generated.
+func (ts Timeslot) IsWinningTicketMarkerPeriod(previous Timeslot) bool {
+	return previous.TimeslotInEpoch() < TicketSubmissionTimeSlots &&
+		TicketSubmissionTimeSlots <= ts.TimeslotInEpoch()
+}

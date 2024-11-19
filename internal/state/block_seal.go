@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	ticketSealContext   = "$jam_ticket_seal"
-	fallbackSealContext = "$jam_fallback_seal"
-	entropyContext      = "$jam_entropy"
+	TicketSealContext   = "jam_ticket_seal"
+	FallbackSealContext = "jam_fallback_seal"
+	EntropyContext      = "jam_entropy"
 )
 
 // TODO currently unused, should be used in section 19
@@ -57,14 +57,14 @@ func encodeUnsealedHeader(header block.Header) ([]byte, error) {
 
 func buildSealContextForFallbackKeys(state *State) []byte {
 	// Equation 60: γ's ∈ ⟦HB⟧
-	context := append([]byte(fallbackSealContext), state.EntropyPool[3][:]...) // η_3
+	context := append([]byte(FallbackSealContext), state.EntropyPool[3][:]...) // η_3
 	T = 0
 	return context
 }
 func buildSealContextForTickets(state *State, ticket block.Ticket) []byte {
 	var context []byte
 	// Equation 59: γ's ∈ ⟦C⟧
-	context = append([]byte(ticketSealContext), state.EntropyPool[3][:]...) // η_3
+	context = append([]byte(TicketSealContext), state.EntropyPool[3][:]...) // η_3
 	context = append(context, byte(ticket.EntryIndex))
 	T = 1
 	return context

@@ -3,7 +3,9 @@ package testutils
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/hex"
 	mathRand "math/rand"
+	"strings"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -34,6 +36,13 @@ func RandomHash(t *testing.T) crypto.Hash {
 	_, err := rand.Read(hash)
 	require.NoError(t, err)
 	return crypto.Hash(hash)
+}
+
+func RandomBandersnatchOutputHash(t *testing.T) crypto.BandersnatchOutputHash {
+	hash := make([]byte, crypto.HashSize)
+	_, err := rand.Read(hash)
+	require.NoError(t, err)
+	return crypto.BandersnatchOutputHash(hash)
 }
 
 func RandomED25519Keys(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey, error) {
@@ -120,4 +129,13 @@ func RandomTicketProof(t *testing.T) [784]byte {
 	_, err := rand.Read(hash[:])
 	require.NoError(t, err)
 	return hash
+}
+
+// Helper to decode a hex string beginning with "0x". Fails the test if the
+// string can't be decoded.
+func MustFromHex(t *testing.T, s string) []byte {
+	t.Helper()
+	b, err := hex.DecodeString(strings.TrimPrefix(s, "0x"))
+	require.NoError(t, err)
+	return b
 }

@@ -35,7 +35,7 @@ func SetupValidatorState(t *testing.T) *ValidatorState {
 
 func RandomTicket(t *testing.T) block.Ticket {
 	return block.Ticket{
-		Identifier: testutils.RandomHash(t),
+		Identifier: testutils.RandomBandersnatchOutputHash(t),
 		EntryIndex: uint8(0),
 	}
 }

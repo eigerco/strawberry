@@ -57,7 +57,7 @@ func TestBuildSealContextWithKey(t *testing.T) {
 	state.ValidatorState = *validatorState
 	context, err := buildSealContext(header, state)
 	require.NoError(t, err)
-	fallbackSealContext := append([]byte(fallbackSealContext), hash[:]...)
+	fallbackSealContext := append([]byte(FallbackSealContext), hash[:]...)
 	assert.Equal(t, fallbackSealContext, context)
 	assert.Equal(t, byte(0), T)
 }
@@ -86,7 +86,7 @@ func TestBuildSealContextWithTicket(t *testing.T) {
 
 	context, err := buildSealContext(header, state)
 	require.NoError(t, err)
-	expected := ticketSealContext + string(hash[:]) + string(rune(0))
+	expected := TicketSealContext + string(hash[:]) + string(rune(0))
 	assert.Equal(t, []byte(expected), context)
 	assert.Equal(t, byte(1), T)
 }

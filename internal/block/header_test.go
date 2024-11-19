@@ -2,10 +2,10 @@ package block
 
 import (
 	"crypto/ed25519"
-	"github.com/eigerco/strawberry/internal/common"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/common"
+
 	"github.com/eigerco/strawberry/internal/testutils"
 
 	"github.com/stretchr/testify/assert"
@@ -29,13 +29,14 @@ func Test_HeaderEncodeDecode(t *testing.T) {
 			},
 			Entropy: testutils.RandomHash(t),
 		},
-		WinningTicketsMarker: &[jamtime.TimeslotsPerEpoch]Ticket{{
-			Identifier: testutils.RandomHash(t),
-			EntryIndex: 111,
-		}, {
-			Identifier: testutils.RandomHash(t),
-			EntryIndex: 222,
-		}},
+		WinningTicketsMarker: &WinningTicketMarker{
+			Ticket{
+				Identifier: testutils.RandomBandersnatchOutputHash(t),
+				EntryIndex: 111,
+			}, Ticket{
+				Identifier: testutils.RandomBandersnatchOutputHash(t),
+				EntryIndex: 222,
+			}},
 		OffendersMarkers: []ed25519.PublicKey{
 			testutils.RandomED25519PublicKey(t),
 		},

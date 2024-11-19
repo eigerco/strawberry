@@ -28,103 +28,45 @@ func TestCalculateNewTimeStateTransiton(t *testing.T) {
 
 func TestCalculateNewEntropyPoolWhenNewEpoch(t *testing.T) {
 	entropyPool := [4]crypto.Hash{
-		testutils.RandomHash(t),
+		crypto.Hash(testutils.MustFromHex(t,
+			"0xf164ce89b10488598cb295e4eef273fb8977722f4d6b2754b970ac77b45fa29b")),
 		testutils.RandomHash(t),
 		testutils.RandomHash(t),
 		testutils.RandomHash(t),
 	}
-	header := block.Header{
-		TimeSlotIndex: 600,
-	}
-	newEntropyPool, err := calculateNewEntropyPool(header, jamtime.Timeslot(599), entropyPool)
+
+	newEntropyPool, err := calculateNewEntropyPool(jamtime.Timeslot(599),
+		jamtime.Timeslot(600),
+		crypto.BandersnatchOutputHash(testutils.MustFromHex(t,
+			"0x92e69aed566b11bf02354c64e44235b79154207021b7db0f03ca62108f826f94")),
+		entropyPool)
 	require.NoError(t, err)
+	assert.Equal(t, newEntropyPool[0], crypto.Hash(testutils.MustFromHex(t,
+		"0x760612c571119ba1af27e99ad6c47b3905469f87cb0453e648df973d003f2160")))
 	assert.Equal(t, entropyPool[2], newEntropyPool[3])
 	assert.Equal(t, entropyPool[1], newEntropyPool[2])
 	assert.Equal(t, entropyPool[0], newEntropyPool[1])
 }
 
 func TestCalculateNewEntropyPoolWhenNotNewEpoch(t *testing.T) {
-	timeslot := jamtime.Timeslot(600)
 	entropyPool := [4]crypto.Hash{
-		testutils.RandomHash(t),
+		crypto.Hash(testutils.MustFromHex(t,
+			"0xf164ce89b10488598cb295e4eef273fb8977722f4d6b2754b970ac77b45fa29b")),
 		testutils.RandomHash(t),
 		testutils.RandomHash(t),
 		testutils.RandomHash(t),
 	}
-	header := block.Header{
-		TimeSlotIndex: 601,
-	}
-	newEntropyPool, err := calculateNewEntropyPool(header, timeslot, entropyPool)
+	newEntropyPool, err := calculateNewEntropyPool(jamtime.Timeslot(600),
+		jamtime.Timeslot(601),
+		crypto.BandersnatchOutputHash(testutils.MustFromHex(t,
+			"0x92e69aed566b11bf02354c64e44235b79154207021b7db0f03ca62108f826f94")),
+		entropyPool)
 	require.NoError(t, err)
+	assert.Equal(t, newEntropyPool[0], crypto.Hash(testutils.MustFromHex(t,
+		"0x760612c571119ba1af27e99ad6c47b3905469f87cb0453e648df973d003f2160")))
 	assert.Equal(t, entropyPool[3], newEntropyPool[3])
 	assert.Equal(t, entropyPool[2], newEntropyPool[2])
 	assert.Equal(t, entropyPool[1], newEntropyPool[1])
-}
-func TestCalculateNewValidatorsWhenNewEpoch(t *testing.T) {
-	vs := validator.SetupValidatorState(t)
-	prevNextValidators := vs.SafroleState.NextValidators
-	header := block.Header{
-		TimeSlotIndex: 600,
-	}
-	newValidators, err := calculateNewValidators(header, jamtime.Timeslot(599), vs.CurrentValidators, vs.SafroleState.NextValidators)
-	require.NoError(t, err)
-	require.Equal(t, prevNextValidators, newValidators)
-}
-
-func TestCalculateNewValidatorsWhenNotNewEpoch(t *testing.T) {
-	vs := validator.SetupValidatorState(t)
-	prevValidators := vs.CurrentValidators
-	header := block.Header{
-		TimeSlotIndex: 2,
-	}
-	newValidators, err := calculateNewValidators(header, jamtime.Timeslot(1), vs.CurrentValidators, vs.SafroleState.NextValidators)
-	require.Error(t, err)
-	require.Equal(t, prevValidators, newValidators)
-}
-
-func TestCalcualteNewArchivedValidatorsWhenNewEpoch(t *testing.T) {
-	vs := validator.SetupValidatorState(t)
-	prevValidators := vs.CurrentValidators
-	header := block.Header{
-		TimeSlotIndex: 600,
-	}
-	newArchivedValidators, err := calculateNewArchivedValidators(header, jamtime.Timeslot(599), vs.ArchivedValidators, vs.CurrentValidators)
-	require.NoError(t, err)
-	require.Equal(t, prevValidators, newArchivedValidators)
-}
-
-func TestCalcualteNewArchivedValidatorsWhenNotNewEpoch(t *testing.T) {
-	vs := validator.SetupValidatorState(t)
-	prevArchivedValidators := vs.ArchivedValidators
-	header := block.Header{
-		TimeSlotIndex: 2,
-	}
-	newArchivedValidators, err := calculateNewArchivedValidators(header, jamtime.Timeslot(1), vs.ArchivedValidators, vs.CurrentValidators)
-	require.Error(t, err)
-	require.Equal(t, prevArchivedValidators, newArchivedValidators)
-}
-
-func TestCaculateNewSafroleStateWhenNewEpoch(t *testing.T) {
-	vs := validator.SetupValidatorState(t)
-	header := block.Header{
-		TimeSlotIndex: 600,
-	}
-	tickets := block.TicketExtrinsic{}
-	expected := vs.SafroleState.NextValidators
-	newSafrole, err := calculateNewSafroleState(header, jamtime.Timeslot(599), tickets, expected)
-	require.NoError(t, err)
-	require.Equal(t, expected, newSafrole.NextValidators)
-}
-
-func TestCaculateNewSafroleStateWhenNotNewEpoch(t *testing.T) {
-	vs := validator.SetupValidatorState(t)
-	header := block.Header{
-		TimeSlotIndex: 1,
-	}
-	tickets := block.TicketExtrinsic{}
-	queuedValidators := vs.QueuedValidators
-	_, err := calculateNewSafroleState(header, jamtime.Timeslot(0), tickets, queuedValidators)
-	require.Error(t, err)
 }
 
 func TestAddUniqueHash(t *testing.T) {
