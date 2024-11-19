@@ -8,8 +8,7 @@ import (
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,12 +22,11 @@ func TestEncodeUnsealedHeader(t *testing.T) {
 		VRFSignature:       testutils.RandomBandersnatchSignature(t),
 		BlockSealSignature: testutils.RandomBandersnatchSignature(t),
 	}
-	serializer := serialization.NewSerializer(&codec.JAMCodec{})
 	encoded, err := encodeUnsealedHeader(header)
 	require.NoError(t, err)
 	require.NotNil(t, encoded)
 	decoded := &block.Header{}
-	err = serializer.Decode(encoded, decoded)
+	err = jam.Unmarshal(encoded, decoded)
 	require.NoError(t, err)
 	assert.Empty(t, decoded.BlockSealSignature)
 	// Check that the rest of the header is the same

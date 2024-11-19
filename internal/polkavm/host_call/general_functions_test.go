@@ -3,9 +3,6 @@ package host_call_test
 import (
 	"testing"
 
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/blake2b"
@@ -16,6 +13,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 func TestGasRemaining(t *testing.T) {
@@ -149,8 +147,7 @@ func TestRead(t *testing.T) {
 	value := []byte("value_to_read")
 
 	// Compute the hash H(E4(s) || keyData)
-	serializer := serialization.NewSerializer(codec.NewJamCodec())
-	serviceIdBytes, err := serializer.Encode(serviceId)
+	serviceIdBytes, err := jam.Marshal(serviceId)
 	require.NoError(t, err)
 
 	hashInput := make([]byte, 0, len(serviceIdBytes)+len(keyData))
@@ -220,8 +217,7 @@ func TestWrite(t *testing.T) {
 	keyData := []byte("key_to_write")
 	value := []byte("value_to_write")
 
-	serializer := serialization.NewSerializer(codec.NewJamCodec())
-	serviceIdBytes, err := serializer.Encode(serviceId)
+	serviceIdBytes, err := jam.Marshal(serviceId)
 	require.NoError(t, err)
 
 	hashInput := append(serviceIdBytes, keyData...)
@@ -338,8 +334,7 @@ func TestInfo(t *testing.T) {
 	require.Equal(t, uint32(host_call.OK), regs[polkavm.A0])
 
 	var accountInfo host_call.AccountInfo
-	serializer := serialization.NewSerializer(codec.NewJamCodec())
-	m, err := serializer.Encode(accountInfo)
+	m, err := jam.Marshal(accountInfo)
 	require.NoError(t, err)
 
 	data := make([]byte, len(m))
@@ -347,7 +342,7 @@ func TestInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	var receivedAccountInfo host_call.AccountInfo
-	err = serializer.Decode(data, &receivedAccountInfo)
+	err = jam.Unmarshal(data, &receivedAccountInfo)
 	require.NoError(t, err)
 
 	expectedAccountInfo := host_call.AccountInfo{

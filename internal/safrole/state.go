@@ -6,8 +6,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/eigerco/strawberry/internal/jamtime"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 // State relevant to Safrole protocol
@@ -46,10 +45,9 @@ func (state State) RingVerifier() (*bandersnatch.RingVrfVerifier, error) {
 // Implements the F function from the graypaper. Equation 71.
 func SelectFallbackKeys(entropy crypto.Hash, currentValidators ValidatorsData) (crypto.EpochKeys, error) {
 	var fallbackKeys crypto.EpochKeys
-	serializer := serialization.NewSerializer(&codec.JAMCodec{})
 	for i := uint32(0); i < jamtime.TimeslotsPerEpoch; i++ {
 		// E₄(i): Encode i as a 4-byte sequence
-		iBytes, err := serializer.Encode(i)
+		iBytes, err := jam.Marshal(i)
 		if err != nil {
 			return crypto.EpochKeys{}, err
 		}
@@ -59,7 +57,7 @@ func SelectFallbackKeys(entropy crypto.Hash, currentValidators ValidatorsData) (
 		hash := crypto.HashData(data)
 		// E⁻¹(...): Decode back to a number
 		var index uint32
-		err = serializer.Decode(hash[:], &index)
+		err = jam.Unmarshal(hash[:], &index)
 		if err != nil {
 			return crypto.EpochKeys{}, err
 		}

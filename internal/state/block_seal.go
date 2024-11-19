@@ -2,14 +2,13 @@ package state
 
 import (
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
 )
 
 const (
@@ -51,8 +50,7 @@ func isWinningKey(key crypto.BandersnatchPublicKey, header *block.Header, state 
 func encodeUnsealedHeader(header block.Header) ([]byte, error) {
 	header.BlockSealSignature = crypto.BandersnatchSignature{}
 	// Use the regular serialization from Appendix C
-	serializer := serialization.NewSerializer(&codec.JAMCodec{})
-	return serializer.Encode(header)
+	return jam.Marshal(header)
 }
 
 func buildSealContextForFallbackKeys(state *State) []byte {

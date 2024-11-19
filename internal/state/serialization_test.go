@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -106,15 +105,12 @@ func TestSerializeSafroleState(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			safroleState := tc.generateSafroleState(t)
 
-			jamCodec := codec.NewJamCodec()
-			serializer := serialization.NewSerializer(jamCodec)
-
-			encodedValue, err := serializer.Encode(safroleState)
+			encodedValue, err := jam.Marshal(safroleState)
 			require.NoError(t, err)
 
 			var decodedValue safrole.State
 
-			err = serializer.Decode(encodedValue, &decodedValue)
+			err = jam.Unmarshal(encodedValue, &decodedValue)
 			require.NoError(t, err)
 
 			require.Equal(t, safroleState, decodedValue, "safrole state mismatch")

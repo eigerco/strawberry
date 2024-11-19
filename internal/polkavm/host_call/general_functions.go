@@ -1,8 +1,7 @@
 package host_call
 
 import (
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"math"
 
 	"golang.org/x/crypto/blake2b"
@@ -126,8 +125,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		return gas, regs, mem, nil
 	}
 
-	serializer := serialization.NewSerializer(codec.NewJamCodec())
-	serviceIdBytes, err := serializer.Encode(sID)
+	serviceIdBytes, err := jam.Marshal(sID)
 	if err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
@@ -180,8 +178,7 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 		return gas, regs, mem, s, err
 	}
 
-	serializer := serialization.NewSerializer(codec.NewJamCodec())
-	serviceIdBytes, err := serializer.Encode(serviceId)
+	serviceIdBytes, err := jam.Marshal(serviceId)
 	if err != nil {
 		return gas, regs, mem, s, err
 	}
@@ -246,9 +243,8 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 		TotalItems:             t.TotalItems(),
 	}
 
-	serializer := serialization.NewSerializer(codec.NewJamCodec())
 	// E(tc, tb, tt, tg , tm, tl, ti)
-	m, err := serializer.Encode(accountInfo)
+	m, err := jam.Marshal(accountInfo)
 	if err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}

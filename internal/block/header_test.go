@@ -5,15 +5,12 @@ import (
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/common"
-
+	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
 )
 
 func Test_HeaderEncodeDecode(t *testing.T) {
@@ -44,12 +41,11 @@ func Test_HeaderEncodeDecode(t *testing.T) {
 		VRFSignature:       testutils.RandomBandersnatchSignature(t),
 		BlockSealSignature: testutils.RandomBandersnatchSignature(t),
 	}
-	serializer := serialization.NewSerializer(&codec.JAMCodec{})
-	bb, err := serializer.Encode(h)
+	bb, err := jam.Marshal(h)
 	require.NoError(t, err)
 
 	h2 := Header{}
-	err = serializer.Decode(bb, &h2)
+	err = jam.Unmarshal(bb, &h2)
 	require.NoError(t, err)
 
 	assert.Equal(t, h, h2)

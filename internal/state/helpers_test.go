@@ -14,8 +14,7 @@ import (
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/stretchr/testify/require"
 )
 
@@ -304,9 +303,6 @@ func RandomState(t *testing.T) State {
 
 // DeserializeState deserializes the given map of crypto.Hash to byte slices into a State object. Not possible to restore the full state.
 func DeserializeState(serializedState map[crypto.Hash][]byte) (State, error) {
-	jamCodec := codec.NewJamCodec()
-	serializer := serialization.NewSerializer(jamCodec)
-
 	state := State{}
 
 	// Helper function to deserialize individual fields
@@ -316,7 +312,7 @@ func DeserializeState(serializedState map[crypto.Hash][]byte) (State, error) {
 		if !ok {
 			return errors.New("missing state key")
 		}
-		return serializer.Decode(encodedValue, target)
+		return jam.Unmarshal(encodedValue, target)
 	}
 
 	// Deserialize basic fields
@@ -346,24 +342,24 @@ func DeserializeState(serializedState map[crypto.Hash][]byte) (State, error) {
 	}
 
 	// Deserialize SafroleState specific fields
-	if err := deserializeSafroleState(&state, serializer, serializedState); err != nil {
+	if err := deserializeSafroleState(&state, serializedState); err != nil {
 		return state, err
 	}
 
 	// Deserialize Past Judgements
-	if err := deserializeJudgements(&state, serializer, serializedState); err != nil {
+	if err := deserializeJudgements(&state, serializedState); err != nil {
 		return state, err
 	}
 
 	// Deserialize Services
-	if err := deserializeServices(&state, serializer, serializedState); err != nil {
+	if err := deserializeServices(&state, serializedState); err != nil {
 		return state, err
 	}
 
 	return state, nil
 }
 
-func deserializeSafroleState(state *State, serializer *serialization.Serializer, serializedState map[crypto.Hash][]byte) error {
+func deserializeSafroleState(state *State, serializedState map[crypto.Hash][]byte) error {
 	stateKey := generateStateKeyBasic(4)
 	encodedSafroleState, ok := serializedState[stateKey]
 	if !ok {
@@ -372,7 +368,7 @@ func deserializeSafroleState(state *State, serializer *serialization.Serializer,
 
 	decodedSafroleState := safrole.State{}
 
-	if err := serializer.Decode(encodedSafroleState, &decodedSafroleState); err != nil {
+	if err := jam.Unmarshal(encodedSafroleState, &decodedSafroleState); err != nil {
 		return err
 	}
 
@@ -381,7 +377,7 @@ func deserializeSafroleState(state *State, serializer *serialization.Serializer,
 	return nil
 }
 
-func deserializeJudgements(state *State, serializer *serialization.Serializer, serializedState map[crypto.Hash][]byte) error {
+func deserializeJudgements(state *State, serializedState map[crypto.Hash][]byte) error {
 	stateKey := generateStateKeyBasic(5)
 	encodedValue, ok := serializedState[stateKey]
 	if !ok {
@@ -395,7 +391,7 @@ func deserializeJudgements(state *State, serializer *serialization.Serializer, s
 		WonkyWorkReports    []crypto.Hash
 		OffendingValidators []ed25519.PublicKey
 	}
-	if err := serializer.Decode(encodedValue, &combined); err != nil {
+	if err := jam.Unmarshal(encodedValue, &combined); err != nil {
 		return err
 	}
 
@@ -407,7 +403,7 @@ func deserializeJudgements(state *State, serializer *serialization.Serializer, s
 	return nil
 }
 
-func deserializeServices(state *State, serializer *serialization.Serializer, serializedState map[crypto.Hash][]byte) error {
+func deserializeServices(state *State, serializedState map[crypto.Hash][]byte) error {
 	state.Services = make(service.ServiceState)
 
 	// Iterate over serializedState and look for service entries (identified by prefix 255)
@@ -426,7 +422,7 @@ func deserializeServices(state *State, serializer *serialization.Serializer, ser
 				FootprintSize          uint64
 				FootprintItems         int
 			}
-			if err := serializer.Decode(encodedValue, &combined); err != nil {
+			if err := jam.Unmarshal(encodedValue, &combined); err != nil {
 				return err
 			}
 
