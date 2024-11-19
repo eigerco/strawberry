@@ -6,8 +6,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"github.com/eigerco/strawberry/internal/service"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"log"
 )
 
@@ -24,7 +23,7 @@ func InvokePVMOnTransfer(serviceState service.ServiceState, serviceIndex block.S
 		gas += transfer.GasLimit
 		serviceAccount.Balance += transfer.Balance
 	}
-	args, err := serialization.NewSerializer(codec.NewJamCodec()).Encode(transfers)
+	args, err := jam.Marshal(transfers)
 	if err != nil {
 		// TODO handle errors appropriately
 		log.Println("error encoding PVM arguments: ", err)

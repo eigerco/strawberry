@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
-	"github.com/ChainSafe/gossamer/pkg/scale"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -60,5 +59,5 @@ func (tok TicketsOrKeys) ValueAt(index uint) (any, error) {
 	case 0:
 		return TicketsBodies{}, nil
 	}
-	return nil, scale.ErrUnknownVaryingDataTypeValue
+	return nil, jam.ErrUnsupportedEnumTypeValue
 }

@@ -13,8 +13,7 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 var toWorkResultErrorMap = map[string]block.WorkResultError{
@@ -28,10 +27,8 @@ func TestDecodeBlockWithJamCodec(t *testing.T) {
 	b, err := os.ReadFile("vectors/block.bin")
 	require.NoError(t, err)
 
-	s := serialization.NewSerializer(codec.NewJamCodec())
-
 	var unmarshaled block.Block
-	err = s.Decode(b, &unmarshaled)
+	err = jam.Unmarshal(b, &unmarshaled)
 	require.NoError(t, err)
 
 	expected := unmarsalExpectedBlock(t)
@@ -147,10 +144,8 @@ func unmarsalExpectedBlock(t *testing.T) expectedBlock {
 	b, err := os.ReadFile("vectors/expected_block.json")
 	require.NoError(t, err)
 
-	s := serialization.NewSerializer(&codec.JSONCodec{})
-
 	var unmarshaled expectedBlock
-	err = s.Decode(b, &unmarshaled)
+	err = json.Unmarshal(b, &unmarshaled)
 	require.NoError(t, err)
 
 	return unmarshaled

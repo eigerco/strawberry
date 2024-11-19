@@ -4,14 +4,13 @@ package integration
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,8 +27,7 @@ func TestShuffleVectors(t *testing.T) {
 	require.NoError(t, err)
 
 	var testCases []TestCase
-	s := serialization.NewSerializer(&codec.JSONCodec{})
-	err = s.Decode(fileData, &testCases)
+	err = json.Unmarshal(fileData, &testCases)
 	require.NoError(t, err)
 
 	for idx, testCase := range testCases {

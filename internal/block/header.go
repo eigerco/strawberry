@@ -8,8 +8,7 @@ import (
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 // Header as defined in the section 5 in the paper
@@ -48,7 +47,7 @@ type AncestorStore struct {
 }
 
 func (a *AncestorStore) StoreHeader(header *Header) error {
-	encodedHeader, err := serialization.NewSerializer(codec.NewJamCodec()).Encode(header)
+	encodedHeader, err := jam.Marshal(header)
 	if err != nil {
 		return err
 	}

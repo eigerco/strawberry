@@ -3,14 +3,13 @@ package block
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/common"
 
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/testutils"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -182,12 +181,11 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		Extrinsic: e,
 	}
 
-	serializer := serialization.NewSerializer(&codec.JAMCodec{})
-	serialized, err := serializer.Encode(originalBlock)
+	serialized, err := jam.Marshal(originalBlock)
 	require.NoError(t, err)
 
 	var deserializedBlock Block
-	err = serializer.Decode(serialized, &deserializedBlock)
+	err = jam.Unmarshal(serialized, &deserializedBlock)
 	require.NoError(t, err)
 
 	assert.Equal(t, originalBlock, deserializedBlock)

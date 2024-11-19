@@ -3,7 +3,6 @@ package statetransition
 import (
 	"bytes"
 	"crypto/ed25519"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -12,10 +11,6 @@ import (
 	"slices"
 	"sort"
 	"sync"
-
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -29,6 +24,7 @@ import (
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/validator"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 const (
@@ -311,7 +307,7 @@ func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesEx
 	workPackageMapping := buildWorkPackageMapping(guarantees.Guarantees)
 
 	// Equation 83: let n = {p, h ▸▸ H(H), b, s ▸▸ H_0}
-	headerBytes, err := json.Marshal(header)
+	headerBytes, err := jam.Marshal(header)
 	if err != nil {
 		return nil, err
 	}
@@ -919,7 +915,7 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 
 		// ∀x ∈ x ∶ ∃h ∈ A ∶ ht = xt ∧ H(h) = xl (149 v0.4.5)
 		ancestor := ancestorStore.FindAncestor(func(ancestor *block.Header) bool {
-			encodedHeader, err := serialization.NewSerializer(codec.NewJamCodec()).Encode(ancestor)
+			encodedHeader, err := jam.Marshal(ancestor)
 			if err != nil {
 				return false
 			}
@@ -977,7 +973,7 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 // anchorBlockInRecentBlocks ∀x ∈ x ∶ ∃y ∈ β ∶ x_a = y_h ∧ x_s = ys ∧ xb = HK (EM (yb)) (147 v0.4.5)
 func anchorBlockInRecentBlocks(context block.RefinementContext, currentState *state.State) bool {
 	for _, y := range currentState.RecentBlocks {
-		encodedMMR, err := serialization.NewSerializer(codec.NewJamCodec()).Encode(y.AccumulationResultMMR)
+		encodedMMR, err := jam.Marshal(y.AccumulationResultMMR)
 		if err != nil {
 			return false
 		}
@@ -1098,7 +1094,7 @@ func verifyGuaranteeCredentials(
 			return false
 		}
 
-		reportBytes, err := json.Marshal(guarantee.WorkReport)
+		reportBytes, err := jam.Marshal(guarantee.WorkReport)
 		if err != nil {
 			return false
 		}

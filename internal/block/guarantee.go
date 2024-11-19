@@ -1,7 +1,6 @@
 package block
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -163,7 +162,7 @@ func (w *WorkReport) Hash() (crypto.Hash, error) {
 	if w == nil {
 		return crypto.Hash{}, nil
 	}
-	jsonData, err := json.Marshal(w)
+	jsonData, err := jam.Marshal(w)
 	if err != nil {
 		return crypto.Hash{}, err
 	}
