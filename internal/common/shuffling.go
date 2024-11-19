@@ -9,13 +9,8 @@ import (
 var serializer = serialization.NewSerializer(codec.NewJamCodec())
 
 // DeterministicShuffle performs a deterministic shuffle of the sequence s based on the hash h (appendix F)
-func DeterministicShuffle(length uint32, h crypto.Hash) ([]uint32, error) {
-	s := make([]uint32, length)
-	for i := uint32(0); i < length; i++ {
-		s[i] = i
-	}
-
-	r, err := generateRandomNumbers(h, length)
+func DeterministicShuffle(s []uint32, h crypto.Hash) ([]uint32, error) {
+	r, err := generateRandomNumbers(h, uint32(len(s)))
 	if err != nil {
 		return nil, err
 	}
