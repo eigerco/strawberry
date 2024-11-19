@@ -1716,7 +1716,7 @@ func calculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslo
 	// let e = ⌊τ/E⌋, e′ = ⌊τ′/E⌋
 	// (a, π′₁) ≡ { (π₀, π₁) if e′ = e
 	//              ([{0,...,[0,...]},...], π₀) otherwise
-	if jamtime.IsEpochTransition(timeslot, block.Header.TimeSlotIndex) {
+	if timeslot.ToEpoch() != block.Header.TimeSlotIndex.ToEpoch() {
 		// Rotate statistics - completed stats become history, start fresh present stats
 		newStats[0] = newStats[1]                                                // Move current to history
 		newStats[1] = [common.NumberOfValidators]validator.ValidatorStatistics{} // Reset current
