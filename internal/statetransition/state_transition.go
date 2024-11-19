@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/serialization"
+	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"log"
 	"maps"
+	"reflect"
 	"slices"
 	"sort"
 	"sync"
@@ -42,7 +45,11 @@ func UpdateState(s *state.State, newBlock block.Block) error {
 		return errors.New("invalid block, the assurance is not anchored on parent")
 	}
 	if !assuranceIsOrderedByValidatorIndex(newBlock.Extrinsic.EA) {
-		return errors.New("Invalid block, the assurance is not ordered by validator index")
+		return errors.New("invalid block, the assurance is not ordered by validator index")
+	}
+
+	if err := validateExtrinsicGuarantees(newBlock.Header, s, newBlock.Extrinsic.EG, block.AncestorStoreSingleton); err != nil {
+		return fmt.Errorf("extrinsic guarantees validation failed, err: %w", err)
 	}
 
 	newTimeState := calculateNewTimeState(newBlock.Header)
@@ -577,6 +584,153 @@ func calculateNewCoreAssignments(
 	}
 
 	return newAssignments
+}
+
+func validateExtrinsicGuarantees(header block.Header, currentState *state.State, guarantees block.GuaranteesExtrinsic, ancestorStore *block.AncestorStore) error {
+
+	// let x ≡ {w_x S w ∈ w} , p ≡ {(w_s)h S w ∈ w} (145 v0.4.5)
+	contexts := make(map[block.RefinementContext]struct{})
+	extrinsicWorkPackages := make(map[crypto.Hash]crypto.Hash)
+
+	prerequisitePackageHashes := make(map[crypto.Hash]struct{})
+
+	// [⋃ x∈β] K(xp)
+	recentBlockPrerequisites := make(map[crypto.Hash]crypto.Hash)
+
+	// [⋃ x∈β] K(x_p) ∪ [⋃ x∈ξ] x ∪ q ∪ a
+	pastWorkPackages := make(map[crypto.Hash]struct{})
+	for _, recentBlock := range currentState.RecentBlocks {
+		for key, val := range recentBlock.WorkReportHashes {
+			recentBlockPrerequisites[key] = val
+			pastWorkPackages[key] = struct{}{}
+		}
+	}
+
+	for _, guarantee := range guarantees.Guarantees {
+		contexts[guarantee.WorkReport.RefinementContext] = struct{}{}
+		extrinsicWorkPackages[guarantee.WorkReport.WorkPackageSpecification.WorkPackageHash] = guarantee.WorkReport.WorkPackageSpecification.SegmentRoot
+		// ∀w ∈ w ∶ [∑ r∈wr] (rg) ≤ GA ∧ ∀r ∈ wr ∶ rg ≥ δ[rs]g (eq. 144 v0.4.5)
+		totalGas := uint64(0)
+		for _, r := range guarantee.WorkReport.WorkResults {
+			if r.GasPrioritizationRatio < currentState.Services[r.ServiceId].GasLimitForAccumulator {
+				return fmt.Errorf("work-report allotted accumulation gas for service is too small")
+			}
+			totalGas += r.GasPrioritizationRatio
+		}
+		if totalGas > service.CoreGasAccumulation {
+			return fmt.Errorf("work-reports total allotted accumulation gas is greater than the gas limit GA")
+		}
+
+		for key := range guarantee.WorkReport.SegmentRootLookup {
+			prerequisitePackageHashes[key] = struct{}{}
+		}
+		if guarantee.WorkReport.RefinementContext.PrerequisiteWorkPackage != nil {
+			prerequisitePackageHashes[*guarantee.WorkReport.RefinementContext.PrerequisiteWorkPackage] = struct{}{}
+
+			// let q = {(wx)p S q ∈ ϑ, w ∈ K(q)} (150 v0.4.5)
+			for _, workReportsAndDeps := range currentState.AccumulationQueue {
+				for _, wd := range workReportsAndDeps {
+					if reflect.DeepEqual(wd.WorkReport, guarantee.WorkReport) { // TODO maybe use hash compare instead of reflect
+						pastWorkPackages[*guarantee.WorkReport.RefinementContext.PrerequisiteWorkPackage] = struct{}{}
+					}
+				}
+			}
+		}
+
+		// let a = {((iw )x)p S i ∈ ρ, i ≠ ∅} (151 v0.4.5)
+		for _, ca := range currentState.CoreAssignments {
+			if ca.WorkReport.RefinementContext.PrerequisiteWorkPackage != nil {
+				pastWorkPackages[*ca.WorkReport.RefinementContext.PrerequisiteWorkPackage] = struct{}{}
+			}
+		}
+	}
+
+	// |p| = |w| (146 v0.4.5)
+	if len(extrinsicWorkPackages) != len(guarantees.Guarantees) {
+		return fmt.Errorf("cardinality of work-package hashes is not equal to the length of work-reports")
+	}
+
+	for context := range contexts {
+		// ∀x ∈ x ∶ ∃y ∈ β ∶ x_a = y_h ∧ x_s = ys ∧ xb = HK (EM (yb)) (147 v0.4.5)
+		if !anchorBlockInRecentBlocks(context, currentState) {
+			return fmt.Errorf("anchor block not present within recent blocks")
+		}
+
+		// ∀x ∈ x ∶ xt ≥ Ht − L (148 v0.4.5)
+		if context.LookupAnchor.Timeslot < header.TimeSlotIndex-state.MaxTimeslotsForPreimage {
+			return fmt.Errorf("lookup anchor block not withing the last %d timeslots", state.MaxTimeslotsForPreimage)
+		}
+
+		// ∀x ∈ x ∶ ∃h ∈ A ∶ ht = xt ∧ H(h) = xl (149 v0.4.5)
+		ancestor := ancestorStore.FindAncestor(func(ancestor *block.Header) bool {
+			encodedHeader, err := serialization.NewSerializer(codec.NewJamCodec()).Encode(ancestor)
+			if err != nil {
+				return false
+			}
+			if ancestor.TimeSlotIndex == context.LookupAnchor.Timeslot && crypto.HashData(encodedHeader) == context.LookupAnchor.HeaderHash {
+				return true
+			}
+			return false
+		})
+		if ancestor == nil {
+			return fmt.Errorf("no record of header found")
+		}
+	}
+
+	accHistoryPrerequisites := make(map[crypto.Hash]struct{})
+	for _, hashSet := range currentState.AccumulationHistory {
+		maps.Copy(accHistoryPrerequisites, hashSet)
+	}
+
+	// ∀p ∈ p, p ∉ [⋃ x∈β] K(x_p) ∪ [⋃ x∈ξ] x ∪ q ∪ a (152 v0.4.5)
+	for p := range extrinsicWorkPackages {
+		if _, ok := pastWorkPackages[p]; ok {
+			return fmt.Errorf("report work-package is the work-package of some other report made in the past")
+		}
+	}
+
+	// p ∪ {x | x ∈ b_p, b ∈ β} (153,154 v0.4.5)
+	extrinsicAndRecentWorkPackages := maps.Clone(extrinsicWorkPackages)
+	maps.Copy(extrinsicAndRecentWorkPackages, recentBlockPrerequisites)
+
+	// ∀w ∈ w, ∀p ∈ (wx)p ∪ K(wl) ∶ p ∈ p ∪ {x S x ∈ K(bp), b ∈ β} (153 v0.4.5)
+	for p := range prerequisitePackageHashes {
+		if _, ok := extrinsicWorkPackages[p]; !ok {
+			return fmt.Errorf("prerequisite report work-package is neither in the extrinsic nor in recent history")
+		}
+	}
+
+	for _, guarantee := range guarantees.Guarantees {
+		// ∀w ∈ w ∶ wl ⊆ p ∪ [⋃ b∈β] b_p (155 v0.4.5)
+		for lookupKey, lookupValue := range guarantee.WorkReport.SegmentRootLookup {
+			if extrinsicAndRecentWorkPackages[lookupKey] != lookupValue {
+				return fmt.Errorf("segment root not present in the present nor recent blocks")
+			}
+		}
+
+		// ∀w ∈ w, ∀r ∈ wr ∶ rc = δ[rs]c (156 v0.4.5)
+		for _, workResult := range guarantee.WorkReport.WorkResults {
+			if workResult.ServiceHashCode != currentState.Services[workResult.ServiceId].CodeHash {
+				return fmt.Errorf("work result code does not correspond with the service code")
+			}
+		}
+	}
+	return nil
+}
+
+// anchorBlockInRecentBlocks ∀x ∈ x ∶ ∃y ∈ β ∶ x_a = y_h ∧ x_s = ys ∧ xb = HK (EM (yb)) (147 v0.4.5)
+func anchorBlockInRecentBlocks(context block.RefinementContext, currentState *state.State) bool {
+	for _, y := range currentState.RecentBlocks {
+		encodedMMR, err := serialization.NewSerializer(codec.NewJamCodec()).Encode(y.AccumulationResultMMR)
+		if err != nil {
+			return false
+		}
+
+		if context.Anchor.HeaderHash == y.HeaderHash && context.Anchor.PosteriorStateRoot == y.StateRoot && context.Anchor.PosteriorBeefyRoot != crypto.KeccakData(encodedMMR) {
+			return true
+		}
+	}
+	return false
 }
 
 // determineValidatorSet implements validator set selection from equations 135 and 139:
