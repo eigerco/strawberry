@@ -203,7 +203,8 @@ func RandomBlockState(t *testing.T) BlockState {
 	var state BlockState
 	state.HeaderHash = testutils.RandomHash(t)
 	state.StateRoot = testutils.RandomHash(t)
-	state.AccumulationResultMMR = testutils.RandomHash(t)
+	h := testutils.RandomHash(t)
+	state.AccumulationResultMMR = []*crypto.Hash{&h}
 	workReportHashes := make(map[crypto.Hash]crypto.Hash)
 	for i := uint16(0); i < common.TotalNumberOfCores; i++ {
 		workReportHashes[testutils.RandomHash(t)] = testutils.RandomHash(t)
