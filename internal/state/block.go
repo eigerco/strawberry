@@ -8,6 +8,6 @@ import (
 type BlockState struct {
 	HeaderHash            crypto.Hash                 // Hash of the block header (h)
 	StateRoot             crypto.Hash                 // State root (b)
-	AccumulationResultMMR crypto.Hash                 // Accumulation-result MMR (s)
+	AccumulationResultMMR []*crypto.Hash              // Accumulation-result MMR (s)
 	WorkReportHashes      map[crypto.Hash]crypto.Hash // Hashes of work-reports (p)
 }

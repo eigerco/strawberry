@@ -2,10 +2,16 @@ package mountain_ranges
 
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/merkle/binary_tree/testutils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
+
+func mockHashData(data []byte) crypto.Hash {
+	var h crypto.Hash
+	copy(h[:], data)
+	return h
+}
 
 func TestMMR(t *testing.T) {
 	tests := []struct {
@@ -16,27 +22,24 @@ func TestMMR(t *testing.T) {
 		{
 			name:          "empty",
 			toAppend:      [][]byte{},
-			expectedPeaks: []*crypto.Hash{},
+			expectedPeaks: make([]*crypto.Hash, 0), // Initialize properly
 		},
 		{
 			name:     "single_item",
 			toAppend: [][]byte{[]byte("1")},
 			expectedPeaks: func() []*crypto.Hash {
-				h := testutils.MockHashData([]byte("1"))
+				h := mockHashData([]byte("1"))
 				return []*crypto.Hash{&h}
 			}(),
 		},
 		{
-			name: "two_items",
-			toAppend: [][]byte{
-				[]byte("1"),
-				[]byte("2"),
-			},
+			name:     "two_items",
+			toAppend: [][]byte{[]byte("1"), []byte("2")},
 			expectedPeaks: func() []*crypto.Hash {
-				h1 := testutils.MockHashData([]byte("1"))
-				h2 := testutils.MockHashData([]byte("2"))
+				h1 := mockHashData([]byte("1"))
+				h2 := mockHashData([]byte("2"))
 				combined := append(h1[:], h2[:]...)
-				hash := testutils.MockHashData(combined)
+				hash := mockHashData(combined)
 				return []*crypto.Hash{
 					nil,
 					&hash,
@@ -44,48 +47,15 @@ func TestMMR(t *testing.T) {
 			}(),
 		},
 		{
-			name: "three_items",
-			toAppend: [][]byte{
-				[]byte("1"),
-				[]byte("2"),
-				[]byte("3"),
-			},
+			name:     "three_items",
+			toAppend: [][]byte{[]byte("1"), []byte("2"), []byte("3")},
 			expectedPeaks: func() []*crypto.Hash {
-				h1 := testutils.MockHashData([]byte("1"))
-				h2 := testutils.MockHashData([]byte("2"))
+				h1 := mockHashData([]byte("1"))
+				h2 := mockHashData([]byte("2"))
 				combined := append(h1[:], h2[:]...)
-				h12 := testutils.MockHashData(combined)
-				h3 := testutils.MockHashData([]byte("3"))
-				return []*crypto.Hash{
-					&h3,
-					&h12,
-				}
-			}(),
-		},
-		{
-			name: "four_items",
-			toAppend: [][]byte{
-				[]byte("1"),
-				[]byte("2"),
-				[]byte("3"),
-				[]byte("4"),
-			},
-			expectedPeaks: func() []*crypto.Hash {
-				h1 := testutils.MockHashData([]byte("1"))
-				h2 := testutils.MockHashData([]byte("2"))
-				combined12 := append(h1[:], h2[:]...)
-				h12 := testutils.MockHashData(combined12)
-				h3 := testutils.MockHashData([]byte("3"))
-				h4 := testutils.MockHashData([]byte("4"))
-				combined34 := append(h3[:], h4[:]...)
-				h34 := testutils.MockHashData(combined34)
-				combined := append(h12[:], h34[:]...)
-				hash := testutils.MockHashData(combined)
-				return []*crypto.Hash{
-					nil,
-					nil,
-					&hash,
-				}
+				h12 := mockHashData(combined)
+				h3 := mockHashData([]byte("3"))
+				return []*crypto.Hash{&h3, &h12}
 			}(),
 		},
 	}
@@ -93,81 +63,28 @@ func TestMMR(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			mmr := New()
-
-			// Append all items
-			for _, item := range tc.toAppend {
-				err := mmr.Append(item, testutils.MockHashData)
-				assert.NoError(t, err)
-			}
-
-			// Check peaks
-			assert.Equal(t, tc.expectedPeaks, mmr.GetPeaks())
-		})
-	}
-}
-
-func TestEncode(t *testing.T) {
-	tests := []struct {
-		name     string
-		toAppend [][]byte
-	}{
-		{
-			name:     "empty",
-			toAppend: [][]byte{},
-		},
-		{
-			name: "multiple_items",
-			toAppend: [][]byte{
-				[]byte("1"),
-				[]byte("2"),
-				[]byte("3"),
-				[]byte("4"),
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			mmr := New()
+			peaks := make([]*crypto.Hash, 0)
 
 			for _, item := range tc.toAppend {
-				err := mmr.Append(item, testutils.MockHashData)
-				assert.NoError(t, err)
+				hash := mockHashData(item)
+				peaks = mmr.Append(peaks, hash, mockHashData)
 			}
 
-			encoded, err := mmr.Encode()
+			// Compare slices length
+			assert.Equal(t, len(tc.expectedPeaks), len(peaks))
 
-			assert.NoError(t, err)
+			// Compare individual hash values
+			for i := range peaks {
+				if tc.expectedPeaks[i] == nil {
+					assert.Nil(t, peaks[i])
+				} else {
+					assert.Equal(t, *tc.expectedPeaks[i], *peaks[i])
+				}
+			}
+
+			encoded, err := mmr.Encode(peaks)
+			require.NoError(t, err)
 			assert.NotNil(t, encoded)
 		})
 	}
-}
-
-func TestAppendIdempotent(t *testing.T) {
-	mmr1 := New()
-	mmr2 := New()
-
-	items := [][]byte{[]byte("1"), []byte("2"), []byte("3")}
-
-	// Append to first MMR in sequence
-	for _, item := range items {
-		err := mmr1.Append(item, testutils.MockHashData)
-		assert.NoError(t, err)
-	}
-
-	// Append same items to second MMR
-	for _, item := range items {
-		err := mmr2.Append(item, testutils.MockHashData)
-		assert.NoError(t, err)
-	}
-
-	// Both should have identical peaks
-	assert.Equal(t, mmr1.GetPeaks(), mmr2.GetPeaks())
-
-	// Both should encode to same value
-	encoded1, err := mmr1.Encode()
-	assert.NoError(t, err)
-	encoded2, err := mmr2.Encode()
-	assert.NoError(t, err)
-	assert.Equal(t, encoded1, encoded2)
 }

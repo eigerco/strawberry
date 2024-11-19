@@ -37,7 +37,12 @@ func TestShuffleVectors(t *testing.T) {
 				entropyBytes, err := hex.DecodeString(testCase.Entropy)
 				require.NoError(t, err)
 
-				shuffledSequence, err := common.DeterministicShuffle(testCase.Input, crypto.Hash(entropyBytes))
+				ss := make([]uint32, testCase.Input)
+				for i := uint32(0); i < testCase.Input; i++ {
+					ss[i] = i
+				}
+
+				shuffledSequence, err := common.DeterministicShuffle(ss, crypto.Hash(entropyBytes))
 				require.NoError(t, err)
 
 				assert.Equal(t, testCase.ExpectedOutput, shuffledSequence)
