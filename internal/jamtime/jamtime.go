@@ -120,11 +120,6 @@ func (jt JamTime) IsInFutureTimeSlot() bool {
 	return jt.ToTimeslot() > CurrentTimeslot()
 }
 
-// IsEpochTransition checks if transitioning to new epoch based on the previous and new timeslot
-func IsEpochTransition(previousTimeslot, newTimeslot Timeslot) bool {
-	return previousTimeslot.IsLastTimeslotInEpoch() && newTimeslot.IsFirstTimeslotInEpoch()
-}
-
 // ToTimeslot converts a JamTime to its corresponding Timeslot
 func (jt JamTime) ToTimeslot() Timeslot {
 	return Timeslot(jt.Seconds / uint64(TimeslotDuration.Seconds()))
