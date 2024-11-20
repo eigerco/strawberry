@@ -4,12 +4,12 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-// SerializeState serializes the given state into a map of crypto.Hash to byte arrays.
-func SerializeState(state State) (map[crypto.Hash][]byte, error) {
-
+// SerializeState serializes the given state into a map of crypto.Hash to byte arrays, for merklization.
+func SerializeState(state state.State) (map[crypto.Hash][]byte, error) {
 	serializedState := make(map[crypto.Hash][]byte)
 
 	// Helper function to serialize individual fields
@@ -69,7 +69,7 @@ func SerializeState(state State) (map[crypto.Hash][]byte, error) {
 	return serializedState, nil
 }
 
-func serializeSafroleState(state State, serializedState map[crypto.Hash][]byte) error {
+func serializeSafroleState(state state.State, serializedState map[crypto.Hash][]byte) error {
 	encodedSafroleState, err := jam.Marshal(state.ValidatorState.SafroleState)
 	if err != nil {
 		return err
@@ -80,7 +80,7 @@ func serializeSafroleState(state State, serializedState map[crypto.Hash][]byte) 
 	return nil
 }
 
-func serializeJudgements(state State, serializedState map[crypto.Hash][]byte) error {
+func serializeJudgements(state state.State, serializedState map[crypto.Hash][]byte) error {
 	sortedGoodWorkReports := sortByteSlicesCopy(state.PastJudgements.GoodWorkReports)
 	encodedGoodWorkReports, err := jam.Marshal(sortedGoodWorkReports)
 	if err != nil {

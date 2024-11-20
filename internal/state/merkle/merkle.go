@@ -3,10 +3,11 @@ package state
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/merkle/trie"
+	"github.com/eigerco/strawberry/internal/state"
 )
 
 // MerklizeState computes the Merkle root of a given state.
-func MerklizeState(s State) (crypto.Hash, error) {
+func MerklizeState(s state.State, store *trie.DB) (crypto.Hash, error) {
 	// Serialize the state
 	serializedState, err := SerializeState(s)
 	if err != nil {
@@ -19,7 +20,10 @@ func MerklizeState(s State) (crypto.Hash, error) {
 		kvs = append(kvs, [2][]byte{key[:], value})
 	}
 
-	// Compute the Merkle root
-	rootHash := trie.Merklize(kvs, 0)
+	// Compute the Merkle root and store trie nodes in the database
+	rootHash, err := store.MerklizeAndCommit(kvs)
+	if err != nil {
+		return crypto.Hash{}, err
+	}
 	return rootHash, nil
 }
