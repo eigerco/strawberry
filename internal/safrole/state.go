@@ -22,6 +22,7 @@ type ValidatorsData [common.NumberOfValidators]crypto.ValidatorKey
 // Returns the RingCommitment for this state i.e. γz.
 func (state State) CalculateRingCommitment() (crypto.RingCommitment, error) {
 	ringVerifier, err := state.RingVerifier()
+	defer ringVerifier.Free()
 	if err != nil {
 		return crypto.RingCommitment{}, err
 	}
