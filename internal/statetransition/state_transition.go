@@ -431,6 +431,7 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 	}
 
 	ringVerifier, err := safstate.RingVerifier()
+	defer ringVerifier.Free()
 	if err != nil {
 		return []block.Ticket{}, err
 	}
