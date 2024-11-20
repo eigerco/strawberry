@@ -25,11 +25,17 @@ Strawberry follows the specifications outlined in version [0.4.5](https://github
 
 - Written in Go for performance and reliability
 - Currently implementing M1 IMPORTER: State-transitioning conformance tests pass and can import blocks.
-- Easy to configure and extend
+- Easy to configure and extend.
 
-## Installation
+## Getting started
 
-To install Strawberry, ensure you have Go installed on your system. Follow the steps below to get started:
+### Prerequisites
+- Make
+- Go 1.22.5 or higher
+- Rust 1.81.1 or higher
+
+### Installation
+Follow the steps below to get started:
 
 1. Clone the repository:
     ```bash
