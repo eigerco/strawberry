@@ -914,7 +914,7 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 		}
 
 		// ∀x ∈ x ∶ ∃h ∈ A ∶ ht = xt ∧ H(h) = xl (149 v0.4.5)
-		ancestor := ancestorStore.FindAncestor(func(ancestor *block.Header) bool {
+		_, err := ancestorStore.FindAncestor(func(ancestor block.Header) bool {
 			encodedHeader, err := jam.Marshal(ancestor)
 			if err != nil {
 				return false
@@ -924,8 +924,8 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 			}
 			return false
 		})
-		if ancestor == nil {
-			return fmt.Errorf("no record of header found")
+		if err != nil {
+			return fmt.Errorf("no record of header found: %w", err)
 		}
 	}
 
