@@ -53,7 +53,21 @@ To install Strawberry, ensure you have Go installed on your system. Follow the s
 
     ```
 
+## Run tests
 
+### Unit tests
+
+```shell
+make test
+```
+
+### Integration tests
+Integration tests validate our code using the test vectors provided by [this](https://github.com/w3f/jamtestvectors) repository.
+All integration tests are grouped within the `tests/integrations` folder, and the test cases/vectors (JSON and BIN files) are located in the `tests/integration/vectors` directory.
+To execute these tests, use the following command:
+```shell
+make integration
+```
 
 ## Contributing
 
