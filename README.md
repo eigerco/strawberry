@@ -2,6 +2,7 @@
 
 Welcome to Strawberry, our implementation of the JAM client for Polkadot, written in Go. This project is part of Eiger's effort to contribute to the Polkadot ecosystem by providing a robust and efficient client implementation.
 
+Eiger account `131MpMXeuKG6L27Ye23uzWr739KFbbrCBdiv39XZtnTCPwQB`
 
 ## Table of Contents
 
