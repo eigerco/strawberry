@@ -19,6 +19,7 @@ Eiger account `131MpMXeuKG6L27Ye23uzWr739KFbbrCBdiv39XZtnTCPwQB`
 Strawberry is an implementation of the JAM (JOIN-ACCUMULATE MACHINE) client for Polkadot, developed in Go. This implementation aims to provide a lightweight, performant, and secure JAM client.
 
 For more information about JAM, read the [graypaper](https://graypaper.com).
+Strawberry follows the specifications outlined in version [0.4.5](https://github.com/gavofyork/graypaper/releases/tag/v0.4.5).
 
 ## Features
 
