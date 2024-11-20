@@ -2,11 +2,8 @@ package common
 
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
-
-var serializer = serialization.NewSerializer(codec.NewJamCodec())
 
 // DeterministicShuffle performs a deterministic shuffle of the sequence s based on the hash h (appendix F)
 func DeterministicShuffle(s []uint32, h crypto.Hash) ([]uint32, error) {
@@ -41,7 +38,7 @@ func generateRandomNumbers(h crypto.Hash, l uint32) ([]uint32, error) {
 	r := make([]uint32, l)
 	for i := uint32(0); i < l; i++ {
 		k := i / 8
-		kBytes, err := serializer.Encode(k)
+		kBytes, err := jam.Marshal(k)
 		if err != nil {
 			return nil, err
 		}
@@ -56,7 +53,7 @@ func generateRandomNumbers(h crypto.Hash, l uint32) ([]uint32, error) {
 		}
 
 		var rI uint32
-		err = serializer.Decode(b[:], &rI)
+		err = jam.Unmarshal(b[:], &rI)
 		if err != nil {
 			return nil, err
 		}

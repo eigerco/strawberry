@@ -8,3 +8,8 @@ var (
 	ErrNotEmbeddedLeaf              = errors.New("node is not an embedded-value leaf node")
 	ErrEmbeddedLeafInsteadOfRegular = errors.New("node is an embedded leaf, expected regular leaf")
 )
+
+const (
+	ErrFailedBatchCommit = "failed to commit batch: %v"
+	ErrFailedStoreInit   = "failed to initialize store: %v"
+)

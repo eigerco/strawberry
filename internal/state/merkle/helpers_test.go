@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/eigerco/strawberry/internal/state"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -14,8 +15,7 @@ import (
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,34 +82,34 @@ func RandomPrivilegedServices() service.PrivilegedServices {
 	}
 }
 
-func RandomEntropyPool(t *testing.T) EntropyPool {
-	return EntropyPool{testutils.RandomHash(t), testutils.RandomHash(t), testutils.RandomHash(t), testutils.RandomHash(t)}
+func RandomEntropyPool(t *testing.T) state.EntropyPool {
+	return state.EntropyPool{testutils.RandomHash(t), testutils.RandomHash(t), testutils.RandomHash(t), testutils.RandomHash(t)}
 }
 
-func RandomCoreAuthorizersPool(t *testing.T) CoreAuthorizersPool {
-	var pool CoreAuthorizersPool
+func RandomCoreAuthorizersPool(t *testing.T) state.CoreAuthorizersPool {
+	var pool state.CoreAuthorizersPool
 	for i := range pool {
-		for j := 0; j < MaxAuthorizersPerCore; j++ {
+		for range state.MaxAuthorizersPerCore {
 			pool[i] = append(pool[i], testutils.RandomHash(t))
 		}
 	}
 	return pool
 }
 
-func RandomPendingAuthorizersQueues(t *testing.T) PendingAuthorizersQueues {
-	var queue PendingAuthorizersQueues
+func RandomPendingAuthorizersQueues(t *testing.T) state.PendingAuthorizersQueues {
+	var queue state.PendingAuthorizersQueues
 	for i := range queue {
-		for j := 0; j < PendingAuthorizersQueueSize; j++ {
+		for j := 0; j < state.PendingAuthorizersQueueSize; j++ {
 			queue[i][j] = testutils.RandomHash(t)
 		}
 	}
 	return queue
 }
 
-func RandomCoreAssignments(t *testing.T) CoreAssignments {
-	var assignments CoreAssignments
+func RandomCoreAssignments(t *testing.T) state.CoreAssignments {
+	var assignments state.CoreAssignments
 	for i := range assignments {
-		assignments[i] = Assignment{
+		assignments[i] = state.Assignment{
 			WorkReport: &block.WorkReport{
 				WorkPackageSpecification: block.WorkPackageSpecification{WorkPackageHash: testutils.RandomHash(t)},
 				RefinementContext: block.RefinementContext{
@@ -142,13 +142,13 @@ func RandomWorkResult(t *testing.T) block.WorkResult {
 	}
 }
 
-func RandomAccumulationQueue(t *testing.T) AccumulationQueue {
-	var queue AccumulationQueue
+func RandomAccumulationQueue(t *testing.T) state.AccumulationQueue {
+	var queue state.AccumulationQueue
 	for i := 0; i < len(queue); i++ {
 		// For each timeslot, create a random slice of WorkReportWithUnAccumulatedDependencies
 		numReports := testutils.RandomUint32()%5 + 1 // Random number of work reports (1-5)
 		for j := 0; j < int(numReports); j++ {
-			queue[i] = append(queue[i], WorkReportWithUnAccumulatedDependencies{
+			queue[i] = append(queue[i], state.WorkReportWithUnAccumulatedDependencies{
 				WorkReport:   RandomWorkReport(t),
 				Dependencies: RandomHashSet(t, 5), // Random set of crypto.Hash
 			})
@@ -157,8 +157,8 @@ func RandomAccumulationQueue(t *testing.T) AccumulationQueue {
 	return queue
 }
 
-func RandomAccumulationHistory(t *testing.T) AccumulationHistory {
-	var history AccumulationHistory
+func RandomAccumulationHistory(t *testing.T) state.AccumulationHistory {
+	var history state.AccumulationHistory
 	for i := 0; i < len(history); i++ {
 		numEntries := testutils.RandomUint32()%5 + 1 // Random number of map entries (1-5)
 		history[i] = make(map[crypto.Hash]struct{})
@@ -199,18 +199,18 @@ func RandomHashSet(t *testing.T, maxSize int) map[crypto.Hash]struct{} {
 	return set
 }
 
-func RandomBlockState(t *testing.T) BlockState {
-	var state BlockState
-	state.HeaderHash = testutils.RandomHash(t)
-	state.StateRoot = testutils.RandomHash(t)
+func RandomBlockState(t *testing.T) state.BlockState {
+	var blockState state.BlockState
+	blockState.HeaderHash = testutils.RandomHash(t)
+	blockState.StateRoot = testutils.RandomHash(t)
 	h := testutils.RandomHash(t)
-	state.AccumulationResultMMR = []*crypto.Hash{&h}
+	blockState.AccumulationResultMMR = []*crypto.Hash{&h}
 	workReportHashes := make(map[crypto.Hash]crypto.Hash)
 	for i := uint16(0); i < common.TotalNumberOfCores; i++ {
 		workReportHashes[testutils.RandomHash(t)] = testutils.RandomHash(t)
 	}
-	state.WorkReportHashes = workReportHashes
-	return state
+	blockState.WorkReportHashes = workReportHashes
+	return blockState
 }
 
 func RandomValidatorState(t *testing.T) validator.ValidatorState {
@@ -240,12 +240,12 @@ func RandomValidatorStatisticsState() validator.ValidatorStatisticsState {
 	}
 }
 
-func RandomJudgements(t *testing.T) Judgements {
+func RandomJudgements(t *testing.T) state.Judgements {
 	offendingValidators := make([]ed25519.PublicKey, 5)
 	for i := range offendingValidators {
 		offendingValidators[i] = testutils.RandomED25519PublicKey(t)
 	}
-	return Judgements{
+	return state.Judgements{
 		BadWorkReports:      []crypto.Hash{testutils.RandomHash(t)},
 		GoodWorkReports:     []crypto.Hash{testutils.RandomHash(t)},
 		WonkyWorkReports:    []crypto.Hash{testutils.RandomHash(t)},
@@ -279,13 +279,13 @@ func RandomSafroleStateWithEpochKeys(t *testing.T) safrole.State {
 	}
 }
 
-func RandomState(t *testing.T) State {
+func RandomState(t *testing.T) state.State {
 	services := make(service.ServiceState)
 	for i := 0; i < 10; i++ {
 		services[block.ServiceId(789)] = RandomServiceAccount(t)
 	}
 
-	return State{
+	return state.State{
 		Services:                 services,
 		PrivilegedServices:       RandomPrivilegedServices(),
 		ValidatorState:           RandomValidatorState(t),
@@ -293,7 +293,7 @@ func RandomState(t *testing.T) State {
 		CoreAuthorizersPool:      RandomCoreAuthorizersPool(t),
 		PendingAuthorizersQueues: RandomPendingAuthorizersQueues(t),
 		CoreAssignments:          RandomCoreAssignments(t),
-		RecentBlocks:             []BlockState{RandomBlockState(t)},
+		RecentBlocks:             []state.BlockState{RandomBlockState(t)},
 		TimeslotIndex:            testutils.RandomTimeslot(),
 		PastJudgements:           RandomJudgements(t),
 		ValidatorStatistics:      RandomValidatorStatisticsState(),
@@ -303,11 +303,8 @@ func RandomState(t *testing.T) State {
 }
 
 // DeserializeState deserializes the given map of crypto.Hash to byte slices into a State object. Not possible to restore the full state.
-func DeserializeState(serializedState map[crypto.Hash][]byte) (State, error) {
-	jamCodec := codec.NewJamCodec()
-	serializer := serialization.NewSerializer(jamCodec)
-
-	state := State{}
+func DeserializeState(serializedState map[crypto.Hash][]byte) (state.State, error) {
+	deserializedState := state.State{}
 
 	// Helper function to deserialize individual fields
 	deserializeField := func(key uint8, target interface{}) error {
@@ -316,7 +313,7 @@ func DeserializeState(serializedState map[crypto.Hash][]byte) (State, error) {
 		if !ok {
 			return errors.New("missing state key")
 		}
-		return serializer.Decode(encodedValue, target)
+		return jam.Unmarshal(encodedValue, target)
 	}
 
 	// Deserialize basic fields
@@ -324,46 +321,46 @@ func DeserializeState(serializedState map[crypto.Hash][]byte) (State, error) {
 		key   uint8
 		value interface{}
 	}{
-		{1, &state.CoreAuthorizersPool},
-		{2, &state.PendingAuthorizersQueues},
-		{3, &state.RecentBlocks},
-		{6, &state.EntropyPool},
-		{7, &state.ValidatorState.QueuedValidators},
-		{8, &state.ValidatorState.CurrentValidators},
-		{9, &state.ValidatorState.ArchivedValidators},
-		{10, &state.CoreAssignments},
-		{11, &state.TimeslotIndex},
-		{12, &state.PrivilegedServices},
-		{13, &state.ValidatorStatistics},
-		{14, &state.AccumulationQueue},
-		{15, &state.AccumulationHistory},
+		{1, &deserializedState.CoreAuthorizersPool},
+		{2, &deserializedState.PendingAuthorizersQueues},
+		{3, &deserializedState.RecentBlocks},
+		{6, &deserializedState.EntropyPool},
+		{7, &deserializedState.ValidatorState.QueuedValidators},
+		{8, &deserializedState.ValidatorState.CurrentValidators},
+		{9, &deserializedState.ValidatorState.ArchivedValidators},
+		{10, &deserializedState.CoreAssignments},
+		{11, &deserializedState.TimeslotIndex},
+		{12, &deserializedState.PrivilegedServices},
+		{13, &deserializedState.ValidatorStatistics},
+		{14, &deserializedState.AccumulationQueue},
+		{15, &deserializedState.AccumulationHistory},
 	}
 
 	for _, field := range basicFields {
 		if err := deserializeField(field.key, field.value); err != nil {
-			return state, err
+			return deserializedState, err
 		}
 	}
 
 	// Deserialize SafroleState specific fields
-	if err := deserializeSafroleState(&state, serializer, serializedState); err != nil {
-		return state, err
+	if err := deserializeSafroleState(&deserializedState, serializedState); err != nil {
+		return deserializedState, err
 	}
 
 	// Deserialize Past Judgements
-	if err := deserializeJudgements(&state, serializer, serializedState); err != nil {
-		return state, err
+	if err := deserializeJudgements(&deserializedState, serializedState); err != nil {
+		return deserializedState, err
 	}
 
 	// Deserialize Services
-	if err := deserializeServices(&state, serializer, serializedState); err != nil {
-		return state, err
+	if err := deserializeServices(&deserializedState, serializedState); err != nil {
+		return deserializedState, err
 	}
 
-	return state, nil
+	return deserializedState, nil
 }
 
-func deserializeSafroleState(state *State, serializer *serialization.Serializer, serializedState map[crypto.Hash][]byte) error {
+func deserializeSafroleState(state *state.State, serializedState map[crypto.Hash][]byte) error {
 	stateKey := generateStateKeyBasic(4)
 	encodedSafroleState, ok := serializedState[stateKey]
 	if !ok {
@@ -372,7 +369,7 @@ func deserializeSafroleState(state *State, serializer *serialization.Serializer,
 
 	decodedSafroleState := safrole.State{}
 
-	if err := serializer.Decode(encodedSafroleState, &decodedSafroleState); err != nil {
+	if err := jam.Unmarshal(encodedSafroleState, &decodedSafroleState); err != nil {
 		return err
 	}
 
@@ -381,7 +378,7 @@ func deserializeSafroleState(state *State, serializer *serialization.Serializer,
 	return nil
 }
 
-func deserializeJudgements(state *State, serializer *serialization.Serializer, serializedState map[crypto.Hash][]byte) error {
+func deserializeJudgements(state *state.State, serializedState map[crypto.Hash][]byte) error {
 	stateKey := generateStateKeyBasic(5)
 	encodedValue, ok := serializedState[stateKey]
 	if !ok {
@@ -395,7 +392,7 @@ func deserializeJudgements(state *State, serializer *serialization.Serializer, s
 		WonkyWorkReports    []crypto.Hash
 		OffendingValidators []ed25519.PublicKey
 	}
-	if err := serializer.Decode(encodedValue, &combined); err != nil {
+	if err := jam.Unmarshal(encodedValue, &combined); err != nil {
 		return err
 	}
 
@@ -407,7 +404,7 @@ func deserializeJudgements(state *State, serializer *serialization.Serializer, s
 	return nil
 }
 
-func deserializeServices(state *State, serializer *serialization.Serializer, serializedState map[crypto.Hash][]byte) error {
+func deserializeServices(state *state.State, serializedState map[crypto.Hash][]byte) error {
 	state.Services = make(service.ServiceState)
 
 	// Iterate over serializedState and look for service entries (identified by prefix 255)
@@ -426,7 +423,7 @@ func deserializeServices(state *State, serializer *serialization.Serializer, ser
 				FootprintSize          uint64
 				FootprintItems         int
 			}
-			if err := serializer.Decode(encodedValue, &combined); err != nil {
+			if err := jam.Unmarshal(encodedValue, &combined); err != nil {
 				return err
 			}
 

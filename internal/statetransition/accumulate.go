@@ -12,8 +12,6 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -24,16 +22,14 @@ const (
 
 func NewAccumulator(state *state.State, header *block.Header) *Accumulator {
 	return &Accumulator{
-		header:     header,
-		state:      state,
-		serializer: serialization.NewSerializer(&codec.JAMCodec{}),
+		header: header,
+		state:  state,
 	}
 }
 
 type Accumulator struct {
-	header     *block.Header
-	state      *state.State
-	serializer *serialization.Serializer
+	header *block.Header
+	state  *state.State
 }
 
 // InvokePVM ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G) Equation 280
@@ -60,7 +56,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, serviceIndex b
 	}
 
 	// E(↕o)
-	args, err := a.serializer.Encode(accOperand)
+	args, err := jam.Marshal(accOperand)
 	if err != nil {
 		log.Println("error encoding arguments", "err", err)
 		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0
@@ -160,19 +156,19 @@ func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.Servi
 
 func (a *Accumulator) newServiceID(serviceIndex block.ServiceId) (block.ServiceId, error) {
 	var hashBytes []byte
-	bb, err := a.serializer.Encode(serviceIndex)
+	bb, err := jam.Marshal(serviceIndex)
 	if err != nil {
 		return 0, err
 	}
 	hashBytes = append(hashBytes, bb...)
 
-	bb, err = a.serializer.Encode(a.state.EntropyPool[0])
+	bb, err = jam.Marshal(a.state.EntropyPool[0])
 	if err != nil {
 		return 0, err
 	}
 	hashBytes = append(hashBytes, bb...)
 
-	bb, err = a.serializer.Encode(a.header.TimeSlotIndex)
+	bb, err = jam.Marshal(a.header.TimeSlotIndex)
 	if err != nil {
 		return 0, err
 	}

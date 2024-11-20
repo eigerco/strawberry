@@ -3,7 +3,6 @@ package statetransition
 import (
 	"bytes"
 	"crypto/ed25519"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -12,10 +11,6 @@ import (
 	"slices"
 	"sort"
 	"sync"
-
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -29,6 +24,7 @@ import (
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/validator"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 const (
@@ -311,7 +307,7 @@ func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesEx
 	workPackageMapping := buildWorkPackageMapping(guarantees.Guarantees)
 
 	// Equation 83: let n = {p, h ▸▸ H(H), b, s ▸▸ H_0}
-	headerBytes, err := json.Marshal(header)
+	headerBytes, err := jam.Marshal(header)
 	if err != nil {
 		return nil, err
 	}
@@ -918,8 +914,8 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 		}
 
 		// ∀x ∈ x ∶ ∃h ∈ A ∶ ht = xt ∧ H(h) = xl (149 v0.4.5)
-		ancestor := ancestorStore.FindAncestor(func(ancestor *block.Header) bool {
-			encodedHeader, err := serialization.NewSerializer(codec.NewJamCodec()).Encode(ancestor)
+		_, err := ancestorStore.FindAncestor(func(ancestor block.Header) bool {
+			encodedHeader, err := jam.Marshal(ancestor)
 			if err != nil {
 				return false
 			}
@@ -928,8 +924,8 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 			}
 			return false
 		})
-		if ancestor == nil {
-			return fmt.Errorf("no record of header found")
+		if err != nil {
+			return fmt.Errorf("no record of header found: %w", err)
 		}
 	}
 
@@ -977,7 +973,7 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 // anchorBlockInRecentBlocks ∀x ∈ x ∶ ∃y ∈ β ∶ x_a = y_h ∧ x_s = ys ∧ xb = HK (EM (yb)) (147 v0.4.5)
 func anchorBlockInRecentBlocks(context block.RefinementContext, currentState *state.State) bool {
 	for _, y := range currentState.RecentBlocks {
-		encodedMMR, err := serialization.NewSerializer(codec.NewJamCodec()).Encode(y.AccumulationResultMMR)
+		encodedMMR, err := jam.Marshal(y.AccumulationResultMMR)
 		if err != nil {
 			return false
 		}
@@ -1098,7 +1094,7 @@ func verifyGuaranteeCredentials(
 			return false
 		}
 
-		reportBytes, err := json.Marshal(guarantee.WorkReport)
+		reportBytes, err := jam.Marshal(guarantee.WorkReport)
 		if err != nil {
 			return false
 		}
@@ -1201,7 +1197,7 @@ func calculateWorkReportsAndAccumulate(
 		slices.Concat(
 			slices.Concat(accQueue[timeslotPerEpoch:]...), // ⋃(ϑm...)
 			slices.Concat(accQueue[:timeslotPerEpoch]...), // ⋃(ϑ...m)
-			queuedWorkReports,                             // WQ
+			queuedWorkReports, // WQ
 		),
 		getWorkPackageHashes(immediatelyAccWorkReports), // P(W!)
 	)
@@ -1847,10 +1843,10 @@ func (a *Accumulator) ParallelDelta(
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
-	uint64,                     // total gas used
-	state.AccumulationState,    // updated context
+	uint64, // total gas used
+	state.AccumulationState, // updated context
 	[]service.DeferredTransfer, // all transfers
-	ServiceHashPairs,           // accumulation outputs
+	ServiceHashPairs, // accumulation outputs
 ) {
 	// Get all unique service indices involved (s)
 	// s = {rs S w ∈ w, r ∈ wr} ∪ K(f)
@@ -1966,7 +1962,7 @@ func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
-	serviceIndex block.ServiceId,             // NS
+	serviceIndex block.ServiceId, // NS
 ) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)

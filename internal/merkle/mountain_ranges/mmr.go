@@ -2,8 +2,7 @@ package mountain_ranges
 
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/pkg/serialization"
-	"github.com/eigerco/strawberry/pkg/serialization/codec"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 type MMR struct{}
@@ -53,10 +52,7 @@ func replacePeakAt(peaks []*crypto.Hash, index int, value *crypto.Hash) []*crypt
 
 // Encode implements E_M function from equation (328):
 func (m *MMR) Encode(peaks []*crypto.Hash) ([]byte, error) {
-	jamCodec := codec.NewJamCodec()
-	serializer := serialization.NewSerializer(jamCodec)
-
-	encoded, err := serializer.Encode(peaks)
+	encoded, err := jam.Marshal(peaks)
 	if err != nil {
 		return nil, err
 	}
