@@ -37,23 +37,27 @@ To install Strawberry, ensure you have Go installed on your system. Follow the s
 
 2. Build the project:
     ```bash
-    
+   make build 
     ```
 
-3. Run the executable:
+3. Run the demo executable:
     ```bash
-    
+    ./strawberry
     ```
-
 ## Usage
+This demo app starts up a simple http server with one endpoint.
+The import block endpoint can be accessed at `POST /block/import`
 
+Usage example:
+```bash
+curl -i -X POST localhost:8080/block/import -H "Content-Type: application/json" --data-binary "@demo-block-sample.json"
+```
 
-- To start the client:
-    ```bash
-
-    ```
-
-
+This returns:
+```
+{"message":"extrinsic guarantees validation failed, err: anchor block not present within recent blocks","status":"error"}
+```
+Meaning that the block is being validated.
 
 ## Contributing
 

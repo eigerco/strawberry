@@ -5,6 +5,9 @@ ifeq ($(shell uname),Darwin)
     DARWIN_TEST_GOFLAGS=-ldflags=-extldflags=-Wl,-ld_classic
 endif
 
+GOOS := $(shell go env GOOS)
+GOARCH := $(shell go env GOARCH)
+
 all: help
 
 .PHONY: help
@@ -43,3 +46,7 @@ integration:
 .PHONY: install-hooks
 install-hooks:
 	git config core.hooksPath .githooks
+
+.PHONY: build
+build: build-bandersnatch
+	GOOS=${GOOS} GOARCH=${GOARCH} go build -o strawberry ./cmd/strawberry
