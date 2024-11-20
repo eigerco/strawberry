@@ -19,7 +19,7 @@ func main() {
 	// this will be replaced with proper p2p network communication in milestone 2
 	mux := http.NewServeMux()
 	mux.HandleFunc("/block/import", func(w http.ResponseWriter, r *http.Request) {
-		r.Header.Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json")
 		newBlock := block.Block{}
 		if err := json.NewDecoder(r.Body).Decode(&newBlock); err != nil {
 			jsonError(w, err.Error(), http.StatusBadRequest)
