@@ -12,3 +12,4 @@ go.work.sum
 .vscode/
 coverage.txt
 target
+strawberry

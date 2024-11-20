@@ -891,7 +891,7 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 
 		// let a = {((iw )x)p S i ∈ ρ, i ≠ ∅} (151 v0.4.5)
 		for _, ca := range currentState.CoreAssignments {
-			if ca.WorkReport.RefinementContext.PrerequisiteWorkPackage != nil {
+			if ca.WorkReport != nil && ca.WorkReport.RefinementContext.PrerequisiteWorkPackage != nil {
 				pastWorkPackages[*ca.WorkReport.RefinementContext.PrerequisiteWorkPackage] = struct{}{}
 			}
 		}
