@@ -4,7 +4,7 @@ import (
 	"math"
 )
 
-func SerializeTrivialNatural[T ~uint8 | ~uint16 | ~uint32 | ~uint64](x T, l uint8) []byte {
+func serializeTrivialNatural[T ~uint8 | ~uint16 | ~uint32 | ~uint64](x T, l uint8) []byte {
 	bytes := make([]byte, l)
 	for i := uint8(0); i < l; i++ {
 		bytes[i] = byte((x >> (8 * i)) & T(math.MaxUint8))
@@ -12,7 +12,7 @@ func SerializeTrivialNatural[T ~uint8 | ~uint16 | ~uint32 | ~uint64](x T, l uint
 	return bytes
 }
 
-func DeserializeTrivialNatural[T ~uint8 | ~uint16 | ~uint32 | ~uint64](serialized []byte, u *T) {
+func deserializeTrivialNatural[T ~uint8 | ~uint16 | ~uint32 | ~uint64](serialized []byte, u *T) {
 	*u = 0
 
 	// Iterate over each byte in the serialized array

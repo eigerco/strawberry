@@ -1,11 +1,9 @@
 package host_call
 
 import (
-	"maps"
 	"math"
 	"slices"
 	"testing"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -75,15 +73,15 @@ func TestAccumulate(t *testing.T) {
 	}{
 		{
 			name: "empower",
-			fn:   fnStd(Empower),
+			fn:   fnStd(Bless),
 			alloc: alloc{
 				A3: slices.Concat(
-					encodeNumber(uint32(123)),
-					encodeNumber(uint64(12341234)),
-					encodeNumber(uint32(234)),
-					encodeNumber(uint64(23452345)),
-					encodeNumber(uint32(345)),
-					encodeNumber(uint64(34563456)),
+					encodeNumber(t, uint32(123)),
+					encodeNumber(t, uint64(12341234)),
+					encodeNumber(t, uint32(234)),
+					encodeNumber(t, uint64(23452345)),
+					encodeNumber(t, uint32(345)),
+					encodeNumber(t, uint64(34563456)),
 				),
 			},
 			initialRegs: deltaRegs{
@@ -159,17 +157,14 @@ func TestAccumulate(t *testing.T) {
 			expectedDeltaRegs: checkUint64(t, 89),
 			expectedX:         checkpointCtx,
 			expectedY:         checkpointCtx,
-		}, {
+		},
+		{
 			name: "new",
 			fn:   fnStd(New),
 			alloc: alloc{
 				A0: hash2bytes(randomHash),
 			},
-			initialRegs: merge(
-				deltaRegs{A1: 123123},
-				storeUint64(123124123, A2, A3),
-				storeUint64(756846353, A4, A5),
-			),
+			initialRegs: deltaRegs{A1: 123123, A2: 123124123, A3: 756846353},
 			expectedDeltaRegs: deltaRegs{
 				A0: uint32(currentServiceID),
 			},
@@ -210,16 +205,14 @@ func TestAccumulate(t *testing.T) {
 					},
 				},
 			},
-		}, {
+		},
+		{
 			name: "upgrade",
 			fn:   fnStd(Upgrade),
 			alloc: alloc{
 				A0: hash2bytes(randomHash),
 			},
-			initialRegs: merge(
-				storeUint64(345345345345, A1, A2),
-				storeUint64(456456456456, A3, A4),
-			),
+			initialRegs: deltaRegs{A1: 3453453453, A2: 456456456},
 			expectedDeltaRegs: deltaRegs{
 				A0: uint32(OK),
 			},
@@ -233,33 +226,31 @@ func TestAccumulate(t *testing.T) {
 				ServiceId: currentServiceID,
 				ServiceState: service.ServiceState{currentServiceID: {
 					CodeHash:               randomHash,
-					GasLimitForAccumulator: 345345345345,
-					GasLimitOnTransfer:     456456456456,
+					GasLimitForAccumulator: 3453453453,
+					GasLimitOnTransfer:     456456456,
 				}},
 			},
 		}, {
 			name: "transfer",
 			fn:   fnStd(Transfer),
 			alloc: alloc{
-				A5: fixedSizeBytes(service.TransferMemoSizeBytes, []byte("memo message")),
+				A3: fixedSizeBytes(service.TransferMemoSizeBytes, []byte("memo message")),
 			},
-			initialRegs: merge(
-				deltaRegs{
-					A0: 1234, // d: receiver
-				},
-				storeUint64(100000000000, A1, A2), // a
-				storeUint64(80, A3, A4),           // g
-			),
+			initialRegs: deltaRegs{
+				A0: 1234,       // d: receiver
+				A1: 1000000000, // a
+				A2: 80,         // g
+			},
 			expectedDeltaRegs: deltaRegs{
 				A0: uint32(OK),
 			},
-			initialGas:  100000000100,
+			initialGas:  1000000100,
 			expectedGas: 88,
 			X: AccumulateContext{
 				ServiceId: block.ServiceId(123123123),
 				ServiceState: service.ServiceState{
 					block.ServiceId(123123123): {
-						Balance: 100000000100,
+						Balance: 1000000100,
 					},
 				},
 				AccumulationState: state.AccumulationState{
@@ -281,13 +272,13 @@ func TestAccumulate(t *testing.T) {
 				ServiceId: block.ServiceId(123123123),
 				ServiceState: service.ServiceState{
 					block.ServiceId(123123123): {
-						Balance: 100000000100,
+						Balance: 1000000100,
 					},
 				},
 				DeferredTransfers: []service.DeferredTransfer{{
 					SenderServiceIndex:   block.ServiceId(123123123),
 					ReceiverServiceIndex: 1234,
-					Balance:              100000000000,
+					Balance:              1000000000,
 					Memo:                 service.Memo(fixedSizeBytes(service.TransferMemoSizeBytes, []byte("memo message"))),
 					GasLimit:             80,
 				}},
@@ -724,21 +715,6 @@ func checkUint64(t *testing.T, gas uint64) deltaRegs {
 	}
 }
 
-func storeUint64(i uint64, reg1, reg2 Reg) deltaRegs {
-	return deltaRegs{
-		reg1: uint32(math.Mod(float64(i), 1<<32)),
-		reg2: uint32(math.Floor(float64(i) / (1 << 32))),
-	}
-}
-
-func merge[M ~map[K]V, K comparable, V any](dd ...M) M {
-	result := make(M)
-	for _, d := range dd {
-		maps.Copy(result, d)
-	}
-	return result
-}
-
 func fnStd(fn func(Gas, Registers, Memory, AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error)) hostCall {
 	return func(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 		return fn(gas, regs, mem, ctxPair)
@@ -775,6 +751,8 @@ func transform[S, S2 any](slice1 []S, fn func(S) S2) (slice []S2) {
 	return slice
 }
 
-func encodeNumber[T ~uint8 | ~uint16 | ~uint32 | ~uint64](v T) []byte {
-	return jam.SerializeTrivialNatural(v, uint8(unsafe.Sizeof(v)))
+func encodeNumber[T ~uint8 | ~uint16 | ~uint32 | ~uint64](t *testing.T, v T) []byte {
+	res, err := jam.Marshal(v)
+	require.NoError(t, err)
+	return res
 }

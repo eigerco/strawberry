@@ -32,9 +32,9 @@ type Accumulator struct {
 	state  *state.State
 }
 
-// InvokePVM ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G) Equation 280
+// InvokePVM ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G) Equation (B.8)
 func (a *Accumulator) InvokePVM(accState state.AccumulationState, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
-	// if d[s]c = ∅
+	// if ud[s]c = ∅
 	if accState.ServiceState[serviceIndex].Code() == nil {
 		ctx, err := a.newCtx(accState, serviceIndex)
 		if err != nil {
@@ -62,7 +62,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, serviceIndex b
 		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0
 	}
 
-	// F (equation 283)
+	// F (equation B.10)
 	hostCallFunc := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctx polkavm.AccumulateContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.AccumulateContextPair, error) {
 		// s
 		currentService := accState.ServiceState[serviceIndex]
@@ -70,7 +70,6 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, serviceIndex b
 		switch hostCall {
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
-			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
 		case host_call.LookupID:
 			gasCounter, regs, mem, err = host_call.Lookup(gasCounter, regs, mem, currentService, serviceIndex, ctx.RegularCtx.AccumulationState.ServiceState)
 			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
@@ -82,9 +81,8 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, serviceIndex b
 			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
 		case host_call.InfoID:
 			gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, serviceIndex, ctx.RegularCtx.AccumulationState.ServiceState)
-			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
-		case host_call.EmpowerID:
-			gasCounter, regs, mem, ctx, err = host_call.Empower(gasCounter, regs, mem, ctx)
+		case host_call.BlessID:
+			gasCounter, regs, mem, ctx, err = host_call.Bless(gasCounter, regs, mem, ctx)
 		case host_call.AssignID:
 			gasCounter, regs, mem, ctx, err = host_call.Assign(gasCounter, regs, mem, ctx)
 		case host_call.DesignateID:
@@ -110,7 +108,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, serviceIndex b
 		return gasCounter, regs, mem, ctx, err
 	}
 
-	remainingGas, ret, newCtxPair, err := interpreter.InvokeWholeProgram(accState.ServiceState[serviceIndex].Code(), 10, gas, args, hostCallFunc, newCtxPair)
+	remainingGas, ret, newCtxPair, err := interpreter.InvokeWholeProgram(accState.ServiceState[serviceIndex].Code(), 5, gas, args, hostCallFunc, newCtxPair)
 	if err != nil {
 		errPanic := &polkavm.ErrPanic{}
 		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {
@@ -128,7 +126,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, serviceIndex b
 	return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(remainingGas)
 }
 
-// newCtx (281)
+// newCtx (B.9)
 func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.ServiceId) (polkavm.AccumulateContext, error) {
 	serviceState := maps.Clone(u.ServiceState)
 	delete(serviceState, serviceIndex)
@@ -176,6 +174,10 @@ func (a *Accumulator) newServiceID(serviceIndex block.ServiceId) (block.ServiceI
 
 	hashData := crypto.HashData(hashBytes)
 	newId := block.ServiceId(0)
-	jam.DeserializeTrivialNatural(hashData[:], &newId)
+	err = jam.Unmarshal(hashData[:], &newId)
+	if err != nil {
+		return 0, err
+	}
+
 	return newId, nil
 }

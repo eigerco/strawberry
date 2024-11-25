@@ -341,7 +341,7 @@ func (br *byteReader) decodeUint(value reflect.Value) error {
 	}
 
 	var v uint64
-	err = DeserializeUint64WithLength(serialized, l, &v)
+	err = deserializeUint64WithLength(serialized, l, &v)
 	if err != nil {
 		return fmt.Errorf(ErrDecodingUint, err)
 	}
@@ -419,19 +419,19 @@ func (br *byteReader) decodeFixedWidthInt(dstv reflect.Value) error {
 	switch in.(type) {
 	case uint8:
 		var temp uint8
-		DeserializeTrivialNatural(buf, &temp)
+		deserializeTrivialNatural(buf, &temp)
 		dstv.Set(reflect.ValueOf(temp))
 	case uint16:
 		var temp uint16
-		DeserializeTrivialNatural(buf, &temp)
+		deserializeTrivialNatural(buf, &temp)
 		dstv.Set(reflect.ValueOf(temp))
 	case uint32:
 		var temp uint32
-		DeserializeTrivialNatural(buf, &temp)
+		deserializeTrivialNatural(buf, &temp)
 		dstv.Set(reflect.ValueOf(temp))
 	case uint64:
 		var temp uint64
-		DeserializeTrivialNatural(buf, &temp)
+		deserializeTrivialNatural(buf, &temp)
 		dstv.Set(reflect.ValueOf(temp))
 	}
 
