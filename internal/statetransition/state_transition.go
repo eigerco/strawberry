@@ -285,10 +285,50 @@ func calculateNewTimeState(header block.Header) jamtime.Timeslot {
 
 // calculateNewRecentBlocks Equation 18: β′ ≺ (H, EG, β†, C) v0.4.5
 func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentBlocks []state.BlockState, serviceHashPairs ServiceHashPairs) ([]state.BlockState, error) {
+	// Gather all the inputs we need.
+
+	// Equation 83: let n = {p, h ▸▸ H(H), b, s ▸▸ H_0}
+	headerBytes, err := jam.Marshal(header)
+	if err != nil {
+		return nil, err
+	}
+	headerHash := crypto.HashData(headerBytes)
+
+	priorStateRoot := header.PriorStateRoot
+
 	// Equation 83: let r = M_B([s ^^ E_4(s) ⌢ E(h) | (s, h) ∈ C], H_K)
 	accumulationRoot, err := computeAccumulationRoot(serviceHashPairs)
 	if err != nil {
 		return nil, err
+	}
+
+	// Equation 83: p = {((g_w)_s)_h ↦ ((g_w)_s)_e | g ∈ E_G}
+	workPackageMapping := buildWorkPackageMapping(guarantees.Guarantees)
+
+	// Update β to produce β'.
+	newRecentBlocks, err := UpdateRecentBlocks(headerHash, priorStateRoot, accumulationRoot, intermediateRecentBlocks, workPackageMapping)
+	if err != nil {
+		return nil, err
+	}
+
+	return newRecentBlocks, nil
+}
+
+// UpdateRecentBlocks updates β. It takes the final inputs from
+// Equation 83: let n = {p, h ▸▸ H(H), b, s ▸▸ H_0} and
+// produces Equation 84: β′ ≡ ←────── β† n_H.
+// We separate out this logic for ease of testing aganist the recent history
+// test vectors.
+func UpdateRecentBlocks(
+	headerHash crypto.Hash,
+	priorStateRoot crypto.Hash,
+	accumulationRoot crypto.Hash,
+	intermediateRecentBlocks []state.BlockState,
+	workPackageMapping map[crypto.Hash]crypto.Hash) (newRecentBlocks []state.BlockState, err error) {
+
+	// Equation 82: β†[SβS − 1]s = Hr
+	if len(intermediateRecentBlocks) > 0 {
+		intermediateRecentBlocks[len(intermediateRecentBlocks)-1].StateRoot = priorStateRoot
 	}
 
 	// Equation 83: let b = A(last([[]] ⌢ [x_b | x <− β]), r, H_K)
@@ -303,24 +343,16 @@ func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesEx
 	// A(last([[]] ⌢ [x_b | x <− β]), r, H_K)
 	newMMR := mountainRange.Append(lastBlockMMR, accumulationRoot, crypto.KeccakData)
 
-	// Equation 83: p = {((g_w)_s)_h ↦ ((g_w)_s)_e | g ∈ E_G}
-	workPackageMapping := buildWorkPackageMapping(guarantees.Guarantees)
-
-	// Equation 83: let n = {p, h ▸▸ H(H), b, s ▸▸ H_0}
-	headerBytes, err := jam.Marshal(header)
-	if err != nil {
-		return nil, err
-	}
 	newBlockState := state.BlockState{
-		HeaderHash:            crypto.HashData(headerBytes), // h ▸▸ H(H)
-		StateRoot:             crypto.Hash{},                // s ▸▸ H_0
-		AccumulationResultMMR: newMMR,                       // b
-		WorkReportHashes:      workPackageMapping,           // p
+		HeaderHash:            headerHash,         // h ▸▸ H(H)
+		StateRoot:             crypto.Hash{},      // s ▸▸ H_0
+		AccumulationResultMMR: newMMR,             // b
+		WorkReportHashes:      workPackageMapping, // p
 	}
 
 	// Equation 84: β′ ≡ ←────── β† n_H
 	// First append new block state
-	newRecentBlocks := append(intermediateRecentBlocks, newBlockState)
+	newRecentBlocks = append(intermediateRecentBlocks, newBlockState)
 
 	// Then keep only last H blocks
 	if len(newRecentBlocks) > state.MaxRecentBlocks {
