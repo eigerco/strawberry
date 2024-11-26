@@ -30,7 +30,7 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint32, gas uint64, args []b
 	}
 
 	result := make([]byte, regs[polkavm.A4])
-	if err := memory1.Read(regs[polkavm.A3], result); err != nil {
+	if err := memory1.Read(uint32(regs[polkavm.A3]), result); err != nil {
 		return 0, nil, x, err
 	}
 
