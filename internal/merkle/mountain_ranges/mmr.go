@@ -13,8 +13,7 @@ func New() *MMR {
 
 // Append (A function): A(r, l, H) ↦ P(r, l, 0, H) from equation (327)
 func (m *MMR) Append(r []*crypto.Hash, l crypto.Hash, hashFunc func([]byte) crypto.Hash) []*crypto.Hash {
-	hash := hashFunc(l[:])
-	return placePeak(r, &hash, 0, hashFunc)
+	return placePeak(r, &l, 0, hashFunc)
 }
 
 // placePeak implements P function from equation (327):
