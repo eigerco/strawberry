@@ -149,7 +149,7 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 		encodedFootprintSize,
 		encodedFootprintItems,
 	)
-	stateKey := generateStateKey(255, serviceId)
+	stateKey := generateStateKeyInterleavedBasic(255, serviceId)
 	serializedState[stateKey] = combined
 
 	// Serialize storage and preimage items

@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestGenerateStateKey verifies that the state key generation works as expected.
-func TestGenerateStateKey(t *testing.T) {
+// TestGenerateStateKeyInterleavedBasic verifies that the state key generation works as expected.
+func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
 	tests := []struct {
 		name      string
 		i         uint8
@@ -39,7 +39,7 @@ func TestGenerateStateKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Generate the state key
-			stateKey := generateStateKey(tt.i, tt.serviceId)
+			stateKey := generateStateKeyInterleavedBasic(tt.i, tt.serviceId)
 
 			// Convert serviceId to bytes for verification
 			serviceIdBytes := make([]byte, 4)

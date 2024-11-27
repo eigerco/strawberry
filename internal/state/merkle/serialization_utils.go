@@ -23,8 +23,8 @@ func generateStateKeyBasic(i uint8) [32]byte {
 	return result
 }
 
-// generateStateKey to generate state key based on i and s
-func generateStateKey(i uint8, s block.ServiceId) [32]byte {
+// generateStateKeyInterleavedBasic to generate state key based on i and s
+func generateStateKeyInterleavedBasic(i uint8, s block.ServiceId) [32]byte {
 	var result [32]byte
 
 	// Place i as the first byte

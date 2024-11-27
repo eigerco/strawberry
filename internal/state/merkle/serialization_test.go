@@ -278,7 +278,7 @@ func TestSerializeStateServices(t *testing.T) {
 	require.NoError(t, err)
 
 	for serviceId := range state.Services {
-		stateKey := generateStateKey(255, serviceId)
+		stateKey := generateStateKeyInterleavedBasic(255, serviceId)
 		hashKey := crypto.Hash(stateKey)
 		assert.Contains(t, serializedState, hashKey)
 		assert.NotEmpty(t, serializedState[hashKey])
