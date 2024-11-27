@@ -65,7 +65,7 @@ func TestLookup(t *testing.T) {
 	t.Run("service_not_found", func(t *testing.T) {
 		initialRegs := polkavm.Registers{
 			polkavm.RA: polkavm.VmAddressReturnToHost,
-			polkavm.SP: memoryMap.StackAddressHigh,
+			polkavm.SP: uint64(memoryMap.StackAddressHigh),
 		}
 		mem := memoryMap.NewMemory(nil, nil, nil)
 		initialGas := uint64(100)
@@ -96,10 +96,10 @@ func TestLookup(t *testing.T) {
 
 		initialRegs := polkavm.Registers{
 			polkavm.RA: polkavm.VmAddressReturnToHost,
-			polkavm.SP: memoryMap.StackAddressHigh,
-			polkavm.A0: uint32(serviceId),
-			polkavm.A1: ho,
-			polkavm.A2: bo,
+			polkavm.SP: uint64(memoryMap.StackAddressHigh),
+			polkavm.A0: uint64(serviceId),
+			polkavm.A1: uint64(ho),
+			polkavm.A2: uint64(bo),
 			polkavm.A3: 32,
 		}
 		sa := service.ServiceAccount{
@@ -170,12 +170,12 @@ func TestRead(t *testing.T) {
 	bz := uint32(32)
 	initialRegs := polkavm.Registers{
 		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: memoryMap.StackAddressHigh,
-		polkavm.A0: uint32(serviceId),
-		polkavm.A1: ko,
-		polkavm.A2: kz,
-		polkavm.A3: bo,
-		polkavm.A4: bz,
+		polkavm.SP: uint64(memoryMap.StackAddressHigh),
+		polkavm.A0: uint64(serviceId),
+		polkavm.A1: uint64(ko),
+		polkavm.A2: uint64(kz),
+		polkavm.A3: uint64(bo),
+		polkavm.A4: uint64(bz),
 	}
 	mem := memoryMap.NewMemory(nil, nil, nil)
 	err = mem.Write(ko, keyData)
@@ -238,11 +238,11 @@ func TestWrite(t *testing.T) {
 
 	initialRegs := polkavm.Registers{
 		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: memoryMap.StackAddressHigh,
-		polkavm.A0: ko,
-		polkavm.A1: kz,
-		polkavm.A2: vo,
-		polkavm.A3: vz,
+		polkavm.SP: uint64(memoryMap.StackAddressHigh),
+		polkavm.A0: uint64(ko),
+		polkavm.A1: uint64(kz),
+		polkavm.A2: uint64(vo),
+		polkavm.A3: uint64(vz),
 	}
 	mem := memoryMap.NewMemory(nil, nil, nil)
 	err = mem.Write(ko, keyData)
@@ -317,9 +317,9 @@ func TestInfo(t *testing.T) {
 	mem := memoryMap.NewMemory(nil, nil, nil)
 	initialRegs := polkavm.Registers{
 		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: memoryMap.StackAddressHigh,
-		polkavm.A0: uint32(serviceId),
-		polkavm.A1: omega1,
+		polkavm.SP: uint64(memoryMap.StackAddressHigh),
+		polkavm.A0: uint64(serviceId),
+		polkavm.A1: uint64(omega1),
 	}
 	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 		gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, serviceId, serviceState)

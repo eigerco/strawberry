@@ -43,19 +43,19 @@ const (
 	ForgetID     = 14
 )
 
-type Code uint32
+type Code uint64
 
 const (
-	NONE Code = math.MaxUint32
-	WHAT Code = math.MaxUint32 - 1
-	OOB  Code = math.MaxUint32 - 2
-	WHO  Code = math.MaxUint32 - 3
-	FULL Code = math.MaxUint32 - 4
-	CORE Code = math.MaxUint32 - 5
-	CASH Code = math.MaxUint32 - 6
-	LOW  Code = math.MaxUint32 - 7
-	HIGH Code = math.MaxUint32 - 8
-	HUH  Code = math.MaxUint32 - 9
+	NONE Code = math.MaxUint64
+	WHAT Code = math.MaxUint64 - 1
+	OOB  Code = math.MaxUint64 - 2
+	WHO  Code = math.MaxUint64 - 3
+	FULL Code = math.MaxUint64 - 4
+	CORE Code = math.MaxUint64 - 5
+	CASH Code = math.MaxUint64 - 6
+	LOW  Code = math.MaxUint64 - 7
+	HIGH Code = math.MaxUint64 - 8
+	HUH  Code = math.MaxUint64 - 9
 	OK   Code = 0
 )
 
@@ -98,6 +98,6 @@ func readNumber[U interface{ ~uint32 | ~uint64 }](mem Memory, addr uint32, lengt
 }
 
 func withCode(regs Registers, s Code) Registers {
-	regs[A0] = uint32(s)
+	regs[A0] = uint64(s)
 	return regs
 }
