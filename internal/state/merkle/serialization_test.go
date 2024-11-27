@@ -10,26 +10,18 @@ import (
 )
 
 func TestSerializeState(t *testing.T) {
-	// Step 1: Generate random state
+	// Generate random state
 	state := RandomState(t)
 
-	// Step 2: Serialize and log serialized keys
+	// Serialize and log serialized keys
 	encodedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	// Check for service keys
-	var serviceKeyCount int
-	for key := range encodedState {
-		if isServiceAccountKey(key) {
-			serviceKeyCount++
-		}
-	}
-
-	// Step 3: Deserialize and check results
+	// Deserialize and check results
 	decodedState, err := DeserializeState(encodedState)
 	require.NoError(t, err)
 
-	// Compare services with better error messages
+	// Compare services
 	assert.Equal(t, len(state.Services), len(decodedState.Services),
 		"Service map length mismatch (Original: %d, Decoded: %d)",
 		len(state.Services), len(decodedState.Services))
