@@ -412,7 +412,10 @@ func deserializeServices(state *state.State, serializedState map[crypto.Hash][]b
 		// Check if this is a service account entry (state key starts with 255)
 		if isServiceAccountKey(stateKey) {
 			// Extract service ID from the key
-			serviceId := extractServiceIdFromKey(stateKey)
+			serviceId, err := extractServiceIdFromKey(stateKey)
+			if err != nil {
+				return err
+			}
 
 			// Deserialize the combined fields (CodeHash, Balance, etc.)
 			var combined struct {
@@ -450,11 +453,19 @@ func isServiceAccountKey(stateKey crypto.Hash) bool {
 	return stateKey[0] == 255
 }
 
-func extractServiceIdFromKey(stateKey crypto.Hash) block.ServiceId {
-	// Since we're using zero-interleaved pattern, we need to reconstruct the service ID
-	// from bytes at positions 1,3,5,7
-	return block.ServiceId(uint32(stateKey[1])<<24 |
-		uint32(stateKey[3])<<16 |
-		uint32(stateKey[5])<<8 |
-		uint32(stateKey[7]))
+func extractServiceIdFromKey(stateKey crypto.Hash) (block.ServiceId, error) {
+	// Collect service ID bytes from positions 1,3,5,7 into a slice
+	encodedServiceId := []byte{
+		stateKey[1],
+		stateKey[3],
+		stateKey[5],
+		stateKey[7],
+	}
+
+	var serviceId block.ServiceId
+	if err := jam.Unmarshal(encodedServiceId, &serviceId); err != nil {
+		return 0, err
+	}
+
+	return serviceId, nil
 }

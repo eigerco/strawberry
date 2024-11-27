@@ -3,7 +3,7 @@ package state
 import (
 	"bytes"
 	"crypto/ed25519"
-	"encoding/binary"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"slices"
 	"sort"
 
@@ -24,42 +24,44 @@ func generateStateKeyBasic(i uint8) [32]byte {
 }
 
 // generateStateKeyInterleavedBasic to generate state key based on i and s
-func generateStateKeyInterleavedBasic(i uint8, s block.ServiceId) [32]byte {
+func generateStateKeyInterleavedBasic(i uint8, s block.ServiceId) ([32]byte, error) {
+	encodedServiceId, err := jam.Marshal(s)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
 	var result [32]byte
 
 	// Place i as the first byte
 	result[0] = i
 
-	// Extract individual bytes from s using bit shifting
-	result[1] = byte(s >> 24) // n0
-	result[3] = byte(s >> 16) // n1
-	result[5] = byte(s >> 8)  // n2
-	result[7] = byte(s)       // n3
+	// Place encoded service ID bytes at positions 1,3,5,7
+	for j := 0; j < 4; j++ {
+		result[1+j*2] = encodedServiceId[j]
+	}
 
-	// result[2,4,6,8] and the rest are already 0 by default
-	return result
+	return result, nil
 }
 
 // Function to interleave the first 4 bytes of s and h, then append the rest of h
-func generateStateKeyInterleaved(s block.ServiceId, h [32]byte) [32]byte {
+func generateStateKeyInterleaved(s block.ServiceId, h [32]byte) ([32]byte, error) {
+	encodedServiceId, err := jam.Marshal(s)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
 	var result [32]byte
 
-	// Convert s into a 4-byte buffer
-	sBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(sBuf, uint32(s)) // s is 4 bytes
-
-	// Interleave the first 4 bytes of s with the first 4 bytes of h
+	// Interleave the first 4 bytes of encodedServiceId with the first 4 bytes of h
 	for i := 0; i < 4; i++ {
-		// Copy the i-th byte from sBuf
-		result[i*2] = sBuf[i]
-		// Copy the i-th byte from h
+		result[i*2] = encodedServiceId[i]
 		result[i*2+1] = h[i]
 	}
 
 	// Append the rest of h to the result
 	copy(result[8:], h[4:])
 
-	return result
+	return result, nil
 }
 
 // calculateFootprintSize calculates the storage footprint size (al) based on Equation 94.

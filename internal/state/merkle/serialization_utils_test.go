@@ -1,8 +1,9 @@
 package state
 
 import (
-	"encoding/binary"
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
 
@@ -39,11 +40,12 @@ func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Generate the state key
-			stateKey := generateStateKeyInterleavedBasic(tt.i, tt.serviceId)
+			stateKey, err := generateStateKeyInterleavedBasic(tt.i, tt.serviceId)
+			require.NoError(t, err)
 
-			// Convert serviceId to bytes for verification
-			serviceIdBytes := make([]byte, 4)
-			binary.BigEndian.PutUint32(serviceIdBytes, uint32(tt.serviceId))
+			// Get encoded service ID for verification
+			encodedServiceId, err := jam.Marshal(tt.serviceId)
+			require.NoError(t, err)
 
 			// Verify length is 32 bytes
 			assert.Equal(t, 32, len(stateKey), "key length should be 32 bytes")
@@ -52,14 +54,14 @@ func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
 			assert.Equal(t, tt.i, stateKey[0], "first byte should be i")
 
 			// Verify the interleaved pattern:
-			// [i, n0, 0, n1, 0, n2, 0, n3, 0, 0, ...]
-			assert.Equal(t, serviceIdBytes[0], stateKey[1], "n0 should be at position 1")
+			// [i, s0, 0, s1, 0, s2, 0, s3, 0, 0, ...]
+			assert.Equal(t, encodedServiceId[0], stateKey[1], "s0 should be at position 1")
 			assert.Equal(t, byte(0), stateKey[2], "zero should be at position 2")
-			assert.Equal(t, serviceIdBytes[1], stateKey[3], "n1 should be at position 3")
+			assert.Equal(t, encodedServiceId[1], stateKey[3], "s1 should be at position 3")
 			assert.Equal(t, byte(0), stateKey[4], "zero should be at position 4")
-			assert.Equal(t, serviceIdBytes[2], stateKey[5], "n2 should be at position 5")
+			assert.Equal(t, encodedServiceId[2], stateKey[5], "s2 should be at position 5")
 			assert.Equal(t, byte(0), stateKey[6], "zero should be at position 6")
-			assert.Equal(t, serviceIdBytes[3], stateKey[7], "n3 should be at position 7")
+			assert.Equal(t, encodedServiceId[3], stateKey[7], "s3 should be at position 7")
 			assert.Equal(t, byte(0), stateKey[8], "zero should be at position 8")
 
 			// Verify remaining bytes are zero
@@ -67,6 +69,11 @@ func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
 				assert.Equal(t, byte(0), stateKey[i],
 					fmt.Sprintf("byte at position %d should be zero", i))
 			}
+
+			// Verify we can extract the service ID back
+			extractedServiceId, err := extractServiceIdFromKey(crypto.Hash(stateKey))
+			require.NoError(t, err)
+			assert.Equal(t, tt.serviceId, extractedServiceId)
 		})
 	}
 }
@@ -76,17 +83,36 @@ func TestGenerateStateKeyInterleaved(t *testing.T) {
 	serviceId := block.ServiceId(1234)
 	hash := crypto.Hash{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 
+	// Get encoded service ID for verification
+	encodedServiceId, err := jam.Marshal(serviceId)
+	require.NoError(t, err)
+
 	// Generate the interleaved state key
-	stateKey := generateStateKeyInterleaved(serviceId, hash)
+	stateKey, err := generateStateKeyInterleaved(serviceId, hash)
+	require.NoError(t, err)
 
 	// Verify the length is 32 bytes
 	assert.Equal(t, 32, len(stateKey))
 
 	// Verify that the first 8 bytes are interleaved between serviceId and hash
-	assert.Equal(t, stateKey[0], byte(serviceId>>24))
-	assert.Equal(t, stateKey[1], hash[0])
-	assert.Equal(t, stateKey[2], byte(serviceId>>16))
-	assert.Equal(t, stateKey[3], hash[1])
+	assert.Equal(t, encodedServiceId[0], stateKey[0])
+	assert.Equal(t, hash[0], stateKey[1])
+	assert.Equal(t, encodedServiceId[1], stateKey[2])
+	assert.Equal(t, hash[1], stateKey[3])
+	assert.Equal(t, encodedServiceId[2], stateKey[4])
+	assert.Equal(t, hash[2], stateKey[5])
+	assert.Equal(t, encodedServiceId[3], stateKey[6])
+	assert.Equal(t, hash[3], stateKey[7])
+
+	// Verify that remaining bytes from hash are copied correctly
+	rest := stateKey[8:]
+	for i := 0; i < len(rest); i++ {
+		if i < len(hash)-4 {
+			assert.Equal(t, hash[i+4], rest[i], "hash byte mismatch at position %d", i)
+		} else {
+			assert.Equal(t, byte(0), rest[i], "should be zero at position %d", i)
+		}
+	}
 }
 
 // TestCalculateFootprintSize checks if the footprint size calculation is correct.

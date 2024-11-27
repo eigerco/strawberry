@@ -149,7 +149,10 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 		encodedFootprintSize,
 		encodedFootprintItems,
 	)
-	stateKey := generateStateKeyInterleavedBasic(255, serviceId)
+	stateKey, err := generateStateKeyInterleavedBasic(255, serviceId)
+	if err != nil {
+		return err
+	}
 	serializedState[stateKey] = combined
 
 	// Serialize storage and preimage items
@@ -174,7 +177,10 @@ func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount servi
 		var combined [32]byte
 		copy(combined[:4], encodedMaxUint32)
 		copy(combined[4:], hash[:28])
-		stateKey := generateStateKeyInterleaved(serviceId, combined)
+		stateKey, err := generateStateKeyInterleaved(serviceId, combined)
+		if err != nil {
+			return err
+		}
 		serializedState[stateKey] = encodedValue
 	}
 
@@ -191,7 +197,10 @@ func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount servi
 		var combined [32]byte
 		copy(combined[:4], encodedMaxUint32MinusOne)
 		copy(combined[4:], hash[1:29])
-		stateKey := generateStateKeyInterleaved(serviceId, combined)
+		stateKey, err := generateStateKeyInterleaved(serviceId, combined)
+		if err != nil {
+			return err
+		}
 		serializedState[stateKey] = encodedValue
 	}
 
@@ -209,7 +218,10 @@ func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount servi
 		var combined [32]byte
 		copy(combined[:4], encodedLength)
 		copy(combined[4:], hashedPreImageHistoricalTimeslots[2:30])
-		stateKey := generateStateKeyInterleaved(serviceId, key.Hash)
+		stateKey, err := generateStateKeyInterleaved(serviceId, key.Hash)
+		if err != nil {
+			return err
+		}
 		serializedState[stateKey] = encodedPreImageHistoricalTimeslots
 	}
 	return nil
