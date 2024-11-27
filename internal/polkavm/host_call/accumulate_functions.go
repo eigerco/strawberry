@@ -23,12 +23,12 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	// let [m, a, v, o, n] = ω7...12
 	managerServiceId, assignServiceId, designateServiceId, addr, servicesNr := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
 	// let g = {(s ↦ g) where E4(s) ⌢ E8(g) = μ_o+12i⋅⋅⋅+12 | i ∈ Nn} if Zo⋅⋅⋅+12n ⊂ Vμ otherwise ∇
-	for i := range servicesNr {
-		serviceId, err := readNumber[block.ServiceId](mem, addr+(12*i), 4)
+	for i := range uint32(servicesNr) {
+		serviceId, err := readNumber[block.ServiceId](mem, uint32(addr)+(12*i), 4)
 		if err != nil {
 			return gas, withCode(regs, OOB), mem, ctxPair, err
 		}
-		serviceGas, err := readNumber[uint64](mem, addr+(12*i)+4, 8)
+		serviceGas, err := readNumber[uint64](mem, uint32(addr)+(12*i)+4, 8)
 		if err != nil {
 			return gas, withCode(regs, OOB), mem, ctxPair, err
 		}
@@ -54,12 +54,12 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 	// let o = ω8
 	addr := regs[A1]
 	core := regs[A0]
-	if core >= uint32(common.TotalNumberOfCores) {
+	if core >= uint64(common.TotalNumberOfCores) {
 		return gas, withCode(regs, CORE), mem, ctxPair, nil
 	}
 	for i := 0; i < state.PendingAuthorizersQueueSize; i++ {
 		bytes := make([]byte, 32)
-		if err := mem.Read(addr+uint32(32*i), bytes); err != nil {
+		if err := mem.Read(uint32(addr)+uint32(32*i), bytes); err != nil {
 			return gas, withCode(regs, OOB), mem, ctxPair, nil
 		}
 		ctxPair.RegularCtx.AccumulationState.WorkReportsQueue[core][i] = crypto.Hash(bytes)
@@ -84,7 +84,7 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 	addr := regs[A0]
 	for i := 0; i < common.NumberOfValidators; i++ {
 		bytes := make([]byte, 336)
-		if err := mem.Read(addr+uint32(336*i), bytes); err != nil {
+		if err := mem.Read(uint32(addr)+uint32(336*i), bytes); err != nil {
 			return gas, withCode(regs, OOB), mem, ctxPair, nil
 		}
 
@@ -109,7 +109,7 @@ func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPa
 	ctxPair.ExceptionalCtx = ctxPair.RegularCtx
 
 	// Set the new ϱ' value into ω′7
-	regs[A0] = uint32(gas & ((1 << 32) - 1))
+	regs[A0] = uint64(gas & ((1 << 32) - 1))
 
 	return gas, regs, mem, ctxPair, nil
 }
@@ -126,7 +126,7 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Ga
 
 	// c = μo⋅⋅⋅+32 if No⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	codeHashBytes := make([]byte, 32)
-	if err := mem.Read(addr, codeHashBytes); err != nil {
+	if err := mem.Read(uint32(addr), codeHashBytes); err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
@@ -149,7 +149,7 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Ga
 
 	// if a ≠ ∇ ∧ b ≥ (xs)t
 	if b >= ctxPair.RegularCtx.ServiceAccount().ThresholdBalance() {
-		regs[A0] = uint32(ctxPair.RegularCtx.ServiceId)
+		regs[A0] = uint64(ctxPair.RegularCtx.ServiceId)
 		currentAccount := ctxPair.RegularCtx.ServiceAccount()
 		currentAccount.Balance = b
 		ctxPair.RegularCtx.ServiceState[ctxPair.RegularCtx.ServiceId] = currentAccount
@@ -176,7 +176,7 @@ func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair)
 
 	// c = μo⋅⋅⋅+32 if No⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	codeHash := make([]byte, 32)
-	if err := mem.Read(addr, codeHash); err != nil {
+	if err := mem.Read(uint32(addr), codeHash); err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
@@ -202,7 +202,7 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 
 	// m = μo⋅⋅⋅+M if No⋅⋅⋅+M ⊂ Vμ otherwise ∇
 	m := make([]byte, service.TransferMemoSizeBytes)
-	if err := mem.Read(o, m); err != nil {
+	if err := mem.Read(uint32(o), m); err != nil {
 		return gas, withCode(regs, OK), mem, ctxPair, nil
 	}
 
@@ -263,7 +263,7 @@ func Quit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (G
 
 	// m = E−1(μo⋅⋅⋅+M)
 	memo := make([]byte, service.TransferMemoSizeBytes)
-	if err := mem.Read(addr, memo); err != nil {
+	if err := mem.Read(uint32(addr), memo); err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
@@ -309,7 +309,7 @@ func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	addr, preimageLength := regs[A0], regs[A1]
 	// let h = μo⋅⋅⋅+32 if Zo⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	preimageHashBytes := make([]byte, 32)
-	if err := mem.Read(addr, preimageHashBytes); err != nil {
+	if err := mem.Read(uint32(addr), preimageHashBytes); err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
@@ -350,7 +350,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 
 	// let h = μo⋅⋅⋅+32 if Zo⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	preimageHashBytes := make([]byte, 32)
-	if err := mem.Read(addr, preimageHashBytes); err != nil {
+	if err := mem.Read(uint32(addr), preimageHashBytes); err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
