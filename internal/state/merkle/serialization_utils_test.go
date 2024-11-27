@@ -1,7 +1,10 @@
 package state
 
 import (
-	"encoding/binary"
+	"fmt"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"github.com/stretchr/testify/require"
+	"math"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -10,25 +13,69 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestGenerateStateKey verifies that the state key generation works as expected.
-func TestGenerateStateKey(t *testing.T) {
-	// Test with i and serviceId
-	i := uint8(1)
-	serviceId := block.ServiceId(100)
+// TestGenerateStateKeyInterleavedBasic verifies that the state key generation works as expected.
+func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
+	tests := []struct {
+		name      string
+		i         uint8
+		serviceId block.ServiceId
+	}{
+		{
+			name:      "basic case",
+			i:         1,
+			serviceId: 100,
+		},
+		{
+			name:      "max values",
+			i:         255,
+			serviceId: block.ServiceId(math.MaxUint32),
+		},
+		{
+			name:      "zero values",
+			i:         0,
+			serviceId: 0,
+		},
+	}
 
-	// Generate the state key
-	stateKey := generateStateKey(i, serviceId)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Generate the state key
+			stateKey, err := generateStateKeyInterleavedBasic(tt.i, tt.serviceId)
+			require.NoError(t, err)
 
-	// Verify the length is 32 bytes
-	assert.Equal(t, 32, len(stateKey))
+			// Get encoded service ID for verification
+			encodedServiceId, err := jam.Marshal(tt.serviceId)
+			require.NoError(t, err)
 
-	// Verify that the first byte matches i
-	assert.Equal(t, i, stateKey[0])
+			// Verify length is 32 bytes
+			assert.Equal(t, 32, len(stateKey), "key length should be 32 bytes")
 
-	// Optionally, verify that the encoded serviceId is in the key
-	expectedEncodedServiceId := make([]byte, 4)
-	binary.BigEndian.PutUint32(expectedEncodedServiceId, uint32(serviceId))
-	assert.Equal(t, expectedEncodedServiceId, stateKey[1:5])
+			// Verify first byte is i
+			assert.Equal(t, tt.i, stateKey[0], "first byte should be i")
+
+			// Verify the interleaved pattern:
+			// [i, s0, 0, s1, 0, s2, 0, s3, 0, 0, ...]
+			assert.Equal(t, encodedServiceId[0], stateKey[1], "s0 should be at position 1")
+			assert.Equal(t, byte(0), stateKey[2], "zero should be at position 2")
+			assert.Equal(t, encodedServiceId[1], stateKey[3], "s1 should be at position 3")
+			assert.Equal(t, byte(0), stateKey[4], "zero should be at position 4")
+			assert.Equal(t, encodedServiceId[2], stateKey[5], "s2 should be at position 5")
+			assert.Equal(t, byte(0), stateKey[6], "zero should be at position 6")
+			assert.Equal(t, encodedServiceId[3], stateKey[7], "s3 should be at position 7")
+			assert.Equal(t, byte(0), stateKey[8], "zero should be at position 8")
+
+			// Verify remaining bytes are zero
+			for i := 9; i < 32; i++ {
+				assert.Equal(t, byte(0), stateKey[i],
+					fmt.Sprintf("byte at position %d should be zero", i))
+			}
+
+			// Verify we can extract the service ID back
+			extractedServiceId, err := extractServiceIdFromKey(crypto.Hash(stateKey))
+			require.NoError(t, err)
+			assert.Equal(t, tt.serviceId, extractedServiceId)
+		})
+	}
 }
 
 // TestGenerateStateKeyInterleaved verifies that the interleaving function works as expected.
@@ -36,17 +83,36 @@ func TestGenerateStateKeyInterleaved(t *testing.T) {
 	serviceId := block.ServiceId(1234)
 	hash := crypto.Hash{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 
+	// Get encoded service ID for verification
+	encodedServiceId, err := jam.Marshal(serviceId)
+	require.NoError(t, err)
+
 	// Generate the interleaved state key
-	stateKey := generateStateKeyInterleaved(serviceId, hash)
+	stateKey, err := generateStateKeyInterleaved(serviceId, hash)
+	require.NoError(t, err)
 
 	// Verify the length is 32 bytes
 	assert.Equal(t, 32, len(stateKey))
 
 	// Verify that the first 8 bytes are interleaved between serviceId and hash
-	assert.Equal(t, stateKey[0], byte(serviceId>>24))
-	assert.Equal(t, stateKey[1], hash[0])
-	assert.Equal(t, stateKey[2], byte(serviceId>>16))
-	assert.Equal(t, stateKey[3], hash[1])
+	assert.Equal(t, encodedServiceId[0], stateKey[0])
+	assert.Equal(t, hash[0], stateKey[1])
+	assert.Equal(t, encodedServiceId[1], stateKey[2])
+	assert.Equal(t, hash[1], stateKey[3])
+	assert.Equal(t, encodedServiceId[2], stateKey[4])
+	assert.Equal(t, hash[2], stateKey[5])
+	assert.Equal(t, encodedServiceId[3], stateKey[6])
+	assert.Equal(t, hash[3], stateKey[7])
+
+	// Verify that remaining bytes from hash are copied correctly
+	rest := stateKey[8:]
+	for i := 0; i < len(rest); i++ {
+		if i < len(hash)-4 {
+			assert.Equal(t, hash[i+4], rest[i], "hash byte mismatch at position %d", i)
+		} else {
+			assert.Equal(t, byte(0), rest[i], "should be zero at position %d", i)
+		}
+	}
 }
 
 // TestCalculateFootprintSize checks if the footprint size calculation is correct.
@@ -76,21 +142,4 @@ func TestCombineEncoded(t *testing.T) {
 
 	// Verify the combined result
 	assert.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, combined)
-}
-
-// TestBitwiseNotExceptFirst4Bytes checks that the bitwise NOT is applied correctly except the first 4 bytes.
-func TestBitwiseNotExceptFirst4Bytes(t *testing.T) {
-	// Example input hash
-	inputHash := crypto.Hash{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
-
-	// Apply the bitwise NOT except the first 4 bytes
-	result := bitwiseNotExceptFirst4Bytes(inputHash)
-
-	// Verify that the first 4 bytes are unchanged
-	assert.Equal(t, inputHash[0:4], result[0:4])
-
-	// Verify that the rest of the bytes are bitwise NOT applied
-	for i := 4; i < len(result); i++ {
-		assert.Equal(t, ^inputHash[i], result[i])
-	}
 }
