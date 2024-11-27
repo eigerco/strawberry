@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/crypto/blake2b"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -31,7 +30,6 @@ func TestGasRemaining(t *testing.T) {
 
 	initialRegs := polkavm.Registers{
 		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: memoryMap.StackAddressHigh,
 	}
 	initialGas := uint64(100)
 	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x struct{}) (polkavm.Gas, polkavm.Registers, polkavm.Memory, struct{}, error) {
@@ -92,7 +90,7 @@ func TestLookup(t *testing.T) {
 		bo := memoryMap.RWDataAddress + 100
 		dataToHash := make([]byte, 32)
 		copy(dataToHash, "hash")
-		hash := blake2b.Sum256(dataToHash)
+		hash := crypto.HashData(dataToHash)
 		err := mem.Write(ho, dataToHash)
 		require.NoError(t, err)
 
@@ -153,7 +151,7 @@ func TestRead(t *testing.T) {
 	hashInput := make([]byte, 0, len(serviceIdBytes)+len(keyData))
 	hashInput = append(hashInput, serviceIdBytes...)
 	hashInput = append(hashInput, keyData...)
-	k := blake2b.Sum256(hashInput)
+	k := crypto.HashData(hashInput)
 
 	sa := service.ServiceAccount{
 		Storage: map[crypto.Hash][]byte{
@@ -221,7 +219,7 @@ func TestWrite(t *testing.T) {
 	require.NoError(t, err)
 
 	hashInput := append(serviceIdBytes, keyData...)
-	k := blake2b.Sum256(hashInput)
+	k := crypto.HashData(hashInput)
 
 	sa := service.ServiceAccount{
 		Balance: 200,

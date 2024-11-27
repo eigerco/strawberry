@@ -13,7 +13,7 @@ const (
 	ReadCost
 	WriteCost
 	InfoCost
-	EmpowerCost
+	BlessCost
 	AssignCost
 	DesignateCost
 	CheckpointCost
@@ -31,7 +31,7 @@ const (
 	ReadID       = 2
 	WriteID      = 3
 	InfoID       = 4
-	EmpowerID    = 5
+	BlessID      = 5
 	AssignID     = 6
 	DesignateID  = 7
 	CheckpointID = 8
@@ -93,7 +93,7 @@ func readNumber[U interface{ ~uint32 | ~uint64 }](mem Memory, addr uint32, lengt
 		return
 	}
 
-	jam.DeserializeTrivialNatural(b, &u)
+	err = jam.Unmarshal(b, &u)
 	return
 }
 

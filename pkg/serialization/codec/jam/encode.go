@@ -292,13 +292,13 @@ func (bw *byteWriter) encodeFixedWidthUint(i interface{}) error {
 
 	switch v := i.(type) {
 	case uint8:
-		data = SerializeTrivialNatural(v, 1)
+		data = serializeTrivialNatural(v, 1)
 	case uint16:
-		data = SerializeTrivialNatural(v, 2)
+		data = serializeTrivialNatural(v, 2)
 	case uint32:
-		data = SerializeTrivialNatural(v, 4)
+		data = serializeTrivialNatural(v, 4)
 	case uint64:
-		data = SerializeTrivialNatural(v, 8)
+		data = serializeTrivialNatural(v, 8)
 	default:
 		return fmt.Errorf(ErrUnsupportedType, i)
 	}
@@ -341,7 +341,7 @@ func (bw *byteWriter) encodeLength(l int) error {
 }
 
 func (bw *byteWriter) encodeUint(i uint) error {
-	encodedBytes := SerializeUint64(uint64(i))
+	encodedBytes := serializeUint64(uint64(i))
 
 	_, err := bw.Write(encodedBytes)
 

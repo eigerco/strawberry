@@ -1,13 +1,14 @@
 package statetransition
 
 import (
+	"log"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-	"log"
 )
 
 // InvokePVMOnTransfer On-Transfer service-account invocation (ΨT).
@@ -48,7 +49,7 @@ func InvokePVMOnTransfer(serviceState service.ServiceState, serviceIndex block.S
 		return gasCounter, regs, mem, serviceAccount, err
 	}
 
-	_, _, newServiceAccount, err := interpreter.InvokeWholeProgram(serviceCode, 15, gas, args, hostCallFunc, serviceAccount)
+	_, _, newServiceAccount, err := interpreter.InvokeWholeProgram(serviceCode, 10, gas, args, hostCallFunc, serviceAccount)
 	if err != nil {
 		// TODO handle errors appropriately
 		log.Println("the virtual machine exited with an error", err)
