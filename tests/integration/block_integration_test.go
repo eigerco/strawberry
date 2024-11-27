@@ -24,7 +24,7 @@ var toWorkResultErrorMap = map[string]block.WorkResultError{
 }
 
 func TestDecodeBlockWithJamCodec(t *testing.T) {
-	b, err := os.ReadFile("vectors/block.bin")
+	b, err := os.ReadFile("vectors/codec/block.bin")
 	require.NoError(t, err)
 
 	var unmarshaled block.Block
@@ -40,6 +40,7 @@ func TestDecodeBlockWithJamCodec(t *testing.T) {
 	require.Equal(t, expected.Header.Slot, unmarshaled.Header.TimeSlotIndex)
 
 	require.Equal(t, expected.Header.EpochMark.Entropy, toHex(unmarshaled.Header.EpochMarker.Entropy))
+	require.Equal(t, expected.Header.EpochMark.TicketsEntropy, toHex(unmarshaled.Header.EpochMarker.TicketsEntropy))
 
 	for i := range expected.Header.EpochMark.Validators {
 		require.Equal(t, expected.Header.EpochMark.Validators[i], toHex(unmarshaled.Header.EpochMarker.Keys[i]))
@@ -97,25 +98,27 @@ func TestDecodeBlockWithJamCodec(t *testing.T) {
 
 	for i := range expected.Extrinsic.Guarantees {
 		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.PackageSpec.Hash, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkPackageSpecification.WorkPackageHash))
-		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.PackageSpec.Len, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkPackageSpecification.AuditableWorkBundleLength)
+		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.PackageSpec.Length, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkPackageSpecification.AuditableWorkBundleLength)
 		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.PackageSpec.ErasureRoot, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkPackageSpecification.ErasureRoot))
 		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.PackageSpec.ExportsRoot, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkPackageSpecification.SegmentRoot))
+		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.PackageSpec.ExportsCount, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkPackageSpecification.SegmentCount)
 
 		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Context.Anchor, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.RefinementContext.Anchor.HeaderHash))
 		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Context.StateRoot, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.RefinementContext.Anchor.PosteriorStateRoot))
 		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Context.BeefyRoot, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.RefinementContext.Anchor.PosteriorBeefyRoot))
 		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Context.LookupAnchor, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.RefinementContext.LookupAnchor.HeaderHash))
 		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Context.LookupAnchorSlot, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.RefinementContext.LookupAnchor.Timeslot)
-		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Context.Prerequisite, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.RefinementContext.PrerequisiteWorkPackage)
+		assertHashSlicesEqual(t, expected.Extrinsic.Guarantees[i].Report.Context.Prerequisites, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.RefinementContext.PrerequisiteWorkPackage)
 
 		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.CoreIndex, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.CoreIndex)
 		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.AuthorizerHash, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.AuthorizerHash))
 		require.Equal(t, expected.Extrinsic.Guarantees[i].Report.AuthOutput, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.Output))
 
 		for j := range expected.Extrinsic.Guarantees[i].Report.Results {
-			require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Results[j].Service, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].ServiceId)
+			require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Results[j].ServiceId, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].ServiceId)
+			require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Results[j].CodeHash, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].ServiceHashCode))
 			require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Results[j].PayloadHash, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].PayloadHash))
-			require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Results[j].GasRatio, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].GasPrioritizationRatio)
+			require.Equal(t, expected.Extrinsic.Guarantees[i].Report.Results[j].Gas, unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].GasPrioritizationRatio)
 			if expected.Extrinsic.Guarantees[i].Report.Results[j].Result.Ok != nil {
 				require.Equal(t, *expected.Extrinsic.Guarantees[i].Report.Results[j].Result.Ok, toHex(unmarshaled.Extrinsic.EG.Guarantees[i].WorkReport.WorkResults[j].Output.Inner))
 			}
@@ -140,8 +143,19 @@ func toHex(data any) string {
 	return fmt.Sprintf("0x%x", data)
 }
 
+func assertHashSlicesEqual(t *testing.T, expected []crypto.Hash, actual []crypto.Hash) {
+	if expected == nil {
+		expected = []crypto.Hash{}
+	}
+	if actual == nil {
+		actual = []crypto.Hash{}
+	}
+
+	require.Equal(t, expected, actual, "Hashes do not match")
+}
+
 func unmarsalExpectedBlock(t *testing.T) expectedBlock {
-	b, err := os.ReadFile("vectors/expected_block.json")
+	b, err := os.ReadFile("vectors/codec/expected_block.json")
 	require.NoError(t, err)
 
 	var unmarshaled expectedBlock
@@ -181,8 +195,9 @@ type expectedBlock struct {
 		ExtrinsicHash   string           `json:"extrinsic_hash"`
 		Slot            jamtime.Timeslot `json:"slot"`
 		EpochMark       struct {
-			Entropy    string   `json:"entropy"`
-			Validators []string `json:"validators"`
+			Entropy        string   `json:"entropy"`
+			TicketsEntropy string   `json:"tickets_entropy"`
+			Validators     []string `json:"validators"`
 		} `json:"epoch_mark"`
 		TicketsMark   *block.WinningTicketMarker `json:"tickets_mark"`
 		OffendersMark []string                   `json:"offenders_mark"`
@@ -195,6 +210,51 @@ type expectedBlock struct {
 			Attempt   uint8  `json:"attempt"`
 			Signature string `json:"signature"`
 		} `json:"tickets"`
+		Preimages []struct {
+			Requester uint32 `json:"requester"`
+			Blob      string `json:"blob"`
+		} `json:"preimages"`
+		Guarantees []struct {
+			Report struct {
+				PackageSpec struct {
+					Hash         string `json:"hash"`
+					Length       uint32 `json:"length"`
+					ErasureRoot  string `json:"erasure_root"`
+					ExportsRoot  string `json:"exports_root"`
+					ExportsCount uint16 `json:"exports_count"`
+				} `json:"package_spec"`
+				Context struct {
+					Anchor           string           `json:"anchor"`
+					StateRoot        string           `json:"state_root"`
+					BeefyRoot        string           `json:"beefy_root"`
+					LookupAnchor     string           `json:"lookup_anchor"`
+					LookupAnchorSlot jamtime.Timeslot `json:"lookup_anchor_slot"`
+					Prerequisites    []crypto.Hash    `json:"prerequisites"`
+				} `json:"context"`
+				CoreIndex         uint16        `json:"core_index"`
+				AuthorizerHash    string        `json:"authorizer_hash"`
+				AuthOutput        string        `json:"auth_output"`
+				SegmentRootLookup []interface{} `json:"segment_root_lookup"`
+				Results           []struct {
+					ServiceId   block.ServiceId `json:"service_id"`
+					CodeHash    string          `json:"code_hash"`
+					PayloadHash string          `json:"payload_hash"`
+					Gas         uint64          `json:"gas"`
+					Result      Result          `json:"result"`
+				} `json:"results"`
+			} `json:"report"`
+			Slot       jamtime.Timeslot `json:"slot"`
+			Signatures []struct {
+				ValidatorIndex uint16 `json:"validator_index"`
+				Signature      string `json:"signature"`
+			} `json:"signatures"`
+		} `json:"guarantees"`
+		Assurances []struct {
+			Anchor         string `json:"anchor"`
+			Bitfield       string `json:"bitfield"`
+			ValidatorIndex uint16 `json:"validator_index"`
+			Signature      string `json:"signature"`
+		} `json:"assurances"`
 		Disputes struct {
 			Verdicts []struct {
 				Target string `json:"target"`
@@ -217,48 +277,5 @@ type expectedBlock struct {
 				Signature string `json:"signature"`
 			} `json:"faults"`
 		} `json:"disputes"`
-		Preimages []struct {
-			Requester uint32 `json:"requester"`
-			Blob      string `json:"blob"`
-		} `json:"preimages"`
-		Assurances []struct {
-			Anchor         string `json:"anchor"`
-			Bitfield       string `json:"bitfield"`
-			ValidatorIndex uint16 `json:"validator_index"`
-			Signature      string `json:"signature"`
-		} `json:"assurances"`
-		Guarantees []struct {
-			Report struct {
-				PackageSpec struct {
-					Hash        string `json:"hash"`
-					Len         uint32 `json:"len"`
-					ErasureRoot string `json:"erasure_root"`
-					ExportsRoot string `json:"exports_root"`
-				} `json:"package_spec"`
-				Context struct {
-					Anchor           string           `json:"anchor"`
-					StateRoot        string           `json:"state_root"`
-					BeefyRoot        string           `json:"beefy_root"`
-					LookupAnchor     string           `json:"lookup_anchor"`
-					LookupAnchorSlot jamtime.Timeslot `json:"lookup_anchor_slot"`
-					Prerequisite     *crypto.Hash     `json:"Prerequisite"`
-				} `json:"context"`
-				CoreIndex      uint16 `json:"core_index"`
-				AuthorizerHash string `json:"authorizer_hash"`
-				AuthOutput     string `json:"auth_output"`
-				Results        []struct {
-					Service     block.ServiceId `json:"service"`
-					CodeHash    string          `json:"code_hash"`
-					PayloadHash string          `json:"payload_hash"`
-					GasRatio    uint64          `json:"gas_ratio"`
-					Result      Result          `json:"result"`
-				} `json:"results"`
-			} `json:"report"`
-			Slot       jamtime.Timeslot `json:"slot"`
-			Signatures []struct {
-				ValidatorIndex uint16 `json:"validator_index"`
-				Signature      string `json:"signature"`
-			} `json:"signatures"`
-		} `json:"guarantees"`
 	} `json:"extrinsic"`
 }

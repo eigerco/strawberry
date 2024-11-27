@@ -4,8 +4,11 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/state"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/state"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -15,7 +18,6 @@ import (
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-	"github.com/stretchr/testify/require"
 )
 
 func RandomValidatorsData(t *testing.T) safrole.ValidatorsData {
@@ -116,10 +118,11 @@ func RandomCoreAssignments(t *testing.T) state.CoreAssignments {
 					LookupAnchor:            block.RefinementContextLookupAnchor{HeaderHash: testutils.RandomHash(t), Timeslot: testutils.RandomTimeslot()},
 					PrerequisiteWorkPackage: nil,
 				},
-				CoreIndex:      uint16(i),
-				AuthorizerHash: testutils.RandomHash(t),
-				Output:         []byte("output"),
-				WorkResults:    []block.WorkResult{RandomWorkResult(t)},
+				CoreIndex:         uint16(i),
+				AuthorizerHash:    testutils.RandomHash(t),
+				Output:            []byte("output"),
+				SegmentRootLookup: make(map[crypto.Hash]crypto.Hash),
+				WorkResults:       []block.WorkResult{RandomWorkResult(t)},
 			},
 			Time: testutils.RandomTimeslot(),
 		}
@@ -182,10 +185,11 @@ func RandomWorkReport(t *testing.T) block.WorkReport {
 				Timeslot:   testutils.RandomTimeslot(),
 			},
 		},
-		CoreIndex:      testutils.RandomUint16(),
-		AuthorizerHash: testutils.RandomHash(t),
-		Output:         []byte("random output"),
-		WorkResults:    []block.WorkResult{RandomWorkResult(t)},
+		CoreIndex:         testutils.RandomUint16(),
+		AuthorizerHash:    testutils.RandomHash(t),
+		Output:            []byte("random output"),
+		SegmentRootLookup: make(map[crypto.Hash]crypto.Hash),
+		WorkResults:       []block.WorkResult{RandomWorkResult(t)},
 	}
 }
 
