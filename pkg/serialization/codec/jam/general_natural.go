@@ -5,8 +5,8 @@ import (
 	"math"
 )
 
-// SerializeUint64 implements the general formula (able to encode naturals of up to 2^64)
-func SerializeUint64(x uint64) []byte {
+// serializeUint64 implements the general formula (able to encode naturals of up to 2^64)
+func serializeUint64(x uint64) []byte {
 	var l uint8
 	// Determine the length needed to represent the value
 	for l = 0; l < 8; l++ {
@@ -30,8 +30,8 @@ func SerializeUint64(x uint64) []byte {
 	return bytes
 }
 
-// DeserializeUint64WithLength deserializes a byte slice into a uint64 value, with length `l`.
-func DeserializeUint64WithLength(serialized []byte, l uint8, u *uint64) error {
+// deserializeUint64WithLength deserializes a byte slice into a uint64 value, with length `l`.
+func deserializeUint64WithLength(serialized []byte, l uint8, u *uint64) error {
 	*u = 0
 
 	n := len(serialized)

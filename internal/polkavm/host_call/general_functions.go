@@ -1,15 +1,13 @@
 package host_call
 
 import (
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"math"
-
-	"golang.org/x/crypto/blake2b"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 type AccountInfo struct {
@@ -29,9 +27,8 @@ func GasRemaining(gas polkavm.Gas, regs polkavm.Registers) (polkavm.Gas, polkavm
 	}
 	gas -= GasRemainingCost
 
-	// Split the new ϱ' value into its lower and upper parts.
-	regs[polkavm.A0] = uint32(gas & ((1 << 32) - 1))
-	regs[polkavm.A1] = uint32(gas >> 32)
+	// Set the new ϱ' value into ω′7
+	regs[polkavm.A0] = uint32(gas)
 
 	return gas, regs, nil
 }
@@ -43,11 +40,11 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 	}
 	gas -= LookupCost
 
-	sID := regs[polkavm.A0]
+	omega7 := regs[polkavm.A0]
 
 	// Determine the lookup key 'a'
 	a := s
-	if sID != math.MaxUint32 && sID != uint32(serviceId) {
+	if uint64(omega7) != math.MaxUint64 && omega7 != uint32(serviceId) {
 		var exists bool
 		// Lookup service account by serviceId in the serviceState
 		a, exists = serviceState[serviceId]
@@ -68,7 +65,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 	}
 
 	// Compute the hash H(µho..ho+32)
-	hash := blake2b.Sum256(memorySlice)
+	hash := crypto.HashData(memorySlice)
 
 	// Lookup value in storage (v) using the hash
 	v, exists := a.Storage[hash]
@@ -102,16 +99,16 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 	}
 	gas -= ReadCost
 
-	sID := regs[polkavm.A0]
+	omega7 := regs[polkavm.A0]
 	ko := regs[polkavm.A1]
 	kz := regs[polkavm.A2]
 	bo := regs[polkavm.A3]
 	bz := regs[polkavm.A4]
 
 	a := s
-	if sID != math.MaxUint32 && sID != uint32(serviceId) {
+	if uint64(omega7) != math.MaxUint64 && omega7 != uint32(serviceId) {
 		var exists bool
-		a, exists = serviceState[block.ServiceId(sID)]
+		a, exists = serviceState[block.ServiceId(omega7)]
 		if !exists {
 			return gas, regs, mem, polkavm.ErrAccountNotFound
 		}
@@ -125,7 +122,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		return gas, regs, mem, nil
 	}
 
-	serviceIdBytes, err := jam.Marshal(sID)
+	serviceIdBytes, err := jam.Marshal(omega7)
 	if err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
@@ -136,7 +133,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 	hashInput = append(hashInput, keyData...)
 
 	// Compute the hash H(E4(s) + keyData)
-	k := blake2b.Sum256(hashInput)
+	k := crypto.HashData(hashInput)
 
 	v, exists := a.Storage[k]
 	if !exists {
@@ -183,7 +180,7 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 		return gas, regs, mem, s, err
 	}
 	hashInput := append(serviceIdBytes, keyData...)
-	k := blake2b.Sum256(hashInput)
+	k := crypto.HashData(hashInput)
 
 	a := s
 	if vz == 0 {
@@ -222,12 +219,12 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 	}
 	gas -= InfoCost
 
-	sID := regs[polkavm.A0]
-	omega1 := regs[polkavm.A1]
+	omega7 := regs[polkavm.A0]
+	omega8 := regs[polkavm.A1]
 
 	t, exists := serviceState[serviceId]
-	if sID != math.MaxUint32 {
-		t, exists = serviceState[block.ServiceId(sID)]
+	if uint64(omega7) != math.MaxUint64 {
+		t, exists = serviceState[block.ServiceId(omega7)]
 	}
 	if !exists {
 		return gas, withCode(regs, NONE), mem, nil
@@ -249,7 +246,7 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
-	if err := mem.Write(omega1, m); err != nil {
+	if err := mem.Write(omega8, m); err != nil {
 		regs[polkavm.A0] = uint32(OOB)
 		return gas, regs, mem, nil
 	}
