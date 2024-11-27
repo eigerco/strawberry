@@ -204,7 +204,7 @@ func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount servi
 		if err != nil {
 			return err
 		}
-		hashedPreImageHistoricalTimeslots := crypto.HashData(preImageHistoricalTimeslots.ToByteSlice())
+		hashedPreImageHistoricalTimeslots := crypto.HashData(encodedPreImageHistoricalTimeslots)
 
 		var combined [32]byte
 		copy(combined[:4], encodedLength)
