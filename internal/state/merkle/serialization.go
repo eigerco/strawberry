@@ -6,6 +6,7 @@ import (
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"math"
 )
 
 // SerializeState serializes the given state into a map of crypto.Hash to byte arrays, for merklization.
@@ -160,21 +161,37 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 }
 
 func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[crypto.Hash][]byte) error {
+	encodedMaxUint32, err := jam.Marshal(math.MaxUint32)
+	if err != nil {
+		return err
+	}
 	for hash, value := range serviceAccount.Storage {
 		encodedValue, err := jam.Marshal(value)
 		if err != nil {
 			return err
 		}
-		stateKey := generateStateKeyInterleaved(serviceId, hash)
+
+		var combined [32]byte
+		copy(combined[:4], encodedMaxUint32)
+		copy(combined[4:], hash[:28])
+		stateKey := generateStateKeyInterleaved(serviceId, combined)
 		serializedState[stateKey] = encodedValue
 	}
 
+	encodedMaxUint32MinusOne, err := jam.Marshal(math.MaxUint32 - 1)
+	if err != nil {
+		return err
+	}
 	for hash, value := range serviceAccount.PreimageLookup {
 		encodedValue, err := jam.Marshal(value)
 		if err != nil {
 			return err
 		}
-		stateKey := generateStateKeyInterleaved(serviceId, hash)
+
+		var combined [32]byte
+		copy(combined[:4], encodedMaxUint32MinusOne)
+		copy(combined[4:], hash[1:29])
+		stateKey := generateStateKeyInterleaved(serviceId, combined)
 		serializedState[stateKey] = encodedValue
 	}
 
@@ -187,11 +204,11 @@ func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount servi
 		if err != nil {
 			return err
 		}
+		hashedPreImageHistoricalTimeslots := crypto.HashData(preImageHistoricalTimeslots.ToByteSlice())
 
 		var combined [32]byte
 		copy(combined[:4], encodedLength)
-		hashNotFirst4Bytes := bitwiseNotExceptFirst4Bytes(key.Hash)
-		copy(combined[4:], hashNotFirst4Bytes[:])
+		copy(combined[4:], hashedPreImageHistoricalTimeslots[2:30])
 		stateKey := generateStateKeyInterleaved(serviceId, key.Hash)
 		serializedState[stateKey] = encodedPreImageHistoricalTimeslots
 	}

@@ -2,7 +2,6 @@ package state
 
 import (
 	"crypto/ed25519"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/eigerco/strawberry/internal/state"
@@ -282,7 +281,8 @@ func RandomSafroleStateWithEpochKeys(t *testing.T) safrole.State {
 func RandomState(t *testing.T) state.State {
 	services := make(service.ServiceState)
 	for i := 0; i < 10; i++ {
-		services[block.ServiceId(789)] = RandomServiceAccount(t)
+		// Use different service IDs for each iteration
+		services[block.ServiceId(uint32(i+789))] = RandomServiceAccount(t)
 	}
 
 	return state.State{
@@ -451,6 +451,10 @@ func isServiceAccountKey(stateKey crypto.Hash) bool {
 }
 
 func extractServiceIdFromKey(stateKey crypto.Hash) block.ServiceId {
-	// Assuming that the service ID is embedded in bytes 1-4 of the key
-	return block.ServiceId(binary.BigEndian.Uint32(stateKey[1:5]))
+	// Since we're using zero-interleaved pattern, we need to reconstruct the service ID
+	// from bytes at positions 1,3,5,7
+	return block.ServiceId(uint32(stateKey[1])<<24 |
+		uint32(stateKey[3])<<16 |
+		uint32(stateKey[5])<<8 |
+		uint32(stateKey[7]))
 }

@@ -2,6 +2,8 @@ package state
 
 import (
 	"encoding/binary"
+	"fmt"
+	"math"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -12,23 +14,61 @@ import (
 
 // TestGenerateStateKey verifies that the state key generation works as expected.
 func TestGenerateStateKey(t *testing.T) {
-	// Test with i and serviceId
-	i := uint8(1)
-	serviceId := block.ServiceId(100)
+	tests := []struct {
+		name      string
+		i         uint8
+		serviceId block.ServiceId
+	}{
+		{
+			name:      "basic case",
+			i:         1,
+			serviceId: 100,
+		},
+		{
+			name:      "max values",
+			i:         255,
+			serviceId: block.ServiceId(math.MaxUint32),
+		},
+		{
+			name:      "zero values",
+			i:         0,
+			serviceId: 0,
+		},
+	}
 
-	// Generate the state key
-	stateKey := generateStateKey(i, serviceId)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Generate the state key
+			stateKey := generateStateKey(tt.i, tt.serviceId)
 
-	// Verify the length is 32 bytes
-	assert.Equal(t, 32, len(stateKey))
+			// Convert serviceId to bytes for verification
+			serviceIdBytes := make([]byte, 4)
+			binary.BigEndian.PutUint32(serviceIdBytes, uint32(tt.serviceId))
 
-	// Verify that the first byte matches i
-	assert.Equal(t, i, stateKey[0])
+			// Verify length is 32 bytes
+			assert.Equal(t, 32, len(stateKey), "key length should be 32 bytes")
 
-	// Optionally, verify that the encoded serviceId is in the key
-	expectedEncodedServiceId := make([]byte, 4)
-	binary.BigEndian.PutUint32(expectedEncodedServiceId, uint32(serviceId))
-	assert.Equal(t, expectedEncodedServiceId, stateKey[1:5])
+			// Verify first byte is i
+			assert.Equal(t, tt.i, stateKey[0], "first byte should be i")
+
+			// Verify the interleaved pattern:
+			// [i, n0, 0, n1, 0, n2, 0, n3, 0, 0, ...]
+			assert.Equal(t, serviceIdBytes[0], stateKey[1], "n0 should be at position 1")
+			assert.Equal(t, byte(0), stateKey[2], "zero should be at position 2")
+			assert.Equal(t, serviceIdBytes[1], stateKey[3], "n1 should be at position 3")
+			assert.Equal(t, byte(0), stateKey[4], "zero should be at position 4")
+			assert.Equal(t, serviceIdBytes[2], stateKey[5], "n2 should be at position 5")
+			assert.Equal(t, byte(0), stateKey[6], "zero should be at position 6")
+			assert.Equal(t, serviceIdBytes[3], stateKey[7], "n3 should be at position 7")
+			assert.Equal(t, byte(0), stateKey[8], "zero should be at position 8")
+
+			// Verify remaining bytes are zero
+			for i := 9; i < 32; i++ {
+				assert.Equal(t, byte(0), stateKey[i],
+					fmt.Sprintf("byte at position %d should be zero", i))
+			}
+		})
+	}
 }
 
 // TestGenerateStateKeyInterleaved verifies that the interleaving function works as expected.
@@ -76,21 +116,4 @@ func TestCombineEncoded(t *testing.T) {
 
 	// Verify the combined result
 	assert.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, combined)
-}
-
-// TestBitwiseNotExceptFirst4Bytes checks that the bitwise NOT is applied correctly except the first 4 bytes.
-func TestBitwiseNotExceptFirst4Bytes(t *testing.T) {
-	// Example input hash
-	inputHash := crypto.Hash{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
-
-	// Apply the bitwise NOT except the first 4 bytes
-	result := bitwiseNotExceptFirst4Bytes(inputHash)
-
-	// Verify that the first 4 bytes are unchanged
-	assert.Equal(t, inputHash[0:4], result[0:4])
-
-	// Verify that the rest of the bytes are bitwise NOT applied
-	for i := 4; i < len(result); i++ {
-		assert.Equal(t, ^inputHash[i], result[i])
-	}
 }

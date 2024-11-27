@@ -30,14 +30,13 @@ func generateStateKey(i uint8, s block.ServiceId) [32]byte {
 	// Place i as the first byte
 	result[0] = i
 
-	// Convert s into a 4-byte buffer and place it starting at result[1]
-	sBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(sBuf, uint32(s)) // s is 4 bytes in BigEndian format
+	// Extract individual bytes from s using bit shifting
+	result[1] = byte(s >> 24) // n0
+	result[3] = byte(s >> 16) // n1
+	result[5] = byte(s >> 8)  // n2
+	result[7] = byte(s)       // n3
 
-	// Copy the 4-byte sBuf to result starting at index 1
-	copy(result[1:], sBuf)
-
-	// The rest of result is already zero-padded by default
+	// result[2,4,6,8] and the rest are already 0 by default
 	return result
 }
 
@@ -111,18 +110,4 @@ func sortByteSlicesCopy(slice interface{}) interface{} {
 	default:
 		panic("unsupported type for sorting")
 	}
-}
-
-// bitwiseNotExceptFirst4Bytes to apply bitwise NOT to all bytes except the first 4
-func bitwiseNotExceptFirst4Bytes(h crypto.Hash) [28]byte {
-	// Clone the original array into a new one
-	var result [28]byte
-	copy(result[:], h[:])
-
-	// Apply bitwise NOT to all bytes except the first 4
-	for i := 4; i < len(result); i++ {
-		result[i] = ^result[i]
-	}
-
-	return result
 }

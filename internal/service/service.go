@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/binary"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -81,6 +82,18 @@ type PreImageMetaKey struct {
 	Length PreimageLength // Length (presupposed) of the preimage ()
 }
 type PreimageHistoricalTimeslots []jamtime.Timeslot // Metadata for preimages (l) - TODO: There is a MaxHistoricalTimeslotsForPreimageMeta.
+
+func (p PreimageHistoricalTimeslots) ToByteSlice() []byte {
+	// Allocate a byte slice large enough to hold all Timeslot values
+	output := make([]byte, len(p)*4)
+
+	// Convert each Timeslot to bytes and copy into the output slice
+	for i, ts := range p {
+		binary.BigEndian.PutUint32(output[i*4:], uint32(ts))
+	}
+
+	return output
+}
 
 type Memo [TransferMemoSizeBytes]byte
 
