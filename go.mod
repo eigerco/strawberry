@@ -5,7 +5,8 @@ go 1.22.5
 require (
 	github.com/cockroachdb/pebble v1.1.0
 	github.com/ebitengine/purego v0.8.1
-	github.com/stretchr/testify v1.9.0
+	github.com/golang/mock v1.6.0
+	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.27.0
 )
 

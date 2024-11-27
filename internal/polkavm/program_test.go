@@ -26,7 +26,7 @@ func Test_ParseBlob(t *testing.T) {
 	assert.Equal(t, uint32(4096), pp.StackSize)
 	if assert.Equal(t, 10, len(pp.Instructions)) {
 		assert.Equal(t, Instruction{
-			Opcode: AddImm,
+			Opcode: AddImm32,
 			Imm:    []uint32{4294967288},
 			Reg:    []Reg{SP, SP},
 			Offset: 0, Length: 3,
@@ -47,7 +47,7 @@ func Test_ParseBlob(t *testing.T) {
 			Length: 2,
 		}, pp.Instructions[2])
 		assert.Equal(t, Instruction{
-			Opcode: Add,
+			Opcode: Add32,
 			Reg:    []Reg{S0, A1, A0},
 			Offset: 8,
 			Length: 3,
@@ -59,7 +59,7 @@ func Test_ParseBlob(t *testing.T) {
 			Length: 1,
 		}, pp.Instructions[4])
 		assert.Equal(t, Instruction{
-			Opcode: Add,
+			Opcode: Add32,
 			Imm:    nil,
 			Reg:    []Reg{A0, A0, S0},
 			Offset: 12,
@@ -80,7 +80,7 @@ func Test_ParseBlob(t *testing.T) {
 			Length: 2,
 		}, pp.Instructions[7])
 		assert.Equal(t, Instruction{
-			Opcode: AddImm,
+			Opcode: AddImm32,
 			Imm:    []uint32{8},
 			Reg:    []Reg{SP, SP},
 			Offset: 20,

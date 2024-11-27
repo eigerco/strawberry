@@ -15,15 +15,15 @@ func TestInstance_Execute(t *testing.T) {
 		RWDataSize: 0,
 		StackSize:  4096,
 		Instructions: []polkavm.Instruction{
-			{Opcode: polkavm.AddImm, Imm: []uint32{4294967288}, Reg: []polkavm.Reg{polkavm.SP, polkavm.SP}, Offset: 0, Length: 3},
+			{Opcode: polkavm.AddImm32, Imm: []uint32{4294967288}, Reg: []polkavm.Reg{polkavm.SP, polkavm.SP}, Offset: 0, Length: 3},
 			{Opcode: polkavm.StoreIndirectU32, Imm: []uint32{4}, Reg: []polkavm.Reg{polkavm.RA, polkavm.SP}, Offset: 3, Length: 3},
 			{Opcode: polkavm.StoreIndirectU32, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.S0, polkavm.SP}, Offset: 6, Length: 2},
-			{Opcode: polkavm.Add, Reg: []polkavm.Reg{polkavm.S0, polkavm.A1, polkavm.A0}, Offset: 8, Length: 3},
+			{Opcode: polkavm.Add32, Reg: []polkavm.Reg{polkavm.S0, polkavm.A1, polkavm.A0}, Offset: 8, Length: 3},
 			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 11, Length: 1},
-			{Opcode: polkavm.Add, Imm: nil, Reg: []polkavm.Reg{polkavm.A0, polkavm.A0, polkavm.S0}, Offset: 12, Length: 3},
+			{Opcode: polkavm.Add32, Imm: nil, Reg: []polkavm.Reg{polkavm.A0, polkavm.A0, polkavm.S0}, Offset: 12, Length: 3},
 			{Opcode: polkavm.LoadIndirectU32, Imm: []uint32{4}, Reg: []polkavm.Reg{polkavm.RA, polkavm.SP}, Offset: 15, Length: 3},
 			{Opcode: polkavm.LoadIndirectU32, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.S0, polkavm.SP}, Offset: 18, Length: 2},
-			{Opcode: polkavm.AddImm, Imm: []uint32{8}, Reg: []polkavm.Reg{polkavm.SP, polkavm.SP}, Offset: 20, Length: 3},
+			{Opcode: polkavm.AddImm32, Imm: []uint32{8}, Reg: []polkavm.Reg{polkavm.SP, polkavm.SP}, Offset: 20, Length: 3},
 			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 23, Length: 2},
 		},
 		Imports: []string{"get_third_number"},
@@ -41,7 +41,7 @@ func TestInstance_Execute(t *testing.T) {
 	entryPoint := pp.Exports[i].TargetCodeOffset
 	initialRegs := polkavm.Registers{
 		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: memoryMap.StackAddressHigh,
+		polkavm.SP: uint64(memoryMap.StackAddressHigh),
 		polkavm.A0: 1,
 		polkavm.A1: 10,
 	}
@@ -57,7 +57,7 @@ func TestInstance_Execute(t *testing.T) {
 		gas, regs, _, _, err := InvokeHostCall(pp, memoryMap, entryPoint, gasLimit, initialRegs, memory, hostCall, nothing{})
 
 		require.ErrorIs(t, err, polkavm.ErrHalt)
-		assert.Equal(t, uint32(111), regs[polkavm.A0])
+		assert.Equal(t, uint64(111), regs[polkavm.A0])
 		assert.Equal(t, polkavm.Gas(gasLimit)-polkavm.Gas(len(pp.Instructions)), gas)
 	})
 

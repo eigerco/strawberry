@@ -2,117 +2,162 @@ package polkavm
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
 type Opcode byte
 
 const (
-	Trap        Opcode = 0
-	Fallthrough Opcode = 17
+	// A.5.1. Instructions without Arguments
+	Trap        Opcode = 0  // trap = 0
+	Fallthrough Opcode = 17 // fallthrough = 1
 
-	JumpIndirect Opcode = 19
-	LoadImm      Opcode = 4
-	LoadU8       Opcode = 60
-	LoadI8       Opcode = 74
-	LoadU16      Opcode = 76
-	LoadI16      Opcode = 66
-	LoadU32      Opcode = 10
-	StoreU8      Opcode = 71
-	StoreU16     Opcode = 69
-	StoreU32     Opcode = 22
+	// A.5.2. Instructions with Arguments of One Immediate.
+	Ecalli Opcode = 78 // ecalli = 10
 
-	LoadImmAndJump                  Opcode = 6
-	BranchEqImm                     Opcode = 7
-	BranchNotEqImm                  Opcode = 15
-	BranchLessUnsignedImm           Opcode = 44
-	BranchLessSignedImm             Opcode = 32
-	BranchGreaterOrEqualUnsignedImm Opcode = 52
-	BranchGreaterOrEqualSignedImm   Opcode = 45
-	BranchLessOrEqualSignedImm      Opcode = 46
-	BranchLessOrEqualUnsignedImm    Opcode = 59
-	BranchGreaterSignedImm          Opcode = 53
-	BranchGreaterUnsignedImm        Opcode = 50
+	// A.5.3. Instructions with Arguments of One Register and One Extended Width Immediate.
+	LoadImm64 = 255 - 20 // load_imm_64 = 20
 
-	StoreImmIndirectU8  Opcode = 26
-	StoreImmIndirectU16 Opcode = 54
-	StoreImmIndirectU32 Opcode = 13
+	// A.5.4. Instructions with Arguments of Two Immediates.
+	StoreImmU8  Opcode = 62       // store_imm_u8 = 30
+	StoreImmU16 Opcode = 79       // store_imm_u16 = 31
+	StoreImmU32 Opcode = 38       // store_imm_u32 = 32
+	StoreImmU64 Opcode = 255 - 33 // store_imm_u64 = 33
 
-	StoreIndirectU8             Opcode = 16
-	StoreIndirectU16            Opcode = 29
-	StoreIndirectU32            Opcode = 3
-	LoadIndirectU8              Opcode = 11
-	LoadIndirectI8              Opcode = 21
-	LoadIndirectU16             Opcode = 37
-	LoadIndirectI16             Opcode = 33
-	LoadIndirectU32             Opcode = 1
-	AddImm                      Opcode = 2
-	AndImm                      Opcode = 18
-	XorImm                      Opcode = 31
-	OrImm                       Opcode = 49
-	MulImm                      Opcode = 35
-	MulUpperSignedSignedImm     Opcode = 65
-	MulUpperUnsignedUnsignedImm Opcode = 63
-	SetLessThanUnsignedImm      Opcode = 27
-	SetLessThanSignedImm        Opcode = 56
-	ShiftLogicalLeftImm         Opcode = 9
-	ShiftLogicalRightImm        Opcode = 14
-	ShiftArithmeticRightImm     Opcode = 25
-	NegateAndAddImm             Opcode = 40
-	SetGreaterThanUnsignedImm   Opcode = 39
-	SetGreaterThanSignedImm     Opcode = 61
-	ShiftLogicalRightImmAlt     Opcode = 72
-	ShiftArithmeticRightImmAlt  Opcode = 80
-	ShiftLogicalLeftImmAlt      Opcode = 75
-
-	CmovIfZeroImm    Opcode = 85
-	CmovIfNotZeroImm Opcode = 86
-
-	BranchEq                     Opcode = 24
-	BranchNotEq                  Opcode = 30
-	BranchLessUnsigned           Opcode = 47
-	BranchLessSigned             Opcode = 48
-	BranchGreaterOrEqualUnsigned Opcode = 41
-	BranchGreaterOrEqualSigned   Opcode = 43
-
-	Add                      Opcode = 8
-	Sub                      Opcode = 20
-	And                      Opcode = 23
-	Xor                      Opcode = 28
-	Or                       Opcode = 12
-	Mul                      Opcode = 34
-	MulUpperSignedSigned     Opcode = 67
-	MulUpperUnsignedUnsigned Opcode = 57
-	MulUpperSignedUnsigned   Opcode = 81
-	SetLessThanUnsigned      Opcode = 36
-	SetLessThanSigned        Opcode = 58
-	ShiftLogicalLeft         Opcode = 55
-	ShiftLogicalRight        Opcode = 51
-	ShiftArithmeticRight     Opcode = 77
-	DivUnsigned              Opcode = 68
-	DivSigned                Opcode = 64
-	RemUnsigned              Opcode = 73
-	RemSigned                Opcode = 70
-
-	CmovIfZero    Opcode = 83
-	CmovIfNotZero Opcode = 84
-
+	// A.5.5. Instructions with Arguments of One Offset.
 	Jump Opcode = 5
 
-	Ecalli Opcode = 78
+	// A.5.6. Instructions with Arguments of One Register & One Immediate.
+	JumpIndirect Opcode = 19       // jump_ind = 50
+	LoadImm      Opcode = 4        // load_imm = 51
+	LoadU8       Opcode = 60       // load_u8 = 52
+	LoadI8       Opcode = 74       // load_i8 = 53
+	LoadU16      Opcode = 76       // load_u16 = 54
+	LoadI16      Opcode = 66       // load_i16 = 55
+	LoadU32      Opcode = 10       // load_u32 = 56
+	LoadI32      Opcode = 255 - 57 // load_i32 = 57
+	LoadU64      Opcode = 255 - 58 // load_u64 = 58
+	StoreU8      Opcode = 71       // store_u8 = 59
+	StoreU16     Opcode = 69       // store_u16 = 60
+	StoreU32     Opcode = 22       // store_u32 = 61
+	StoreU64     Opcode = 255 - 62 // store_u64 = 62
 
-	StoreImmU8  Opcode = 62
-	StoreImmU16 Opcode = 79
-	StoreImmU32 Opcode = 38
+	// A.5.7. Instructions with Arguments of One Register & Two Immediates.
+	StoreImmIndirectU8  Opcode = 26       // store_imm_ind_u8 = 70
+	StoreImmIndirectU16 Opcode = 54       // store_imm_ind_u16 = 71
+	StoreImmIndirectU32 Opcode = 13       // store_imm_ind_u32 = 72
+	StoreImmIndirectU64 Opcode = 300 - 73 // store_imm_ind_u64 = 73 // todo fix opcode numbers
 
-	MoveReg Opcode = 82
-	Sbrk    Opcode = 87
+	// A.5.8. Instructions with Arguments of One Register, One Immediate and One Offset.
+	LoadImmAndJump                  Opcode = 6  // load_imm_jump = 80
+	BranchEqImm                     Opcode = 7  // branch_eq_imm = 81
+	BranchNotEqImm                  Opcode = 15 // branch_ne_imm = 82
+	BranchLessUnsignedImm           Opcode = 44 // branch_lt_u_imm = 83
+	BranchLessOrEqualUnsignedImm    Opcode = 59 // branch_le_u_imm = 84
+	BranchGreaterOrEqualUnsignedImm Opcode = 52 // branch_ge_u_imm = 85
+	BranchGreaterUnsignedImm        Opcode = 50 // branch_gt_u_imm = 86
+	BranchLessSignedImm             Opcode = 32 // branch_lt_s_imm = 87
+	BranchLessOrEqualSignedImm      Opcode = 46 // branch_le_s_imm = 88
+	BranchGreaterOrEqualSignedImm   Opcode = 45 // branch_ge_s_imm = 89
+	BranchGreaterSignedImm          Opcode = 53 // branch_gt_s_imm = 90
 
-	LoadImmAndJumpIndirect Opcode = 42
+	// A.5.9. Instructions with Arguments of Two Registers.
+	MoveReg Opcode = 82 // move_reg = 100
+	Sbrk    Opcode = 87 // sbrk = 101
+
+	// A.5.10. Instructions with Arguments of Two Registers & One Immediate.
+	StoreIndirectU8              Opcode = 16        // store_ind_u8 = 110
+	StoreIndirectU16             Opcode = 29        // store_ind_u16 = 111
+	StoreIndirectU32             Opcode = 3         // store_ind_u32 = 112
+	StoreIndirectU64             Opcode = 350 - 113 // store_ind_u64 = 113 // todo fix opcode numbers
+	LoadIndirectU8               Opcode = 11        // load_ind_u8 = 114
+	LoadIndirectI8               Opcode = 21        // load_ind_i8 = 115
+	LoadIndirectU16              Opcode = 37        // load_ind_u16 = 116
+	LoadIndirectI16              Opcode = 33        // load_ind_i16 = 117
+	LoadIndirectU32              Opcode = 1         // load_ind_u32 = 118
+	LoadIndirectI32              Opcode = 255 - 119 // load_ind_i32 = 119
+	LoadIndirectU64              Opcode = 255 - 120 // load_ind_u64 = 120
+	AddImm32                     Opcode = 2         // add_imm_32 = 121
+	AndImm                       Opcode = 18        // and_imm = 122
+	XorImm                       Opcode = 31        // xor_imm = 123
+	OrImm                        Opcode = 49        // or_imm = 124
+	MulImm32                     Opcode = 35        // mul_imm_32 = 125
+	SetLessThanUnsignedImm       Opcode = 27        // set_lt_u_imm = 126
+	SetLessThanSignedImm         Opcode = 56        // set_lt_s_imm = 127
+	ShiftLogicalLeftImm32        Opcode = 9         // shlo_l_imm_32 = 128
+	ShiftLogicalRightImm32       Opcode = 14        // shlo_r_imm_32 = 129
+	ShiftArithmeticRightImm32    Opcode = 25        // shar_r_imm_32 = 130
+	NegateAndAddImm32            Opcode = 40        // neg_add_imm_32 = 131
+	SetGreaterThanUnsignedImm    Opcode = 39        // set_gt_u_imm = 132
+	SetGreaterThanSignedImm      Opcode = 61        // set_gt_s_imm = 133
+	ShiftLogicalRightImmAlt32    Opcode = 72        // shlo_r_imm_alt_32 = 134
+	ShiftArithmeticRightImmAlt32 Opcode = 80        // shar_r_imm_alt_32 = 135
+	ShiftLogicalLeftImmAlt32     Opcode = 75        // shlo_l_imm_alt_32 = 136
+	CmovIfZeroImm                Opcode = 85        // cmov_iz_imm = 137
+	CmovIfNotZeroImm             Opcode = 86        // cmov_nz_imm = 138
+	AddImm64                     Opcode = 139       // add_imm_64 = 139
+	MulImm64                     Opcode = 140       // mul_imm_64 = 140
+	ShiftLogicalLeftImm64        Opcode = 141       // shlo_l_imm_64 = 141
+	ShiftLogicalRightImm64       Opcode = 142       // shlo_r_imm_64 = 142
+	ShiftArithmeticRightImm64    Opcode = 143       // shar_r_imm_64 = 143
+	NegateAndAddImm64            Opcode = 144       // neg_add_imm_64 = 144
+	ShiftLogicalLeftImmAlt64     Opcode = 145       // shlo_l_imm_alt_64 = 145
+	ShiftLogicalRightImmAlt64    Opcode = 146       // shlo_r_imm_alt_64 = 146
+	ShiftArithmeticRightImmAlt64 Opcode = 147       // shar_r_imm_alt_64 = 147
+
+	// A.5.11. Instructions with Arguments of Two Registers & One Offset.
+	BranchEq                     Opcode = 24 // branch_eq = 150
+	BranchNotEq                  Opcode = 30 // branch_ne = 151
+	BranchLessUnsigned           Opcode = 47 // branch_lt_u = 152
+	BranchLessSigned             Opcode = 48 // branch_lt_s = 153
+	BranchGreaterOrEqualUnsigned Opcode = 41 // branch_ge_u = 154
+	BranchGreaterOrEqualSigned   Opcode = 43 // branch_ge_s = 155
+
+	// A.5.12. Instruction with Arguments of Two Registers and Two Immediates.
+	LoadImmAndJumpIndirect Opcode = 42 // load_imm_jump_ind = 160
+
+	// A.5.13. Instructions with Arguments of Three Registers.
+	Add32                    Opcode = 8   // add_32 = 170
+	Sub32                    Opcode = 20  // sub_32 = 171
+	Mul32                    Opcode = 34  // mul_32 = 172
+	DivUnsigned32            Opcode = 68  // div_u_32 = 173
+	DivSigned32              Opcode = 64  // div_s_32 = 174
+	RemUnsigned32            Opcode = 73  // rem_u_32 = 175
+	RemSigned32              Opcode = 70  // rem_s_32 = 176
+	ShiftLogicalLeft32       Opcode = 55  // shlo_l_32 = 177
+	ShiftLogicalRight32      Opcode = 51  // shlo_r_32 = 178
+	ShiftArithmeticRight32   Opcode = 77  // shar_r_32 = 179
+	Add64                    Opcode = 180 // add_64 = 180
+	Sub64                    Opcode = 181 // sub_64 = 181
+	Mul64                    Opcode = 182 // mul_64 = 182
+	DivUnsigned64            Opcode = 183 // div_u_64 = 183
+	DivSigned64              Opcode = 184 // div_s_64 = 184
+	RemUnsigned64            Opcode = 185 // rem_u_64 = 185
+	RemSigned64              Opcode = 186 // rem_s_64 = 186
+	ShiftLogicalLeft64       Opcode = 187 // shlo_l_64 = 187
+	ShiftLogicalRight64      Opcode = 188 // shlo_r_64 = 188
+	ShiftArithmeticRight64   Opcode = 189 // shar_r_64 = 189
+	And                      Opcode = 23  // and = 190
+	Xor                      Opcode = 28  // xor = 191
+	Or                       Opcode = 12  // or = 192
+	MulUpperSignedSigned     Opcode = 67  // mul_upper_s_s = 193
+	MulUpperUnsignedUnsigned Opcode = 57  // mul_upper_u_u = 194
+	MulUpperSignedUnsigned   Opcode = 81  // mul_upper_s_u = 195
+	SetLessThanUnsigned      Opcode = 36  // set_lt_u = 196
+	SetLessThanSigned        Opcode = 58  // set_lt_s = 197
+	CmovIfZero               Opcode = 83  // cmov_iz = 198
+	CmovIfNotZero            Opcode = 84  // cmov_nz = 199
 )
 
 var GasCosts = map[Opcode]Gas{
 	Trap:                            1,
 	Fallthrough:                     1,
+	Ecalli:                          1,
+	StoreImmU8:                      1,
+	StoreImmU16:                     1,
+	StoreImmU32:                     1,
+	StoreImmU64:                     1,
+	Jump:                            1,
 	JumpIndirect:                    1,
 	LoadImm:                         1,
 	LoadU8:                          1,
@@ -120,85 +165,104 @@ var GasCosts = map[Opcode]Gas{
 	LoadU16:                         1,
 	LoadI16:                         1,
 	LoadU32:                         1,
+	LoadI32:                         1,
+	LoadU64:                         1,
 	StoreU8:                         1,
 	StoreU16:                        1,
 	StoreU32:                        1,
+	StoreU64:                        1,
+	StoreImmIndirectU8:              1,
+	StoreImmIndirectU16:             1,
+	StoreImmIndirectU32:             1,
+	StoreImmIndirectU64:             1,
 	LoadImmAndJump:                  1,
 	BranchEqImm:                     1,
 	BranchNotEqImm:                  1,
 	BranchLessUnsignedImm:           1,
-	BranchLessSignedImm:             1,
-	BranchGreaterOrEqualUnsignedImm: 1,
-	BranchGreaterOrEqualSignedImm:   1,
-	BranchLessOrEqualSignedImm:      1,
 	BranchLessOrEqualUnsignedImm:    1,
-	BranchGreaterSignedImm:          1,
+	BranchGreaterOrEqualUnsignedImm: 1,
 	BranchGreaterUnsignedImm:        1,
-	StoreImmIndirectU8:              1,
-	StoreImmIndirectU16:             1,
-	StoreImmIndirectU32:             1,
+	BranchLessSignedImm:             1,
+	BranchLessOrEqualSignedImm:      1,
+	BranchGreaterOrEqualSignedImm:   1,
+	BranchGreaterSignedImm:          1,
+	MoveReg:                         1,
+	Sbrk:                            1,
 	StoreIndirectU8:                 1,
 	StoreIndirectU16:                1,
 	StoreIndirectU32:                1,
+	StoreIndirectU64:                1,
 	LoadIndirectU8:                  1,
 	LoadIndirectI8:                  1,
 	LoadIndirectU16:                 1,
 	LoadIndirectI16:                 1,
 	LoadIndirectU32:                 1,
-	AddImm:                          1,
+	LoadIndirectI32:                 1,
+	LoadIndirectU64:                 1,
+	AddImm32:                        1,
 	AndImm:                          1,
 	XorImm:                          1,
 	OrImm:                           1,
-	MulImm:                          1,
-	MulUpperSignedSignedImm:         1,
-	MulUpperUnsignedUnsignedImm:     1,
+	MulImm32:                        1,
 	SetLessThanUnsignedImm:          1,
 	SetLessThanSignedImm:            1,
-	ShiftLogicalLeftImm:             1,
-	ShiftLogicalRightImm:            1,
-	ShiftArithmeticRightImm:         1,
-	NegateAndAddImm:                 1,
+	ShiftLogicalLeftImm32:           1,
+	ShiftLogicalRightImm32:          1,
+	ShiftArithmeticRightImm32:       1,
+	NegateAndAddImm32:               1,
 	SetGreaterThanUnsignedImm:       1,
 	SetGreaterThanSignedImm:         1,
-	ShiftLogicalRightImmAlt:         1,
-	ShiftArithmeticRightImmAlt:      1,
-	ShiftLogicalLeftImmAlt:          1,
+	ShiftLogicalRightImmAlt32:       1,
+	ShiftArithmeticRightImmAlt32:    1,
+	ShiftLogicalLeftImmAlt32:        1,
 	CmovIfZeroImm:                   1,
 	CmovIfNotZeroImm:                1,
+	AddImm64:                        1,
+	MulImm64:                        1,
+	ShiftLogicalLeftImm64:           1,
+	ShiftLogicalRightImm64:          1,
+	ShiftArithmeticRightImm64:       1,
+	NegateAndAddImm64:               1,
+	ShiftLogicalLeftImmAlt64:        1,
+	ShiftLogicalRightImmAlt64:       1,
+	ShiftArithmeticRightImmAlt64:    1,
 	BranchEq:                        1,
 	BranchNotEq:                     1,
 	BranchLessUnsigned:              1,
 	BranchLessSigned:                1,
 	BranchGreaterOrEqualUnsigned:    1,
 	BranchGreaterOrEqualSigned:      1,
-	Add:                             1,
-	Sub:                             1,
+	LoadImmAndJumpIndirect:          1,
+	Add32:                           1,
+	Sub32:                           1,
+	Mul32:                           1,
+	DivUnsigned32:                   1,
+	DivSigned32:                     1,
+	RemUnsigned32:                   1,
+	RemSigned32:                     1,
+	ShiftLogicalLeft32:              1,
+	ShiftLogicalRight32:             1,
+	ShiftArithmeticRight32:          1,
+	Add64:                           1,
+	Sub64:                           1,
+	Mul64:                           1,
+	DivUnsigned64:                   1,
+	DivSigned64:                     1,
+	RemUnsigned64:                   1,
+	RemSigned64:                     1,
+	ShiftLogicalLeft64:              1,
+	ShiftLogicalRight64:             1,
+	ShiftArithmeticRight64:          1,
 	And:                             1,
 	Xor:                             1,
 	Or:                              1,
-	Mul:                             1,
 	MulUpperSignedSigned:            1,
 	MulUpperUnsignedUnsigned:        1,
 	MulUpperSignedUnsigned:          1,
 	SetLessThanUnsigned:             1,
 	SetLessThanSigned:               1,
-	ShiftLogicalLeft:                1,
-	ShiftLogicalRight:               1,
-	ShiftArithmeticRight:            1,
-	DivUnsigned:                     1,
-	DivSigned:                       1,
-	RemUnsigned:                     1,
-	RemSigned:                       1,
 	CmovIfZero:                      1,
 	CmovIfNotZero:                   1,
-	Jump:                            1,
-	Ecalli:                          1,
-	StoreImmU8:                      1,
-	StoreImmU16:                     1,
-	StoreImmU32:                     1,
-	MoveReg:                         1,
-	Sbrk:                            1,
-	LoadImmAndJumpIndirect:          1,
 }
 
 type Reg uint
@@ -290,30 +354,63 @@ func parseReg(v byte) Reg {
 }
 
 var (
-	// Instructions with args: none
+	// Instructions without Arguments
 	instrNone = []Opcode{Trap, Fallthrough}
-	// Instructions with args: reg, imm
-	instrRegImm = []Opcode{JumpIndirect, LoadImm, LoadU8, LoadI8, LoadU16, LoadI16, LoadU32, StoreU8, StoreU16, StoreU32}
-	// Instructions with args: reg, imm, offset
-	instrRegImmOffset = []Opcode{LoadImmAndJump, BranchEqImm, BranchNotEqImm, BranchLessUnsignedImm, BranchLessSignedImm, BranchGreaterOrEqualUnsignedImm, BranchGreaterOrEqualSignedImm, BranchLessOrEqualSignedImm, BranchLessOrEqualUnsignedImm, BranchGreaterSignedImm, BranchGreaterUnsignedImm}
-	// Instructions with args: reg, imm, imm
-	instrRegImm2 = []Opcode{StoreImmIndirectU8, StoreImmIndirectU16, StoreImmIndirectU32}
-	// Instructions with args: reg, reg, imm
-	instrReg2Imm = []Opcode{StoreIndirectU8, StoreIndirectU16, StoreIndirectU32, LoadIndirectU8, LoadIndirectI8, LoadIndirectU16, LoadIndirectI16, LoadIndirectU32, AddImm, AndImm, XorImm, OrImm, MulImm, MulUpperSignedSignedImm, MulUpperUnsignedUnsignedImm, SetLessThanUnsignedImm, SetLessThanSignedImm, ShiftLogicalLeftImm, ShiftLogicalRightImm, ShiftArithmeticRightImm, NegateAndAddImm, SetGreaterThanUnsignedImm, SetGreaterThanSignedImm, ShiftLogicalRightImmAlt, ShiftArithmeticRightImmAlt, ShiftLogicalLeftImmAlt, CmovIfZeroImm, CmovIfNotZeroImm}
-	// Instructions with args: reg, reg, offset
-	instrReg2Offset = []Opcode{BranchEq, BranchNotEq, BranchLessUnsigned, BranchLessSigned, BranchGreaterOrEqualUnsigned, BranchGreaterOrEqualSigned}
-	// Instructions with args: reg, reg, reg
-	instrReg3 = []Opcode{Add, Sub, And, Xor, Or, Mul, MulUpperSignedSigned, MulUpperUnsignedUnsigned, MulUpperSignedUnsigned, SetLessThanUnsigned, SetLessThanSigned, ShiftLogicalLeft, ShiftLogicalRight, ShiftArithmeticRight, DivUnsigned, DivSigned, RemUnsigned, RemSigned, CmovIfZero, CmovIfNotZero}
-	// Instructions with args: offset
-	instrOffset = []Opcode{Jump}
-	// Instructions with args: imm
+	// Instructions with Arguments of One Immediate.
 	instrImm = []Opcode{Ecalli}
-	// Instructions with args: imm, imm
-	instrImm2 = []Opcode{StoreImmU8, StoreImmU16, StoreImmU32}
-	// Instructions with args: reg, reg
+	// Instructions with Arguments of One Register and One Extended Width Immediate.
+	instrRegImmExt = []Opcode{LoadImm64}
+	// Instructions with Arguments of Two Immediates.
+	instrImm2 = []Opcode{StoreImmU8, StoreImmU16, StoreImmU32, StoreImmU64}
+	// Instructions with Arguments of One Offset.
+	instrOffset = []Opcode{Jump}
+	// Instructions with Arguments of One Register & One Immediate.
+	instrRegImm = []Opcode{
+		JumpIndirect, LoadImm, LoadU8, LoadI8, LoadU16, LoadI16, LoadU32, LoadI32, LoadU64,
+		StoreU8, StoreU16, StoreU32, StoreU64,
+	}
+	// Instructions with Arguments of One Register & Two Immediates.
+	instrRegImm2 = []Opcode{StoreImmIndirectU8, StoreImmIndirectU16, StoreImmIndirectU32, StoreImmIndirectU64}
+	// Instructions with Arguments of One Register, One Immediate and One Offset.
+	instrRegImmOffset = []Opcode{
+		LoadImmAndJump, BranchEqImm, BranchNotEqImm, BranchLessUnsignedImm, BranchLessOrEqualUnsignedImm,
+		BranchGreaterOrEqualUnsignedImm, BranchGreaterUnsignedImm, BranchLessSignedImm,
+		BranchLessOrEqualSignedImm, BranchGreaterOrEqualSignedImm, BranchGreaterSignedImm,
+	}
+	// Instructions with Arguments of Two Registers.
 	instrRegReg = []Opcode{MoveReg, Sbrk}
-	// Instructions with args: reg, reg, imm, imm
+	// Instructions with Arguments of Two Registers & One Immediate.
+	instrReg2Imm = []Opcode{
+		StoreIndirectU8, StoreIndirectU16, StoreIndirectU32, StoreIndirectU64,
+		LoadIndirectU8, LoadIndirectI8, LoadIndirectU16, LoadIndirectI16,
+		LoadIndirectU32, LoadIndirectI32, LoadIndirectU64,
+		AddImm32, AndImm, XorImm, OrImm, MulImm32,
+		SetLessThanUnsignedImm, SetLessThanSignedImm,
+		ShiftLogicalLeftImm32, ShiftLogicalRightImm32, ShiftArithmeticRightImm32,
+		NegateAndAddImm32, SetGreaterThanUnsignedImm, SetGreaterThanSignedImm,
+		ShiftLogicalRightImmAlt32, ShiftArithmeticRightImmAlt32, ShiftLogicalLeftImmAlt32,
+		CmovIfZeroImm, CmovIfNotZeroImm,
+		AddImm64, MulImm64,
+		ShiftLogicalLeftImm64, ShiftLogicalRightImm64, ShiftArithmeticRightImm64,
+		NegateAndAddImm64,
+		ShiftLogicalLeftImmAlt64, ShiftLogicalRightImmAlt64, ShiftArithmeticRightImmAlt64,
+	}
+	// Instructions with Arguments of Two Registers & One Offset.
+	instrReg2Offset = []Opcode{
+		BranchEq, BranchNotEq, BranchLessUnsigned, BranchLessSigned,
+		BranchGreaterOrEqualUnsigned, BranchGreaterOrEqualSigned,
+	}
+	// Instruction with Arguments of Two Registers and Two Immediates.
 	instrReg2Imm2 = []Opcode{LoadImmAndJumpIndirect}
+	// Instructions with Arguments of Three Registers.
+	instrReg3 = []Opcode{
+		Add32, Sub32, Mul32, DivUnsigned32, DivSigned32, RemUnsigned32, RemSigned32,
+		ShiftLogicalLeft32, ShiftLogicalRight32, ShiftArithmeticRight32,
+		Add64, Sub64, Mul64, DivUnsigned64, DivSigned64, RemUnsigned64, RemSigned64,
+		ShiftLogicalLeft64, ShiftLogicalRight64, ShiftArithmeticRight64,
+		And, Xor, Or, MulUpperSignedSigned, MulUpperUnsignedUnsigned, MulUpperSignedUnsigned,
+		SetLessThanUnsigned, SetLessThanSigned, CmovIfZero, CmovIfNotZero,
+	}
 )
 
 type InstrParseArgFunc func(chunk []byte, instructionOffset, argsLength uint32) ([]Reg, []uint32)
@@ -356,6 +453,12 @@ func init() {
 	}
 	for _, code := range instrReg2Imm2 {
 		parseArgsTable[code] = parseArgsRegs2Imm2
+	}
+	for _, code := range instrRegImmExt {
+		parseArgsTable[code] = func(chunk []byte, instructionOffset, argsLength uint32) ([]Reg, []uint32) {
+			// TODO parse extended immediate
+			return nil, nil
+		}
 	}
 }
 
@@ -484,6 +587,7 @@ func parseArgsRegs2Offset(code []byte, instructionOffset, skip uint32) ([]Reg, [
 type Instruction struct {
 	Opcode Opcode
 	Imm    []uint32
+	ExtImm uint64
 	Reg    []Reg
 	Offset uint32
 	Length uint32
@@ -509,12 +613,18 @@ func (i *Instruction) Mutate(mutator Mutator) (uint32, error) {
 		return 0, mutator.LoadI16(i.Reg[0], i.Imm[0])
 	case LoadU32:
 		return 0, mutator.LoadU32(i.Reg[0], i.Imm[0])
+	case LoadI32:
+		return 0, mutator.LoadI32(i.Reg[0], i.Imm[0])
+	case LoadU64:
+		return 0, mutator.LoadU64(i.Reg[0], i.Imm[0])
 	case StoreU8:
 		return 0, mutator.StoreU8(i.Reg[0], i.Imm[0])
 	case StoreU16:
 		return 0, mutator.StoreU16(i.Reg[0], i.Imm[0])
 	case StoreU32:
 		return 0, mutator.StoreU32(i.Reg[0], i.Imm[0])
+	case StoreU64:
+		return 0, mutator.StoreU64(i.Reg[0], i.Imm[0])
 	case LoadImmAndJump:
 		mutator.LoadImmAndJump(i.Reg[0], i.Imm[0], i.Imm[1])
 	case BranchEqImm:
@@ -543,12 +653,16 @@ func (i *Instruction) Mutate(mutator Mutator) (uint32, error) {
 		return 0, mutator.StoreImmIndirectU16(i.Reg[0], i.Imm[0], i.Imm[1])
 	case StoreImmIndirectU32:
 		return 0, mutator.StoreImmIndirectU32(i.Reg[0], i.Imm[0], i.Imm[1])
+	case StoreImmIndirectU64:
+		return 0, mutator.StoreImmIndirectU64(i.Reg[0], i.Imm[0], i.Imm[1])
 	case StoreIndirectU8:
 		return 0, mutator.StoreIndirectU8(i.Reg[0], i.Reg[1], i.Imm[0])
 	case StoreIndirectU16:
 		return 0, mutator.StoreIndirectU16(i.Reg[0], i.Reg[1], i.Imm[0])
 	case StoreIndirectU32:
 		return 0, mutator.StoreIndirectU32(i.Reg[0], i.Reg[1], i.Imm[0])
+	case StoreIndirectU64:
+		return 0, mutator.StoreIndirectU64(i.Reg[0], i.Reg[1], i.Imm[0])
 	case LoadIndirectU8:
 		return 0, mutator.LoadIndirectU8(i.Reg[0], i.Reg[1], i.Imm[0])
 	case LoadIndirectI8:
@@ -559,43 +673,60 @@ func (i *Instruction) Mutate(mutator Mutator) (uint32, error) {
 		return 0, mutator.LoadIndirectI16(i.Reg[0], i.Reg[1], i.Imm[0])
 	case LoadIndirectU32:
 		return 0, mutator.LoadIndirectU32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case AddImm:
-
-		mutator.AddImm(i.Reg[0], i.Reg[1], i.Imm[0])
+	case LoadIndirectI32:
+		return 0, mutator.LoadIndirectI32(i.Reg[0], i.Reg[1], i.Imm[0])
+	case LoadIndirectU64:
+		return 0, mutator.LoadIndirectU64(i.Reg[0], i.Reg[1], i.Imm[0])
+	case AddImm32:
+		mutator.AddImm32(i.Reg[0], i.Reg[1], i.Imm[0])
+	case AddImm64:
+		mutator.AddImm64(i.Reg[0], i.Reg[1], i.Imm[0])
 	case AndImm:
 		mutator.AndImm(i.Reg[0], i.Reg[1], i.Imm[0])
 	case XorImm:
 		mutator.XorImm(i.Reg[0], i.Reg[1], i.Imm[0])
 	case OrImm:
 		mutator.OrImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case MulImm:
-		mutator.MulImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case MulUpperSignedSignedImm:
-		mutator.MulUpperSignedSignedImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case MulUpperUnsignedUnsignedImm:
-		mutator.MulUpperUnsignedUnsignedImm(i.Reg[0], i.Reg[1], i.Imm[0])
+	case MulImm32:
+		mutator.MulImm32(i.Reg[0], i.Reg[1], i.Imm[0])
+	case MulImm64:
+		mutator.MulImm64(i.Reg[0], i.Reg[1], i.Imm[0])
 	case SetLessThanUnsignedImm:
 		mutator.SetLessThanUnsignedImm(i.Reg[0], i.Reg[1], i.Imm[0])
 	case SetLessThanSignedImm:
 		mutator.SetLessThanSignedImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalLeftImm:
-		mutator.ShiftLogicalLeftImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalRightImm:
-		mutator.ShiftLogicalRightImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftArithmeticRightImm:
-		mutator.ShiftArithmeticRightImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case NegateAndAddImm:
-		mutator.NegateAndAddImm(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftLogicalLeftImm32:
+		mutator.ShiftLogicalLeftImm32(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftLogicalLeftImm64:
+		mutator.ShiftLogicalLeftImm64(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftLogicalRightImm32:
+		mutator.ShiftLogicalRightImm32(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftLogicalRightImm64:
+		mutator.ShiftLogicalRightImm64(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftArithmeticRightImm32:
+		mutator.ShiftArithmeticRightImm32(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftArithmeticRightImm64:
+		mutator.ShiftArithmeticRightImm64(i.Reg[0], i.Reg[1], i.Imm[0])
+	case NegateAndAddImm32:
+		mutator.NegateAndAddImm32(i.Reg[0], i.Reg[1], i.Imm[0])
+	case NegateAndAddImm64:
+		mutator.NegateAndAddImm64(i.Reg[0], i.Reg[1], i.Imm[0])
 	case SetGreaterThanUnsignedImm:
 		mutator.SetGreaterThanUnsignedImm(i.Reg[0], i.Reg[1], i.Imm[0])
 	case SetGreaterThanSignedImm:
 		mutator.SetGreaterThanSignedImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalRightImmAlt:
-		mutator.ShiftLogicalRightImmAlt(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftArithmeticRightImmAlt:
-		mutator.ShiftArithmeticRightImmAlt(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalLeftImmAlt:
-		mutator.ShiftLogicalLeftImmAlt(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftLogicalRightImmAlt32:
+		mutator.ShiftLogicalRightImmAlt32(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftLogicalRightImmAlt64:
+		mutator.ShiftLogicalRightImmAlt64(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftArithmeticRightImmAlt32:
+		mutator.ShiftArithmeticRightImmAlt32(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftArithmeticRightImmAlt64:
+		mutator.ShiftArithmeticRightImmAlt64(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftLogicalLeftImmAlt32:
+		mutator.ShiftLogicalLeftImmAlt32(i.Reg[0], i.Reg[1], i.Imm[0])
+	case ShiftLogicalLeftImmAlt64:
+		mutator.ShiftLogicalLeftImmAlt64(i.Reg[0], i.Reg[1], i.Imm[0])
 	case CmovIfZeroImm:
 		mutator.CmovIfZeroImm(i.Reg[0], i.Reg[1], i.Imm[0])
 	case CmovIfNotZeroImm:
@@ -612,18 +743,24 @@ func (i *Instruction) Mutate(mutator Mutator) (uint32, error) {
 		mutator.BranchGreaterOrEqualUnsigned(i.Reg[0], i.Reg[1], i.Imm[0])
 	case BranchGreaterOrEqualSigned:
 		mutator.BranchGreaterOrEqualSigned(i.Reg[0], i.Reg[1], i.Imm[0])
-	case Add:
-		mutator.Add(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Sub:
-		mutator.Sub(i.Reg[0], i.Reg[1], i.Reg[2])
+	case Add32:
+		mutator.Add32(i.Reg[0], i.Reg[1], i.Reg[2])
+	case Add64:
+		mutator.Add64(i.Reg[0], i.Reg[1], i.Reg[2])
+	case Sub32:
+		mutator.Sub32(i.Reg[0], i.Reg[1], i.Reg[2])
+	case Sub64:
+		mutator.Sub64(i.Reg[0], i.Reg[1], i.Reg[2])
 	case And:
 		mutator.And(i.Reg[0], i.Reg[1], i.Reg[2])
 	case Xor:
 		mutator.Xor(i.Reg[0], i.Reg[1], i.Reg[2])
 	case Or:
 		mutator.Or(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Mul:
-		mutator.Mul(i.Reg[0], i.Reg[1], i.Reg[2])
+	case Mul32:
+		mutator.Mul32(i.Reg[0], i.Reg[1], i.Reg[2])
+	case Mul64:
+		mutator.Mul64(i.Reg[0], i.Reg[1], i.Reg[2])
 	case MulUpperSignedSigned:
 		mutator.MulUpperSignedSigned(i.Reg[0], i.Reg[1], i.Reg[2])
 	case MulUpperUnsignedUnsigned:
@@ -634,20 +771,34 @@ func (i *Instruction) Mutate(mutator Mutator) (uint32, error) {
 		mutator.SetLessThanUnsigned(i.Reg[0], i.Reg[1], i.Reg[2])
 	case SetLessThanSigned:
 		mutator.SetLessThanSigned(i.Reg[0], i.Reg[1], i.Reg[2])
-	case ShiftLogicalLeft:
-		mutator.ShiftLogicalLeft(i.Reg[0], i.Reg[1], i.Reg[2])
-	case ShiftLogicalRight:
-		mutator.ShiftLogicalRight(i.Reg[0], i.Reg[1], i.Reg[2])
-	case ShiftArithmeticRight:
-		mutator.ShiftArithmeticRight(i.Reg[0], i.Reg[1], i.Reg[2])
-	case DivUnsigned:
-		mutator.DivUnsigned(i.Reg[0], i.Reg[1], i.Reg[2])
-	case DivSigned:
-		mutator.DivSigned(i.Reg[0], i.Reg[1], i.Reg[2])
-	case RemUnsigned:
-		mutator.RemUnsigned(i.Reg[0], i.Reg[1], i.Reg[2])
-	case RemSigned:
-		mutator.RemSigned(i.Reg[0], i.Reg[1], i.Reg[2])
+	case ShiftLogicalLeft32:
+		mutator.ShiftLogicalLeft32(i.Reg[0], i.Reg[1], i.Reg[2])
+	case ShiftLogicalLeft64:
+		mutator.ShiftLogicalLeft64(i.Reg[0], i.Reg[1], i.Reg[2])
+	case ShiftLogicalRight32:
+		mutator.ShiftLogicalRight32(i.Reg[0], i.Reg[1], i.Reg[2])
+	case ShiftLogicalRight64:
+		mutator.ShiftLogicalRight64(i.Reg[0], i.Reg[1], i.Reg[2])
+	case ShiftArithmeticRight32:
+		mutator.ShiftArithmeticRight32(i.Reg[0], i.Reg[1], i.Reg[2])
+	case ShiftArithmeticRight64:
+		mutator.ShiftArithmeticRight64(i.Reg[0], i.Reg[1], i.Reg[2])
+	case DivUnsigned32:
+		mutator.DivUnsigned32(i.Reg[0], i.Reg[1], i.Reg[2])
+	case DivUnsigned64:
+		mutator.DivUnsigned64(i.Reg[0], i.Reg[1], i.Reg[2])
+	case DivSigned32:
+		mutator.DivSigned32(i.Reg[0], i.Reg[1], i.Reg[2])
+	case DivSigned64:
+		mutator.DivSigned64(i.Reg[0], i.Reg[1], i.Reg[2])
+	case RemUnsigned32:
+		mutator.RemUnsigned32(i.Reg[0], i.Reg[1], i.Reg[2])
+	case RemUnsigned64:
+		mutator.RemUnsigned64(i.Reg[0], i.Reg[1], i.Reg[2])
+	case RemSigned32:
+		mutator.RemSigned32(i.Reg[0], i.Reg[1], i.Reg[2])
+	case RemSigned64:
+		mutator.RemSigned64(i.Reg[0], i.Reg[1], i.Reg[2])
 	case CmovIfZero:
 		mutator.CmovIfZero(i.Reg[0], i.Reg[1], i.Reg[2])
 	case CmovIfNotZero:
@@ -662,12 +813,19 @@ func (i *Instruction) Mutate(mutator Mutator) (uint32, error) {
 		return 0, mutator.StoreImmU16(i.Imm[0], i.Imm[1])
 	case StoreImmU32:
 		return 0, mutator.StoreImmU32(i.Imm[0], i.Imm[1])
+	case StoreImmU64:
+		return 0, mutator.StoreImmU64(i.Imm[0], i.Imm[1])
 	case MoveReg:
 		mutator.MoveReg(i.Reg[0], i.Reg[1])
 	case Sbrk:
 		return 0, mutator.Sbrk(i.Reg[0], i.Reg[1])
 	case LoadImmAndJumpIndirect:
 		return 0, mutator.LoadImmAndJumpIndirect(i.Reg[0], i.Reg[1], i.Imm[0], i.Imm[1])
+	case LoadImm64:
+		mutator.LoadImm64(i.Reg[0], i.ExtImm)
+		return 0, nil
+	default:
+		return 0, fmt.Errorf("unsupported instruction opcode: %d", i.Opcode)
 	}
 	return 0, nil
 }

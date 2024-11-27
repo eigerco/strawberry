@@ -10,7 +10,7 @@ func InitRegs(args []byte) polkavm.Registers {
 	regs[polkavm.RA] = 1<<32 - 1<<16
 	regs[polkavm.SP] = 1<<32 - 2*(1<<16) - 2<<24
 	regs[polkavm.A0] = 1<<32 - 1<<16 - 2<<24
-	regs[polkavm.A1] = uint32(len(args))
+	regs[polkavm.A1] = uint64(len(args))
 	return regs
 }
 
