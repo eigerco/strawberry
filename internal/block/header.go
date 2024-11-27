@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+
 	"github.com/eigerco/strawberry/pkg/db"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 
@@ -30,8 +31,9 @@ type Header struct {
 // EpochMarker consists of epoch randomness and a sequence of
 // Bandersnatch keys defining the Bandersnatch validator keys (kb) beginning in the next epoch.
 type EpochMarker struct {
-	Entropy crypto.Hash
-	Keys    [common.NumberOfValidators]crypto.BandersnatchPublicKey
+	Entropy        crypto.Hash
+	TicketsEntropy crypto.Hash
+	Keys           [common.NumberOfValidators]crypto.BandersnatchPublicKey
 }
 
 type WinningTicketMarker [jamtime.TimeslotsPerEpoch]Ticket

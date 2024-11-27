@@ -26,18 +26,16 @@ type CredentialSignature struct {
 	Signature      [crypto.Ed25519SignatureSize]byte // The Ed25519 signature
 }
 
-// WorkReport represents a work report in the JAM state (equation 118 v0.4.5)
+// WorkReport represents a work report in the JAM state (equation 11.2 v0.5.0)
 // TODO: The total serialized size of a work-report may be no greater than MaxWorkPackageSizeBytes.
 type WorkReport struct {
-	WorkPackageSpecification WorkPackageSpecification // Work-package specification (s)
-	RefinementContext        RefinementContext        // Refinement context (x)
-	CoreIndex                uint16                   // Core index (c) - Max value: TotalNumberOfCores
-	AuthorizerHash           crypto.Hash              // HeaderHash of the authorizer (a)
-	Output                   []byte                   // Output of the work report (o)
-	WorkResults              []WorkResult             // Results of the evaluation of each of the items in the work-package (r) - Min value: MinWorkPackageResultsSize. Max value: MaxWorkPackageResultsSize.
-
-	// TODO ignore this field for now as the test vectors still do not include it
-	SegmentRootLookup map[crypto.Hash]crypto.Hash `json:"-" jam:"-"` // A segment-root lookup dictionary (l ∈ D⟨H → H⟩)
+	WorkPackageSpecification WorkPackageSpecification    // Work-package specification (s)
+	RefinementContext        RefinementContext           // Refinement context (x)
+	CoreIndex                uint16                      // Core index (c) - Max value: TotalNumberOfCores
+	AuthorizerHash           crypto.Hash                 // HeaderHash of the authorizer (a)
+	Output                   []byte                      // Output of the work report (o)
+	SegmentRootLookup        map[crypto.Hash]crypto.Hash // A segment-root lookup dictionary (l ∈ D⟨H → H⟩)
+	WorkResults              []WorkResult                // Results of the evaluation of each of the items in the work-package (r) - Min value: MinWorkPackageResultsSize. Max value: MaxWorkPackageResultsSize.
 }
 
 type WorkPackageSpecification struct {
@@ -45,13 +43,14 @@ type WorkPackageSpecification struct {
 	AuditableWorkBundleLength uint32      // Length of the auditable work bundle (l)
 	ErasureRoot               crypto.Hash // Erasure root (u) - is the root of a binary Merkle tree which functions as a commitment to all data required for the auditing of the report and for use by later workpackages should they need to retrieve any data yielded. It is thus used by assurers to verify the correctness of data they have been sent by guarantors, and it is later verified as correct by auditors.
 	SegmentRoot               crypto.Hash // Segment root (e) - root of a constant-depth, left-biased and zero-hash-padded binary Merkle tree committing to the hashes of each of the exported segments of each work-item. These are used by guarantors to verify the correctness of any reconstructed segments they are called upon to import for evaluation of some later work-package.
+	SegmentCount              uint16      // Segment count (n)
 }
 
 // RefinementContext describes the context of the chain at the point that the report’s corresponding work-package was evaluated.
 type RefinementContext struct {
 	Anchor                  RefinementContextAnchor       // Historical block anchor
 	LookupAnchor            RefinementContextLookupAnchor // Historical block anchor
-	PrerequisiteWorkPackage *crypto.Hash                  // Prerequisite work package (p) (optional)
+	PrerequisiteWorkPackage []crypto.Hash                 // Prerequisite work package (p) (optional)
 }
 
 type RefinementContextAnchor struct {

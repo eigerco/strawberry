@@ -3,15 +3,15 @@ package block
 import (
 	"crypto/ed25519"
 	"crypto/rand"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/common"
-
-	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 func Test_BlockEncodeDecode(t *testing.T) {
@@ -156,6 +156,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 							Output:                 WorkResultOutputOrError{CodeTooLarge},
 						},
 					},
+					SegmentRootLookup: make(map[crypto.Hash]crypto.Hash),
 				},
 				Credentials: []CredentialSignature{
 					{
