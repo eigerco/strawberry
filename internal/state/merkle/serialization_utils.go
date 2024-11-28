@@ -3,7 +3,7 @@ package state
 import (
 	"bytes"
 	"crypto/ed25519"
-	"encoding/binary"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"slices"
 	"sort"
 
@@ -23,44 +23,45 @@ func generateStateKeyBasic(i uint8) [32]byte {
 	return result
 }
 
-// generateStateKey to generate state key based on i and s
-func generateStateKey(i uint8, s block.ServiceId) [32]byte {
+// generateStateKeyInterleavedBasic to generate state key based on i and s
+func generateStateKeyInterleavedBasic(i uint8, s block.ServiceId) ([32]byte, error) {
+	encodedServiceId, err := jam.Marshal(s)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
 	var result [32]byte
 
 	// Place i as the first byte
 	result[0] = i
 
-	// Convert s into a 4-byte buffer and place it starting at result[1]
-	sBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(sBuf, uint32(s)) // s is 4 bytes in BigEndian format
+	// Place encoded service ID bytes at positions 1,3,5,7
+	for j := 0; j < 4; j++ {
+		result[1+j*2] = encodedServiceId[j]
+	}
 
-	// Copy the 4-byte sBuf to result starting at index 1
-	copy(result[1:], sBuf)
-
-	// The rest of result is already zero-padded by default
-	return result
+	return result, nil
 }
 
 // Function to interleave the first 4 bytes of s and h, then append the rest of h
-func generateStateKeyInterleaved(s block.ServiceId, h [32]byte) [32]byte {
+func generateStateKeyInterleaved(s block.ServiceId, h [32]byte) ([32]byte, error) {
+	encodedServiceId, err := jam.Marshal(s)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
 	var result [32]byte
 
-	// Convert s into a 4-byte buffer
-	sBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(sBuf, uint32(s)) // s is 4 bytes
-
-	// Interleave the first 4 bytes of s with the first 4 bytes of h
+	// Interleave the first 4 bytes of encodedServiceId with the first 4 bytes of h
 	for i := 0; i < 4; i++ {
-		// Copy the i-th byte from sBuf
-		result[i*2] = sBuf[i]
-		// Copy the i-th byte from h
+		result[i*2] = encodedServiceId[i]
 		result[i*2+1] = h[i]
 	}
 
 	// Append the rest of h to the result
 	copy(result[8:], h[4:])
 
-	return result
+	return result, nil
 }
 
 // calculateFootprintSize calculates the storage footprint size (al) based on Equation 94.
@@ -111,18 +112,4 @@ func sortByteSlicesCopy(slice interface{}) interface{} {
 	default:
 		panic("unsupported type for sorting")
 	}
-}
-
-// bitwiseNotExceptFirst4Bytes to apply bitwise NOT to all bytes except the first 4
-func bitwiseNotExceptFirst4Bytes(h crypto.Hash) [28]byte {
-	// Clone the original array into a new one
-	var result [28]byte
-	copy(result[:], h[:])
-
-	// Apply bitwise NOT to all bytes except the first 4
-	for i := 4; i < len(result); i++ {
-		result[i] = ^result[i]
-	}
-
-	return result
 }

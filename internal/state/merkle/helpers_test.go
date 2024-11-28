@@ -2,7 +2,6 @@ package state
 
 import (
 	"crypto/ed25519"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/eigerco/strawberry/internal/state"
@@ -282,7 +281,8 @@ func RandomSafroleStateWithEpochKeys(t *testing.T) safrole.State {
 func RandomState(t *testing.T) state.State {
 	services := make(service.ServiceState)
 	for i := 0; i < 10; i++ {
-		services[block.ServiceId(789)] = RandomServiceAccount(t)
+		// Use different service IDs for each iteration
+		services[block.ServiceId(uint32(i+789))] = RandomServiceAccount(t)
 	}
 
 	return state.State{
@@ -412,7 +412,10 @@ func deserializeServices(state *state.State, serializedState map[crypto.Hash][]b
 		// Check if this is a service account entry (state key starts with 255)
 		if isServiceAccountKey(stateKey) {
 			// Extract service ID from the key
-			serviceId := extractServiceIdFromKey(stateKey)
+			serviceId, err := extractServiceIdFromKey(stateKey)
+			if err != nil {
+				return err
+			}
 
 			// Deserialize the combined fields (CodeHash, Balance, etc.)
 			var combined struct {
@@ -450,7 +453,19 @@ func isServiceAccountKey(stateKey crypto.Hash) bool {
 	return stateKey[0] == 255
 }
 
-func extractServiceIdFromKey(stateKey crypto.Hash) block.ServiceId {
-	// Assuming that the service ID is embedded in bytes 1-4 of the key
-	return block.ServiceId(binary.BigEndian.Uint32(stateKey[1:5]))
+func extractServiceIdFromKey(stateKey crypto.Hash) (block.ServiceId, error) {
+	// Collect service ID bytes from positions 1,3,5,7 into a slice
+	encodedServiceId := []byte{
+		stateKey[1],
+		stateKey[3],
+		stateKey[5],
+		stateKey[7],
+	}
+
+	var serviceId block.ServiceId
+	if err := jam.Unmarshal(encodedServiceId, &serviceId); err != nil {
+		return 0, err
+	}
+
+	return serviceId, nil
 }
