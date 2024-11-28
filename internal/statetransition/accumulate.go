@@ -102,7 +102,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, serviceIndex b
 		case host_call.ForgetID:
 			gasCounter, regs, mem, ctx, err = host_call.Forget(gasCounter, regs, mem, ctx, a.header.TimeSlotIndex)
 		default:
-			regs[polkavm.A0] = uint32(host_call.WHAT)
+			regs[polkavm.A0] = uint64(host_call.WHAT)
 			gasCounter -= AccumulateCost
 		}
 		return gasCounter, regs, mem, ctx, err

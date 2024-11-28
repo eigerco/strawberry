@@ -43,7 +43,7 @@ func InvokePVMOnTransfer(serviceState service.ServiceState, serviceIndex block.S
 		case host_call.InfoID:
 			gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, serviceIndex, serviceState)
 		default:
-			regs[polkavm.A0] = uint32(host_call.WHAT)
+			regs[polkavm.A0] = uint64(host_call.WHAT)
 			gasCounter -= OnTransferCost
 		}
 		return gasCounter, regs, mem, serviceAccount, err
