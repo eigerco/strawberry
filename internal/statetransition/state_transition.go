@@ -3,11 +3,11 @@ package statetransition
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log"
 	"maps"
-	"reflect"
 	"slices"
 	"sort"
 	"sync"
@@ -871,10 +871,32 @@ func calculateNewCoreAssignments(
 	return newAssignments
 }
 
-func validateExtrinsicGuarantees(header block.Header, currentState *state.State, guarantees block.GuaranteesExtrinsic, ancestorStore *block.AncestorStore) error {
+// generateRefinementContextID serializes the RefinementContext and returns its SHA-256 hash as a hex string.
+func generateRefinementContextID(context block.RefinementContext) (string, error) {
+	serialized, err := jam.Marshal(context)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize RefinementContext: %w", err)
+	}
 
-	// let x ≡ {w_x S w ∈ w} , p ≡ {(w_s)h S w ∈ w} (145 v0.4.5)
-	contexts := make(map[block.RefinementContext]struct{})
+	hash := sha256.Sum256(serialized)
+
+	// Convert hash to a hex
+	return fmt.Sprintf("%x", hash), nil
+}
+
+// computeWorkReportHash computes a SHA-256 hash of the WorkReport
+func computeWorkReportHash(workReport block.WorkReport) (crypto.Hash, error) {
+	serialized, err := jam.Marshal(workReport)
+	if err != nil {
+		return crypto.Hash{}, fmt.Errorf("failed to serialize WorkReport: %w", err)
+	}
+	hash := sha256.Sum256(serialized)
+
+	return hash, nil
+}
+
+func validateExtrinsicGuarantees(header block.Header, currentState *state.State, guarantees block.GuaranteesExtrinsic, ancestorStore *block.AncestorStore) error {
+	contexts := make(map[string]struct{})
 	extrinsicWorkPackages := make(map[crypto.Hash]crypto.Hash)
 
 	prerequisitePackageHashes := make(map[crypto.Hash]struct{})
@@ -892,9 +914,17 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 	}
 
 	for _, guarantee := range guarantees.Guarantees {
-		contexts[guarantee.WorkReport.RefinementContext] = struct{}{}
+		context := guarantee.WorkReport.RefinementContext
+
+		// Generate a unique ID for the context
+		contextID, err := generateRefinementContextID(context)
+		if err != nil {
+			return fmt.Errorf("failed to generate RefinementContextID: %w", err)
+		}
+
+		contexts[contextID] = struct{}{}
 		extrinsicWorkPackages[guarantee.WorkReport.WorkPackageSpecification.WorkPackageHash] = guarantee.WorkReport.WorkPackageSpecification.SegmentRoot
-		// ∀w ∈ w ∶ [∑ r∈wr] (rg) ≤ GA ∧ ∀r ∈ wr ∶ rg ≥ δ[rs]g (eq. 144 v0.4.5)
+		// ∀w ∈ w ∶ [∑ r∈wr] (rg) ≤ GA ∧ ∀r ∈ wr ∶ rg ≥ δ[rs]g (eq. 11.29 0.5.0)
 		totalGas := uint64(0)
 		for _, r := range guarantee.WorkReport.WorkResults {
 			if r.GasPrioritizationRatio < currentState.Services[r.ServiceId].GasLimitForAccumulator {
@@ -909,45 +939,67 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 		for key := range guarantee.WorkReport.SegmentRootLookup {
 			prerequisitePackageHashes[key] = struct{}{}
 		}
-		if guarantee.WorkReport.RefinementContext.PrerequisiteWorkPackage != nil {
-			prerequisitePackageHashes[*guarantee.WorkReport.RefinementContext.PrerequisiteWorkPackage] = struct{}{}
 
-			// let q = {(wx)p S q ∈ ϑ, w ∈ K(q)} (150 v0.4.5)
+		for _, prereqHash := range context.PrerequisiteWorkPackage {
+			prerequisitePackageHashes[prereqHash] = struct{}{}
+
+			// let q = {(wx)p S q ∈ ϑ, w ∈ K(q)} (eq. 11.35 0.5.0)
 			for _, workReportsAndDeps := range currentState.AccumulationQueue {
 				for _, wd := range workReportsAndDeps {
-					if reflect.DeepEqual(wd.WorkReport, guarantee.WorkReport) { // TODO maybe use hash compare instead of reflect
-						pastWorkPackages[*guarantee.WorkReport.RefinementContext.PrerequisiteWorkPackage] = struct{}{}
+					// Compare the hashes
+					wdHash, err := computeWorkReportHash(wd.WorkReport)
+					if err != nil {
+						return fmt.Errorf("failed to compute WorkReport hash: %w", err)
+					}
+					currentGuaranteeHash, err := computeWorkReportHash(guarantee.WorkReport)
+					if err != nil {
+						return fmt.Errorf("failed to compute current WorkReport hash: %w", err)
+					}
+					if wdHash == currentGuaranteeHash {
+						pastWorkPackages[prereqHash] = struct{}{}
 					}
 				}
 			}
 		}
 
-		// let a = {((iw )x)p S i ∈ ρ, i ≠ ∅} (151 v0.4.5)
+		// let a = {((iw )x)p S i ∈ ρ, i ≠ ∅} (eq. 11.36 0.5.0)
 		for _, ca := range currentState.CoreAssignments {
-			if ca.WorkReport != nil && ca.WorkReport.RefinementContext.PrerequisiteWorkPackage != nil {
-				pastWorkPackages[*ca.WorkReport.RefinementContext.PrerequisiteWorkPackage] = struct{}{}
+			if ca.WorkReport != nil {
+				for _, prereqHash := range ca.WorkReport.RefinementContext.PrerequisiteWorkPackage {
+					pastWorkPackages[prereqHash] = struct{}{}
+				}
 			}
 		}
 	}
 
-	// |p| = |w| (146 v0.4.5)
+	// |p| = |w| (eq. 11.31 0.5.0)
 	if len(extrinsicWorkPackages) != len(guarantees.Guarantees) {
 		return fmt.Errorf("cardinality of work-package hashes is not equal to the length of work-reports")
 	}
 
-	for context := range contexts {
-		// ∀x ∈ x ∶ ∃y ∈ β ∶ x_a = y_h ∧ x_s = ys ∧ xb = HK (EM (yb)) (147 v0.4.5)
+	for _, guarantee := range guarantees.Guarantees {
+		context := guarantee.WorkReport.RefinementContext
+		contextID, err := generateRefinementContextID(context)
+		if err != nil {
+			return fmt.Errorf("failed to generate RefinementContextID: %w", err)
+		}
+
+		if _, exists := contexts[contextID]; !exists {
+			return fmt.Errorf("context ID not found in contexts map")
+		}
+
+		// ∀x ∈ x ∶ ∃y ∈ β ∶ x_a = y_h ∧ x_s = y_s ∧ x_b = HK (EM (y_b)) (eq. 11.32 0.5.0)
 		if !anchorBlockInRecentBlocks(context, currentState) {
 			return fmt.Errorf("anchor block not present within recent blocks")
 		}
 
-		// ∀x ∈ x ∶ xt ≥ Ht − L (148 v0.4.5)
+		// ∀x ∈ x ∶ xt ≥ Ht − L (eq. 11.33 0.5.0)
 		if context.LookupAnchor.Timeslot < header.TimeSlotIndex-state.MaxTimeslotsForPreimage {
-			return fmt.Errorf("lookup anchor block not withing the last %d timeslots", state.MaxTimeslotsForPreimage)
+			return fmt.Errorf("lookup anchor block (timeslot %d) not within the last %d timeslots (current timeslot: %d)", context.LookupAnchor.Timeslot, state.MaxTimeslotsForPreimage, header.TimeSlotIndex)
 		}
 
-		// ∀x ∈ x ∶ ∃h ∈ A ∶ ht = xt ∧ H(h) = xl (149 v0.4.5)
-		_, err := ancestorStore.FindAncestor(func(ancestor block.Header) bool {
+		// ∀x ∈ x ∶ ∃h ∈ A ∶ ht = xt ∧ H(h) = xl (eq. 11.34 0.5.0)
+		_, err = ancestorStore.FindAncestor(func(ancestor block.Header) bool {
 			encodedHeader, err := jam.Marshal(ancestor)
 			if err != nil {
 				return false
@@ -967,18 +1019,23 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 		maps.Copy(accHistoryPrerequisites, hashSet)
 	}
 
-	// ∀p ∈ p, p ∉ [⋃ x∈β] K(x_p) ∪ [⋃ x∈ξ] x ∪ q ∪ a (152 v0.4.5)
+	// ∀p ∈ p, p ∉ [⋃ x∈β] K(x_p) ∪ [⋃ x∈ξ] x ∪ q ∪ a (eq. 11.37 0.5.0)
 	for p := range extrinsicWorkPackages {
 		if _, ok := pastWorkPackages[p]; ok {
 			return fmt.Errorf("report work-package is the work-package of some other report made in the past")
 		}
 	}
 
-	// p ∪ {x | x ∈ b_p, b ∈ β} (153,154 v0.4.5)
-	extrinsicAndRecentWorkPackages := maps.Clone(extrinsicWorkPackages)
-	maps.Copy(extrinsicAndRecentWorkPackages, recentBlockPrerequisites)
+	// p ∪ {x | x ∈ b_p, b ∈ β} (eq. 11.33, 11.39 0.5.0)
+	extrinsicAndRecentWorkPackages := make(map[crypto.Hash]crypto.Hash)
+	for k, v := range extrinsicWorkPackages {
+		extrinsicAndRecentWorkPackages[k] = v
+	}
+	for k, v := range recentBlockPrerequisites {
+		extrinsicAndRecentWorkPackages[k] = v
+	}
 
-	// ∀w ∈ w, ∀p ∈ (wx)p ∪ K(wl) ∶ p ∈ p ∪ {x S x ∈ K(bp), b ∈ β} (153 v0.4.5)
+	// ∀w ∈ w, ∀p ∈ (wx)p ∪ K(wl) ∶ p ∈ p ∪ {x S x ∈ K(bp), b ∈ β} (eq. 11.38 0.5.0)
 	for p := range prerequisitePackageHashes {
 		if _, ok := extrinsicWorkPackages[p]; !ok {
 			return fmt.Errorf("prerequisite report work-package is neither in the extrinsic nor in recent history")
@@ -986,14 +1043,14 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 	}
 
 	for _, guarantee := range guarantees.Guarantees {
-		// ∀w ∈ w ∶ wl ⊆ p ∪ [⋃ b∈β] b_p (155 v0.4.5)
+		// ∀w ∈ w ∶ wl ⊆ p ∪ [⋃ b∈β] b_p (eq. 11.40 0.5.0)
 		for lookupKey, lookupValue := range guarantee.WorkReport.SegmentRootLookup {
 			if extrinsicAndRecentWorkPackages[lookupKey] != lookupValue {
 				return fmt.Errorf("segment root not present in the present nor recent blocks")
 			}
 		}
 
-		// ∀w ∈ w, ∀r ∈ wr ∶ rc = δ[rs]c (156 v0.4.5)
+		// ∀w ∈ w, ∀r ∈ wr ∶ rc = δ[rs]c (eq. 11.41 0.5.0)
 		for _, workResult := range guarantee.WorkReport.WorkResults {
 			if workResult.ServiceHashCode != currentState.Services[workResult.ServiceId].CodeHash {
 				return fmt.Errorf("work result code does not correspond with the service code")
@@ -1321,8 +1378,8 @@ func accumulationPriority(workReportAndDeps []state.WorkReportWithUnAccumulatedD
 // getWorkReportDependencies (167) D(w) ≡ (w, {(wx)p} ∪ K(wl))
 func getWorkReportDependencies(workReport block.WorkReport) state.WorkReportWithUnAccumulatedDependencies {
 	deps := make(map[crypto.Hash]struct{})
-	if workReport.RefinementContext.PrerequisiteWorkPackage != nil {
-		deps[*workReport.RefinementContext.PrerequisiteWorkPackage] = struct{}{}
+	for _, prereqHash := range workReport.RefinementContext.PrerequisiteWorkPackage {
+		deps[prereqHash] = struct{}{}
 	}
 	for key := range workReport.SegmentRootLookup {
 		deps[key] = struct{}{}
