@@ -1016,9 +1016,7 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 
 	accHistoryPrerequisites := make(map[crypto.Hash]struct{})
 	for _, hashSet := range currentState.AccumulationHistory {
-		for h := range hashSet {
-			accHistoryPrerequisites[h] = struct{}{}
-		}
+		maps.Copy(accHistoryPrerequisites, hashSet)
 	}
 
 	// ∀p ∈ p, p ∉ [⋃ x∈β] K(x_p) ∪ [⋃ x∈ξ] x ∪ q ∪ a (eq. 11.37 0.5.0)
