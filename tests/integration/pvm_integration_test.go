@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration_pvm
 
 package integration_test
 
