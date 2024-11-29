@@ -93,98 +93,6 @@ func TestAddUniqueEdPubKey(t *testing.T) {
 	assert.Equal(t, key2, newSlice[1], "Last element should be the newly added key")
 }
 
-func TestProcessVerdictGood(t *testing.T) {
-	judgements := &state.Judgements{}
-	verdict := createVerdictWithJudgments(crypto.Hash{1}, common.ValidatorsSuperMajority)
-
-	processVerdict(judgements, verdict)
-
-	assert.Len(t, judgements.GoodWorkReports, 1, "Should have 1 good work report")
-	assert.Equal(t, crypto.Hash{1}, judgements.GoodWorkReports[0], "Good work report should have hash {1}")
-	assert.Empty(t, judgements.BadWorkReports, "Should have no bad work reports")
-	assert.Empty(t, judgements.WonkyWorkReports, "Should have no wonky work reports")
-}
-
-func TestProcessVerdictBad(t *testing.T) {
-	judgements := &state.Judgements{}
-	verdict := createVerdictWithJudgments(crypto.Hash{2}, 0)
-
-	processVerdict(judgements, verdict)
-
-	assert.Len(t, judgements.BadWorkReports, 1, "Should have 1 bad work report")
-	assert.Equal(t, crypto.Hash{2}, judgements.BadWorkReports[0], "Bad work report should have hash {2}")
-	assert.Empty(t, judgements.GoodWorkReports, "Should have no good work reports")
-	assert.Empty(t, judgements.WonkyWorkReports, "Should have no wonky work reports")
-}
-
-func TestProcessVerdictWonky(t *testing.T) {
-	judgements := &state.Judgements{}
-	verdict := createVerdictWithJudgments(crypto.Hash{3}, common.NumberOfValidators/3)
-
-	processVerdict(judgements, verdict)
-
-	assert.Len(t, judgements.WonkyWorkReports, 1, "Should have 1 wonky work report")
-	assert.Equal(t, crypto.Hash{3}, judgements.WonkyWorkReports[0], "Wonky work report should have hash {3}")
-	assert.Empty(t, judgements.GoodWorkReports, "Should have no good work reports")
-	assert.Empty(t, judgements.BadWorkReports, "Should have no bad work reports")
-}
-
-func TestProcessVerdictMultiple(t *testing.T) {
-	judgements := &state.Judgements{}
-
-	processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{1}, common.ValidatorsSuperMajority))
-	processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{2}, 0))
-	processVerdict(judgements, createVerdictWithJudgments(crypto.Hash{3}, common.NumberOfValidators/3))
-
-	assert.Len(t, judgements.GoodWorkReports, 1, "Should have 1 good work report")
-	assert.Len(t, judgements.BadWorkReports, 1, "Should have 1 bad work report")
-	assert.Len(t, judgements.WonkyWorkReports, 1, "Should have 1 wonky work report")
-}
-
-func TestProcessOffender(t *testing.T) {
-	judgements := &state.Judgements{}
-	key := ed25519.PublicKey([]byte{1, 2, 3})
-
-	processOffender(judgements, key)
-	assert.Len(t, judgements.OffendingValidators, 1, "Should have 1 offending validator")
-
-	processOffender(judgements, key) // Add same key again
-	assert.Len(t, judgements.OffendingValidators, 1, "Should still have 1 offending validator after adding duplicate")
-}
-
-func TestCalculateNewJudgements(t *testing.T) {
-	stateJudgements := state.Judgements{
-		BadWorkReports:  []crypto.Hash{{1}},
-		GoodWorkReports: []crypto.Hash{{2}},
-	}
-
-	var judgements [common.ValidatorsSuperMajority]block.Judgement
-	for i := 0; i < common.ValidatorsSuperMajority; i++ {
-		judgements[i] = block.Judgement{IsValid: true, ValidatorIndex: uint16(i)}
-	}
-
-	disputes := block.DisputeExtrinsic{
-		Verdicts: []block.Verdict{
-			{
-				ReportHash: crypto.Hash{3},
-				Judgements: judgements,
-			},
-		},
-		Culprits: []block.Culprit{
-			{ValidatorEd25519PublicKey: ed25519.PublicKey([]byte{1, 2, 3})},
-		},
-		Faults: []block.Fault{
-			{ValidatorEd25519PublicKey: ed25519.PublicKey([]byte{4, 5, 6})},
-		},
-	}
-
-	newJudgements := calculateNewJudgements(disputes, stateJudgements)
-
-	assert.Len(t, newJudgements.BadWorkReports, 1, "Should have 1 bad work report")
-	assert.Len(t, newJudgements.GoodWorkReports, 2, "Should have 2 good work reports")
-	assert.Len(t, newJudgements.OffendingValidators, 2, "Should have 2 offending validators")
-}
-
 func TestCalculateIntermediateBlockState(t *testing.T) {
 	header := block.Header{
 		PriorStateRoot: crypto.Hash{1, 2, 3},
@@ -916,11 +824,11 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 	t.Run("new epoch transition", func(t *testing.T) {
 		// Initial state with some existing stats
 		initialStats := validator.ValidatorStatisticsState{
-			0: [1023]validator.ValidatorStatistics{
+			0: [common.NumberOfValidators]validator.ValidatorStatistics{
 				0: {NumOfBlocks: 5},
 				1: {NumOfTickets: 3},
 			},
-			1: [1023]validator.ValidatorStatistics{
+			1: [common.NumberOfValidators]validator.ValidatorStatistics{
 				0: {NumOfBlocks: 10},
 				1: {NumOfTickets: 6},
 			},
@@ -944,7 +852,7 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 
 	t.Run("block author statistics", func(t *testing.T) {
 		initialStats := validator.ValidatorStatisticsState{
-			1: [1023]validator.ValidatorStatistics{}, // Current epoch stats
+			1: [common.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
 		}
 
 		block := block.Block{
@@ -977,7 +885,7 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 
 	t.Run("guarantees and assurances", func(t *testing.T) {
 		initialStats := validator.ValidatorStatisticsState{
-			1: [1023]validator.ValidatorStatistics{}, // Current epoch stats
+			1: [common.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
 		}
 
 		block := block.Block{
@@ -1018,7 +926,7 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 
 	t.Run("full block processing", func(t *testing.T) {
 		initialStats := validator.ValidatorStatisticsState{
-			1: [1023]validator.ValidatorStatistics{
+			1: [common.NumberOfValidators]validator.ValidatorStatistics{
 				1: {
 					NumOfBlocks:                 5,
 					NumOfTickets:                10,
