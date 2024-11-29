@@ -1,22 +1,10 @@
 package interpreter
 
 import (
-	"encoding/binary"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"math"
 
 	"github.com/eigerco/strawberry/internal/polkavm"
-)
-
-const (
-	x8  = 1
-	x16 = 2
-	x32 = 4
-	x64 = 8
-)
-
-const (
-	signed   = true
-	unsigned = false
 )
 
 var _ polkavm.Mutator = &Mutator{}
@@ -45,33 +33,37 @@ func (m *Mutator) branch(condition bool, target uint32) {
 	m.instance.startBasicBlock(m.program)
 }
 
-func (m *Mutator) load(memLen int, signed bool, dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
+type number interface {
+	uint8 | int8 | uint16 | int16 | uint32 | int32 | uint64 | int64
+}
+
+func load[T number](m *Mutator, dst polkavm.Reg, base *polkavm.Reg, offset uint32) error {
 	var address uint32 = 0
-	if base != 0 {
-		address = m.get32(base)
+	if base != nil {
+		address = m.get32(*base)
 	}
 	address += offset
-	slice := make([]byte, memLen)
+	value := T(0)
+	slice := make([]byte, jam.IntLength(value))
 	err := m.instance.memory.Read(address, slice)
 	if err != nil {
 		return err
 	}
 
-	value, err := leDecode(memLen, slice)
-	if err != nil {
+	if err := jam.Unmarshal(slice, &value); err != nil {
 		return err
 	}
-	m.setNext64(dst, toSigned(value, memLen, signed))
+	m.setNext64(dst, uint64(value))
 	return nil
 }
 
-func (m *Mutator) store(memLen int, signed bool, src uint64, base polkavm.Reg, offset uint32) error {
+func store[T number](m *Mutator, src T, base polkavm.Reg, offset uint32) error {
 	var address uint32 = 0
 	if base != 0 {
 		address = m.get32(base)
 	}
 	address += offset
-	data, err := leEncode(memLen, toSigned(src, memLen, signed))
+	data, err := jam.Marshal(src)
 	if err != nil {
 		return err
 	}
@@ -81,49 +73,6 @@ func (m *Mutator) store(memLen int, signed bool, src uint64, base polkavm.Reg, o
 
 	m.instance.NextOffsets()
 	return nil
-}
-func toSigned(v uint64, memLen int, signed bool) uint64 {
-	if signed {
-		switch memLen {
-		case x8:
-			return uint64(int8(v))
-		case x16:
-			return uint64(int16(v))
-		case x32:
-			return uint64(int32(v))
-		case x64:
-			return uint64(int64(v))
-		}
-	}
-	return v
-}
-func leEncode(memLen int, src uint64) ([]byte, error) {
-	slice := make([]byte, memLen)
-	switch memLen {
-	case x8:
-		slice[0] = byte(src)
-	case x16:
-		binary.LittleEndian.PutUint16(slice, uint16(src))
-	case x32:
-		binary.LittleEndian.PutUint32(slice, uint32(src))
-	default:
-		return nil, polkavm.ErrPanicf("invalid Memory slice length: %d", memLen)
-	}
-	return slice, nil
-}
-func leDecode(memLen int, src []byte) (uint64, error) {
-	switch memLen {
-	case x8:
-		return uint64(src[0]), nil
-	case x16:
-		return uint64(binary.LittleEndian.Uint16(src)), nil
-	case x32:
-		return uint64(binary.LittleEndian.Uint32(src)), nil
-	case x64:
-		return binary.LittleEndian.Uint64(src), nil
-	default:
-		return 0, polkavm.ErrPanicf("invalid Memory slice length: %d", memLen)
-	}
 }
 
 // djump Equation 249 v0.4.5
@@ -509,94 +458,94 @@ func (m *Mutator) CmovIfNotZeroImm(d polkavm.Reg, c polkavm.Reg, s uint32) {
 }
 
 func (m *Mutator) StoreU8(src polkavm.Reg, offset uint32) error {
-	return m.store(x8, unsigned, uint64(m.get32(src)), 0, offset)
+	return store(m, uint8(m.get32(src)), 0, offset)
 }
 func (m *Mutator) StoreU16(src polkavm.Reg, offset uint32) error {
-	return m.store(x16, unsigned, uint64(m.get32(src)), 0, offset)
+	return store(m, uint16(m.get32(src)), 0, offset)
 }
 func (m *Mutator) StoreU32(src polkavm.Reg, offset uint32) error {
-	return m.store(x32, unsigned, uint64(m.get32(src)), 0, offset)
+	return store(m, uint32(m.get32(src)), 0, offset)
 }
 func (m *Mutator) StoreU64(src polkavm.Reg, offset uint32) error {
-	return m.store(x32, unsigned, uint64(m.get32(src)), 0, offset)
+	return store(m, uint64(m.get32(src)), 0, offset)
 }
 func (m *Mutator) StoreImmU8(offset uint32, value uint32) error {
-	return m.store(x8, unsigned, uint64(value), 0, offset)
+	return store(m, uint8(value), 0, offset)
 }
 func (m *Mutator) StoreImmU16(offset uint32, value uint32) error {
-	return m.store(x16, unsigned, uint64(value), 0, offset)
+	return store(m, uint16(value), 0, offset)
 }
 func (m *Mutator) StoreImmU32(offset uint32, value uint32) error {
-	return m.store(x32, unsigned, uint64(value), 0, offset)
+	return store(m, uint32(value), 0, offset)
 }
 func (m *Mutator) StoreImmU64(offset uint32, value uint32) error {
-	return m.store(x64, unsigned, uint64(value), 0, offset)
+	return store(m, uint64(value), 0, offset)
 }
 func (m *Mutator) StoreImmIndirectU8(base polkavm.Reg, offset uint32, value uint32) error {
-	return m.store(x8, unsigned, uint64(value), base, offset)
+	return store(m, uint8(value), base, offset)
 }
 func (m *Mutator) StoreImmIndirectU16(base polkavm.Reg, offset uint32, value uint32) error {
-	return m.store(x16, unsigned, uint64(value), base, offset)
+	return store(m, uint16(value), base, offset)
 }
 func (m *Mutator) StoreImmIndirectU32(base polkavm.Reg, offset uint32, value uint32) error {
-	return m.store(x32, unsigned, uint64(value), base, offset)
+	return store(m, uint32(value), base, offset)
 }
 func (m *Mutator) StoreImmIndirectU64(base polkavm.Reg, offset uint32, value uint32) error {
-	return m.store(x64, unsigned, uint64(value), base, offset)
+	return store(m, uint64(value), base, offset)
 }
 func (m *Mutator) StoreIndirectU8(src polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return m.store(x8, unsigned, m.get64(src), base, offset)
+	return store(m, uint8(m.get64(src)), base, offset)
 }
 func (m *Mutator) StoreIndirectU16(src polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return m.store(x16, unsigned, m.get64(src), base, offset)
+	return store(m, uint16(m.get64(src)), base, offset)
 }
 func (m *Mutator) StoreIndirectU32(src polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return m.store(x32, unsigned, m.get64(src), base, offset)
+	return store(m, uint32(m.get64(src)), base, offset)
 }
 func (m *Mutator) StoreIndirectU64(src polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return m.store(x64, unsigned, m.get64(src), base, offset)
+	return store(m, uint64(m.get64(src)), base, offset)
 }
 func (m *Mutator) LoadU8(dst polkavm.Reg, offset uint32) error {
-	return m.load(x8, unsigned, dst, 0, offset)
+	return load[uint8](m, dst, nil, offset)
 }
 func (m *Mutator) LoadI8(dst polkavm.Reg, offset uint32) error {
-	return m.load(x8, signed, dst, 0, offset)
+	return load[int8](m, dst, nil, offset)
 }
 func (m *Mutator) LoadU16(dst polkavm.Reg, offset uint32) error {
-	return m.load(x16, unsigned, dst, 0, offset)
+	return load[uint16](m, dst, nil, offset)
 }
 func (m *Mutator) LoadI16(dst polkavm.Reg, offset uint32) error {
-	return m.load(x16, signed, dst, 0, offset)
+	return load[int16](m, dst, nil, offset)
 }
 func (m *Mutator) LoadI32(dst polkavm.Reg, offset uint32) error {
-	return m.load(x32, signed, dst, 0, offset)
+	return load[int32](m, dst, nil, offset)
 }
 func (m *Mutator) LoadU32(dst polkavm.Reg, offset uint32) error {
-	return m.load(x32, unsigned, dst, 0, offset)
+	return load[uint32](m, dst, nil, offset)
 }
 func (m *Mutator) LoadU64(dst polkavm.Reg, offset uint32) error {
-	return m.load(x64, unsigned, dst, 0, offset)
+	return load[uint64](m, dst, nil, offset)
 }
 func (m *Mutator) LoadIndirectU8(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return m.load(x8, unsigned, dst, base, offset)
+	return load[uint8](m, dst, &base, offset)
 }
 func (m *Mutator) LoadIndirectI8(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return m.load(x8, signed, dst, base, offset)
+	return load[int8](m, dst, &base, offset)
 }
 func (m *Mutator) LoadIndirectU16(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return m.load(x16, unsigned, dst, base, offset)
+	return load[uint16](m, dst, &base, offset)
 }
 func (m *Mutator) LoadIndirectI16(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return m.load(x16, signed, dst, base, offset)
+	return load[int16](m, dst, &base, offset)
 }
 func (m *Mutator) LoadIndirectI32(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return m.load(x32, signed, dst, base, offset)
+	return load[int32](m, dst, &base, offset)
 }
 func (m *Mutator) LoadIndirectU32(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return m.load(x32, unsigned, dst, base, offset)
+	return load[uint32](m, dst, &base, offset)
 }
 func (m *Mutator) LoadIndirectU64(dst polkavm.Reg, base polkavm.Reg, offset uint32) error {
-	return m.load(x64, unsigned, dst, base, offset)
+	return load[uint64](m, dst, &base, offset)
 }
 func (m *Mutator) LoadImm(dst polkavm.Reg, imm uint32) {
 	m.setNext32(dst, imm)
