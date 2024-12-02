@@ -10,24 +10,30 @@ import (
 func Test_memoryMap(t *testing.T) {
 	maxSize := uint32(AddressSpaceSize - uint64(VmMaxPageSize)*5)
 	tests := []struct {
-		expectError                                 bool
-		pageSize, roDataSize, rwDataSize, stackSize uint32
+		expectError                       bool
+		roDataSize, rwDataSize, stackSize uint32
 		expectedRODataAddress, expectedRODataSize, expectedRWDataSize, expectedRWDataAddress,
 		expectedStackSize, expectedStackAddressHigh, expectedStackAddressLow, expectedHeapBase uint32
 		expectedMaxHeapSize uint64
 	}{{
-		pageSize: 0x4000, roDataSize: 1, rwDataSize: 1, stackSize: 1,
+		roDataSize: 1, rwDataSize: 1, stackSize: 1,
 		expectedRODataAddress:    0x10000,
-		expectedRODataSize:       0x4000,
-		expectedRWDataSize:       0x4000,
-		expectedStackSize:        0x4000,
-		expectedRWDataAddress:    0x30000,
-		expectedStackAddressHigh: 0xfffe0000,
-		expectedStackAddressLow:  0xfffdc000,
-		expectedHeapBase:         0x30001,
-		expectedMaxHeapSize:      AddressSpaceSize - uint64(VmMaxPageSize)*4 - uint64(0x30001),
+		expectedRODataSize:       0x1000,
+		expectedRWDataSize:       0x1000,
+		expectedStackSize:        0x1000,
+		expectedRWDataAddress:    VmAddressSpaceBottom + 0x1000 + VmMaxPageSize,
+		expectedStackAddressHigh: VmAddressSpaceTop - VmMaxPageSize,
+		expectedStackAddressLow:  VmAddressSpaceTop - VmMaxPageSize - 0x1000,
+		expectedHeapBase:         VmAddressSpaceBottom + 0x1000 + VmMaxPageSize + 1,
+		expectedMaxHeapSize: func() uint64 {
+			addressLow := VmAddressSpaceBottom + uint32(0x1000) + VmMaxPageSize + uint32(0x1000) + VmMaxPageSize
+			heapSlack := uint32(0x1000) - 1
+			addressHigh := VmAddressSpaceTop - VmMaxPageSize - uint32(0x1000)
+
+			return uint64(addressHigh - addressLow + heapSlack)
+		}(),
 	}, {
-		pageSize: 0x4000, roDataSize: maxSize, rwDataSize: 0, stackSize: 0,
+		roDataSize: maxSize, rwDataSize: 0, stackSize: 0,
 		expectedRODataAddress:    0x10000,
 		expectedRODataSize:       maxSize,
 		expectedRWDataAddress:    0x10000 + VmMaxPageSize + maxSize,
@@ -38,16 +44,16 @@ func Test_memoryMap(t *testing.T) {
 		expectedHeapBase:         0x10000 + VmMaxPageSize + maxSize,
 		expectedMaxHeapSize:      0,
 	}, {
-		pageSize: 0x4000, roDataSize: maxSize + 1, rwDataSize: 0, stackSize: 0,
+		roDataSize: maxSize + 1, rwDataSize: 0, stackSize: 0,
 		expectError: true,
 	}, {
-		pageSize: 0x4000, roDataSize: maxSize, rwDataSize: 1, stackSize: 0,
+		roDataSize: maxSize, rwDataSize: 1, stackSize: 0,
 		expectError: true,
 	}, {
-		pageSize: 0x4000, roDataSize: maxSize, rwDataSize: 0, stackSize: 1,
+		roDataSize: maxSize, rwDataSize: 0, stackSize: 1,
 		expectError: true,
 	}, {
-		pageSize: 0x4000, roDataSize: 0, rwDataSize: maxSize, stackSize: 0,
+		roDataSize: 0, rwDataSize: maxSize, stackSize: 0,
 		expectedRODataAddress:    VmMaxPageSize,
 		expectedRODataSize:       0,
 		expectedRWDataAddress:    VmMaxPageSize * 2,
@@ -58,7 +64,7 @@ func Test_memoryMap(t *testing.T) {
 		expectedHeapBase:         VmMaxPageSize*2 + maxSize,
 		expectedMaxHeapSize:      0,
 	}, {
-		pageSize: 0x4000, roDataSize: 0, rwDataSize: 0, stackSize: maxSize,
+		roDataSize: 0, rwDataSize: 0, stackSize: maxSize,
 		expectedRODataAddress:    VmMaxPageSize,
 		expectedRODataSize:       0,
 		expectedRWDataAddress:    VmMaxPageSize * 2,
@@ -71,7 +77,7 @@ func Test_memoryMap(t *testing.T) {
 	}}
 	for _, tc := range tests {
 		t.Run("", func(t *testing.T) {
-			m, err := NewMemoryMap(uint(tc.pageSize), uint(tc.roDataSize), uint(tc.rwDataSize), uint(tc.stackSize), 0)
+			m, err := NewMemoryMap(tc.roDataSize, tc.rwDataSize, tc.stackSize, 0)
 			if err != nil {
 				if tc.expectError {
 					return
@@ -91,19 +97,19 @@ func Test_memoryMap(t *testing.T) {
 }
 
 func Test_alignToNextPageUint32(t *testing.T) {
-	v, _ := AlignToNextPage(4096, 0)
-	assert.Equal(t, uint(0), v)
-	v, _ = AlignToNextPage(4096, 1)
-	assert.Equal(t, uint(4096), v)
-	v, _ = AlignToNextPage(4096, 4095)
-	assert.Equal(t, uint(4096), v)
-	v, _ = AlignToNextPage(4096, 4096)
-	assert.Equal(t, uint(4096), v)
-	v, _ = AlignToNextPage(4096, 4097)
-	assert.Equal(t, uint(8192), v)
-	var maxVal uint = math.MaxUint + 1 - 4096
-	v, _ = AlignToNextPage(4096, maxVal)
+	v, _ := AlignToNextPage(0)
+	assert.Equal(t, uint32(0), v)
+	v, _ = AlignToNextPage(1)
+	assert.Equal(t, uint32(4096), v)
+	v, _ = AlignToNextPage(4095)
+	assert.Equal(t, uint32(4096), v)
+	v, _ = AlignToNextPage(uint32(4096))
+	assert.Equal(t, uint32(4096), v)
+	v, _ = AlignToNextPage(4097)
+	assert.Equal(t, uint32(8192), v)
+	var maxVal uint32 = math.MaxUint32 + 1 - 4096
+	v, _ = AlignToNextPage(maxVal)
 	assert.Equal(t, maxVal, v)
-	_, err := AlignToNextPage(4096, maxVal+1)
+	_, err := AlignToNextPage(maxVal + 1)
 	assert.Error(t, err)
 }

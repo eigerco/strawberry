@@ -175,17 +175,17 @@ func (m *Mutator) Sbrk(dst polkavm.Reg, sizeReg polkavm.Reg) error {
 	}
 
 	newHeapSize := m.instance.heapSize + size
-	if newHeapSize > uint32(m.memoryMap.MaxHeapSize) {
+	if newHeapSize > m.memoryMap.MaxHeapSize {
 		return polkavm.ErrPanicf("max heap size exceeded")
 	}
 
 	m.instance.heapSize = newHeapSize
 	heapTop := m.memoryMap.HeapBase + newHeapSize
-	if err := m.instance.memory.Sbrk(m.memoryMap.PageSize, heapTop); err != nil {
+	if err := m.instance.memory.Sbrk(heapTop); err != nil {
 		return polkavm.ErrPanicf(err.Error())
 	}
 
-	m.setNext32(dst, uint32(heapTop))
+	m.setNext32(dst, heapTop)
 	return nil
 }
 

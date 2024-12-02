@@ -23,7 +23,7 @@ func TestGasRemaining(t *testing.T) {
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(polkavm.VmMaxPageSize, 0, 0, 4096, 0)
+	memoryMap, err := polkavm.NewMemoryMap(0, 0, 4096, 0)
 	require.NoError(t, err)
 
 	mem := memoryMap.NewMemory(nil, nil, nil)
@@ -60,7 +60,7 @@ func TestLookup(t *testing.T) {
 		Exports: []polkavm.ProgramExport{{TargetCodeOffset: 0, Symbol: "test_lookup"}},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(polkavm.VmMinPageSize, 0, 256, 512, 0)
+	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
 	require.NoError(t, err)
 	t.Run("service_not_found", func(t *testing.T) {
 		initialRegs := polkavm.Registers{
@@ -137,7 +137,7 @@ func TestRead(t *testing.T) {
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(polkavm.VmMinPageSize, 0, 256, 512, 0)
+	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
 	require.NoError(t, err)
 
 	serviceId := block.ServiceId(1)
@@ -208,7 +208,7 @@ func TestWrite(t *testing.T) {
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(polkavm.VmMinPageSize, 0, 256, 512, 0)
+	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
 	require.NoError(t, err)
 
 	serviceId := block.ServiceId(1)
@@ -290,7 +290,7 @@ func TestInfo(t *testing.T) {
 		Exports: []polkavm.ProgramExport{{TargetCodeOffset: 0, Symbol: "test_info"}},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(polkavm.VmMinPageSize, 0, 256, 512, 0)
+	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
 	require.NoError(t, err)
 
 	serviceId := block.ServiceId(1)

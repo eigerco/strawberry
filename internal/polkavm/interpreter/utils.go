@@ -3,8 +3,9 @@ package interpreter
 import (
 	"bytes"
 	"errors"
-	"github.com/eigerco/strawberry/internal/polkavm"
 	"slices"
+
+	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
 // InvokeWholeProgram the marshalling whole-program pvm machine state-transition function: (ΨM)
@@ -19,7 +20,7 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint32, gas uint64, args []b
 	if err != nil {
 		return 0, nil, x, polkavm.ErrPanicf(err.Error())
 	}
-	memMap, err := polkavm.NewMemoryMap(polkavm.VmMinPageSize, uint(program.RODataSize), uint(program.RWDataSize), uint(program.StackSize), uint(len(args)))
+	memMap, err := polkavm.NewMemoryMap(program.RODataSize, program.RWDataSize, program.StackSize, uint32(len(args)))
 	if err != nil {
 		return 0, nil, x, polkavm.ErrPanicf(err.Error())
 	}

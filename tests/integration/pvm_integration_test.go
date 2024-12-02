@@ -97,7 +97,7 @@ func Test_Vectors(t *testing.T) {
 }
 
 func getMemoryMap(pageMap []Page) *polkavm.MemoryMap {
-	mm := &polkavm.MemoryMap{PageSize: polkavm.VmMinPageSize, ArgsDataAddress: 1<<32 - 1}
+	mm := &polkavm.MemoryMap{ArgsDataAddress: 1<<32 - 1}
 	for _, page := range pageMap {
 		if !page.IsWritable {
 			mm.RODataAddress = page.Address

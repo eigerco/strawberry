@@ -4,9 +4,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
 func TestInstance_Execute(t *testing.T) {
@@ -30,7 +31,7 @@ func TestInstance_Execute(t *testing.T) {
 		Exports: []polkavm.ProgramExport{{TargetCodeOffset: 0, Symbol: "add_numbers"}},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(0x1000, uint(pp.RODataSize), uint(pp.RWDataSize), uint(pp.StackSize), 0)
+	memoryMap, err := polkavm.NewMemoryMap(pp.RODataSize, pp.RWDataSize, pp.StackSize, 0)
 	require.NoError(t, err)
 
 	memory := memoryMap.NewMemory(pp.RWData, pp.ROData, nil)
