@@ -393,20 +393,7 @@ func (br *byteReader) decodeBytes(dstv reflect.Value) error {
 func (br *byteReader) decodeFixedWidthInt(dstv reflect.Value) error {
 	in := dstv.Interface()
 	var buf []byte
-	var length int
-
-	switch in.(type) {
-	case uint8:
-		length = 1
-	case uint16:
-		length = 2
-	case uint32:
-		length = 4
-	case uint64:
-		length = 8
-	default:
-		return fmt.Errorf(ErrUnsupportedType, in)
-	}
+	length := IntLength(in)
 
 	// Read the appropriate number of bytes
 	buf = make([]byte, length)
@@ -433,6 +420,22 @@ func (br *byteReader) decodeFixedWidthInt(dstv reflect.Value) error {
 		var temp uint64
 		deserializeTrivialNatural(buf, &temp)
 		dstv.Set(reflect.ValueOf(temp))
+	case int8:
+		var temp uint8
+		deserializeTrivialNatural(buf, &temp)
+		dstv.Set(reflect.ValueOf(int8(temp)))
+	case int16:
+		var temp uint16
+		deserializeTrivialNatural(buf, &temp)
+		dstv.Set(reflect.ValueOf(int16(temp)))
+	case int32:
+		var temp uint32
+		deserializeTrivialNatural(buf, &temp)
+		dstv.Set(reflect.ValueOf(int32(temp)))
+	case int64:
+		var temp uint64
+		deserializeTrivialNatural(buf, &temp)
+		dstv.Set(reflect.ValueOf(int64(temp)))
 	}
 
 	return nil
@@ -456,5 +459,20 @@ func indirect(v reflect.Value) reflect.Value {
 		default:
 			return v
 		}
+	}
+}
+
+func IntLength(in any) int {
+	switch in.(type) {
+	case uint8, int8:
+		return 1
+	case uint16, int16:
+		return 2
+	case uint32, int32:
+		return 4
+	case uint64, int64:
+		return 8
+	default:
+		panic(fmt.Errorf(ErrUnsupportedType, in))
 	}
 }
