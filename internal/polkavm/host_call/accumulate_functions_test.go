@@ -649,7 +649,7 @@ func TestAccumulate(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			memoryMap, err := NewMemoryMap(VmMinPageSize, 0, 0, 1<<19, 0)
+			memoryMap, err := NewMemoryMap(0, 0, 1<<19, 0)
 			require.NoError(t, err)
 
 			mem := memoryMap.NewMemory(nil, nil, nil)

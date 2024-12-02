@@ -49,14 +49,14 @@ func (m *Memory) inRange(address uint32) *memorySegment {
 	return nil
 }
 
-func (m *Memory) Sbrk(pageSize, heapTop uint32) error {
+func (m *Memory) Sbrk(heapTop uint32) error {
 	if heapTop > m.data[2].end {
-		nextPage, err := AlignToNextPage(uint(pageSize), uint(heapTop))
+		nextPage, err := AlignToNextPage(heapTop)
 		if err != nil {
 			return err
 		}
 
-		m.data[2].end += uint32(nextPage)
+		m.data[2].end += nextPage
 	}
 	return nil
 }
