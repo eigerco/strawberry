@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"io"
 	"log"
 	"math/bits"
@@ -349,6 +350,23 @@ func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruc
 	chunkLength := min(16, skip+1)
 	chunk := code[instructionOffset:min(instructionOffset+chunkLength, len(code))]
 	opcode := Opcode(chunk[0])
+
+	// for simplicity because there is only one code for extended immediate we do not include it in the parseArgsTable
+	if opcode == LoadImm64 {
+		reg1 := min(12, code[0]&0b1111)
+		imm := uint64(0)
+		if err := jam.Unmarshal(code[1:9], imm); err != nil {
+			return 0, Instruction{}, err
+		}
+		return nextOffset, Instruction{
+			Opcode: opcode,
+			Reg:    []Reg{Reg(reg1)},
+			ExtImm: imm,
+			Offset: uint32(instructionOffset),
+			Length: uint32(len(chunk[1:]) + 1),
+		}, nil
+	}
+
 	regs, imm := parseArgsTable[opcode](chunk[1:], uint32(instructionOffset), uint32(len(chunk[1:])))
 	return nextOffset, Instruction{
 		Opcode: opcode,

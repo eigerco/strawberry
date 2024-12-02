@@ -1,8 +1,8 @@
 package polkavm
 
 import (
-	"encoding/binary"
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 type Opcode byte
@@ -316,43 +316,6 @@ const (
 	A5 Reg = 12
 )
 
-func parseReg(v byte) Reg {
-	value := v & 0b1111
-	if value > 12 {
-		value = 12
-	}
-	switch value {
-	case 0:
-		return RA
-	case 1:
-		return SP
-	case 2:
-		return T0
-	case 3:
-		return T1
-	case 4:
-		return T2
-	case 5:
-		return S0
-	case 6:
-		return S1
-	case 7:
-		return A0
-	case 8:
-		return A1
-	case 9:
-		return A2
-	case 10:
-		return A3
-	case 11:
-		return A4
-	case 12:
-		return A5
-	default:
-		panic("unreachable")
-	}
-}
-
 var (
 	// Instructions without Arguments
 	instrNone = []Opcode{Trap, Fallthrough}
@@ -454,12 +417,6 @@ func init() {
 	for _, code := range instrReg2Imm2 {
 		parseArgsTable[code] = parseArgsRegs2Imm2
 	}
-	for _, code := range instrRegImmExt {
-		parseArgsTable[code] = func(chunk []byte, instructionOffset, argsLength uint32) ([]Reg, []uint32) {
-			// TODO parse extended immediate
-			return nil, nil
-		}
-	}
 }
 
 func clamp(start, end, value uint32) uint32 {
@@ -490,20 +447,14 @@ func sext(value uint32, length uint32) uint32 {
 }
 func read(slice []byte, offset, length uint32) uint32 {
 	slice = slice[offset : offset+length]
-	switch length {
-	case 0:
+	if length == 0 {
 		return 0
-	case 1:
-		return uint32(slice[0])
-	case 2:
-		return uint32(binary.LittleEndian.Uint16([]byte{slice[0], slice[1]}))
-	case 3:
-		return binary.LittleEndian.Uint32([]byte{slice[0], slice[1], slice[2], 0})
-	case 4:
-		return binary.LittleEndian.Uint32([]byte{slice[0], slice[1], slice[2], slice[3]})
-	default:
-		panic("unreachable")
 	}
+	imm := uint32(0)
+	if err := jam.Unmarshal(slice, &imm); err != nil {
+		panic(fmt.Errorf("unexpected err %w", err))
+	}
+	return imm
 }
 
 func parseArgsImm(code []byte, _, skip uint32) ([]Reg, []uint32) {
@@ -532,7 +483,7 @@ func parseArgsRegImm(code []byte, _, skip uint32) ([]Reg, []uint32) {
 	reg := min(12, code[0]&0b1111)
 	immLength := clamp(0, 4, skip-1)
 	imm := sext(read(code, 1, immLength), immLength)
-	return []Reg{parseReg(reg)}, []uint32{imm}
+	return []Reg{Reg(reg)}, []uint32{imm}
 }
 
 func parseArgsRegImmOffset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32) {
@@ -546,7 +497,7 @@ func parseArgsRegImm2(code []byte, _, skip uint32) ([]Reg, []uint32) {
 	imm2Length := clamp(0, 4, skip-imm1Length-1)
 	imm1 := sext(read(code, 1, imm1Length), imm1Length)
 	imm2 := sext(read(code, 1+imm1Length, imm2Length), imm2Length)
-	return []Reg{parseReg(reg)}, []uint32{imm1, imm2}
+	return []Reg{Reg(reg)}, []uint32{imm1, imm2}
 }
 
 func parseArgsRegs2Imm2(code []byte, _, skip uint32) ([]Reg, []uint32) {
@@ -556,27 +507,28 @@ func parseArgsRegs2Imm2(code []byte, _, skip uint32) ([]Reg, []uint32) {
 	imm2Length := clamp(0, 4, skip-imm1Length-2)
 	imm1 := sext(read(code, 2, imm1Length), imm1Length)
 	imm2 := sext(read(code, 2+imm1Length, imm2Length), imm2Length)
-	return []Reg{parseReg(reg1), parseReg(reg2)}, []uint32{imm1, imm2}
+	return []Reg{Reg(reg1), Reg(reg2)}, []uint32{imm1, imm2}
 }
+
 func parseArgsRegs2Imm(code []byte, _, skip uint32) ([]Reg, []uint32) {
 	immLength := clamp(0, 4, uint32(skip)-1)
 	imm := sext(read(code, 1, immLength), immLength)
 	return []Reg{
-		parseReg(min(12, code[0]&0b1111)),
-		parseReg(min(12, code[0]>>4)),
+		Reg(min(12, code[0]&0b1111)),
+		Reg(min(12, code[0]>>4)),
 	}, []uint32{imm}
 }
 
 func parseArgsRegs3(code []byte, _, _ uint32) ([]Reg, []uint32) {
 	return []Reg{
-		parseReg(min(12, code[1]&0b1111)),
-		parseReg(min(12, code[0]&0b1111)),
-		parseReg(min(12, code[0]>>4)),
+		Reg(min(12, code[1]&0b1111)),
+		Reg(min(12, code[0]&0b1111)),
+		Reg(min(12, code[0]>>4)),
 	}, nil
 }
 
 func parseArgsRegs2(code []byte, _, _ uint32) ([]Reg, []uint32) {
-	return []Reg{parseReg(min(12, code[0]&0b1111)), parseReg(min(12, code[0]>>4))}, nil
+	return []Reg{Reg(min(12, code[0]&0b1111)), Reg(min(12, code[0]>>4))}, nil
 }
 
 func parseArgsRegs2Offset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32) {
