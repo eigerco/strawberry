@@ -376,7 +376,7 @@ var (
 	}
 )
 
-type InstrParseArgFunc func(chunk []byte, instructionOffset, argsLength uint32) ([]Reg, []uint32)
+type InstrParseArgFunc func(chunk []byte, instructionOffset, argsLength uint32) ([]Reg, []uint32, error)
 
 var parseArgsTable = map[Opcode]InstrParseArgFunc{}
 
@@ -445,95 +445,141 @@ func sext(value uint32, length uint32) uint32 {
 		panic("unreachable")
 	}
 }
-func read(slice []byte, offset, length uint32) uint32 {
+func read(slice []byte, offset, length uint32) (uint32, error) {
 	slice = slice[offset : offset+length]
 	if length == 0 {
-		return 0
+		return 0, nil
 	}
 	imm := uint32(0)
 	if err := jam.Unmarshal(slice, &imm); err != nil {
-		panic(fmt.Errorf("unexpected err %w", err))
+		return 0, fmt.Errorf("unexpected err %w", err)
 	}
-	return imm
+	return imm, nil
 }
 
-func parseArgsImm(code []byte, _, skip uint32) ([]Reg, []uint32) {
+func parseArgsImm(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
 	immLength := min(4, skip)
-	return nil, []uint32{sext(read(code, 0, immLength), immLength)}
+	imm, err := read(code, 0, immLength)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return nil, []uint32{sext(imm, immLength)}, nil
 }
 
-func parseArgsImmOffset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32) {
-	_, imm := parseArgsImm(code, instructionOffset, skip)
-	return nil, []uint32{instructionOffset + imm[0]}
+func parseArgsImmOffset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32, error) {
+	_, imm, err := parseArgsImm(code, instructionOffset, skip)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, []uint32{instructionOffset + imm[0]}, nil
 }
 
-func parseArgsImm2(code []byte, _, skip uint32) ([]Reg, []uint32) {
+func parseArgsImm2(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
 	imm1Length := min(4, uint32(code[0])&0b111)
 	imm2Length := clamp(0, 4, skip-imm1Length-1)
-	imm1 := sext(read(code, 1, imm1Length), imm1Length)
-	imm2 := sext(read(code, 1+imm1Length, imm2Length), imm2Length)
-	return nil, []uint32{imm1, imm2}
+	imm1, err := read(code, 1, imm1Length)
+	if err != nil {
+		return nil, nil, err
+	}
+	imm1 = sext(imm1, imm1Length)
+	imm2, err := read(code, 1+imm1Length, imm2Length)
+	if err != nil {
+		return nil, nil, err
+	}
+	imm2 = sext(imm2, imm2Length)
+	return nil, []uint32{imm1, imm2}, nil
 }
 
-func parseArgsNone(_ []byte, _, _ uint32) ([]Reg, []uint32) {
-	return nil, nil
+func parseArgsNone(_ []byte, _, _ uint32) ([]Reg, []uint32, error) {
+	return nil, nil, nil
 }
 
-func parseArgsRegImm(code []byte, _, skip uint32) ([]Reg, []uint32) {
+func parseArgsRegImm(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
 	reg := min(12, code[0]&0b1111)
 	immLength := clamp(0, 4, skip-1)
-	imm := sext(read(code, 1, immLength), immLength)
-	return []Reg{Reg(reg)}, []uint32{imm}
+	imm, err := read(code, 1, immLength)
+	if err != nil {
+		return nil, nil, err
+	}
+	imm = sext(imm, immLength)
+	return []Reg{Reg(reg)}, []uint32{imm}, nil
 }
 
-func parseArgsRegImmOffset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32) {
-	regs, imm := parseArgsRegImm2(code, instructionOffset, skip)
-	return regs, []uint32{imm[0], instructionOffset + imm[1]}
+func parseArgsRegImmOffset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32, error) {
+	regs, imm, err := parseArgsRegImm2(code, instructionOffset, skip)
+	if err != nil {
+		return nil, nil, err
+	}
+	return regs, []uint32{imm[0], instructionOffset + imm[1]}, nil
 }
 
-func parseArgsRegImm2(code []byte, _, skip uint32) ([]Reg, []uint32) {
+func parseArgsRegImm2(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
 	reg := min(12, code[0]&0b1111)
 	imm1Length := min(4, uint32(code[0]>>4)&0b111)
 	imm2Length := clamp(0, 4, skip-imm1Length-1)
-	imm1 := sext(read(code, 1, imm1Length), imm1Length)
-	imm2 := sext(read(code, 1+imm1Length, imm2Length), imm2Length)
-	return []Reg{Reg(reg)}, []uint32{imm1, imm2}
+	imm1, err := read(code, 1, imm1Length)
+	if err != nil {
+		return nil, nil, err
+	}
+	imm1 = sext(imm1, imm1Length)
+	imm2, err := read(code, 1+imm1Length, imm2Length)
+	if err != nil {
+		return nil, nil, err
+	}
+	imm2 = sext(imm2, imm2Length)
+	return []Reg{Reg(reg)}, []uint32{imm1, imm2}, nil
 }
 
-func parseArgsRegs2Imm2(code []byte, _, skip uint32) ([]Reg, []uint32) {
+func parseArgsRegs2Imm2(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
 	reg1 := min(12, code[0]&0b1111)
 	reg2 := min(12, code[0]>>4)
 	imm1Length := min(4, uint32(code[1])&0b111)
 	imm2Length := clamp(0, 4, skip-imm1Length-2)
-	imm1 := sext(read(code, 2, imm1Length), imm1Length)
-	imm2 := sext(read(code, 2+imm1Length, imm2Length), imm2Length)
-	return []Reg{Reg(reg1), Reg(reg2)}, []uint32{imm1, imm2}
+	imm1, err := read(code, 2, imm1Length)
+	if err != nil {
+		return nil, nil, err
+	}
+	imm1 = sext(imm1, imm1Length)
+	imm2, err := read(code, 2+imm1Length, imm2Length)
+	if err != nil {
+		return nil, nil, err
+	}
+	imm2 = sext(imm2, imm2Length)
+	return []Reg{Reg(reg1), Reg(reg2)}, []uint32{imm1, imm2}, nil
 }
 
-func parseArgsRegs2Imm(code []byte, _, skip uint32) ([]Reg, []uint32) {
+func parseArgsRegs2Imm(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
 	immLength := clamp(0, 4, uint32(skip)-1)
-	imm := sext(read(code, 1, immLength), immLength)
+	imm, err := read(code, 1, immLength)
+	if err != nil {
+		return nil, nil, err
+	}
+	imm = sext(imm, immLength)
 	return []Reg{
 		Reg(min(12, code[0]&0b1111)),
 		Reg(min(12, code[0]>>4)),
-	}, []uint32{imm}
+	}, []uint32{imm}, nil
 }
 
-func parseArgsRegs3(code []byte, _, _ uint32) ([]Reg, []uint32) {
+func parseArgsRegs3(code []byte, _, _ uint32) ([]Reg, []uint32, error) {
 	return []Reg{
 		Reg(min(12, code[1]&0b1111)),
 		Reg(min(12, code[0]&0b1111)),
 		Reg(min(12, code[0]>>4)),
-	}, nil
+	}, nil, nil
 }
 
-func parseArgsRegs2(code []byte, _, _ uint32) ([]Reg, []uint32) {
-	return []Reg{Reg(min(12, code[0]&0b1111)), Reg(min(12, code[0]>>4))}, nil
+func parseArgsRegs2(code []byte, _, _ uint32) ([]Reg, []uint32, error) {
+	return []Reg{Reg(min(12, code[0]&0b1111)), Reg(min(12, code[0]>>4))}, nil, nil
 }
 
-func parseArgsRegs2Offset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32) {
-	regs, imm := parseArgsRegs2Imm(code, instructionOffset, skip)
-	return regs, []uint32{instructionOffset + imm[0]}
+func parseArgsRegs2Offset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32, error) {
+	regs, imm, err := parseArgsRegs2Imm(code, instructionOffset, skip)
+	if err != nil {
+		return nil, nil, err
+	}
+	return regs, []uint32{instructionOffset + imm[0]}, nil
 }
 
 type Instruction struct {
