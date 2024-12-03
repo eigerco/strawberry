@@ -367,7 +367,10 @@ func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruc
 		}, nil
 	}
 
-	regs, imm := parseArgsTable[opcode](chunk[1:], uint32(instructionOffset), uint32(len(chunk[1:])))
+	regs, imm, err := parseArgsTable[opcode](chunk[1:], uint32(instructionOffset), uint32(len(chunk[1:])))
+	if err != nil {
+		return 0, Instruction{}, err
+	}
 	return nextOffset, Instruction{
 		Opcode: opcode,
 		Reg:    regs,
