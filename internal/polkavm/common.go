@@ -6,11 +6,12 @@ import (
 	"github.com/eigerco/strawberry/internal/state"
 )
 
-type MemoryAccess bool
+type MemoryAccess int
 
 const (
-	ReadOnly  MemoryAccess = false // (R)
-	ReadWrite MemoryAccess = true  // (W)
+	Inaccessible MemoryAccess = iota // ∅ (Inaccessible)
+	ReadOnly                         // R (Read-Only)
+	ReadWrite                        // W (Read-Write)
 )
 
 // Memory Equation: 34 (M)
@@ -27,8 +28,8 @@ type memorySegment struct {
 // Read reads from the set of readable indices (Vμ)
 func (m *Memory) Read(address uint32, data []byte) error {
 	memSeg := m.inRange(address)
-	if memSeg == nil {
-		return &ErrPageFault{Reason: "address not in a valid range", Address: address}
+	if memSeg == nil || memSeg.access == Inaccessible {
+		return &ErrPageFault{Reason: "inaccessible memory", Address: address}
 	}
 
 	offset := int(address - memSeg.start)
