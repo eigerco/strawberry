@@ -29,7 +29,7 @@ type ServiceAccount struct {
 	GasLimitOnTransfer     uint64                                          // Gas limit for on_transfer (m)
 }
 
-// Code returns the actual code of the service account as per Equation (9.4)
+// Code returns the actual code of the service account as per Equation (9.4 v0.5.0)
 func (sa ServiceAccount) Code() []byte {
 	if code, exists := sa.PreimageLookup[sa.CodeHash]; exists {
 		return code
@@ -37,7 +37,7 @@ func (sa ServiceAccount) Code() []byte {
 	return nil
 }
 
-// TotalItems (94) ∀a ∈ V(δ): ai
+// TotalItems (9.8 v0.5.0) ∀a ∈ V(δ): ai
 func (sa ServiceAccount) TotalItems() uint32 {
 	totalPreimages := len(sa.PreimageLookup)
 	totalStorageItems := len(sa.Storage)
@@ -46,7 +46,7 @@ func (sa ServiceAccount) TotalItems() uint32 {
 	return uint32(ai)
 }
 
-// TotalStorageSize (94) ∀a ∈ V(δ): al
+// TotalStorageSize (9.8 v0.5.0) ∀a ∈ V(δ): al
 func (sa ServiceAccount) TotalStorageSize() uint64 {
 	var al uint64 = 0
 
@@ -65,7 +65,7 @@ func (sa ServiceAccount) TotalStorageSize() uint64 {
 	return al
 }
 
-// ThresholdBalance (94) ∀a ∈ V(δ): at
+// ThresholdBalance (9.8 v0.5.0) ∀a ∈ V(δ): at
 func (sa ServiceAccount) ThresholdBalance() uint64 {
 	ai := uint64(sa.TotalItems())
 	al := sa.TotalStorageSize()
@@ -74,7 +74,7 @@ func (sa ServiceAccount) ThresholdBalance() uint64 {
 }
 
 // AddPreimage adds a preimage to the service account's preimage lookup and metadata
-// (9.6) ∀a ∈ A, (h ↦ p) ∈ ap ⇒ h = H(p) ∧ {h, |p|} ∈ K(al)
+// (9.6 v0.5.0) ∀a ∈ A, (h ↦ p) ∈ ap ⇒ h = H(p) ∧ {h, |p|} ∈ K(al)
 func (sa ServiceAccount) AddPreimage(p []byte, currentTimeslot jamtime.Timeslot) error {
 	h := crypto.HashData(p)
 	if _, exists := sa.PreimageLookup[h]; exists {
@@ -101,7 +101,7 @@ func (sa ServiceAccount) AddPreimage(p []byte, currentTimeslot jamtime.Timeslot)
 	return nil
 }
 
-// LookupPreimage implements the historical lookup function (Λ) as defined in Equation (9.7).
+// LookupPreimage implements the historical lookup function (Λ) as defined in Equation (9.7 v0.5.0).
 func (sa ServiceAccount) LookupPreimage(t jamtime.Timeslot, h crypto.Hash) []byte {
 	p, exists := sa.PreimageLookup[h]
 	if !exists {
@@ -161,7 +161,7 @@ type PreimageHistoricalTimeslots []jamtime.Timeslot // Metadata for preimages (l
 
 type Memo [TransferMemoSizeBytes]byte
 
-// DeferredTransfer Equation 161: T ≡ (s ∈ Ns, d ∈ Ns, a ∈ Nb, m ∈ Ym, g ∈ Ng)
+// DeferredTransfer Equation (12.14 v0.5.0): T ≡ (s ∈ Ns, d ∈ Ns, a ∈ Nb, m ∈ Ym, g ∈ Ng)
 type DeferredTransfer struct {
 	SenderServiceIndex   block.ServiceId // sender service index (s)
 	ReceiverServiceIndex block.ServiceId // receiver service index (d)
