@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
@@ -28,11 +29,15 @@ type ServiceAccount struct {
 	GasLimitOnTransfer     uint64                                          // Gas limit for on_transfer (m)
 }
 
+// Code returns the actual code of the service account as per Equation (9.4 v0.5.0)
 func (sa ServiceAccount) Code() []byte {
-	return sa.PreimageLookup[sa.CodeHash]
+	if code, exists := sa.PreimageLookup[sa.CodeHash]; exists {
+		return code
+	}
+	return nil
 }
 
-// TotalItems (94) ∀a ∈ V(δ): ai
+// TotalItems (9.8 v0.5.0) ∀a ∈ V(δ): ai
 func (sa ServiceAccount) TotalItems() uint32 {
 	totalPreimages := len(sa.PreimageLookup)
 	totalStorageItems := len(sa.Storage)
@@ -41,7 +46,7 @@ func (sa ServiceAccount) TotalItems() uint32 {
 	return uint32(ai)
 }
 
-// TotalStorageSize (94) ∀a ∈ V(δ): al
+// TotalStorageSize (9.8 v0.5.0) ∀a ∈ V(δ): al
 func (sa ServiceAccount) TotalStorageSize() uint64 {
 	var al uint64 = 0
 
@@ -60,12 +65,84 @@ func (sa ServiceAccount) TotalStorageSize() uint64 {
 	return al
 }
 
-// ThresholdBalance (94) ∀a ∈ V(δ): at
+// ThresholdBalance (9.8 v0.5.0) ∀a ∈ V(δ): at
 func (sa ServiceAccount) ThresholdBalance() uint64 {
 	ai := uint64(sa.TotalItems())
 	al := sa.TotalStorageSize()
 
 	return BasicMinimumBalance + AdditionalMinimumBalancePerItem*ai + AdditionalMinimumBalancePerOctet*al
+}
+
+// AddPreimage adds a preimage to the service account's preimage lookup and metadata
+// (9.6 v0.5.0) ∀a ∈ A, (h ↦ p) ∈ ap ⇒ h = H(p) ∧ {h, |p|} ∈ K(al)
+func (sa ServiceAccount) AddPreimage(p []byte, currentTimeslot jamtime.Timeslot) error {
+	h := crypto.HashData(p)
+	if _, exists := sa.PreimageLookup[h]; exists {
+		metaKey := PreImageMetaKey{Hash: h, Length: PreimageLength(len(p))}
+		metadata, exists := sa.PreimageMeta[metaKey]
+		if !exists {
+			return nil
+		}
+
+		if len(metadata) < common.MaxHistoricalTimeslotsForPreimageMeta {
+			sa.PreimageMeta[metaKey] = append(metadata, currentTimeslot)
+		}
+
+		return nil
+	}
+
+	// Add new preimage
+	sa.PreimageLookup[h] = p
+
+	// Initialize metadata
+	metaKey := PreImageMetaKey{Hash: h, Length: PreimageLength(len(p))}
+	sa.PreimageMeta[metaKey] = PreimageHistoricalTimeslots{currentTimeslot}
+
+	return nil
+}
+
+// LookupPreimage implements the historical lookup function (Λ) as defined in Equation (9.7 v0.5.0).
+func (sa ServiceAccount) LookupPreimage(t jamtime.Timeslot, h crypto.Hash) []byte {
+	p, exists := sa.PreimageLookup[h]
+	if !exists {
+		return nil
+	}
+
+	metaKey := PreImageMetaKey{Hash: h, Length: PreimageLength(len(p))}
+	metadata, exists := sa.PreimageMeta[metaKey]
+	if !exists {
+		return nil
+	}
+
+	// Determine if the preimage was available at timeslot t using I(al[h, |p|], t)
+	available := isPreimageAvailableAt(metadata, t)
+
+	if available {
+		return p
+	}
+
+	return nil
+}
+
+// isPreimageAvailableAt determines availability based on historical timeslots
+// ● h = []: The preimage is requested, but has not yet been supplied.
+// ● h ∈ [h0]: The preimage is available and has been from time h0.
+// ● h ∈ [h0, h1): The preimage was available from h0 until h1.
+// ● h ∈ [h0, h1) ∨ [h2, ∞): The preimage was available from h0 until h1 and from h2 onwards.
+func isPreimageAvailableAt(metadata PreimageHistoricalTimeslots, t jamtime.Timeslot) bool {
+	switch len(metadata) {
+	case 0:
+		return false
+	case 1:
+		return metadata[0] <= t
+	case 2:
+		return metadata[0] <= t && t < metadata[1]
+	case 3:
+		return (metadata[0] <= t && t < metadata[1]) || (metadata[2] <= t)
+	}
+
+	// More than 3 timeslots are not allowed
+	return false
 }
 
 type PrivilegedServices struct {
@@ -84,7 +161,7 @@ type PreimageHistoricalTimeslots []jamtime.Timeslot // Metadata for preimages (l
 
 type Memo [TransferMemoSizeBytes]byte
 
-// DeferredTransfer Equation 161: T ≡ (s ∈ Ns, d ∈ Ns, a ∈ Nb, m ∈ Ym, g ∈ Ng)
+// DeferredTransfer Equation (12.14 v0.5.0): T ≡ (s ∈ Ns, d ∈ Ns, a ∈ Nb, m ∈ Ym, g ∈ Ng)
 type DeferredTransfer struct {
 	SenderServiceIndex   block.ServiceId // sender service index (s)
 	ReceiverServiceIndex block.ServiceId // receiver service index (d)
