@@ -242,7 +242,7 @@ type expectedBlock struct {
 					Gas         uint64          `json:"gas"`
 					Result      Result          `json:"result"`
 				} `json:"results"`
-			} `json:"report"`
+			} `json:"Report"`
 			Slot       jamtime.Timeslot `json:"slot"`
 			Signatures []struct {
 				ValidatorIndex uint16 `json:"validator_index"`

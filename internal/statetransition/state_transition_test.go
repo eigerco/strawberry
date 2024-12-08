@@ -22,7 +22,7 @@ func TestCalculateNewTimeStateTransiton(t *testing.T) {
 	header := block.Header{
 		TimeSlotIndex: 2,
 	}
-	newTimeState := calculateNewTimeState(header)
+	newTimeState := CalculateNewTimeState(header)
 	require.Equal(t, newTimeState, header.TimeSlotIndex)
 }
 
@@ -179,7 +179,7 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 		},
 	}
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -197,7 +197,7 @@ func TestCalculateIntermediateServiceStateEmptyPreimages(t *testing.T) {
 
 	expectedServiceState := serviceState
 
-	newServiceState := calculateIntermediateServiceState(block.PreimageExtrinsic{}, serviceState, jamtime.Timeslot(100))
+	newServiceState := CalculateIntermediateServiceState(block.PreimageExtrinsic{}, serviceState, jamtime.Timeslot(100))
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -225,7 +225,7 @@ func TestCalculateIntermediateServiceStateNonExistentService(t *testing.T) {
 
 	expectedServiceState := serviceState
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -269,7 +269,7 @@ func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
 		},
 	}
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -314,7 +314,7 @@ func TestCalculateIntermediateServiceStateExistingPreimage(t *testing.T) {
 		},
 	}
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -341,7 +341,7 @@ func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
 
 	expectedServiceState := serviceState // Should remain unchanged
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -370,7 +370,7 @@ func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 		{WorkReport: workReport2},
 	}
 
-	newAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(disputes, coreAssignments)
+	newAssignments := CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes, coreAssignments)
 	require.Equal(t, expectedAssignments, newAssignments)
 }
 
@@ -394,7 +394,7 @@ func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			assurances := createAssuranceExtrinsic(tc.availableCores, tc.validators)
 			initialAssignments := createInitialAssignments()
-			newAssignments := calculateIntermediateCoreAssignmentsFromAvailability(assurances, initialAssignments)
+			newAssignments := CalculateIntermediateCoreAssignmentsFromAvailability(assurances, initialAssignments)
 
 			keptCount := uint16(0)
 			for _, assignment := range newAssignments {
@@ -483,7 +483,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments := calculateNewCoreAssignments(
+		newAssignments := CalculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
@@ -552,7 +552,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments := calculateNewCoreAssignments(
+		newAssignments := CalculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
@@ -617,7 +617,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments := calculateNewCoreAssignments(
+		newAssignments := CalculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
@@ -684,7 +684,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments := calculateNewCoreAssignments(
+		newAssignments := CalculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
