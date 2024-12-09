@@ -2,6 +2,7 @@ package polkavm
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 )
@@ -220,4 +221,17 @@ func (s *AccumulateContext) ServiceAccount() service.ServiceAccount {
 type AccumulateContextPair struct {
 	RegularCtx     AccumulateContext // x
 	ExceptionalCtx AccumulateContext // y
+}
+
+type IntegratedPVM struct {
+	Code               []byte //p program code
+	Ram                Memory //u RAM
+	InstructionCounter uint32 //i  instruction counter
+}
+
+type Segment [common.SizeOfExportedSegment]byte
+
+type RefineContextPair struct {
+	IntegratedPVMMap map[uint64]IntegratedPVM //m
+	Segments         []Segment                //e
 }

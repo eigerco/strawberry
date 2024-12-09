@@ -12,4 +12,5 @@ const (
 	ValidatorRotationPeriod                      = jamtime.Timeslot(10)             // R = 10: The rotation period of validator-core assignments, in timeslots.
 	MaxTicketExtrinsicSize                       = 16                               // The maximum number of tickets which may be submitted in a single extrinsic.
 	MaxHistoricalTimeslotsForPreimageMeta        = 3                                // () Maximum number of historical timeslots for preimage metadata
+	SizeOfExportedSegment                        = 6                                // (WS) The size of an exported segment in erasure-coded pieces in octets.
 )

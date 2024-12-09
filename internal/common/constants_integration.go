@@ -12,4 +12,5 @@ const (
 	ValidatorRotationPeriod                      = jamtime.Timeslot(10)
 	MaxTicketExtrinsicSize                       = 16
 	MaxHistoricalTimeslotsForPreimageMeta        = 3
+	SizeOfExportedSegment                        = 6
 )
