@@ -23,24 +23,26 @@ const (
 	QuitCost
 	SolicitCost
 	ForgetCost
+	HistoricalLookupCost
 )
 
 const (
-	GasID        = 0
-	LookupID     = 1
-	ReadID       = 2
-	WriteID      = 3
-	InfoID       = 4
-	BlessID      = 5
-	AssignID     = 6
-	DesignateID  = 7
-	CheckpointID = 8
-	NewID        = 9
-	UpgradeID    = 10
-	TransferID   = 11
-	QuitID       = 12
-	SolicitID    = 13
-	ForgetID     = 14
+	GasID = iota
+	LookupID
+	ReadID
+	WriteID
+	InfoID
+	BlessID
+	AssignID
+	DesignateID
+	CheckpointID
+	NewID
+	UpgradeID
+	TransferID
+	QuitID
+	SolicitID
+	ForgetID
+	HistoricalLookupID
 )
 
 type Code uint64
