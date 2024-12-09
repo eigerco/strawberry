@@ -229,7 +229,7 @@ type IntegratedPVM struct {
 	InstructionCounter uint32 //i  instruction counter
 }
 
-type Segment [common.SizeOfExportedSegment]byte
+type Segment [common.SizeOfSegment]byte
 
 type RefineContextPair struct {
 	IntegratedPVMMap map[uint64]IntegratedPVM //m
