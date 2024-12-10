@@ -1,4 +1,5 @@
 //go:build integration
+
 package integration
 
 import (
@@ -29,7 +30,6 @@ func stringToHex(s string) []byte {
 	return bytes
 }
 
-
 func ReadJSONFile(filename string) (*JSONData, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -49,7 +49,6 @@ func ReadJSONFile(filename string) (*JSONData, error) {
 
 	return &data, nil
 }
-
 
 type Judgement struct {
 	IsValid        bool   `json:"vote"`
@@ -90,11 +89,15 @@ type Psi struct {
 }
 
 type ReportResult struct {
-	ServiceID   int               `json:"service_id"`
-	CodeHash    string            `json:"code_hash"`
-	PayloadHash string            `json:"payload_hash"`
-	Gas         int               `json:"gas"`
-	Result      map[string]string `json:"result"`
+	ServiceID   int                `json:"service_id"`
+	CodeHash    string             `json:"code_hash"`
+	PayloadHash string             `json:"payload_hash"`
+	Gas         uint64             `json:"gas"`
+	Result      ReportResultOutput `json:"result"`
+}
+
+type ReportResultOutput struct {
+	Ok string
 }
 
 type Context struct {
@@ -108,20 +111,25 @@ type Context struct {
 
 type PackageSpec struct {
 	Hash         string `json:"hash"`
-	Length       int    `json:"length"`
+	Length       uint32 `json:"length"`
 	ErasureRoot  string `json:"erasure_root"`
 	ExportsRoot  string `json:"exports_root"`
-	ExportsCount int    `json:"exports_count"`
+	ExportsCount uint16 `json:"exports_count"`
 }
 
 type Report struct {
-	PackageSpec       PackageSpec    `json:"package_spec"`
-	Context           Context        `json:"context"`
-	CoreIndex         int            `json:"core_index"`
-	AuthorizerHash    string         `json:"authorizer_hash"`
-	AuthOutput        string         `json:"auth_output"`
-	SegmentRootLookup []string       `json:"segment_root_lookup"`
-	Results           []ReportResult `json:"results"`
+	PackageSpec       PackageSpec       `json:"package_spec"`
+	Context           Context           `json:"context"`
+	CoreIndex         uint16            `json:"core_index"`
+	AuthorizerHash    string            `json:"authorizer_hash"`
+	AuthOutput        string            `json:"auth_output"`
+	SegmentRootLookup []SegmentRootPair `json:"segment_root_lookup"`
+	Results           []ReportResult    `json:"results"`
+}
+
+type SegmentRootPair struct {
+	Key string `json:"key"`
+	Val string `json:"val"`
 }
 
 type Rho struct {
@@ -129,7 +137,7 @@ type Rho struct {
 	Timeout int     `json:"timeout"`
 }
 
-type Kappa struct {
+type ValidatorKey struct {
 	Bandersnatch string `json:"bandersnatch"`
 	Ed25519      string `json:"ed25519"`
 	BLS          string `json:"bls"`
@@ -137,7 +145,7 @@ type Kappa struct {
 }
 
 type OutputOk struct {
-	OffendersMark []string `json:"offenders_mark"`
+	OffendersMark []string `json:"offenders_mark,omitempty"`
 }
 
 type Output struct {
@@ -146,11 +154,11 @@ type Output struct {
 }
 
 type State struct {
-	Psi    Psi     `json:"psi"`
-	Rho    []Rho   `json:"rho"`
-	Tau    int     `json:"tau"`
-	Kappa  []Kappa `json:"kappa"`
-	Lambda []Kappa `json:"lambda"`
+	Psi    Psi            `json:"psi"`
+	Rho    []Rho          `json:"rho"`
+	Tau    int            `json:"tau"`
+	Kappa  []ValidatorKey `json:"kappa"`
+	Lambda []ValidatorKey `json:"lambda"`
 }
 
 type Input struct {
@@ -158,11 +166,11 @@ type Input struct {
 }
 
 type PostState struct {
-	Psi    Psi     `json:"psi"`
-	Rho    []Rho   `json:"rho"`
-	Tau    int     `json:"tau"`
-	Kappa  []Kappa `json:"kappa"`
-	Lambda []Kappa `json:"lambda"`
+	Psi    Psi            `json:"psi"`
+	Rho    []Rho          `json:"rho"`
+	Tau    int            `json:"tau"`
+	Kappa  []ValidatorKey `json:"kappa"`
+	Lambda []ValidatorKey `json:"lambda"`
 }
 
 type JSONData struct {
@@ -192,8 +200,8 @@ func mapPsi(psi Psi) state.Judgements {
 	}
 }
 
-func mapKey(kappa Kappa) crypto.ValidatorKey {
-	return crypto.ValidatorKey{
+func mapKey(kappa ValidatorKey) *crypto.ValidatorKey {
+	return &crypto.ValidatorKey{
 		Bandersnatch: crypto.BandersnatchPublicKey(stringToHex(kappa.Bandersnatch)),
 		Ed25519:      ed25519.PublicKey(stringToHex(kappa.Ed25519)),
 		Bls:          crypto.BlsKey(stringToHex(kappa.BLS)),

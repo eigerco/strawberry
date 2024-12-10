@@ -88,7 +88,7 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 			return gas, withCode(regs, OOB), mem, ctxPair, nil
 		}
 
-		ctxPair.RegularCtx.AccumulationState.ValidatorKeys[i] = crypto.ValidatorKey{
+		ctxPair.RegularCtx.AccumulationState.ValidatorKeys[i] = &crypto.ValidatorKey{
 			Bandersnatch: crypto.BandersnatchPublicKey(bytes[:bandersnatch]),
 			Ed25519:      bytes[bandersnatch:ed25519],
 			Bls:          crypto.BlsKey(bytes[ed25519:bls]),

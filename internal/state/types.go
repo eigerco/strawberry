@@ -23,7 +23,7 @@ type Judgements struct {
 	OffendingValidators []ed25519.PublicKey //  Offending validators (ψp) - CurrentValidators who made a judgement found to be incorrect.
 }
 
-type CoreAssignments [common.TotalNumberOfCores]Assignment
+type CoreAssignments [common.TotalNumberOfCores]*Assignment
 
 type PendingAuthorizersQueues [common.TotalNumberOfCores][PendingAuthorizersQueueSize]crypto.Hash
 

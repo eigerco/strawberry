@@ -17,7 +17,7 @@ type State struct {
 	RingCommitment    crypto.RingCommitment // (γz) Bandersnatch ring commitment.
 }
 
-type ValidatorsData [common.NumberOfValidators]crypto.ValidatorKey
+type ValidatorsData [common.NumberOfValidators]*crypto.ValidatorKey
 
 // Returns the RingCommitment for this state i.e. γz.
 func (state State) CalculateRingCommitment() (crypto.RingCommitment, error) {

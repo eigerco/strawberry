@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"log"
 	"maps"
 	"slices"
 	"sort"
@@ -34,6 +33,15 @@ const (
 	signatureContextInvalid   = "jam_invalid"   // X_A ≡ $jam_invalid (128 v0.4.5)
 )
 
+var (
+	ErrBadSignature         = errors.New("bad_signature")
+	ErrReportTimeout        = errors.New("report_timeout")
+	ErrBadAttestationParent = errors.New("bad_attestation_parent")
+	ErrBadOrder             = errors.New("bad_order")
+	ErrCoreNotEngaged       = errors.New("core_not_engaged")
+	ErrBadValidatorIndex    = errors.New("bad_validator_index")
+)
+
 // UpdateState updates the state
 // TODO: all the calculations which are not dependent on intermediate / new state can be done in parallel
 //
@@ -41,13 +49,6 @@ const (
 func UpdateState(s *state.State, newBlock block.Block) error {
 	if newBlock.Header.TimeSlotIndex.IsInFuture() {
 		return errors.New("invalid block, it is in the future")
-	}
-
-	if !assuranceIsAnchoredOnParent(newBlock.Header, newBlock.Extrinsic.EA) {
-		return errors.New("invalid block, the assurance is not anchored on parent")
-	}
-	if !assuranceIsOrderedByValidatorIndex(newBlock.Extrinsic.EA) {
-		return errors.New("invalid block, the assurance is not ordered by validator index")
 	}
 
 	if err := validateExtrinsicGuarantees(newBlock.Header, s, newBlock.Extrinsic.EG, block.AncestorStoreSingleton); err != nil {
@@ -69,7 +70,10 @@ func UpdateState(s *state.State, newBlock block.Block) error {
 	newValidatorStatistics := calculateNewValidatorStatistics(newBlock, newTimeState, s.ValidatorStatistics)
 
 	intermediateCoreAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
-	intermediateCoreAssignments = calculateIntermediateCoreAssignmentsFromAvailability(newBlock.Extrinsic.EA, intermediateCoreAssignments)
+	intermediateCoreAssignments, err = CalculateIntermediateCoreFromAssurances(newValidatorState.CurrentValidators, intermediateCoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
+	if err != nil {
+		return err
+	}
 
 	newCoreAssignments := calculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState, newTimeState, newEntropyPool)
 
@@ -106,11 +110,6 @@ func UpdateState(s *state.State, newBlock block.Block) error {
 	}
 
 	newCoreAuthorizations := calculateNewCoreAuthorizations(newBlock.Header, newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
-
-	if assurancesSignatureIsInvalid(newValidatorState.CurrentValidators, newBlock.Header, newBlock.Extrinsic.EA) {
-		log.Printf("extrinsic assurance signature is invalid")
-		return err
-	}
 
 	// Update the state with new state values.
 	s.TimeslotIndex = newTimeState
@@ -222,9 +221,9 @@ func calculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeEx
 		// If less than 2/3 majority of positive judgments, clear the assignment for matching cores
 		if positiveJudgments < common.ValidatorsSuperMajority {
 			for c := uint16(0); c < common.TotalNumberOfCores; c++ {
-				if newAssignments[c].WorkReport != nil {
+				if newAssignments[c] != nil {
 					if hash, err := newAssignments[c].WorkReport.Hash(); err == nil && hash == reportHash {
-						newAssignments[c] = state.Assignment{} // Clear the assignment
+						newAssignments[c] = nil // Clear the assignment
 					}
 				}
 			}
@@ -236,49 +235,44 @@ func calculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeEx
 
 // calculateIntermediateCoreAssignmentsFromAvailability implements equation 26: ρ‡ ≺ (EA, ρ†)
 // It calculates the intermediate core assignments based on availability assurances.
-func calculateIntermediateCoreAssignmentsFromAvailability(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments) state.CoreAssignments {
+func calculateIntermediateCoreAssignmentsFromAvailability(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments, header block.Header) (state.CoreAssignments, error) {
 	// Initialize availability count for each core
-	availabilityCounts := make([]int, common.TotalNumberOfCores)
+	availabilityCounts := make(map[uint16]int)
 
 	// Process each assurance in the AssurancesExtrinsic (EA)
-	for _, assurance := range assurances {
-		// Check the availability status for each core in this assurance
-		for coreIndex := uint16(0); coreIndex < common.TotalNumberOfCores; coreIndex++ {
-			// Calculate which byte and bit within the Bitfield correspond to this core
-			byteIndex := coreIndex / 8
-			bitIndex := coreIndex % 8
-
+	// Check the availability status for each core in this assurance
+	for coreIndex := range common.TotalNumberOfCores {
+		for _, assurance := range assurances {
 			// Check if the bit corresponding to this core is set (1) in the Bitfield
-			if assurance.Bitfield[byteIndex]&(1<<bitIndex) != 0 {
+			if block.HasAssuranceForCore(assurance, coreIndex) {
+				if coreAssignments[coreIndex] == nil {
+					return coreAssignments, ErrCoreNotEngaged
+				}
 				// If set, increment the availability count for this core
 				availabilityCounts[coreIndex]++
+				//if header.TimeSlotIndex >= coreAssignments[coreIndex].Time+common.WorkReportTimeoutPeriod {
+				if isAssignmentStale(coreAssignments[coreIndex], header.TimeSlotIndex) {
+					return coreAssignments, ErrReportTimeout
+				}
 			}
 		}
 	}
 
-	// Create new CoreAssignments (ρ‡)
-	var newAssignments state.CoreAssignments
-
-	// Calculate the availability threshold (2/3 of validators)
-	// This implements part of equation 129: ∑a∈EA av[c] > 2/3 V
-	availabilityThreshold := (2 * common.NumberOfValidators) / 3
-
 	// Update assignments based on availability
 	// This implements equation 130: ∀c ∈ NC : ρ‡[c] ≡ { ∅ if ρ[c]w ∈ W, ρ†[c] otherwise }
-	for coreIndex := uint16(0); coreIndex < common.TotalNumberOfCores; coreIndex++ {
-		if availabilityCounts[coreIndex] > availabilityThreshold {
-			// If the availability count exceeds the threshold, keep the assignment
-			// This corresponds to ρ[c]w ∈ W in equation 129
-			newAssignments[coreIndex] = coreAssignments[coreIndex]
-		} else {
-			// If the availability count doesn't exceed the threshold, clear the assignment
-			// This corresponds to the ∅ case in equation 130
-			newAssignments[coreIndex] = state.Assignment{}
+	for coreIndex := range common.TotalNumberOfCores {
+		availCountForCore, ok := availabilityCounts[coreIndex]
+		// remove core if:
+		// 1. there is no availability value for core
+		// 2. There is some availability, but it's less than the required threshold
+		// 3. Assignment report is stale
+		if (ok && availCountForCore > common.AvailabilityThreshold) || isAssignmentStale(coreAssignments[coreIndex], header.TimeSlotIndex) {
+			coreAssignments[coreIndex] = nil
 		}
 	}
 
 	// Return the new intermediate CoreAssignments (ρ‡)
-	return newAssignments
+	return coreAssignments, nil
 }
 
 // Final State Calculation Functions
@@ -1204,7 +1198,7 @@ func calculateNewCoreAssignments(
 			)
 
 			if verifyGuaranteeCredentials(guarantee, validators, entropyPool, newTimeslot) {
-				newAssignments[coreIndex] = state.Assignment{
+				newAssignments[coreIndex] = &state.Assignment{
 					WorkReport: &guarantee.WorkReport,
 					Time:       newTimeslot,
 				}
@@ -1463,9 +1457,12 @@ func sortGuaranteesByCoreIndex(guarantees []block.Guarantee) []block.Guarantee {
 // isAssignmentValid checks if a new assignment can be made for a core.
 // This implements the condition from equation 142:
 // ρ‡[wc] = ∅ ∨ Ht ≥ ρ‡[wc]t + U
-func isAssignmentValid(currentAssignment state.Assignment, newTimeslot jamtime.Timeslot) bool {
-	return currentAssignment.WorkReport == nil ||
-		newTimeslot >= currentAssignment.Time+common.WorkReportTimeoutPeriod
+func isAssignmentValid(currentAssignment *state.Assignment, newTimeslot jamtime.Timeslot) bool {
+	return currentAssignment != nil && (currentAssignment.WorkReport == nil || isAssignmentStale(currentAssignment, newTimeslot))
+}
+
+func isAssignmentStale(currentAssignment *state.Assignment, newTimeslot jamtime.Timeslot) bool {
+	return newTimeslot >= currentAssignment.Time+common.WorkReportTimeoutPeriod
 }
 
 // verifyGuaranteeCredentials verifies the credentials of a guarantee.
@@ -1949,17 +1946,7 @@ func translatePVMContext(ctx polkavm.AccumulateContext, root *crypto.Hash) state
 	}
 }
 
-// assuranceIsAnchoredOnParent (125) ∀a ∈ EA ∶ a_a = Hp
-func assuranceIsAnchoredOnParent(header block.Header, assurances block.AssurancesExtrinsic) bool {
-	for _, assurance := range assurances {
-		if assurance.Anchor != header.ParentHash {
-			return false
-		}
-	}
-	return true
-}
-
-// assuranceIsOrderedByValidatorIndex (126) ∀i ∈ {1 . . . SEAS} ∶ EA[i − 1]v < EA[i]v
+// assuranceIsOrderedByValidatorIndex (126) ∀i ∈ {1 ... |E_A|} ∶ EA[i − 1]v < EA[i]v
 func assuranceIsOrderedByValidatorIndex(assurances block.AssurancesExtrinsic) bool {
 	return slices.IsSortedFunc(assurances, func(a, b block.Assurance) int {
 		if a.ValidatorIndex < b.ValidatorIndex {
@@ -1971,28 +1958,45 @@ func assuranceIsOrderedByValidatorIndex(assurances block.AssurancesExtrinsic) bo
 	})
 }
 
-// assurancesSignatureIsInvalid (127) ∀a ∈ EA ∶ as ∈ Eκ′[av ]e ⟨XA ⌢ H(E(Hp, af ))⟩
-func assurancesSignatureIsInvalid(validators safrole.ValidatorsData, header block.Header, assurances block.AssurancesExtrinsic) bool {
+func CalculateIntermediateCoreFromAssurances(validators safrole.ValidatorsData, assignments state.CoreAssignments, header block.Header, assurances block.AssurancesExtrinsic) (state.CoreAssignments, error) {
+	if err := validateAssurancesSignature(validators, header, assurances); err != nil {
+		return assignments, err
+	}
+
+	if !assuranceIsOrderedByValidatorIndex(assurances) {
+		return assignments, ErrBadOrder
+	}
+
+	return calculateIntermediateCoreAssignmentsFromAvailability(assurances, assignments, header)
+}
+
+// validateAssurancesSignature (127) ∀a ∈ EA ∶ as ∈ Eκ′[av ]e ⟨XA ⌢ H(E(Hp, af ))⟩
+func validateAssurancesSignature(validators safrole.ValidatorsData, header block.Header, assurances block.AssurancesExtrinsic) error {
 	for _, assurance := range assurances {
+		if int(assurance.ValidatorIndex) >= common.NumberOfValidators || validators[assurance.ValidatorIndex] == nil {
+			return ErrBadValidatorIndex
+		}
+		// ∀a ∈ EA ∶ a_a = Hp (eq. 11.11)
+		if assurance.Anchor != header.ParentHash {
+			return ErrBadAttestationParent
+		}
 		var message []byte
 		b, err := jam.Marshal(header.ParentHash)
 		if err != nil {
-			log.Println("error encoding header parent hash", err)
-			return false
+			return fmt.Errorf("error encoding header parent hash %w", err)
 		}
 		message = append(message, b...)
 		b, err = jam.Marshal(assurance.Bitfield)
 		if err != nil {
-			log.Println("error encoding assurance bitfield", err)
-			return false
+			return fmt.Errorf("error encoding assurance bitfield %w", err)
 		}
 		message = append(message, b...)
 		messageHash := crypto.HashData(message)
 		if !ed25519.Verify(validators[assurance.ValidatorIndex].Ed25519, append([]byte(signatureContextAvailable), messageHash[:]...), assurance.Signature[:]) {
-			return false
+			return ErrBadSignature
 		}
 	}
-	return true
+	return nil
 }
 
 // getAvailableWorkReports partially implements equation 28: W* ≺ (EA, ρ′) and 130: W ≡ [ρ†[c]w | c <- NC, ∑a∈EA af[c] > 2/3 V]

@@ -2,13 +2,13 @@ package statetransition
 
 import (
 	"crypto/ed25519"
-	"github.com/eigerco/strawberry/internal/safrole"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/testutils"
@@ -366,7 +366,7 @@ func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 	}
 
 	expectedAssignments := state.CoreAssignments{
-		{WorkReport: nil}, // Cleared due to less than super majority
+		nil, // Cleared due to less than super majority
 		{WorkReport: workReport2},
 	}
 
@@ -376,10 +376,10 @@ func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 
 func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
 	testCases := []struct {
-		name           string
-		availableCores uint16
-		validators     uint16
-		expectedKept   uint16
+		name            string
+		availableCores  uint16
+		validators      uint16
+		expectedRemoved uint16
 	}{
 		{"No Cores Available, All Validators", 0, common.NumberOfValidators, 0},
 		{"No Cores Available, No Validators", 0, 0, 0},
@@ -394,15 +394,16 @@ func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			assurances := createAssuranceExtrinsic(tc.availableCores, tc.validators)
 			initialAssignments := createInitialAssignments()
-			newAssignments := calculateIntermediateCoreAssignmentsFromAvailability(assurances, initialAssignments)
+			newAssignments, err := calculateIntermediateCoreAssignmentsFromAvailability(assurances, initialAssignments, block.Header{TimeSlotIndex: jamtime.Timeslot(12)})
+			require.NoError(t, err)
 
-			keptCount := uint16(0)
+			removedCount := uint16(0)
 			for _, assignment := range newAssignments {
-				if assignment.WorkReport != nil {
-					keptCount++
+				if assignment == nil {
+					removedCount++
 				}
 			}
-			require.Equal(t, tc.expectedKept, keptCount, "Number of kept assignments should match expected")
+			require.Equal(t, tc.expectedRemoved, removedCount, "Number of kept assignments should match expected")
 		})
 	}
 }
@@ -492,9 +493,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 		)
 
 		// Assert
-		require.NotNil(t, newAssignments[selectedCoreIndex].WorkReport)
-		require.Equal(t, workReport, *newAssignments[selectedCoreIndex].WorkReport)
-		require.Equal(t, currentTimeslot, newAssignments[selectedCoreIndex].Time)
+		require.Nil(t, newAssignments[selectedCoreIndex])
 	})
 
 	t.Run("invalid guarantee due to timeslot too old", func(t *testing.T) {
@@ -560,7 +559,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			state.EntropyPool{},
 		)
 
-		require.Nil(t, newAssignments[0].WorkReport)
+		require.Nil(t, newAssignments[0])
 	})
 
 	t.Run("invalid guarantee due to unordered credentials", func(t *testing.T) {
@@ -625,7 +624,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			state.EntropyPool{},
 		)
 
-		require.Nil(t, newAssignments[0].WorkReport)
+		require.Nil(t, newAssignments[0])
 	})
 
 	t.Run("invalid guarantee due to wrong signature", func(t *testing.T) {
@@ -692,7 +691,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			state.EntropyPool{},
 		)
 
-		require.Nil(t, newAssignments[0].WorkReport)
+		require.Nil(t, newAssignments[0])
 	})
 }
 
@@ -997,7 +996,7 @@ func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16
 func createInitialAssignments() state.CoreAssignments {
 	var initialAssignments state.CoreAssignments
 	for i := range initialAssignments {
-		initialAssignments[i] = state.Assignment{
+		initialAssignments[i] = &state.Assignment{
 			WorkReport: &block.WorkReport{CoreIndex: uint16(i)},
 			Time:       jamtime.Timeslot(100),
 		}
