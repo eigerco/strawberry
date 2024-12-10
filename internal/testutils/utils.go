@@ -86,8 +86,8 @@ func RandomMetadataKey(t *testing.T) crypto.MetadataKey {
 	return crypto.MetadataKey(hash)
 }
 
-func RandomValidatorKey(t *testing.T) crypto.ValidatorKey {
-	return crypto.ValidatorKey{
+func RandomValidatorKey(t *testing.T) *crypto.ValidatorKey {
+	return &crypto.ValidatorKey{
 		Bandersnatch: RandomBandersnatchPublicKey(t),
 		Ed25519:      RandomED25519PublicKey(t),
 		Bls:          RandomBlsKey(t),

@@ -23,7 +23,7 @@ import (
 func RandomValidatorsData(t *testing.T) safrole.ValidatorsData {
 	var validatorsData safrole.ValidatorsData
 	for i := 0; i < len(validatorsData); i++ {
-		validatorsData[i] = crypto.ValidatorKey{
+		validatorsData[i] = &crypto.ValidatorKey{
 			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
 			Ed25519:      testutils.RandomED25519PublicKey(t),
 			Bls:          testutils.RandomBlsKey(t),
@@ -110,7 +110,7 @@ func RandomPendingAuthorizersQueues(t *testing.T) state.PendingAuthorizersQueues
 func RandomCoreAssignments(t *testing.T) state.CoreAssignments {
 	var assignments state.CoreAssignments
 	for i := range assignments {
-		assignments[i] = state.Assignment{
+		assignments[i] = &state.Assignment{
 			WorkReport: &block.WorkReport{
 				WorkPackageSpecification: block.WorkPackageSpecification{WorkPackageHash: testutils.RandomHash(t)},
 				RefinementContext: block.RefinementContext{
