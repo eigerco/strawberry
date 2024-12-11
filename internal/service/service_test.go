@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
@@ -18,8 +19,8 @@ func TestServiceAccount_AddAndLookupPreimage(t *testing.T) {
 		PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 		CodeHash:               testutils.RandomHash(t),
 		Balance:                1000,
-		GasLimitForAccumulator: service.CoreGasAccumulation,
-		GasLimitOnTransfer:     service.CoreGasAccumulation,
+		GasLimitForAccumulator: common.MaxAllocatedGasAccumulation,
+		GasLimitOnTransfer:     common.MaxAllocatedGasAccumulation,
 	}
 
 	preimage := []byte("example code")
