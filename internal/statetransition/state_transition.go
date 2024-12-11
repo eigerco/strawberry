@@ -1270,7 +1270,7 @@ func validateExtrinsicGuarantees(header block.Header, currentState *state.State,
 			}
 			totalGas += r.GasPrioritizationRatio
 		}
-		if totalGas > service.CoreGasAccumulation {
+		if totalGas > common.MaxAllocatedGasAccumulation {
 			return fmt.Errorf("work-reports total allotted accumulation gas is greater than the gas limit GA")
 		}
 
@@ -1640,7 +1640,7 @@ func calculateWorkReportsAndAccumulate(
 		privSvcGas += gas
 	}
 	// (181) let g = max(GT, GA ⋅ C + [∑ x∈V(χ_g)](x))
-	gasLimit := max(service.TotalGasAccumulation, service.CoreGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
+	gasLimit := max(service.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
 
 	// (182) let (n, o, t, C) = ∆+(g, W∗, (χ, δ†, ι, φ), χg )
 	maxReports, newAccumulationState, transfers, hashPairs := NewAccumulator(currentState, header).SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
@@ -2089,10 +2089,10 @@ func calculateGasAllocations(
 	}
 
 	// Calculate remaining gas after minimum allocations
-	if totalMinGas >= service.CoreGasAccumulation {
+	if totalMinGas >= common.MaxAllocatedGasAccumulation {
 		return allocations
 	}
-	remainingGas := service.CoreGasAccumulation - totalMinGas
+	remainingGas := common.MaxAllocatedGasAccumulation - totalMinGas
 
 	// Calculate sum of gas ratios for all work results
 	totalGasRatios := uint64(0)

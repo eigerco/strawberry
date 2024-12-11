@@ -12,7 +12,6 @@ const (
 	AdditionalMinimumBalancePerItem  = 10          // (BI) The additional minimum balance required per item of elective service state.
 	AdditionalMinimumBalancePerOctet = 1           // (BL) The additional minimum balance required per octet of elective service state.
 	TransferMemoSizeBytes            = 128         // (M) Size of the transfer memo in bytes.
-	CoreGasAccumulation              = 100_000     // GA = 100,000: Total gas allocated to a core for Accumulation
 	TotalGasAccumulation             = 341_000_000 // GT = 341,000,000: Total gas allocated across all cores for Accumulation
 )
 

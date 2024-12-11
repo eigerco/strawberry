@@ -14,4 +14,5 @@ const (
 	MaxTicketExtrinsicSize                       = 16                               // The maximum number of tickets which may be submitted in a single extrinsic.
 	MaxHistoricalTimeslotsForPreimageMeta        = 3                                // () Maximum number of historical timeslots for preimage metadata
 	SizeOfSegment                                = 4104                             // WG = WP*WE = 4104: The size of a segment in octets.
+	MaxAllocatedGasAccumulation                  = 100_000                          // GA = 100,000: The gas allocated to invoke a work-report’s Accumulation logic.
 )
