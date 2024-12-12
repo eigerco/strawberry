@@ -4,13 +4,14 @@ import (
 	"math"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	. "github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/service"
 )
 
-// HistoricalLookup ΩH(ϱ, ω, µ, (m, e), s,d, t)
+// HistoricalLookup ΩH(ϱ, ω, µ, (m, e), s, d, t)
 func HistoricalLookup(
 	gas Gas,
 	regs Registers,
@@ -68,5 +69,44 @@ func HistoricalLookup(
 	// set ω7 to |v|
 	regs[A0] = uint64(len(v))
 
+	return gas, regs, mem, ctxPair, nil
+}
+
+// Import ΩY(ϱ, ω, µ, (m, e), i)
+func Import(
+	gas Gas,
+	regs Registers,
+	mem Memory,
+	ctxPair RefineContextPair,
+	importedSegments []Segment,
+) (Gas, Registers, Memory, RefineContextPair, error) {
+	if gas < ImportCost {
+		return gas, regs, mem, ctxPair, ErrOutOfGas
+	}
+	gas -= ImportCost
+
+	omega7 := regs[A0]
+	omega8 := regs[A1]
+	omega9 := regs[A2]
+
+	// v = ∅
+	if omega7 >= uint64(len(importedSegments)) {
+		// v = ∅, return NONE
+		regs[A0] = uint64(NONE)
+		return gas, regs, mem, ctxPair, nil
+	}
+
+	// v = i[ω7]
+	v := importedSegments[omega7][:]
+
+	l := min(omega9, common.SizeOfSegment)
+
+	segmentToWrite := v[:l]
+	if err := mem.Write(uint32(omega8), segmentToWrite); err != nil {
+		regs[A0] = uint64(OOB)
+		return gas, regs, mem, ctxPair, nil
+	}
+
+	regs[A0] = uint64(OK)
 	return gas, regs, mem, ctxPair, nil
 }
