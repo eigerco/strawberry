@@ -54,8 +54,7 @@ func HistoricalLookup(
 	v := a.LookupPreimage(t, h)
 
 	if len(v) == 0 {
-		regs[A0] = uint64(NONE)
-		return gas, regs, mem, ctxPair, nil
+		return gas, withCode(regs, NONE), mem, ctxPair, nil
 	}
 
 	if uint64(len(v)) > bz {
@@ -85,28 +84,25 @@ func Import(
 	}
 	gas -= ImportCost
 
-	omega7 := regs[A0]
-	omega8 := regs[A1]
-	omega9 := regs[A2]
+	index := regs[A0]  // ω7
+	offset := regs[A1] // ω8
+	length := regs[A2] // ω9
 
 	// v = ∅
-	if omega7 >= uint64(len(importedSegments)) {
+	if index >= uint64(len(importedSegments)) {
 		// v = ∅, return NONE
-		regs[A0] = uint64(NONE)
-		return gas, regs, mem, ctxPair, nil
+		return gas, withCode(regs, NONE), mem, ctxPair, nil
 	}
 
 	// v = i[ω7]
-	v := importedSegments[omega7][:]
+	v := importedSegments[index][:]
 
-	l := min(omega9, common.SizeOfSegment)
+	l := min(length, common.SizeOfSegment)
 
 	segmentToWrite := v[:l]
-	if err := mem.Write(uint32(omega8), segmentToWrite); err != nil {
-		regs[A0] = uint64(OOB)
-		return gas, regs, mem, ctxPair, nil
+	if err := mem.Write(uint32(offset), segmentToWrite); err != nil {
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
-	regs[A0] = uint64(OK)
-	return gas, regs, mem, ctxPair, nil
+	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
