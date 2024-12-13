@@ -36,7 +36,7 @@ func TestAccumulate(t *testing.T) {
 	validatorKeys := generate(t, testutils.RandomValidatorKey, common.NumberOfValidators)
 	checkpointCtx := AccumulateContext{
 		AccumulationState: state.AccumulationState{
-			WorkReportsQueue: state.PendingAuthorizersQueues{
+			PendingAuthorizersQueues: state.PendingAuthorizersQueues{
 				0: [state.PendingAuthorizersQueueSize]crypto.Hash(
 					generate(t, testutils.RandomHash, state.PendingAuthorizersQueueSize),
 				),
@@ -126,7 +126,7 @@ func TestAccumulate(t *testing.T) {
 			},
 			expectedX: AccumulateContext{
 				AccumulationState: state.AccumulationState{
-					WorkReportsQueue: state.PendingAuthorizersQueues{
+					PendingAuthorizersQueues: state.PendingAuthorizersQueues{
 						1: [state.PendingAuthorizersQueueSize]crypto.Hash(authHashes),
 					},
 				},

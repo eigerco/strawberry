@@ -179,7 +179,7 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 		},
 	}
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState := calculateIntermediateServiceState(preimages, serviceState, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -197,7 +197,7 @@ func TestCalculateIntermediateServiceStateEmptyPreimages(t *testing.T) {
 
 	expectedServiceState := serviceState
 
-	newServiceState := calculateIntermediateServiceState(block.PreimageExtrinsic{}, serviceState, jamtime.Timeslot(100))
+	newServiceState := calculateIntermediateServiceState(block.PreimageExtrinsic{}, serviceState, serviceState, jamtime.Timeslot(100))
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -225,7 +225,7 @@ func TestCalculateIntermediateServiceStateNonExistentService(t *testing.T) {
 
 	expectedServiceState := serviceState
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState := calculateIntermediateServiceState(preimages, serviceState, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -269,7 +269,7 @@ func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
 		},
 	}
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState := calculateIntermediateServiceState(preimages, serviceState, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -314,7 +314,7 @@ func TestCalculateIntermediateServiceStateExistingPreimage(t *testing.T) {
 		},
 	}
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState := calculateIntermediateServiceState(preimages, serviceState, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -341,7 +341,7 @@ func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
 
 	expectedServiceState := serviceState // Should remain unchanged
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState := calculateIntermediateServiceState(preimages, serviceState, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 

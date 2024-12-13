@@ -41,10 +41,10 @@ type AccumulationHistory [jamtime.TimeslotsPerEpoch]map[crypto.Hash]struct{} // 
 
 // AccumulationState characterization of state components (equation 174 v0.4.5)
 type AccumulationState struct {
-	ServiceState       service.ServiceState                                                // Service accounts δ (d ∈ D⟨NS → A⟩)
-	ValidatorKeys      safrole.ValidatorsData                                              // Validator keys ι (i ∈ ⟦K⟧V)
-	WorkReportsQueue   [common.TotalNumberOfCores][PendingAuthorizersQueueSize]crypto.Hash // Queue of work-reports (q ∈ C⟦H⟧QHC)
-	PrivilegedServices service.PrivilegedServices                                          // Privileges state (x ∈ (NS, NS, NS, D⟨NS → NG⟩))
+	ServiceState             service.ServiceState                                                // Service accounts δ (d ∈ D⟨NS → A⟩)
+	ValidatorKeys            safrole.ValidatorsData                                              // Validator keys ι (i ∈ ⟦K⟧V)
+	PendingAuthorizersQueues [common.TotalNumberOfCores][PendingAuthorizersQueueSize]crypto.Hash // Queue of authorizers (q ∈ C⟦H⟧QHC)
+	PrivilegedServices       service.PrivilegedServices                                          // Privileges state (x ∈ (NS, NS, NS, D⟨NS → NG⟩))
 }
 
 // AccumulationOperand represents a single operand for accumulation (equation 179 v0.4.5)
