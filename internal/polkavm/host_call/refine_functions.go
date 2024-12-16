@@ -9,6 +9,7 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	. "github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/work"
 )
 
 // HistoricalLookup ΩH(ϱ, ω, µ, (m, e), s, d, t)
@@ -105,4 +106,49 @@ func Import(
 	}
 
 	return gas, withCode(regs, OK), mem, ctxPair, nil
+}
+
+// Export ΩE(ϱ, ω, µ, (m, e), ς)
+func Export(
+	gas Gas,
+	regs Registers,
+	mem Memory,
+	ctxPair RefineContextPair,
+	exportOffset uint64,
+) (Gas, Registers, Memory, RefineContextPair, error) {
+	if gas < ExportCost {
+		return gas, regs, mem, ctxPair, ErrOutOfGas
+	}
+	gas -= ExportCost
+
+	p := regs[A0]               // ω7
+	requestedLength := regs[A1] // ω8
+
+	// let z = min(ω8,WG)
+	z := min(requestedLength, common.SizeOfSegment)
+
+	data := make([]byte, z)
+	if err := mem.Read(uint32(p), data); err != nil {
+		// x = ∇
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
+
+	// Apply zero-padding Pn to data to make it WG-sized
+	paddedData := work.ZeroPadding(data, common.SizeOfSegment)
+
+	var segmentData Segment
+	copy(segmentData[:], paddedData)
+
+	currentCount := uint64(len(ctxPair.Segments))
+	if exportOffset+currentCount >= work.MaxNumberOfEntries {
+		return gas, withCode(regs, FULL), mem, ctxPair, nil
+	}
+
+	// Append x to e
+	ctxPair.Segments = append(ctxPair.Segments, segmentData)
+
+	// ω7 = ς + |e|
+	regs[A0] = exportOffset + uint64(len(ctxPair.Segments))
+
+	return gas, regs, mem, ctxPair, nil
 }
