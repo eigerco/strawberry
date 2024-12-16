@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/polkavm"
@@ -102,5 +103,131 @@ func TestHistoricalLookup(t *testing.T) {
 	assert.Equal(t, uint64(len(preimage)), regsOut[polkavm.A0])
 
 	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.HistoricalLookupCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
+	assert.Equal(t, expectedGasRemaining, gasRemaining)
+}
+
+func TestImport(t *testing.T) {
+	pp := &polkavm.Program{
+		Instructions: []polkavm.Instruction{
+			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		},
+	}
+
+	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	require.NoError(t, err)
+
+	initialGas := uint64(100)
+
+	segmentData := [common.SizeOfSegment]byte{}
+	for i := range segmentData {
+		segmentData[i] = byte('A')
+	}
+	importedSegments := []polkavm.Segment{segmentData}
+
+	bo := memoryMap.RWDataAddress + 100
+	bz := uint32(50)
+
+	initialRegs := polkavm.Registers{
+		polkavm.RA: polkavm.VmAddressReturnToHost,
+		polkavm.SP: uint64(memoryMap.StackAddressHigh),
+		polkavm.A0: uint64(0),
+		polkavm.A1: uint64(bo),
+		polkavm.A2: uint64(bz),
+	}
+
+	mem := memoryMap.NewMemory(nil, nil, nil)
+
+	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
+		gasCounterOut, regsOut, memOut, _, err := host_call.Import(
+			gasCounter,
+			regs,
+			mem,
+			polkavm.RefineContextPair{},
+			importedSegments,
+		)
+		require.NoError(t, err)
+		return gasCounterOut, regsOut, memOut, x, err
+	}
+
+	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
+	require.ErrorIs(t, err, polkavm.ErrHalt)
+
+	actualValue := make([]byte, bz)
+	err = memOut.Read(bo, actualValue)
+	require.NoError(t, err)
+
+	expectedData := make([]byte, bz)
+	for i := range expectedData {
+		expectedData[i] = 'A'
+	}
+
+	assert.Equal(t, expectedData, actualValue)
+	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
+
+	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.ImportCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
+	assert.Equal(t, expectedGasRemaining, gasRemaining)
+}
+
+func TestExport(t *testing.T) {
+	pp := &polkavm.Program{
+		Instructions: []polkavm.Instruction{
+			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		},
+	}
+
+	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	require.NoError(t, err)
+
+	initialGas := uint64(100)
+
+	dataToExport := []byte("export_data")
+	p := memoryMap.RWDataAddress
+
+	mem := memoryMap.NewMemory(nil, nil, nil)
+	err = mem.Write(p, dataToExport)
+	require.NoError(t, err)
+
+	exportOffset := uint64(10)
+
+	initialRegs := polkavm.Registers{
+		polkavm.RA: polkavm.VmAddressReturnToHost,
+		polkavm.SP: uint64(memoryMap.StackAddressHigh),
+		polkavm.A0: uint64(p),
+		polkavm.A1: uint64(len(dataToExport)),
+	}
+
+	ctxPair := polkavm.RefineContextPair{
+		Segments: []polkavm.Segment{},
+	}
+
+	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
+		gasCounterOut, regsOut, memOut, ctxOut, err := host_call.Export(
+			gasCounter,
+			regs,
+			mem,
+			ctxPair,
+			exportOffset,
+		)
+		require.NoError(t, err)
+
+		ctxPair = ctxOut
+		return gasCounterOut, regsOut, memOut, x, err
+	}
+
+	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
+	require.ErrorIs(t, err, polkavm.ErrHalt)
+
+	// We expect ω7 = ς + |e| = 10 + 1 = 11
+	assert.Equal(t, exportOffset+1, regsOut[polkavm.A0])
+
+	require.Len(t, ctxPair.Segments, 1)
+	seg := ctxPair.Segments[0]
+	expectedSegment := make([]byte, common.SizeOfSegment)
+	copy(expectedSegment, dataToExport)
+	assert.Equal(t, expectedSegment, seg[:])
+
+	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.ExportCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
 	assert.Equal(t, expectedGasRemaining, gasRemaining)
 }

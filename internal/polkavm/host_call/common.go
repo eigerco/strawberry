@@ -24,6 +24,8 @@ const (
 	SolicitCost
 	ForgetCost
 	HistoricalLookupCost
+	ImportCost
+	ExportCost
 )
 
 const (
@@ -43,6 +45,8 @@ const (
 	SolicitID
 	ForgetID
 	HistoricalLookupID
+	ImportID
+	ExportID
 )
 
 type Code uint64
