@@ -62,7 +62,7 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 		if err := mem.Read(uint32(addr)+uint32(32*i), bytes); err != nil {
 			return gas, withCode(regs, OOB), mem, ctxPair, nil
 		}
-		ctxPair.RegularCtx.AccumulationState.WorkReportsQueue[core][i] = crypto.Hash(bytes)
+		ctxPair.RegularCtx.AccumulationState.PendingAuthorizersQueues[core][i] = crypto.Hash(bytes)
 	}
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }

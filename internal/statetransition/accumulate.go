@@ -2,6 +2,7 @@ package statetransition
 
 import (
 	"errors"
+	"github.com/eigerco/strawberry/internal/jamtime"
 	"log"
 	"maps"
 
@@ -20,20 +21,22 @@ const (
 	AccumulateCost = 10
 )
 
-func NewAccumulator(state *state.State, header *block.Header) *Accumulator {
+func NewAccumulator(state *state.State, header *block.Header, newTimeslot jamtime.Timeslot) *Accumulator {
 	return &Accumulator{
-		header: header,
-		state:  state,
+		header:      header,
+		state:       state,
+		newTimeslot: newTimeslot,
 	}
 }
 
 type Accumulator struct {
-	header *block.Header
-	state  *state.State
+	header      *block.Header
+	state       *state.State
+	newTimeslot jamtime.Timeslot
 }
 
 // InvokePVM ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G) Equation (B.8)
-func (a *Accumulator) InvokePVM(accState state.AccumulationState, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
+func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// if ud[s]c = ∅
 	if accState.ServiceState[serviceIndex].Code() == nil {
 		ctx, err := a.newCtx(accState, serviceIndex)
@@ -55,8 +58,16 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, serviceIndex b
 		ExceptionalCtx: ctx,
 	}
 
-	// E(↕o)
-	args, err := jam.Marshal(accOperand)
+	// E(t, s, ↕o)
+	args, err := jam.Marshal(struct {
+		Timeslot             jamtime.Timeslot
+		ServiceID            block.ServiceId
+		AccumulationOperands []state.AccumulationOperand
+	}{
+		Timeslot:             newTime,
+		ServiceID:            serviceIndex,
+		AccumulationOperands: accOperand,
+	})
 	if err != nil {
 		log.Println("error encoding arguments", "err", err)
 		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0
@@ -137,9 +148,9 @@ func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.Servi
 			ServiceState: map[block.ServiceId]service.ServiceAccount{
 				serviceIndex: u.ServiceState[serviceIndex],
 			},
-			ValidatorKeys:      u.ValidatorKeys,
-			WorkReportsQueue:   u.WorkReportsQueue,
-			PrivilegedServices: u.PrivilegedServices,
+			ValidatorKeys:            u.ValidatorKeys,
+			PendingAuthorizersQueues: u.PendingAuthorizersQueues,
+			PrivilegedServices:       u.PrivilegedServices,
 		},
 		DeferredTransfers: []service.DeferredTransfer{},
 	}
@@ -153,31 +164,23 @@ func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.Servi
 }
 
 func (a *Accumulator) newServiceID(serviceIndex block.ServiceId) (block.ServiceId, error) {
-	var hashBytes []byte
-	bb, err := jam.Marshal(serviceIndex)
+	hashBytes, err := jam.Marshal(struct {
+		ServiceID block.ServiceId
+		Entropy   crypto.Hash
+		Timeslot  jamtime.Timeslot
+	}{
+		ServiceID: serviceIndex,
+		Entropy:   a.state.EntropyPool[0],
+		Timeslot:  a.header.TimeSlotIndex,
+	})
 	if err != nil {
 		return 0, err
 	}
-	hashBytes = append(hashBytes, bb...)
-
-	bb, err = jam.Marshal(a.state.EntropyPool[0])
-	if err != nil {
-		return 0, err
-	}
-	hashBytes = append(hashBytes, bb...)
-
-	bb, err = jam.Marshal(a.header.TimeSlotIndex)
-	if err != nil {
-		return 0, err
-	}
-	hashBytes = append(hashBytes, bb...)
-
 	hashData := crypto.HashData(hashBytes)
 	newId := block.ServiceId(0)
 	err = jam.Unmarshal(hashData[:], &newId)
 	if err != nil {
 		return 0, err
 	}
-
 	return newId, nil
 }
