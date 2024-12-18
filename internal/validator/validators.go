@@ -32,12 +32,12 @@ type ValidatorStatistics struct {
 // validator data matches the offenders list (ψ′), all the keys for that
 // validator are zero'd out.
 func NullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed25519.PublicKey) safrole.ValidatorsData {
-	offenderMap := make(map[string]struct{})
+	offenderMap := make(crypto.ED25519PublicKeySet)
 	for _, key := range offenders {
-		offenderMap[string(key)] = struct{}{}
+		offenderMap.Add(key)
 	}
 	for i, validator := range queuedValidators {
-		if _, found := offenderMap[string(validator.Ed25519)]; found {
+		if offenderMap.Has(validator.Ed25519) {
 			queuedValidators[i] = &crypto.ValidatorKey{
 				// Ensure these 32 bytes are zero'd out, and not just nil.  TODO
 				// - maybe use a custom wrapper type for [32]byte ?

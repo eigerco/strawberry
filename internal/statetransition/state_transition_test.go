@@ -484,7 +484,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments := calculateNewCoreAssignments(
+		newAssignments, _ := calculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
@@ -551,7 +551,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments := calculateNewCoreAssignments(
+		newAssignments, _ := calculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
@@ -616,7 +616,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments := calculateNewCoreAssignments(
+		newAssignments, _ := calculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
@@ -683,7 +683,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments := calculateNewCoreAssignments(
+		newAssignments, _ := calculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
@@ -840,7 +840,7 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 			},
 		}
 
-		newStats := calculateNewValidatorStatistics(block, jamtime.Timeslot(599), initialStats)
+		newStats := CalculateNewValidatorStatistics(block, jamtime.Timeslot(599), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{})
 
 		// Check that stats were rotated correctly
 		assert.Equal(t, uint32(10), newStats[0][0].NumOfBlocks, "Previous current stats should become history")
@@ -870,7 +870,7 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 			},
 		}
 
-		newStats := calculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats)
+		newStats := CalculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{})
 
 		// Check block author stats
 		assert.Equal(t, uint32(1), newStats[1][1].NumOfBlocks, "Block count should increment")
@@ -913,11 +913,15 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 				},
 			},
 		}
-
-		newStats := calculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats)
+		ed25519key1 := testutils.RandomED25519PublicKey(t)
+		ed25519key2 := testutils.RandomED25519PublicKey(t)
+		reporters := make(crypto.ED25519PublicKeySet)
+		reporters.Add(ed25519key1)
+		reporters.Add(ed25519key2)
+		newStats := CalculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}})
 
 		// Check guarantees and assurances
-		assert.Equal(t, uint64(2), newStats[1][0].NumOfGuaranteedReports, "Should count all guarantees for validator 0")
+		assert.Equal(t, uint64(1), newStats[1][0].NumOfGuaranteedReports, "Should count all guarantees for validator 0")
 		assert.Equal(t, uint64(1), newStats[1][1].NumOfGuaranteedReports, "Should count all guarantees for validator 1")
 		assert.Equal(t, uint64(1), newStats[1][0].NumOfAvailabilityAssurances, "Should count assurance for validator 0")
 		assert.Equal(t, uint64(1), newStats[1][1].NumOfAvailabilityAssurances, "Should count assurance for validator 1")
@@ -964,7 +968,12 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 			},
 		}
 
-		newStats := calculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats)
+		ed25519key1 := testutils.RandomED25519PublicKey(t)
+		ed25519key2 := testutils.RandomED25519PublicKey(t)
+		reporters := make(crypto.ED25519PublicKeySet)
+		reporters.Add(ed25519key1)
+		reporters.Add(ed25519key2)
+		newStats := CalculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}})
 
 		expected := validator.ValidatorStatistics{
 			NumOfBlocks:                 6,
