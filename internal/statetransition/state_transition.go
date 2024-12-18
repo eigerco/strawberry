@@ -67,15 +67,15 @@ func UpdateState(s *state.State, newBlock block.Block) error {
 		return err
 	}
 
-	newValidatorStatistics := calculateNewValidatorStatistics(newBlock, newTimeState, s.ValidatorStatistics)
-
 	intermediateCoreAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
 	intermediateCoreAssignments, err = CalculateIntermediateCoreFromAssurances(newValidatorState.CurrentValidators, intermediateCoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
 	if err != nil {
 		return err
 	}
 
-	newCoreAssignments := calculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState, newTimeState, newEntropyPool)
+	newCoreAssignments, reporters := calculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState, newTimeState, newEntropyPool)
+
+	newValidatorStatistics := CalculateNewValidatorStatistics(newBlock, s.TimeslotIndex, s.ValidatorStatistics, reporters, s.ValidatorState.CurrentValidators)
 
 	workReports := getAvailableWorkReports(intermediateCoreAssignments)
 
@@ -1168,8 +1168,8 @@ func calculateNewCoreAssignments(
 	validatorState validator.ValidatorState,
 	newTimeslot jamtime.Timeslot,
 	entropyPool state.EntropyPool,
-) state.CoreAssignments {
-	newAssignments := intermediateAssignments
+) (newAssignments state.CoreAssignments, reporters []ed25519.PublicKey) {
+	newAssignments = intermediateAssignments
 	sortedGuarantees := sortGuaranteesByCoreIndex(guarantees.Guarantees)
 
 	for _, guarantee := range sortedGuarantees {
@@ -1191,7 +1191,9 @@ func calculateNewCoreAssignments(
 				validatorState.ArchivedValidators,
 			)
 
-			if verifyGuaranteeCredentials(guarantee, validators, entropyPool, newTimeslot) {
+			var ok bool
+			ok, reporters = verifyGuaranteeCredentials(guarantee, validators, entropyPool, newTimeslot)
+			if ok {
 				newAssignments[coreIndex] = &state.Assignment{
 					WorkReport: &guarantee.WorkReport,
 					Time:       newTimeslot,
@@ -1200,7 +1202,7 @@ func calculateNewCoreAssignments(
 		}
 	}
 
-	return newAssignments
+	return newAssignments, reporters
 }
 
 // generateRefinementContextID serializes the RefinementContext and returns its SHA-256 hash as a hex string.
@@ -1474,11 +1476,12 @@ func verifyGuaranteeCredentials(
 	validators safrole.ValidatorsData,
 	entropyPool state.EntropyPool,
 	currentTimeslot jamtime.Timeslot,
-) bool {
+) (bool, []ed25519.PublicKey) {
+	reporters := []ed25519.PublicKey{}
 	// Verify that credentials are ordered by validator index (equation 138)
 	for i := 1; i < len(guarantee.Credentials); i++ {
 		if guarantee.Credentials[i-1].ValidatorIndex >= guarantee.Credentials[i].ValidatorIndex {
-			return false
+			return false, reporters
 		}
 	}
 
@@ -1499,38 +1502,39 @@ func verifyGuaranteeCredentials(
 	}
 
 	if err != nil {
-		return false
+		return false, reporters
 	}
 
 	// Verify the signatures using the correct validator keys (Equation 140 v0.4.5)
 	for _, credential := range guarantee.Credentials {
 		if credential.ValidatorIndex >= uint16(len(validators)) {
-			return false
+			return false, reporters
 		}
 
 		validatorKey := validators[credential.ValidatorIndex]
 		// Check if the validator key is valid
 		if len(validatorKey.Ed25519) != ed25519.PublicKeySize {
-			return false
+			return false, reporters
 		}
 
 		// Check if the validator is assigned to the core specified in the work report
 		if !isValidatorAssignedToCore(credential.ValidatorIndex, guarantee.WorkReport.CoreIndex, coreAssignments) {
-			return false
+			return false, reporters
 		}
 
 		reportBytes, err := jam.Marshal(guarantee.WorkReport)
 		if err != nil {
-			return false
+			return false, reporters
 		}
 		hashed := crypto.HashData(reportBytes)
 		message := append([]byte(signatureContextGuarantee), hashed[:]...)
 		if !ed25519.Verify(validatorKey.Ed25519, message, credential.Signature[:]) {
-			return false
+			return false, reporters
 		}
+		reporters = append(reporters, validatorKey.Ed25519)
 	}
 
-	return true
+	return true, reporters
 }
 
 // isValidatorAssignedToCore checks if a validator is assigned to a specific core.
@@ -2104,9 +2108,9 @@ func buildServiceAccumulationCommitments(accumResults map[block.ServiceId]state.
 	return commitments
 }
 
-// calculateNewValidatorStatistics implements equation 30:
+// CalculateNewValidatorStatistics implements equation 30:
 // π′ ≺ (EG, EP, EA, ET, τ, κ′, π, H)
-func calculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslot, validatorStatistics validator.ValidatorStatisticsState) validator.ValidatorStatisticsState {
+func CalculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslot, validatorStatistics validator.ValidatorStatisticsState, reporters []ed25519.PublicKey, currValidators safrole.ValidatorsData) validator.ValidatorStatisticsState {
 	newStats := validatorStatistics
 
 	// Implements equations 170-171:
@@ -2120,7 +2124,7 @@ func calculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslo
 	}
 
 	// Implements equation 172: ∀v ∈ NV
-	for v := uint16(0); v < uint16(len(newStats)); v++ {
+	for v := uint16(0); v < uint16(len(newStats[0])); v++ {
 		// π′₀[v]b ≡ a[v]b + (v = Hi)
 		if v == block.Header.BlockAuthorIndex {
 			newStats[1][v].NumOfBlocks++
@@ -2142,11 +2146,9 @@ func calculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslo
 
 		// π′₀[v]g ≡ a[v]g + (κ′v ∈ R)
 		// Where R is the set of reporter keys defined in eq 139
-		for _, guarantee := range block.Extrinsic.EG.Guarantees {
-			for _, credential := range guarantee.Credentials {
-				if credential.ValidatorIndex == v {
-					newStats[1][v].NumOfGuaranteedReports++
-				}
+		for _, reporter := range reporters {
+			if currValidators[v] != nil && slices.Equal(currValidators[v].Ed25519, reporter) {
+				newStats[1][v].NumOfGuaranteedReports++
 			}
 		}
 
