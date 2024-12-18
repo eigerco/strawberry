@@ -1,0 +1,12 @@
+[package]
+name = "erasurecoding"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hex = "0.4.3"
+reed-solomon-simd = "3.0.1"
+libc = "0.2.161"
+
+[lib]
+crate-type = ["cdylib"]
