@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"crypto/ed25519"
 	"embed"
 	"encoding/json"
 	"io"
@@ -186,9 +185,10 @@ func TestStatistics(t *testing.T) {
 			}
 			newBlock := mapStatisticsInput(tc.Input)
 			preState := mapStatisticsState(tc.PreState)
-			reporters := mapSlice(tc.Input.Reporters, func(s string) ed25519.PublicKey {
-				return stringToHex(s)
-			})
+			reporters := make(crypto.ED25519PublicKeySet)
+			for _, reporter := range tc.Input.Reporters {
+				reporters.Add(stringToHex(reporter))
+			}
 
 			preState.ValidatorStatistics = statetransition.CalculateNewValidatorStatistics(newBlock, preState.TimeslotIndex, preState.ValidatorStatistics, reporters, preState.ValidatorState.CurrentValidators)
 

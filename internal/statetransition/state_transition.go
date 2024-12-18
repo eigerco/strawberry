@@ -1168,7 +1168,7 @@ func calculateNewCoreAssignments(
 	validatorState validator.ValidatorState,
 	newTimeslot jamtime.Timeslot,
 	entropyPool state.EntropyPool,
-) (newAssignments state.CoreAssignments, reporters []ed25519.PublicKey) {
+) (newAssignments state.CoreAssignments, reporters crypto.ED25519PublicKeySet) {
 	newAssignments = intermediateAssignments
 	sortedGuarantees := sortGuaranteesByCoreIndex(guarantees.Guarantees)
 
@@ -1476,8 +1476,8 @@ func verifyGuaranteeCredentials(
 	validators safrole.ValidatorsData,
 	entropyPool state.EntropyPool,
 	currentTimeslot jamtime.Timeslot,
-) (bool, []ed25519.PublicKey) {
-	reporters := []ed25519.PublicKey{}
+) (bool, crypto.ED25519PublicKeySet) {
+	reporters := make(crypto.ED25519PublicKeySet)
 	// Verify that credentials are ordered by validator index (equation 138)
 	for i := 1; i < len(guarantee.Credentials); i++ {
 		if guarantee.Credentials[i-1].ValidatorIndex >= guarantee.Credentials[i].ValidatorIndex {
@@ -1531,7 +1531,7 @@ func verifyGuaranteeCredentials(
 		if !ed25519.Verify(validatorKey.Ed25519, message, credential.Signature[:]) {
 			return false, reporters
 		}
-		reporters = append(reporters, validatorKey.Ed25519)
+		reporters.Add(validatorKey.Ed25519)
 	}
 
 	return true, reporters
@@ -2110,7 +2110,7 @@ func buildServiceAccumulationCommitments(accumResults map[block.ServiceId]state.
 
 // CalculateNewValidatorStatistics implements equation 30:
 // π′ ≺ (EG, EP, EA, ET, τ, κ′, π, H)
-func CalculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslot, validatorStatistics validator.ValidatorStatisticsState, reporters []ed25519.PublicKey, currValidators safrole.ValidatorsData) validator.ValidatorStatisticsState {
+func CalculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslot, validatorStatistics validator.ValidatorStatisticsState, reporters crypto.ED25519PublicKeySet, currValidators safrole.ValidatorsData) validator.ValidatorStatisticsState {
 	newStats := validatorStatistics
 
 	// Implements equations 170-171:
@@ -2146,8 +2146,8 @@ func CalculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslo
 
 		// π′₀[v]g ≡ a[v]g + (κ′v ∈ R)
 		// Where R is the set of reporter keys defined in eq 139
-		for _, reporter := range reporters {
-			if currValidators[v] != nil && slices.Equal(currValidators[v].Ed25519, reporter) {
+		for reporter := range reporters {
+			if currValidators[v] != nil && slices.Equal(currValidators[v].Ed25519, reporter[:]) {
 				newStats[1][v].NumOfGuaranteedReports++
 			}
 		}
