@@ -5,42 +5,33 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 )
 
-// SegmentReferenceType differentiates between a direct segment-root hash (H) and a work-package hash (H⊞)
-type SegmentReferenceType uint8
-
-const (
-	SegmentReferenceRootHash        SegmentReferenceType = iota // H
-	SegmentReferenceWorkPackageHash                             // H⊞
-)
-
 type ImportedSegment struct {
-	RefType SegmentReferenceType
-	Hash    crypto.Hash
-	Index   uint32
+	Hash  crypto.Hash
+	Index uint16
 }
 
-type BlobHashLengthPair struct {
+type Extrinsic struct {
 	Hash   crypto.Hash
 	Length uint32
 }
 
 // Item represents I (14.2 v0.5.2)
 type Item struct {
-	ServiceId          uint32               // s ∈ N_S
-	CodeHash           crypto.Hash          // c ∈ H
-	Payload            []byte               // y ∈ Y
-	GasLimitRefine     uint64               // g ∈ N_G
-	GasLimitAccumulate uint64               // a ∈ N_G
-	ExportedSegments   uint                 // e ∈ N
-	ImportedSegments   []ImportedSegment    // i ∈ ⟦{H ∪ (H⊞), N}⟧
-	BlobHashLengths    []BlobHashLengthPair // x ∈ ⟦(H, N)⟧
+	ServiceId          uint32            // s ∈ N_S
+	CodeHash           crypto.Hash       // c ∈ H
+	Payload            []byte            // y ∈ Y
+	GasLimitRefine     uint64            // g ∈ N_G
+	GasLimitAccumulate uint64            // a ∈ N_G
+	ImportedSegments   []ImportedSegment // i ∈ ⟦{H ∪ (H⊞), N}⟧
+	Extrinsics         []Extrinsic       // x ∈ ⟦(H, N)⟧
+	ExportedSegments   uint16            // e ∈ N
 }
 
 func (w *Item) Size() uint64 {
 	// S(w) = |w.y| + |w.i| * WG + Σ(h,l)∈w.x l
 	total := uint64(len(w.Payload))                          // |w.y|
 	total += uint64(len(w.ImportedSegments)) * SizeOfSegment // |w.i| * WG
-	for _, bh := range w.BlobHashLengths {
+	for _, bh := range w.Extrinsics {
 		total += uint64(bh.Length)
 	}
 	return total
