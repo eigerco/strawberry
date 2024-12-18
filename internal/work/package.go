@@ -21,10 +21,10 @@ type Package struct {
 
 // ValidateNumberOfEntries (14.4 v0.5.2)
 func (wp *Package) ValidateNumberOfEntries() error {
-	var totalExported, totalImported uint
+	var totalExported, totalImported uint16
 	for _, w := range wp.WorkItems {
 		totalExported += w.ExportedSegments
-		totalImported += uint(len(w.ImportedSegments))
+		totalImported += uint16(len(w.ImportedSegments))
 	}
 
 	if totalExported > MaxNumberOfEntries {
