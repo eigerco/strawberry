@@ -26,6 +26,13 @@ const (
 	HistoricalLookupCost
 	ImportCost
 	ExportCost
+	MachineCost
+	PeekCost
+	PokeCost
+	ZeroCost
+	VoidCost
+	InvokeCost
+	ExpungeCost
 )
 
 const (
@@ -47,6 +54,13 @@ const (
 	HistoricalLookupID
 	ImportID
 	ExportID
+	MachineID
+	PeekID
+	PokeID
+	ZeroID
+	VoidID
+	InvokeID
+	ExpungeID
 )
 
 type Code uint64
