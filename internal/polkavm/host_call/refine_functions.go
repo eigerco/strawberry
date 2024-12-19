@@ -152,3 +152,112 @@ func Export(
 
 	return gas, regs, mem, ctxPair, nil
 }
+
+// Machine ΩM(ϱ, ω, µ, (m, e))
+func Machine(
+	gas Gas,
+	regs Registers,
+	mem Memory,
+	ctxPair RefineContextPair,
+) (Gas, Registers, Memory, RefineContextPair, error) {
+	if gas < MachineCost {
+		return gas, regs, mem, ctxPair, ErrOutOfGas
+	}
+	gas -= MachineCost
+
+	// let [po, pz, i] = ω7...10
+	po := regs[A0]
+	pz := regs[A1]
+	i := regs[A2]
+
+	// p = µ[po ... po+pz]
+	p := make([]byte, pz)
+	err := mem.Read(uint32(po), p)
+	if err != nil {
+		// p = ∇
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
+
+	// let n = min(n ∈ N, n ∉ K(m))
+	n := findSmallestMissingKey(ctxPair.IntegratedPVMMap)
+
+	pvm := IntegratedPVM{
+		Code:               p,
+		Ram:                Memory{}, // u = {V▸[0,0,...], A▸[∅, ∅, ...]}
+		InstructionCounter: uint32(i),
+	}
+
+	// (ω′7,m′) = (n, m ∪ {n ↦ {p,u,i}})
+	regs[A0] = n
+	ctxPair.IntegratedPVMMap[n] = pvm
+
+	return gas, regs, mem, ctxPair, nil
+}
+
+// Peek ΩP(ϱ, ω, µ, (m, e))
+func Peek(
+	gas Gas,
+	regs Registers,
+	mem Memory,
+	ctxPair RefineContextPair,
+) (Gas, Registers, Memory, RefineContextPair, error) {
+	return gas, regs, mem, ctxPair, nil
+}
+
+// Poke ΩO(ϱ, ω, µ, (m, e))
+func Poke(
+	gas Gas,
+	regs Registers,
+	mem Memory,
+	ctxPair RefineContextPair,
+) (Gas, Registers, Memory, RefineContextPair, error) {
+	return gas, regs, mem, ctxPair, nil
+}
+
+// Zero ΩZ(ϱ, ω, µ, (m, e))
+func Zero(
+	gas Gas,
+	regs Registers,
+	mem Memory,
+	ctxPair RefineContextPair,
+) (Gas, Registers, Memory, RefineContextPair, error) {
+	return gas, regs, mem, ctxPair, nil
+}
+
+// Void ΩV(ϱ, ω, µ, (m, e))
+func Void(
+	gas Gas,
+	regs Registers,
+	mem Memory,
+	ctxPair RefineContextPair,
+) (Gas, Registers, Memory, RefineContextPair, error) {
+	return gas, regs, mem, ctxPair, nil
+}
+
+// Invoke ΩK(ϱ, ω, µ, (m, e))
+func Invoke(
+	gas Gas,
+	regs Registers,
+	mem Memory,
+	ctxPair RefineContextPair,
+) (Gas, Registers, Memory, RefineContextPair, error) {
+	return gas, regs, mem, ctxPair, nil
+}
+
+// Expunge ΩX(ϱ, ω, µ, (m, e))
+func Expunge(
+	gas Gas,
+	regs Registers,
+	mem Memory,
+	ctxPair RefineContextPair,
+) (Gas, Registers, Memory, RefineContextPair, error) {
+	return gas, regs, mem, ctxPair, nil
+}
+
+func findSmallestMissingKey(m map[uint64]IntegratedPVM) uint64 {
+	for n := uint64(0); ; n++ {
+		if _, exists := m[n]; !exists {
+			return n
+		}
+	}
+}
