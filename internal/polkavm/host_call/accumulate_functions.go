@@ -76,7 +76,7 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 
 	const (
 		bandersnatch = crypto.BandersnatchSize
-		ed25519      = bandersnatch + 32
+		ed25519      = bandersnatch + crypto.Ed25519PublicSize
 		bls          = ed25519 + crypto.BLSSize
 		metadata     = bls + crypto.MetadataSize
 	)
