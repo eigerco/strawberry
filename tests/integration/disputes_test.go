@@ -1,4 +1,5 @@
 //go:build integration
+
 package integration
 
 import (
@@ -29,7 +30,6 @@ func stringToHex(s string) []byte {
 	return bytes
 }
 
-
 func ReadJSONFile(filename string) (*JSONData, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -49,7 +49,6 @@ func ReadJSONFile(filename string) (*JSONData, error) {
 
 	return &data, nil
 }
-
 
 type Judgement struct {
 	IsValid        bool   `json:"vote"`
@@ -125,8 +124,8 @@ type Report struct {
 }
 
 type Rho struct {
-	Report  *Report `json:"report"`
-	Timeout int     `json:"timeout"`
+	Report  *Report `json:"Report"`
+	Timeout int     `json:"Timeout"`
 }
 
 type Kappa struct {
