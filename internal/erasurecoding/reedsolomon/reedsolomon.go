@@ -17,7 +17,9 @@ var (
 		recoveryShardsCount C.size_t,
 		shardSize C.size_t,
 		originalShards []byte,
+		originalShardsLen C.size_t,
 		recoveryShardsOut []byte,
+		recoveryShardsLen C.size_t,
 	) (cerr int)
 
 	reedSolomonDecode func(
@@ -30,8 +32,9 @@ var (
 		recoveryShards []byte,
 		recoveryShardsLen C.size_t,
 		recoveryShardsIndexes []C.size_t,
-		shardsRecoveredOut []byte,
-		shardsRecoveredIndexesOut []C.size_t,
+		recoveredShards []byte,
+		recoveredShardsLength C.size_t,
+		recoveredShardsIndexesOut []C.size_t,
 	) (cerr int)
 )
 
@@ -93,9 +96,15 @@ func (r *Encoder) Encode(
 	}
 
 	shardSize := shardSize(shards)
+	if shardSize == 0 {
+		return errors.New("invalid shard size")
+	}
 
 	flatOriginalShards := make([]byte, r.originalShardsCount*shardSize)
 	for i, s := range shards[:r.originalShardsCount] {
+		if len(s) != shardSize {
+			return errors.New("inconsistent shard size")
+		}
 		copy(flatOriginalShards[i*shardSize:], s)
 	}
 
@@ -106,7 +115,10 @@ func (r *Encoder) Encode(
 		C.size_t(r.recoveryShardsCount),
 		C.size_t(shardSize),
 		flatOriginalShards,
-		recoveryShardsOut)
+		C.size_t(len(flatOriginalShards)),
+		recoveryShardsOut,
+		C.size_t(len(recoveryShardsOut)),
+	)
 	if result != 0 {
 		return errors.New("unable to encode data")
 	}
@@ -129,7 +141,6 @@ func (r *Encoder) Decode(shards [][]byte) error {
 	}
 	shardSize := shardSize(shards)
 	if shardSize == 0 {
-		// todo better error name
 		return errors.New("invalid shard size")
 	}
 
@@ -137,6 +148,9 @@ func (r *Encoder) Decode(shards [][]byte) error {
 	flatOriginalShardsIndexes := []C.size_t{}
 	for i, s := range shards[:r.originalShardsCount] {
 		if len(s) != 0 {
+			if len(s) != shardSize {
+				return errors.New("inconsistent shard size")
+			}
 			flatOriginalShards = append(flatOriginalShards, s...)
 			flatOriginalShardsIndexes = append(flatOriginalShardsIndexes, C.size_t(i))
 		}
@@ -146,6 +160,9 @@ func (r *Encoder) Decode(shards [][]byte) error {
 	flatRecoveryShardsIndexes := []C.size_t{}
 	for i, s := range shards[r.originalShardsCount:] {
 		if len(s) != 0 {
+			if len(s) != shardSize {
+				return errors.New("inconsistent shard size")
+			}
 			flatRecoveryShards = append(flatRecoveryShards, s...)
 			flatRecoveryShardsIndexes = append(flatRecoveryShardsIndexes, C.size_t(i))
 		}
@@ -168,6 +185,7 @@ func (r *Encoder) Decode(shards [][]byte) error {
 		C.size_t(len(flatRecoveryShards)),
 		flatRecoveryShardsIndexes,
 		restoredShards,
+		C.size_t(len(restoredShards)),
 		restoredShardsIndexes)
 	if result != 0 {
 		return errors.New("unable to decode data")
