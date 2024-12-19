@@ -3,6 +3,7 @@ package cert
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base32"
@@ -18,26 +19,82 @@ const (
 
 var base32Encoding = base32.NewEncoding("abcdefghijklmnopqrstuvwxyz234567").WithPadding(base32.NoPadding)
 
+// Generator handles certificate generation
+type Generator struct {
+	config Config
+}
+
 type Config struct {
 	PublicKey          ed25519.PublicKey
 	PrivateKey         ed25519.PrivateKey
 	CertValidityPeriod time.Duration
 }
 
-type Generator struct {
-	config Config
-}
-
 func NewGenerator(config Config) *Generator {
 	return &Generator{config: config}
 }
 
-func encodePubKeyToDNS(pubKey ed25519.PublicKey) string {
+// Validator implements the transport.CertValidator interface
+type Validator struct{}
+
+func NewValidator() *Validator {
+	return &Validator{}
+}
+
+// ValidateCertificate implements transport.CertValidator
+func (v *Validator) ValidateCertificate(cert *x509.Certificate) error {
+	if cert.SignatureAlgorithm != x509.PureEd25519 {
+		return fmt.Errorf("invalid signature algorithm: expected Ed25519")
+	}
+
+	pubKey, ok := cert.PublicKey.(ed25519.PublicKey)
+	if !ok {
+		return fmt.Errorf("certificate public key is not Ed25519")
+	}
+
+	if len(cert.DNSNames) != 1 {
+		return fmt.Errorf("certificate must have exactly one DNS name")
+	}
+	dnsName := cert.DNSNames[0]
+
+	if len(dnsName) != 53 || !strings.HasPrefix(dnsName, DNSNamePrefix) {
+		return fmt.Errorf("invalid DNS name format: %s (length: %d)", dnsName, len(dnsName))
+	}
+
+	// Generate expected DNS name
+	expectedDNSName := EncodePubKeyToDNS(pubKey)
+
+	if dnsName != expectedDNSName {
+		return fmt.Errorf("DNS name does not match public key")
+	}
+
+	// Check expiration
+	now := time.Now()
+	if now.Before(cert.NotBefore) {
+		return fmt.Errorf("certificate is not yet valid")
+	}
+	if now.After(cert.NotAfter) {
+		return fmt.Errorf("certificate has expired")
+	}
+	return nil
+}
+
+// ExtractPublicKey implements transport.CertValidator
+func (v *Validator) ExtractPublicKey(cert *x509.Certificate) (ed25519.PublicKey, error) {
+	pubKey, ok := cert.PublicKey.(ed25519.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("certificate public key is not an Ed25519 key")
+	}
+	return pubKey, nil
+}
+
+// Helper functions used by both Generator and Validator
+func EncodePubKeyToDNS(pubKey ed25519.PublicKey) string {
 	return DNSNamePrefix + base32Encoding.EncodeToString(pubKey)
 }
 
-func (g *Generator) GenerateCertificate() (*x509.Certificate, error) {
-	dnsName := encodePubKeyToDNS(g.config.PublicKey)
+func (g *Generator) GenerateCertificate() (*tls.Certificate, error) {
+	dnsName := EncodePubKeyToDNS(g.config.PublicKey)
 
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
@@ -57,6 +114,8 @@ func (g *Generator) GenerateCertificate() (*x509.Certificate, error) {
 			x509.ExtKeyUsageServerAuth,
 			x509.ExtKeyUsageClientAuth,
 		},
+		SignatureAlgorithm:    x509.PureEd25519,
+		PublicKeyAlgorithm:    x509.Ed25519,
 		BasicConstraintsValid: true,
 	}
 
@@ -70,44 +129,9 @@ func (g *Generator) GenerateCertificate() (*x509.Certificate, error) {
 		return nil, fmt.Errorf("failed to parse certificate: %w", err)
 	}
 
-	return cert, nil
-}
-
-func ValidateCertificate(cert *x509.Certificate) error {
-	// Check signature algorithm
-	if cert.SignatureAlgorithm != x509.PureEd25519 {
-		return fmt.Errorf("invalid signature algorithm: expected Ed25519")
-	}
-
-	// Check DNS names
-	if len(cert.DNSNames) != 1 {
-		return fmt.Errorf("certificate must have exactly one DNS name")
-	}
-	dnsName := cert.DNSNames[0]
-
-	// Verify format
-	if len(dnsName) != 53 || !strings.HasPrefix(dnsName, DNSNamePrefix) {
-		return fmt.Errorf("invalid DNS name format: %s", dnsName)
-	}
-
-	// Validate public key
-	pubKey, ok := cert.PublicKey.(ed25519.PublicKey)
-	if !ok {
-		return fmt.Errorf("certificate public key is not an Ed25519 key")
-	}
-	expectedDNSName := encodePubKeyToDNS(pubKey)
-	if dnsName != expectedDNSName {
-		return fmt.Errorf("DNS name does not match public key: got %s, expected %s", dnsName, expectedDNSName)
-	}
-
-	// Check expiration
-	now := time.Now()
-	if now.Before(cert.NotBefore) {
-		return fmt.Errorf("certificate is not yet valid: valid from %v", cert.NotBefore)
-	}
-	if now.After(cert.NotAfter) {
-		return fmt.Errorf("certificate has expired: valid until %v", cert.NotAfter)
-	}
-
-	return nil
+	return &tls.Certificate{
+		Certificate: [][]byte{certDER},
+		PrivateKey:  g.config.PrivateKey,
+		Leaf:        cert,
+	}, nil
 }
