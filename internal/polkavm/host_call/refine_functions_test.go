@@ -1,6 +1,7 @@
 package host_call_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -287,5 +288,157 @@ func TestMachine(t *testing.T) {
 	assert.Equal(t, uint32(i), vm.InstructionCounter)
 
 	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.MachineCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
+	assert.Equal(t, expectedGasRemaining, gasRemaining)
+}
+
+func TestPeek(t *testing.T) {
+	pp := &polkavm.Program{
+		Instructions: []polkavm.Instruction{
+			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		},
+	}
+
+	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	require.NoError(t, err)
+
+	n := uint64(0)
+	o := memoryMap.RWDataAddress + 100
+	z := uint64(1)
+
+	uData := []byte("data_for_peek")
+
+	mem := memoryMap.NewMemory(nil, nil, nil)
+
+	uDataBase := memoryMap.RWDataAddress
+	require.True(t, uDataBase+uint32(len(uData)) < math.MaxUint32)
+
+	err = mem.Write(uDataBase, uData)
+	require.NoError(t, err)
+
+	s := uint64(uDataBase) + 10
+
+	u := polkavm.IntegratedPVM{
+		Code:               nil,
+		Ram:                mem,
+		InstructionCounter: 0,
+	}
+
+	ctxPair := polkavm.RefineContextPair{
+		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{
+			n: u,
+		},
+		Segments: []polkavm.Segment{},
+	}
+
+	initialRegs := polkavm.Registers{
+		polkavm.RA: polkavm.VmAddressReturnToHost,
+		polkavm.SP: uint64(memoryMap.StackAddressHigh),
+		polkavm.A0: n,
+		polkavm.A1: uint64(o),
+		polkavm.A2: s,
+		polkavm.A3: z,
+	}
+
+	hostCall := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mm polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
+		gasCounterOut, regsOut, memOut, ctxOut, err := host_call.Peek(
+			gasCounter,
+			regs,
+			mm,
+			ctxPair,
+		)
+		require.NoError(t, err)
+		ctxPair = ctxOut
+		return gasCounterOut, regsOut, memOut, x, err
+	}
+
+	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
+	require.ErrorIs(t, err, polkavm.ErrHalt)
+
+	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
+
+	actualValue := make([]byte, z)
+	err = memOut.Read(o, actualValue)
+	require.NoError(t, err)
+
+	startOffset := s - uint64(uDataBase)
+	endOffset := startOffset + z
+	expectedValue := uData[startOffset:endOffset]
+	assert.Equal(t, expectedValue, actualValue)
+
+	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.PeekCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
+	assert.Equal(t, expectedGasRemaining, gasRemaining)
+}
+
+func TestPoke(t *testing.T) {
+	pp := &polkavm.Program{
+		Instructions: []polkavm.Instruction{
+			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		},
+	}
+
+	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	require.NoError(t, err)
+
+	n := uint64(0)
+	s := uint64(memoryMap.RWDataAddress) + 100
+	o := uint64(memoryMap.RWDataAddress) + 200
+	z := uint64(4)
+
+	mem := memoryMap.NewMemory(nil, nil, nil)
+
+	sourceData := []byte("data_for_poke")
+
+	err = mem.Write(uint32(s), sourceData)
+	require.NoError(t, err)
+
+	u := polkavm.IntegratedPVM{
+		Code:               nil,
+		Ram:                mem,
+		InstructionCounter: 0,
+	}
+
+	ctxPair := polkavm.RefineContextPair{
+		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{
+			n: u,
+		},
+		Segments: []polkavm.Segment{},
+	}
+
+	initialRegs := polkavm.Registers{
+		polkavm.RA: polkavm.VmAddressReturnToHost,
+		polkavm.SP: uint64(memoryMap.StackAddressHigh),
+		polkavm.A0: n,
+		polkavm.A1: s,
+		polkavm.A2: o,
+		polkavm.A3: z,
+	}
+
+	hostCall := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mm polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
+		gasCounterOut, regsOut, memOut, ctxOut, err := host_call.Poke(
+			gasCounter,
+			regs,
+			mm,
+			ctxPair,
+		)
+		require.NoError(t, err)
+		ctxPair = ctxOut
+		return gasCounterOut, regsOut, memOut, x, err
+	}
+
+	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
+	require.ErrorIs(t, err, polkavm.ErrHalt)
+
+	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
+
+	actual := make([]byte, z)
+	vm := ctxPair.IntegratedPVMMap[n]
+	err = (&vm.Ram).Read(uint32(o), actual)
+	require.NoError(t, err)
+	expected := sourceData[:z]
+	assert.Equal(t, expected, actual)
+
+	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.PokeCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
 	assert.Equal(t, expectedGasRemaining, gasRemaining)
 }
