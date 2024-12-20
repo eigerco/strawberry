@@ -24,35 +24,19 @@ pub unsafe extern "C" fn reed_solomon_encode(
     recovery_shards_out: *mut u8,
     recovery_shards_out_len: size_t,
 ) -> c_int {
-    if let Some(sum) = original_shards_count.checked_add(recovery_shards_count) {
-        if sum > MAX_SHARDS {
-            return -1;
-        }
-    } else {
-        // Overflow.
-        return -1;
-    }
+    match original_shards_count.checked_add(recovery_shards_count) {
+        Some(sum) if sum <= MAX_SHARDS => {}
+        _ => return -1,
+    };
 
-    if !(original_shards_count > 0 && recovery_shards_count > 0) {
-        return -1;
-    }
-
-    if original_shards.is_null() || recovery_shards_out.is_null() {
-        return -1;
-    }
-
-    // Shard size must be a multiple of 2.
-    if !(shard_size > 0 && shard_size % 2 == 0) {
-        return -1;
-    }
-
-    if original_shards_len % shard_size != 0
+    if !(original_shards_count > 0 && recovery_shards_count > 0)
+        || original_shards.is_null()
+        || recovery_shards_out.is_null()
+        || !(shard_size > 0 && shard_size % 2 == 0)
+        || original_shards_len % shard_size != 0
         || original_shards_len / shard_size != original_shards_count
+        || recovery_shards_out_len != recovery_shards_count * shard_size
     {
-        return -1;
-    }
-
-    if recovery_shards_out_len != recovery_shards_count * shard_size {
         return -1;
     }
 
@@ -71,8 +55,7 @@ pub unsafe extern "C" fn reed_solomon_encode(
 
             for (i, shard) in recovery.iter().enumerate() {
                 let start = i * shard_size;
-                let end = start + shard_size;
-                output_slice[start..end].copy_from_slice(shard);
+                output_slice[start..start + shard_size].copy_from_slice(shard);
             }
             0
         }
@@ -113,14 +96,10 @@ pub unsafe extern "C" fn reed_solomon_decode(
     recovered_shards_out_len: size_t,
     recovered_shards_indexes_out: *mut size_t,
 ) -> c_int {
-    if let Some(sum) = original_shards_count.checked_add(recovery_shards_count) {
-        if sum > MAX_SHARDS {
-            return -1;
-        }
-    } else {
-        // Overflow.
-        return -1;
-    }
+    match original_shards_count.checked_add(recovery_shards_count) {
+        Some(sum) if sum <= MAX_SHARDS => {}
+        _ => return -1,
+    };
 
     if original_shards.is_null()
         || original_shards_indexes.is_null()
@@ -128,35 +107,20 @@ pub unsafe extern "C" fn reed_solomon_decode(
         || recovery_shards_indexes.is_null()
         || recovered_shards_out.is_null()
         || recovered_shards_indexes_out.is_null()
-    {
-        return -1;
-    }
-
-    if !(original_shards_count > 0 && recovery_shards_count > 0) {
-        return -1;
-    }
-
-    // Shard size must be a multiple of 2.
-    if !(shard_size > 0 && shard_size % 2 == 0) {
-        return -1;
-    }
-
-    if original_shards_len % shard_size != 0
+        || !(original_shards_count > 0 && recovery_shards_count > 0)
+        || !(shard_size > 0 && shard_size % 2 == 0)
+        || original_shards_len % shard_size != 0
         || recovery_shards_len % shard_size != 0
         || recovery_shards_len % shard_size != 0
-    {
-        return -1;
-    }
-
     // Expected recovered shards are original shards count - original shards
     // provided. Since we only get back missing original shards.
-    if recovered_shards_out_len
-        != shard_size * (original_shards_count - (original_shards_len / shard_size))
+        || recovered_shards_out_len
+            != shard_size * (original_shards_count - (original_shards_len / shard_size))
     {
         return -1;
     }
 
-    // Create original shard pairs
+    // Create original shard pairs.
     let original_shards = slice::from_raw_parts(original_shards, original_shards_len);
     let original_shards_indexes =
         slice::from_raw_parts(original_shards_indexes, original_shards_len / shard_size);
@@ -165,7 +129,7 @@ pub unsafe extern "C" fn reed_solomon_decode(
         .zip(original_shards.chunks(shard_size))
         .map(|(&idx, chunk)| (idx, chunk));
 
-    // Create recovery shard pairs
+    // Create recovery shard pairs.
     let recovery_shards = slice::from_raw_parts(recovery_shards, recovery_shards_len);
     let recovery_shards_indexes =
         slice::from_raw_parts(recovery_shards_indexes, recovery_shards_len / shard_size);
@@ -187,10 +151,9 @@ pub unsafe extern "C" fn reed_solomon_decode(
             let recovered_shards_indexes_out =
                 slice::from_raw_parts_mut(recovered_shards_indexes_out, restored.len());
 
-            for (i, (&shard_index, shard_data)) in restored.iter().enumerate() {
+            for (i, (&shard_index, shard)) in restored.iter().enumerate() {
                 let start = i * shard_size;
-                let end = start + shard_size;
-                recovered_shards_out[start..end].copy_from_slice(shard_data);
+                recovered_shards_out[start..start + shard_size].copy_from_slice(shard);
                 recovered_shards_indexes_out[i] = shard_index;
             }
             0
