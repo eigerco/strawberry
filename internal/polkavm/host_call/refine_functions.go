@@ -201,7 +201,33 @@ func Peek(
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	return gas, regs, mem, ctxPair, nil
+	if gas < PeekCost {
+		return gas, regs, mem, ctxPair, ErrOutOfGas
+	}
+	gas -= PeekCost
+
+	n, o, sReg, z := regs[A0], regs[A1], regs[A2], regs[A3]
+
+	u, exists := ctxPair.IntegratedPVMMap[n]
+	if !exists {
+		//n ∉ K(m)
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
+
+	// (m[n]u)[s...s+z]
+	s := make([]byte, z)
+	err := u.Ram.Read(uint32(sReg), s)
+	if err != nil {
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
+
+	// (ω′7, µ′) = (OK, µ′o...o+z = s)
+	err = mem.Write(uint32(o), s)
+	if err != nil {
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
+
+	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
 // Poke ΩO(ϱ, ω, µ, (m, e))
@@ -211,7 +237,33 @@ func Poke(
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	return gas, regs, mem, ctxPair, nil
+	if gas < PokeCost {
+		return gas, regs, mem, ctxPair, ErrOutOfGas
+	}
+	gas -= PokeCost
+
+	n, sReg, o, z := regs[A0], regs[A1], regs[A2], regs[A3]
+
+	innerPVM, exists := ctxPair.IntegratedPVMMap[n]
+	if !exists {
+		//n ∉ K(m)
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
+
+	s := make([]byte, z)
+	err := mem.Read(uint32(sReg), s)
+	if err != nil {
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
+
+	err = innerPVM.Ram.Write(uint32(o), s)
+	if err != nil {
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
+
+	// (ω′7,m′) = (OK, (m′[n]u)[o..o+z]=s)
+	ctxPair.IntegratedPVMMap[n] = innerPVM
+	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
 // Zero ΩZ(ϱ, ω, µ, (m, e))
