@@ -32,14 +32,19 @@ lint:
 build-bandersnatch:
 	cargo build --release --lib --manifest-path=bandersnatch/Cargo.toml
 
+.PHONY: build-erasurecoding
+## build-erasurecoding: Builds the erasure coding library
+build-erasurecoding:
+	cargo build --release --lib --manifest-path=erasurecoding/Cargo.toml
+
 .PHONY: test
 ## test: Runs unit tests.
-test: build-bandersnatch
+test: build-bandersnatch build-erasurecoding
 	go test ./... -race -v $(DARWIN_TEST_GOFLAGS)
 
 .PHONY: integration
 ## integration: Runs integration tests.
-integration:
+integration: build-bandersnatch build-erasurecoding
 	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=integration
 
 ## install-hooks: Install git-hooks from .githooks directory.
@@ -48,5 +53,5 @@ install-hooks:
 	git config core.hooksPath .githooks
 
 .PHONY: build
-build: build-bandersnatch
+build: build-bandersnatch build-erasurecoding
 	GOOS=${GOOS} GOARCH=${GOARCH} go build -o strawberry ./cmd/strawberry
