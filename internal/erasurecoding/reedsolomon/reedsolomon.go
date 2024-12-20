@@ -4,11 +4,19 @@ import (
 	"C"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 
+	"github.com/eigerco/strawberry/internal/common"
+
 	"github.com/ebitengine/purego"
+)
+
+const (
+	MaxShards    = 65535 // Original + Recovery shards should equal this, a limitation of the reed-solomon-simd library.
+	MaxShardSize = 1024  // The graypayer calls for a shard size of 2 so this is a decent sized maximum if this changes.
 )
 
 var (
@@ -45,11 +53,19 @@ type Encoder struct {
 
 // Create a new reed solomon enocder with the given original shards count and
 // recovery shards count.
-func New(originalShardsCount, recoveryShardsCount int) *Encoder {
+func New(originalShardsCount, recoveryShardsCount int) (*Encoder, error) {
+	if recoveryShardsCount > math.MaxInt-originalShardsCount {
+		return nil, fmt.Errorf("shard count overflow")
+	}
+
+	if originalShardsCount+recoveryShardsCount > MaxShards {
+		return nil, fmt.Errorf("too many total shards")
+	}
+
 	return &Encoder{
 		originalShardsCount: originalShardsCount,
 		recoveryShardsCount: recoveryShardsCount,
-	}
+	}, nil
 }
 
 // Takes a slice of data to encode and chunks the data into shards. The
@@ -58,6 +74,9 @@ func New(originalShardsCount, recoveryShardsCount int) *Encoder {
 // length of the original shards count + the recovery shards count. Data is not
 // copied, so the input data should not be modified after.
 func (r *Encoder) Chunk(data []byte) ([][]byte, error) {
+	if len(data) > common.MaxWorkPackageSize {
+		return nil, errors.New("data length too long")
+	}
 	// Need at least two bytes per chunk.
 	if len(data) < r.originalShardsCount*2 {
 		return nil, errors.New("data length too short")
@@ -96,7 +115,7 @@ func (r *Encoder) Encode(
 	}
 
 	shardSize := shardSize(shards)
-	if shardSize == 0 {
+	if shardSize == 0 || shardSize > MaxShardSize {
 		return errors.New("invalid shard size")
 	}
 
@@ -140,7 +159,7 @@ func (r *Encoder) Decode(shards [][]byte) error {
 		return errors.New("too few shards")
 	}
 	shardSize := shardSize(shards)
-	if shardSize == 0 {
+	if shardSize == 0 || shardSize > MaxShardSize {
 		return errors.New("invalid shard size")
 	}
 

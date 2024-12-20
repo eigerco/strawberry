@@ -13,6 +13,7 @@ const (
 	ValidatorRotationPeriod                      = jamtime.Timeslot(10)
 	MaxTicketExtrinsicSize                       = 16
 	MaxHistoricalTimeslotsForPreimageMeta        = 3
-	MaxAllocatedGasAccumulation                  = 100_000
 	SizeOfSegment                                = 4104
+	MaxWorkPackageSize                           = 12 * 1 << 20 // 12 MB: The maximum size of an encoded work-package in octets (including extrinsic data and import implications).
+	MaxAllocatedGasAccumulation                  = 100_000
 )

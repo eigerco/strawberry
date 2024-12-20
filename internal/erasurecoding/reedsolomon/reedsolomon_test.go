@@ -23,7 +23,9 @@ func TestRoundTrip(t *testing.T) {
 
 	data := testutils.MustFromHex(t, tv.Data)
 
-	rs := New(342, 681)
+	rs, err := New(342, 681)
+	require.NoError(t, err)
+
 	shards, err := rs.Chunk(data)
 	require.NoError(t, err)
 
