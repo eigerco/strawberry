@@ -133,8 +133,8 @@ type SegmentRootPair struct {
 }
 
 type Rho struct {
-	Report  *Report `json:"report"`
-	Timeout int     `json:"timeout"`
+	Report  *Report `json:"Report"`
+	Timeout int     `json:"Timeout"`
 }
 
 type ValidatorKey struct {

@@ -10,10 +10,11 @@ const (
 	TotalNumberOfCores                    uint16 = 2
 	ValidatorsSuperMajority                      = (2 * NumberOfValidators / 3) + 1
 	WorkReportTimeoutPeriod                      = jamtime.Timeslot(5)
-	ValidatorRotationPeriod                      = jamtime.Timeslot(10)
+	ValidatorRotationPeriod                      = jamtime.Timeslot(4)
 	MaxTicketExtrinsicSize                       = 16
 	MaxHistoricalTimeslotsForPreimageMeta        = 3
 	SizeOfSegment                                = 4104
 	MaxWorkPackageSize                           = 12 * 1 << 20 // 12 MB: The maximum size of an encoded work-package in octets (including extrinsic data and import implications).
 	MaxAllocatedGasAccumulation                  = 100_000
+	WorkReportMaxSumOfDependencies               = 8
 )
