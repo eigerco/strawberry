@@ -18,11 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCalculateNewTimeStateTransiton(t *testing.T) {
+func TestCalculateNewTimeStateTransition(t *testing.T) {
 	header := block.Header{
 		TimeSlotIndex: 2,
 	}
-	newTimeState := calculateNewTimeState(header)
+	newTimeState := CalculateNewTimeState(header)
 	require.Equal(t, newTimeState, header.TimeSlotIndex)
 }
 
@@ -179,7 +179,7 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 		},
 	}
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, serviceState, newTimeslot)
+	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -197,7 +197,7 @@ func TestCalculateIntermediateServiceStateEmptyPreimages(t *testing.T) {
 
 	expectedServiceState := serviceState
 
-	newServiceState := calculateIntermediateServiceState(block.PreimageExtrinsic{}, serviceState, serviceState, jamtime.Timeslot(100))
+	newServiceState := CalculateIntermediateServiceState(block.PreimageExtrinsic{}, serviceState, jamtime.Timeslot(100))
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -225,7 +225,7 @@ func TestCalculateIntermediateServiceStateNonExistentService(t *testing.T) {
 
 	expectedServiceState := serviceState
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, serviceState, newTimeslot)
+	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -269,7 +269,7 @@ func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
 		},
 	}
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, serviceState, newTimeslot)
+	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -314,7 +314,7 @@ func TestCalculateIntermediateServiceStateExistingPreimage(t *testing.T) {
 		},
 	}
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, serviceState, newTimeslot)
+	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -341,7 +341,7 @@ func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
 
 	expectedServiceState := serviceState // Should remain unchanged
 
-	newServiceState := calculateIntermediateServiceState(preimages, serviceState, serviceState, newTimeslot)
+	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -370,7 +370,7 @@ func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 		{WorkReport: workReport2},
 	}
 
-	newAssignments := calculateIntermediateCoreAssignmentsFromExtrinsics(disputes, coreAssignments)
+	newAssignments := CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes, coreAssignments)
 	require.Equal(t, expectedAssignments, newAssignments)
 }
 
@@ -394,7 +394,7 @@ func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			assurances := createAssuranceExtrinsic(tc.availableCores, tc.validators)
 			initialAssignments := createInitialAssignments()
-			newAssignments, err := calculateIntermediateCoreAssignmentsFromAvailability(assurances, initialAssignments, block.Header{TimeSlotIndex: jamtime.Timeslot(12)})
+			newAssignments, err := CalculateIntermediateCoreAssignmentsFromAvailability(assurances, initialAssignments, block.Header{TimeSlotIndex: jamtime.Timeslot(12)})
 			require.NoError(t, err)
 
 			removedCount := uint16(0)
@@ -484,7 +484,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments, _ := calculateNewCoreAssignments(
+		newAssignments, _, err := CalculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
@@ -492,8 +492,10 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			entropyPool,
 		)
 
-		// Assert
-		require.Nil(t, newAssignments[selectedCoreIndex])
+		require.NoError(t, err)
+		require.Equal(t, workReport, *newAssignments[selectedCoreIndex].WorkReport)
+		require.Equal(t, currentTimeslot, newAssignments[selectedCoreIndex].Time)
+
 	})
 
 	t.Run("invalid guarantee due to timeslot too old", func(t *testing.T) {
@@ -551,14 +553,14 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments, _ := calculateNewCoreAssignments(
+		newAssignments, _, err := CalculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
 			currentTimeslot,
 			state.EntropyPool{},
 		)
-
+		require.ErrorIs(t, err, ErrTimeslotOutOfRange)
 		require.Nil(t, newAssignments[0])
 	})
 
@@ -616,14 +618,14 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments, _ := calculateNewCoreAssignments(
+		newAssignments, _, err := CalculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
 			currentTimeslot,
 			state.EntropyPool{},
 		)
-
+		require.ErrorIs(t, err, ErrCredentialVerificationFailed)
 		require.Nil(t, newAssignments[0])
 	})
 
@@ -683,14 +685,14 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 
 		intermediateAssignments := state.CoreAssignments{}
 
-		newAssignments, _ := calculateNewCoreAssignments(
+		newAssignments, _, err := CalculateNewCoreAssignments(
 			guarantees,
 			intermediateAssignments,
 			validatorState,
 			currentTimeslot,
 			state.EntropyPool{},
 		)
-
+		assert.ErrorIs(t, err, ErrCredentialVerificationFailed)
 		require.Nil(t, newAssignments[0])
 	})
 }
@@ -707,7 +709,7 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		newAuth := testutils.RandomHash(t)
 		pendingAuths[0][1] = newAuth // At index 1 (matching TimeSlotIndex)
 
-		newAuths := calculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
+		newAuths := CalculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
 
 		require.Len(t, newAuths[0], 1)
 		assert.Equal(t, newAuth, newAuths[0][0])
@@ -739,7 +741,7 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		newAuth := testutils.RandomHash(t)
 		pendingAuths[0][1] = newAuth // At index 1 (matching TimeSlotIndex)
 
-		newAuths := calculateNewCoreAuthorizations(header, guarantees, pendingAuths, currentAuths)
+		newAuths := CalculateNewCoreAuthorizations(header, guarantees, pendingAuths, currentAuths)
 
 		require.Len(t, newAuths[0], 1)
 		assert.Equal(t, newAuth, newAuths[0][0])
@@ -762,7 +764,7 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		newAuth := testutils.RandomHash(t)
 		pendingAuths[0][1] = newAuth
 
-		newAuths := calculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
+		newAuths := CalculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
 
 		// Check that size limit is maintained and oldest auth was removed
 		require.Len(t, newAuths[0], state.MaxAuthorizersPerCore)
@@ -782,7 +784,7 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		// Empty pending authorizations
 		pendingAuths := state.PendingAuthorizersQueues{}
 
-		newAuths := calculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
+		newAuths := CalculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
 
 		// Should keep existing authorizations unchanged
 		require.Len(t, newAuths[0], 1)
@@ -808,7 +810,7 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		pendingAuths[0][1] = newAuth0
 		pendingAuths[1][1] = newAuth1
 
-		newAuths := calculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
+		newAuths := CalculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
 
 		require.Len(t, newAuths[0], 2)
 		require.Len(t, newAuths[1], 2)
