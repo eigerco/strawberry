@@ -192,7 +192,7 @@ func TestAssurancesTiny(t *testing.T) {
 			newBlock := mapBlock(tc.Input)
 			theState := mapAssurancesState(tc.PreState)
 			if theState.CoreAssignments, err = statetransition.CalculateIntermediateCoreFromAssurances(theState.ValidatorState.CurrentValidators, theState.CoreAssignments, newBlock.Header, newBlock.Extrinsic.EA); tc.Output.Err != "" {
-				assert.EqualError(t, err, tc.Output.Err)
+				require.EqualError(t, err, strings.ReplaceAll(tc.Output.Err, "_", " "))
 			} else {
 				require.NoError(t, err)
 			}
