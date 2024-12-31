@@ -94,7 +94,7 @@ func TestEncodeDecodeRoundTripRandom(t *testing.T) {
 }
 
 func TestEncodeDecodeInitialTestVector(t *testing.T) {
-	jsonData, err := os.ReadFile("reedsolomon/vectors/initial.json")
+	jsonData, err := os.ReadFile("reedsolomon/test_data.json")
 	require.NoError(t, err)
 
 	tv := TestVector{}

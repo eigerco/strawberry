@@ -126,7 +126,6 @@ func Decode(shards [][]byte, outSize int) ([]byte, error) {
 // ensuring even distribution across shards. Returns nil if n <= 0.
 // Implements equation H.4 from the graypaper (v0.5.3).
 func unzip(n int, data []byte) [][]byte {
-
 	if n <= 0 {
 		return nil
 	}
