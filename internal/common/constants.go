@@ -15,6 +15,7 @@ const (
 	MaxHistoricalTimeslotsForPreimageMeta        = 3                                // () Maximum number of historical timeslots for preimage metadata
 	SizeOfSegment                                = 4104                             // WG = WP*WE = 4104: The size of a segment in octets.
 	MaxWorkPackageSize                           = 12 * 1 << 20                     // WB = 12 MB: The maximum size of an encoded work-package in octets (including extrinsic data and import implications).
+	ErasureCodingChunkSize                       = 684                              // WE = 684: The basic size of erasure-coded pieces in octets.
 	MaxAllocatedGasAccumulation                  = 100_000                          // GA = 100,000: The gas allocated to invoke a work-report’s Accumulation logic.
 	WorkReportMaxSumOfDependencies               = 8                                // (J) The maximum sum of dependency items in a work-report.
 )
