@@ -51,7 +51,7 @@ type Encoder struct {
 	recoveryShardsCount int
 }
 
-// Create a new reed solomon enocder with the given original shards count and
+// Create a new reed solomon encoder with the given original shards count and
 // recovery shards count.
 func New(originalShardsCount, recoveryShardsCount int) (*Encoder, error) {
 	if recoveryShardsCount > math.MaxInt-originalShardsCount {
@@ -84,14 +84,13 @@ func (r *Encoder) Chunk(data []byte) ([][]byte, error) {
 	shardSize := (len(data) + r.originalShardsCount - 1) / r.originalShardsCount
 	shards := make([][]byte, r.originalShardsCount+r.recoveryShardsCount)
 
-	// Handle all full-sized chunks
+	// Handle all full-sized chunks.
 	for i := 0; i < r.originalShardsCount-1; i++ {
 		start := i * shardSize
-		end := start + shardSize
-		shards[i] = data[start:end]
+		shards[i] = data[start : start+shardSize]
 	}
 
-	// Handle last chunk with padding
+	// Handle last chunk with padding.
 	start := (r.originalShardsCount - 1) * shardSize
 	padded := make([]byte, shardSize)
 	copy(padded, data[start:])
@@ -106,7 +105,7 @@ func (r *Encoder) Chunk(data []byte) ([][]byte, error) {
 // This can be used to implement C ∶ ⟦Y2⟧342 → ⟦Y2⟧1023 in the graypaper. (Apendix H, v0.5.2-4)
 func (r *Encoder) Encode(
 	shards [][]byte) error {
-	if shardCount(shards[:r.originalShardsCount]) != r.originalShardsCount {
+	if ShardCount(shards[:r.originalShardsCount]) != r.originalShardsCount {
 		return errors.New("too few original shards")
 	}
 
@@ -114,7 +113,7 @@ func (r *Encoder) Encode(
 		return errors.New("not enough space for recovery shards")
 	}
 
-	shardSize := shardSize(shards)
+	shardSize := ShardSize(shards)
 	if shardSize == 0 || shardSize > MaxShardSize {
 		return errors.New("invalid shard size")
 	}
@@ -144,8 +143,7 @@ func (r *Encoder) Encode(
 
 	for i := 0; i < r.recoveryShardsCount; i++ {
 		start := i * shardSize
-		end := start + shardSize
-		shards[i+r.originalShardsCount] = recoveryShardsOut[start:end]
+		shards[i+r.originalShardsCount] = recoveryShardsOut[start : start+shardSize]
 	}
 	return nil
 }
@@ -155,10 +153,10 @@ func (r *Encoder) Encode(
 // or a length of zero before decoding.
 // This can be used to implement R ∶ ℘⟨⎧⎩Y2, N1023⎫⎭⟩342 → ⟦Y2⟧342 in the graypaper. (Apendix H, v0.5.2-4)
 func (r *Encoder) Decode(shards [][]byte) error {
-	if shardCount(shards) < r.originalShardsCount {
+	if ShardCount(shards) < r.originalShardsCount {
 		return errors.New("too few shards")
 	}
-	shardSize := shardSize(shards)
+	shardSize := ShardSize(shards)
 	if shardSize == 0 || shardSize > MaxShardSize {
 		return errors.New("invalid shard size")
 	}
@@ -187,7 +185,7 @@ func (r *Encoder) Decode(shards [][]byte) error {
 		}
 	}
 
-	shardCountOriginal := shardCount(shards[:r.originalShardsCount])
+	shardCountOriginal := ShardCount(shards[:r.originalShardsCount])
 	// Shards we already have aren't restored.
 	restoredShardsCount := r.originalShardsCount - shardCountOriginal
 	restoredShards := make([]byte, restoredShardsCount*shardSize)
@@ -212,16 +210,15 @@ func (r *Encoder) Decode(shards [][]byte) error {
 
 	for i := 0; i < restoredShardsCount; i++ {
 		start := i * shardSize
-		end := start + shardSize
 		index := int(restoredShardsIndexes[i])
-		shards[index] = restoredShards[start:end]
+		shards[index] = restoredShards[start : start+shardSize]
 	}
 
 	return nil
 }
 
 // Returns the first non nil or length zero shard length.
-func shardSize(shards [][]byte) int {
+func ShardSize(shards [][]byte) int {
 	for _, shard := range shards {
 		if len(shard) != 0 {
 			return len(shard)
@@ -231,7 +228,7 @@ func shardSize(shards [][]byte) int {
 }
 
 // Returns the count of non nil or length zero shards.
-func shardCount(shards [][]byte) int {
+func ShardCount(shards [][]byte) int {
 	count := 0
 	for _, shard := range shards {
 		if len(shard) != 0 {
@@ -242,21 +239,21 @@ func shardCount(shards [][]byte) int {
 }
 
 func init() {
-	// Load the Rust shared library in the init function
+	// Load the Rust shared library in the init function.
 	libPath, err := getErasurecodingLibaryPath()
 	if err != nil {
 		fmt.Println("Failed to load erasure coding library path:", err)
 		os.Exit(1)
 	}
 
-	// Load the Rust shared library
+	// Load the Rust shared library.
 	lib, err := purego.Dlopen(libPath, purego.RTLD_NOW|purego.RTLD_GLOBAL)
 	if err != nil {
 		fmt.Println("Failed to load erasure coding library:", err)
 		os.Exit(1)
 	}
 
-	// Register the Rust FFI functions with Go using purego
+	// Register the Rust FFI functions with Go using purego.
 	purego.RegisterLibFunc(&reedSolomonEncode, lib, "reed_solomon_encode")
 	purego.RegisterLibFunc(&reedSolomonDecode, lib, "reed_solomon_decode")
 }

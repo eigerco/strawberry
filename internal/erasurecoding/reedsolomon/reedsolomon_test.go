@@ -14,7 +14,7 @@ import (
 )
 
 func TestRoundTrip(t *testing.T) {
-	jsonData, err := os.ReadFile("vectors/initial.json")
+	jsonData, err := os.ReadFile("test_data.json")
 	require.NoError(t, err)
 
 	tv := TestVector{}
