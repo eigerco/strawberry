@@ -283,17 +283,16 @@ func TestReports(t *testing.T) {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
+		failsOnValidateExtrinsicsGuarantees := true
 
 		t.Run(file.Name(), func(t *testing.T) {
 			switch file.Name() {
+			case "bad_signature-1.json", "wrong_assignment-1.json":
+				failsOnValidateExtrinsicsGuarantees = false
 			case "bad_beefy_mmr-1.json":
 				t.Skip("MMR verification currently disabled pending implementation of new MMR super-peak function")
-			case "bad_signature-1.json":
-				t.Skip("It needs further investigation")
 			case "high_work_report_gas-1.json":
 				t.Skip("Gas limit in test vector seems to not match specification")
-			case "wrong_assignment-1.json":
-				t.Skip("It needs further investigation")
 			}
 
 			filePath := fmt.Sprintf("vectors/reports/tiny/%s", file.Name())
@@ -331,14 +330,10 @@ func TestReports(t *testing.T) {
 				},
 			}
 
-			//err = statetransition.UpdateState(&preState, newBlock)
-			//require.NoError(t, err)
-			log.Printf("\n=== Starting Validation ===")
 			newTimeState := statetransition.CalculateNewTimeState(newBlock.Header)
-			fmt.Printf("State Core Assignments: %+v\n", preState.CoreAssignments)
 			err = statetransition.ValidateExtrinsicGuarantees(newBlock.Header, &preState, newBlock.Extrinsic.EG, preState.CoreAssignments, newTimeState, block.AncestorStoreSingleton)
-			// Verify results
-			if data.Output.Err != "" {
+			//Verify results
+			if data.Output.Err != "" && failsOnValidateExtrinsicsGuarantees {
 				require.Error(t, err)
 				require.EqualError(t, err, strings.ReplaceAll(data.Output.Err, "_", " "))
 				return
@@ -350,6 +345,11 @@ func TestReports(t *testing.T) {
 			require.NoError(t, err)
 
 			newCoreAssignments, reporters, err := statetransition.CalculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, preState.ValidatorState, newTimeState, preState.EntropyPool)
+			if data.Output.Err != "" {
+				require.Error(t, err)
+				require.EqualError(t, err, strings.ReplaceAll(data.Output.Err, "_", " "))
+				return
+			}
 			require.NoError(t, err)
 
 			workReports := statetransition.GetAvailableWorkReports(newCoreAssignments)

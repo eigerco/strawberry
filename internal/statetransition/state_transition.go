@@ -34,15 +34,6 @@ const (
 	signatureContextInvalid   = "jam_invalid"   // X_A ≡ $jam_invalid (128 v0.4.5)
 )
 
-var (
-	ErrBadSignature         = errors.New("bad_signature")
-	ErrReportTimeout        = errors.New("report_timeout")
-	ErrBadAttestationParent = errors.New("bad_attestation_parent")
-	ErrBadOrder             = errors.New("bad_order")
-	ErrCoreNotEngaged       = errors.New("core_not_engaged")
-	ErrBadValidatorIndex    = errors.New("bad_validator_index")
-)
-
 // UpdateState updates the state
 // TODO: all the calculations which are not dependent on intermediate / new state can be done in parallel
 //
@@ -1186,6 +1177,7 @@ func CalculateNewCoreAssignments(
 
 	for _, guarantee := range guarantees.Guarantees {
 		coreIndex := guarantee.WorkReport.CoreIndex
+		log.Printf("Processing guarantee for core %d", coreIndex)
 
 		// Check timeslot range: R(⌊τ′/R⌋ - 1) ≤ t ≤ τ′
 		previousRotationStart := (newTimeslot/common.ValidatorRotationPeriod - 1) * common.ValidatorRotationPeriod
@@ -1196,11 +1188,11 @@ func CalculateNewCoreAssignments(
 		}
 
 		if isAssignmentValid(intermediateAssignments[coreIndex], newTimeslot) {
-			var ok bool
 			var guaranteeReporters crypto.ED25519PublicKeySet
-			ok, guaranteeReporters = verifyGuaranteeCredentials(guarantee, validatorState, entropyPool, newTimeslot)
-			if !ok {
-				return state.CoreAssignments{}, nil, ErrCredentialVerificationFailed
+			guaranteeReporters, err := verifyGuaranteeCredentials(guarantee, validatorState, entropyPool, newTimeslot)
+			if err != nil {
+				log.Printf("Signature verification failed for core %d", guarantee.WorkReport.CoreIndex)
+				return state.CoreAssignments{}, nil, err
 			}
 			for reporter := range guaranteeReporters {
 				reporters[reporter] = struct{}{}
@@ -1654,7 +1646,7 @@ func verifyGuaranteeCredentials(
 	validatorState validator.ValidatorState,
 	entropyPool state.EntropyPool,
 	currentTimeslot jamtime.Timeslot,
-) (bool, crypto.ED25519PublicKeySet) {
+) (crypto.ED25519PublicKeySet, error) {
 	reporters := make(crypto.ED25519PublicKeySet)
 
 	validators, entropy, timeslotForPermutation := determineValidatorsAndDataForPermutation(
@@ -1667,47 +1659,50 @@ func verifyGuaranteeCredentials(
 
 	coreAssignments, err := PermuteAssignments(entropy, timeslotForPermutation)
 	if err != nil {
-		log.Printf("Error computing core assignments: %v", err)
-		return false, reporters
+		return reporters, fmt.Errorf("failed to compute core assignments: %w", err)
 	}
 
+	log.Printf("Core assignments for timeslot %d: %v", timeslotForPermutation, coreAssignments)
+
+	// Generate work report hash
+	reportBytes, err := jam.Marshal(guarantee.WorkReport)
+	if err != nil {
+		return reporters, fmt.Errorf("failed to marshal work report: %w", err)
+	}
+	hashed := crypto.HashData(reportBytes)
+	message := append([]byte(signatureContextGuarantee), hashed[:]...)
+
 	for _, credential := range guarantee.Credentials {
+
 		if !isValidatorAssignedToCore(credential.ValidatorIndex,
-			guarantee.WorkReport.CoreIndex,
-			coreAssignments) {
-			return false, reporters
+			guarantee.WorkReport.CoreIndex, coreAssignments) {
+			log.Printf("Validator %d not assigned to core %d",
+				credential.ValidatorIndex, guarantee.WorkReport.CoreIndex)
+			return reporters, ErrWrongAssignment
 		}
 
 		if credential.ValidatorIndex >= uint16(len(validators)) {
-			return false, reporters
+			return reporters, fmt.Errorf("invalid validator index %d", credential.ValidatorIndex)
 		}
 
-		validatorKey := validators[credential.ValidatorIndex]
-		if len(validatorKey.Ed25519) != ed25519.PublicKeySize {
-			return false, reporters
+		validatorKey := validators[credential.ValidatorIndex].Ed25519
+		if len(validatorKey) != ed25519.PublicKeySize {
+			return reporters, fmt.Errorf("invalid validator key size for validator %d", credential.ValidatorIndex)
 		}
 
-		isAssigned := coreAssignments[credential.ValidatorIndex] == uint32(guarantee.WorkReport.CoreIndex)
-
-		if !isAssigned {
-			log.Printf("Validator %d not assigned to core %d", credential.ValidatorIndex, guarantee.WorkReport.CoreIndex)
-			return false, reporters
-		}
-
-		reportBytes, err := jam.Marshal(guarantee.WorkReport)
-		if err != nil {
-			return false, reporters
-		}
-		hashed := crypto.HashData(reportBytes)
-		message := append([]byte(signatureContextGuarantee), hashed[:]...)
-		sigValid := ed25519.Verify(validatorKey.Ed25519, message, credential.Signature[:])
+		// Verify signature
+		sigValid := ed25519.Verify(validatorKey, message, credential.Signature[:])
 		if !sigValid {
-			return false, reporters
+			log.Printf("Invalid signature from validator %d", credential.ValidatorIndex)
+			log.Printf("  Key: %x", validatorKey)
+			log.Printf("  Signature: %x", credential.Signature[:])
+			return reporters, ErrBadSignature
 		}
-		reporters.Add(validatorKey.Ed25519)
+
+		reporters.Add(validatorKey)
 	}
 
-	return true, reporters
+	return reporters, nil
 }
 
 // isValidatorAssignedToCore checks if a validator is assigned to a specific core.
@@ -1720,6 +1715,7 @@ func isValidatorAssignedToCore(validatorIndex uint16, coreIndex uint16, coreAssi
 	if !assigned {
 		log.Printf("Validator %d assigned to core %d but tried to sign for core %d",
 			validatorIndex, coreAssignments[validatorIndex], coreIndex)
+		return false
 	}
 	return assigned
 }

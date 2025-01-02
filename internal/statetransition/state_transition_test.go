@@ -625,7 +625,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			currentTimeslot,
 			state.EntropyPool{},
 		)
-		require.ErrorIs(t, err, ErrCredentialVerificationFailed)
+		require.ErrorIs(t, err, ErrWrongAssignment)
 		require.Nil(t, newAssignments[0])
 	})
 
@@ -692,7 +692,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 			currentTimeslot,
 			state.EntropyPool{},
 		)
-		assert.ErrorIs(t, err, ErrCredentialVerificationFailed)
+		require.ErrorIs(t, err, ErrWrongAssignment)
 		require.Nil(t, newAssignments[0])
 	})
 }
