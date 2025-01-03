@@ -273,7 +273,41 @@ func Zero(
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	return gas, regs, mem, ctxPair, nil
+	if gas < ZeroCost {
+		return gas, regs, mem, ctxPair, ErrOutOfGas
+	}
+	gas -= ZeroCost
+
+	n, p, c := regs[A0], regs[A1], regs[A2]
+
+	// p < 16 ∨ p + c ≥  2^32 / ZP
+	if p < 16 || p+c >= VMMaxPageIndex {
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
+
+	// u = m[n]u if n ∈ K(m), otherwise ∇
+	u, exists := ctxPair.IntegratedPVMMap[n]
+	if !exists {
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
+
+	for pageIndex := p; pageIndex < p+c; pageIndex++ {
+		// (u′A)p..+c = [W, W, ...]
+		if err := u.Ram.SetAccess(uint32(pageIndex), ReadWrite); err != nil {
+			return gas, withCode(regs, OOB), mem, ctxPair, nil
+		}
+
+		// (u′V)pZP..+cZP = [0, 0, ...]
+		start := uint32(pageIndex * uint64(VMPageSize))
+		zeroBuf := make([]byte, VMPageSize)
+		if err := u.Ram.Write(start, zeroBuf); err != nil {
+			return gas, withCode(regs, OOB), mem, ctxPair, nil
+		}
+	}
+
+	// (ω′7,m′) = (OK, (m′[n]u)=u′)
+	ctxPair.IntegratedPVMMap[n] = u
+	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
 // Void ΩV(ϱ, ω, µ, (m, e))

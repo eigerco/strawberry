@@ -80,6 +80,24 @@ func (m *Memory) Write(address uint32, data []byte) error {
 	return nil
 }
 
+// SetAccess updates the access mode
+func (m *Memory) SetAccess(pageIndex uint32, access MemoryAccess) error {
+	pageStart := pageIndex * VMPageSize
+	pageEnd := pageStart + VMPageSize - 1
+
+	for _, seg := range m.data {
+		if seg.start <= pageStart && seg.end >= pageEnd {
+			seg.access = access
+			return nil
+		}
+	}
+
+	return &ErrPageFault{
+		Reason:  "page out of valid range",
+		Address: pageStart,
+	}
+}
+
 type Registers [13]uint64
 
 type Gas int64

@@ -442,3 +442,87 @@ func TestPoke(t *testing.T) {
 	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.PokeCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
 	assert.Equal(t, expectedGasRemaining, gasRemaining)
 }
+
+func TestZero(t *testing.T) {
+	pp := &polkavm.Program{
+		Instructions: []polkavm.Instruction{
+			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		},
+	}
+
+	memoryMap, err := polkavm.NewMemoryMap(0, 128*1024, 0, 0)
+	require.NoError(t, err)
+
+	n := uint64(0)
+	p := uint64(32)
+	c := uint64(2) // zero out pages #32 & #33
+
+	startAddr := p * uint64(polkavm.VMPageSize)
+	endAddr := (p + c) * uint64(polkavm.VMPageSize)
+
+	mem := memoryMap.NewMemory(nil, nil, nil)
+	for addr := startAddr; addr < endAddr; addr++ {
+		err := mem.Write(uint32(addr), []byte{0xFF})
+		require.NoError(t, err)
+	}
+
+	u := polkavm.IntegratedPVM{Ram: mem}
+	ctxPair := polkavm.RefineContextPair{
+		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{n: u},
+	}
+
+	initialRegs := polkavm.Registers{
+		polkavm.RA: polkavm.VmAddressReturnToHost,
+		polkavm.SP: uint64(memoryMap.StackAddressHigh),
+		polkavm.A0: n,
+		polkavm.A1: p,
+		polkavm.A2: c,
+	}
+
+	hostCallFn := func(
+		hc uint32,
+		gasCounter polkavm.Gas,
+		regs polkavm.Registers,
+		mm polkavm.Memory,
+		acc service.ServiceAccount,
+	) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
+
+		gasOut, regsOut, memOut, ctxOut, err := host_call.Zero(
+			gasCounter,
+			regs,
+			mm,
+			ctxPair,
+		)
+		require.NoError(t, err)
+
+		ctxPair = ctxOut
+		return gasOut, regsOut, memOut, acc, err
+	}
+
+	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(
+		pp,
+		memoryMap,
+		0,
+		initialGas,
+		initialRegs,
+		mem,
+		hostCallFn,
+		service.ServiceAccount{},
+	)
+	require.ErrorIs(t, err, polkavm.ErrHalt)
+	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
+
+	for addr := startAddr; addr < endAddr; addr++ {
+		b := make([]byte, 1)
+		err = memOut.Read(uint32(addr), b)
+		require.NoError(t, err)
+		assert.Equal(t, byte(0), b[0])
+	}
+
+	expectedGasRemaining := polkavm.Gas(initialGas) -
+		host_call.ZeroCost -
+		polkavm.GasCosts[polkavm.Ecalli] -
+		polkavm.GasCosts[polkavm.JumpIndirect]
+	assert.Equal(t, expectedGasRemaining, gasRemaining)
+}
