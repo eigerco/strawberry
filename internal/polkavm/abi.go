@@ -13,12 +13,13 @@ import (
 )
 
 const (
-	AddressSpaceSize      = 0x100000000                      // 2^32
-	VmMaxPageSize         = 0x10000                          // The maximum page size of the VM.
-	VMPageSize            = uint32(1 << 12)                  // ZP: 4096 (2^12) The pvm memory page size.
-	VmAddressReturnToHost = 0xffff0000                       // The address which, when jumped to, will return to the host.
-	VmAddressSpaceTop     = AddressSpaceSize - VmMaxPageSize // The address at which the program's stackData starts inside of the VM.
-	VmAddressSpaceBottom  = VmMaxPageSize                    // The bottom of the accessible address space inside the VM (ZQ?)
+	AddressSpaceSize      = 0x100000000                           // 2^32
+	VmMaxPageSize         = 0x10000                               // The maximum page size of the VM.
+	VMPageSize            = uint32(1 << 12)                       // ZP: 4096 (2^12) The pvm memory page size.
+	VmAddressReturnToHost = 0xffff0000                            // The address which, when jumped to, will return to the host.
+	VmAddressSpaceTop     = AddressSpaceSize - VmMaxPageSize      // The address at which the program's stackData starts inside of the VM.
+	VmAddressSpaceBottom  = VmMaxPageSize                         // The bottom of the accessible address space inside the VM (ZQ?)
+	VMMaxPageIndex        = AddressSpaceSize / uint64(VMPageSize) // 2^32 / ZP = 1 << 20
 )
 
 var (
