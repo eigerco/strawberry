@@ -1,6 +1,7 @@
 package work
 
 const (
+	MaxSizeServiceCode                  = 4000000                                                                // WC = 4000000: The maximum size of service code in octets.
 	MaxNumberOfEntries                  = 1 << 11                                                                // WM = 2^11: The maximum number of entries in a work-package manifest.
 	NumberOfErasureCodecPiecesInSegment = 6                                                                      // WP = 6: The number of erasure-coded pieces in a segment.
 	SizeOfErasureCodecPiecesInOctets    = 684                                                                    // WE = 684: The basic size of erasure-coded pieces in octets.
