@@ -1,4 +1,4 @@
-package transport
+package protocol
 
 import (
 	"github.com/stretchr/testify/assert"
