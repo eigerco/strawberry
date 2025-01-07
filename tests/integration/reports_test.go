@@ -341,7 +341,7 @@ func TestReports(t *testing.T) {
 			require.NoError(t, err)
 
 			intermediateCoreAssignments := statetransition.CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, preState.CoreAssignments)
-			intermediateCoreAssignments, err = statetransition.CalculateIntermediateCoreAssignmentsFromAvailability(newBlock.Extrinsic.EA, intermediateCoreAssignments, newBlock.Header)
+			intermediateCoreAssignments, _, err = statetransition.CalculateIntermediateCoreAssignmentsFromAvailability(newBlock.Extrinsic.EA, intermediateCoreAssignments, newBlock.Header)
 			require.NoError(t, err)
 
 			newCoreAssignments, reporters, err := statetransition.CalculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, preState.ValidatorState, newTimeState, preState.EntropyPool)

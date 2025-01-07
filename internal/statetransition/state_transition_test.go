@@ -394,7 +394,7 @@ func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			assurances := createAssuranceExtrinsic(tc.availableCores, tc.validators)
 			initialAssignments := createInitialAssignments()
-			newAssignments, err := CalculateIntermediateCoreAssignmentsFromAvailability(assurances, initialAssignments, block.Header{TimeSlotIndex: jamtime.Timeslot(12)})
+			newAssignments, _, err := CalculateIntermediateCoreAssignmentsFromAvailability(assurances, initialAssignments, block.Header{TimeSlotIndex: jamtime.Timeslot(12)})
 			require.NoError(t, err)
 
 			removedCount := uint16(0)

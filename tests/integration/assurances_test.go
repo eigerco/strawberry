@@ -191,18 +191,15 @@ func TestAssurancesTiny(t *testing.T) {
 
 			newBlock := mapBlock(tc.Input)
 			theState := mapAssurancesState(tc.PreState)
-			if theState.CoreAssignments, err = statetransition.CalculateIntermediateCoreFromAssurances(theState.ValidatorState.CurrentValidators, theState.CoreAssignments, newBlock.Header, newBlock.Extrinsic.EA); tc.Output.Err != "" {
+			var removedReports []*block.WorkReport
+			theState.CoreAssignments, removedReports, err = statetransition.CalculateIntermediateCoreFromAssurances(theState.ValidatorState.CurrentValidators, theState.CoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
+			if tc.Output.Err != "" {
 				require.EqualError(t, err, strings.ReplaceAll(tc.Output.Err, "_", " "))
 			} else {
 				require.NoError(t, err)
 			}
 			assert.Equal(t, mapAssurancesState(tc.PostState), theState)
-
-			// TODO assert output
+			assert.Equal(t, mapSlice(tc.Output.Ok.Reported, mapReport), removedReports)
 		})
 	}
-}
-
-func runAssuranceFunctions(newBlock *block.Block, prevState state.State) state.State {
-	return state.State{}
 }
