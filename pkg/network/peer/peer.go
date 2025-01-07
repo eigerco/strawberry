@@ -2,7 +2,6 @@ package peer
 
 import (
 	"context"
-	"crypto/ed25519"
 	"fmt"
 
 	"github.com/eigerco/strawberry/pkg/network/handlers"
@@ -17,8 +16,6 @@ type Peer struct {
 	conn *transport.Conn
 	// protoConn handles protocol-specific operations
 	protoConn *protocol.ProtocolConn
-	// pubKey uniquely identifies the remote peer
-	pubKey ed25519.PublicKey
 }
 
 // NewPeer creates a new peer instance from an established transport connection.
@@ -27,11 +24,10 @@ type Peer struct {
 //   - conn: The underlying transport connection
 //   - pubKey: The peer's Ed25519 public key
 //   - protoManager: The protocol manager for handling streams
-func NewPeer(conn *transport.Conn, pubKey ed25519.PublicKey, protoManager *protocol.Manager) *Peer {
+func NewPeer(conn *transport.Conn, protoManager *protocol.Manager) *Peer {
 	return &Peer{
 		conn:      conn,
 		protoConn: protoManager.WrapConnection(conn),
-		pubKey:    pubKey,
 	}
 }
 

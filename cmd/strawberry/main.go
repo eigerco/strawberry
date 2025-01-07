@@ -106,7 +106,7 @@ func main() {
 		hash := [32]byte{1, 2, 3, 4} // Example hash
 
 		// Create peer with protocol connection
-		p := peer.NewPeer(conn, conn.PeerKey(), protoManager)
+		p := peer.NewPeer(conn, protoManager)
 		ctx := context.Background()
 		blocks, err := p.RequestBlocks(ctx, hash, true)
 		if err != nil {

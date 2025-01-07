@@ -68,13 +68,13 @@ type Config struct {
 
 // Transport manages QUIC connections and their lifecycles
 type Transport struct {
-	config       Config
-	listener     *quic.Listener
-	mu           sync.RWMutex
-	conns        map[string]*Conn // Active connections mapped by peer key
-	ctx          context.Context
-	cancel       context.CancelFunc
-	acceptLoopWg sync.WaitGroup // For clean shutdown of accept loop
+	config   Config
+	listener *quic.Listener
+	mu       sync.RWMutex
+	conns    map[string]*Conn // Active connections mapped by peer key
+	ctx      context.Context
+	cancel   context.CancelFunc
+	done     chan struct{} // For clean shutdown of accept loop
 }
 
 // NewTransport creates and configures a new transport instance.
@@ -110,12 +110,19 @@ func (t *Transport) Start() error {
 		ClientAuth:         tls.RequireAnyClientCert,
 		MinVersion:         tls.VersionTLS13,
 		InsecureSkipVerify: true,
-		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			c, err := x509.ParseCertificate(rawCerts[0])
-			if err != nil {
+		VerifyConnection: func(cs tls.ConnectionState) error {
+			fmt.Printf("Negotiated Protocol: %s\n", cs.NegotiatedProtocol)
+			if len(cs.PeerCertificates) == 0 {
+				return fmt.Errorf("%w: no peer certificate provided", ErrInvalidCertificate)
+			}
+			cert := cs.PeerCertificates[0]
+			if err := t.config.CertValidator.ValidateCertificate(cert); err != nil {
 				return fmt.Errorf("%w: %v", ErrInvalidCertificate, err)
 			}
-			return t.config.CertValidator.ValidateCertificate(c)
+			if err := t.config.Handler.ValidateConnection(cs); err != nil {
+				return fmt.Errorf("connection validation failed: %v", err)
+			}
+			return nil
 		},
 	}
 
@@ -129,10 +136,10 @@ func (t *Transport) Start() error {
 
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 	t.listener = listener
-	t.acceptLoopWg.Add(1)
+	t.done = make(chan struct{})
 	go func() {
-		defer t.acceptLoopWg.Done()
 		t.acceptLoop()
+		close(t.done)
 	}()
 	return nil
 }
@@ -140,11 +147,29 @@ func (t *Transport) Start() error {
 // Stop gracefully shuts down the transport and all active connections.
 // Waits for the accept loop to finish before returning.
 func (t *Transport) Stop() error {
+	// Cancel the accept loop
 	t.cancel()
-	if t.listener != nil {
-		t.listener.Close()
+
+	// Close all active connections
+	t.mu.Lock()
+	for _, conn := range t.conns {
+		if err := conn.Close(); err != nil {
+			fmt.Printf("Failed to close connection: %v\n", err)
+		}
 	}
-	t.acceptLoopWg.Wait() // Wait for acceptLoop to finish
+	// Clear the connection map
+	t.conns = make(map[string]*Conn)
+	t.mu.Unlock()
+
+	// Close the listener
+	if t.listener != nil {
+		if err := t.listener.Close(); err != nil {
+			return fmt.Errorf("failed to close listener: %w", err)
+		}
+	}
+
+	// Wait for the accept loop to finish
+	<-t.done
 	return nil
 }
 
@@ -232,24 +257,7 @@ func (t *Transport) acceptLoop() {
 
 // handleConnection processes a new QUIC connection
 func (t *Transport) handleConnection(qConn quic.Connection) *Conn {
-	tlsState := qConn.ConnectionState().TLS
-
-	if err := t.verifyPeerCert(tlsState.PeerCertificates); err != nil {
-		if cerr := qConn.CloseWithError(0, ErrInvalidCertificate.Error()); cerr != nil {
-			fmt.Printf("Failed to close connection: %v\n", cerr)
-		}
-		return nil
-	}
-
-	if err := t.config.Handler.ValidateConnection(tlsState); err != nil {
-		fmt.Printf("Failed to validate connection: %v\n", err)
-		if cerr := qConn.CloseWithError(0, err.Error()); cerr != nil {
-			fmt.Printf("Failed to close connection: %v\n", cerr)
-		}
-		return nil
-	}
-
-	peerKey, err := t.config.CertValidator.ExtractPublicKey(tlsState.PeerCertificates[0])
+	peerKey, err := t.config.CertValidator.ExtractPublicKey(qConn.ConnectionState().TLS.PeerCertificates[0])
 	if err != nil {
 		fmt.Printf("Failed to extract peer key: %v\n", err)
 		if cerr := qConn.CloseWithError(0, fmt.Sprintf("%s: %v", ErrInvalidCertificate.Error(), err)); cerr != nil {
@@ -258,22 +266,7 @@ func (t *Transport) handleConnection(qConn quic.Connection) *Conn {
 		return nil
 	}
 
-	t.mu.Lock()
-	if existingConn, exists := t.conns[string(peerKey)]; exists {
-		fmt.Println("Found existing connection, closing it")
-		// Close existing connection before replacing it
-		if err := existingConn.Close(); err != nil {
-			fmt.Printf("Failed to close existing connection: %v\n", err)
-		}
-		delete(t.conns, string(peerKey))
-	}
-
-	conn := newConn(qConn, t)
-	conn.peerKey = peerKey
-
-	// Store connection
-	t.conns[string(peerKey)] = conn
-	t.mu.Unlock()
+	conn := t.manageConnection(peerKey, qConn)
 
 	if err := t.config.Handler.OnConnection(conn); err != nil {
 		t.cleanup(peerKey)
@@ -286,21 +279,31 @@ func (t *Transport) handleConnection(qConn quic.Connection) *Conn {
 	return conn
 }
 
+// manageConnection handles connection storage and replacement
+func (t *Transport) manageConnection(peerKey ed25519.PublicKey, qConn quic.Connection) *Conn {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Close existing connection if any
+	if existingConn, exists := t.conns[string(peerKey)]; exists {
+		fmt.Println("Found existing connection, closing it")
+		if err := existingConn.Close(); err != nil {
+			fmt.Printf("Failed to close existing connection: %v\n", err)
+		}
+		delete(t.conns, string(peerKey))
+	}
+
+	// Create and store new connection
+	conn := newConn(qConn, t)
+	conn.peerKey = peerKey
+	t.conns[string(peerKey)] = conn
+
+	return conn
+}
+
 // Cleanup removes a connection from the map
 func (t *Transport) cleanup(peerKey ed25519.PublicKey) {
 	t.mu.Lock()
 	delete(t.conns, string(peerKey))
 	t.mu.Unlock()
-}
-
-// verifyPeerCert verifies the peer's certificate chain
-func (t *Transport) verifyPeerCert(certs []*x509.Certificate) error {
-	if len(certs) == 0 {
-		return fmt.Errorf("%w: no certificates provided", ErrInvalidCertificate)
-	}
-	if err := t.config.CertValidator.ValidateCertificate(certs[0]); err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidCertificate, err)
-	}
-
-	return nil
 }

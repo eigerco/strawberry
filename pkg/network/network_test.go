@@ -92,7 +92,7 @@ func setupTestPair(t *testing.T) (*testNode, *testNode, *peer.Peer) {
 	conn, err := node2.transport.Connect(node1.addr)
 	require.NoError(t, err)
 
-	p := peer.NewPeer(conn, conn.PeerKey(), node2.protoManager)
+	p := peer.NewPeer(conn, node2.protoManager)
 	return node1, node2, p
 }
 
@@ -177,13 +177,14 @@ func TestConnectionClosure(t *testing.T) {
 
 	// Close node1's transport
 	require.NoError(t, node1.transport.Stop())
+	// Wait a bit to ensure connection is fully closed
+	time.Sleep(1 * time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	response, err := p.RequestBlocks(ctx, [32]byte{}, true)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), context.DeadlineExceeded.Error())
 	assert.Nil(t, response)
 }
 
@@ -225,7 +226,7 @@ func TestServerNodeRestart(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create new peer with new connection
-	p = peer.NewPeer(conn, conn.PeerKey(), node2.protoManager)
+	p = peer.NewPeer(conn, node2.protoManager)
 
 	// Try request with longer timeout
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -258,7 +259,7 @@ func TestClientNodeRestart(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create new peer with new connection
-	newPeer := peer.NewPeer(conn, conn.PeerKey(), node2.protoManager)
+	newPeer := peer.NewPeer(conn, node2.protoManager)
 
 	// Try request with new peer
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -266,4 +267,64 @@ func TestClientNodeRestart(t *testing.T) {
 	cancel()
 	require.NoError(t, err)
 	assert.Equal(t, "test block response", string(response2))
+}
+
+func TestConnectWithWrongChainHash(t *testing.T) {
+	// Setup node1
+	node1 := setupTestNode(t)
+	defer cleanupNodes(t, node1)
+
+	// Generate a unique address for node2
+	listener, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
+	node2Addr := listener.Addr().String()
+	listener.Close()
+
+	// Generate keys for node2
+	pub, priv, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+
+	// Create certificate for node2
+	certGen := cert.NewGenerator(cert.Config{
+		PublicKey:          pub,
+		PrivateKey:         priv,
+		CertValidityPeriod: 24 * time.Hour,
+	})
+	tlsCert, err := certGen.GenerateCertificate()
+	require.NoError(t, err)
+
+	// Create a protocol manager with a wrong chain hash for node2
+	protoConfig := protocol.Config{
+		ChainHash: "12345679", // Mismatched chain hash
+		IsBuilder: false,
+	}
+	protoManager, err := protocol.NewManager(protoConfig)
+	require.NoError(t, err)
+
+	// Create transport for node2
+	transportConfig := transport.Config{
+		PublicKey:     pub,
+		PrivateKey:    priv,
+		TLSCert:       tlsCert,
+		ListenAddr:    node2Addr, // Use the new address for node2
+		CertValidator: cert.NewValidator(),
+		Handler:       protoManager,
+	}
+
+	node2Transport, err := transport.NewTransport(transportConfig)
+	require.NoError(t, err)
+
+	// Start node1 and node2
+	require.NoError(t, node1.transport.Start())
+	require.NoError(t, node2Transport.Start())
+	defer func() {
+		if err := node2Transport.Stop(); err != nil {
+			t.Errorf("failed to stop node2 transport: %v", err)
+		}
+	}()
+
+	// Attempt to connect node2 to node1
+	_, err = node2Transport.Connect(node1.addr)
+	assert.Error(t, err, "connection should fail due to ALPN mismatch")
+	assert.Contains(t, err.Error(), "no application protocol", "error should indicate ALPN failure")
 }
