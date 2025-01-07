@@ -266,7 +266,7 @@ func (t *Transport) handleConnection(qConn quic.Connection) *Conn {
 		return nil
 	}
 
-	conn := t.manageConnection(peerKey, qConn)
+	conn := t.storeConnection(peerKey, qConn)
 
 	if err := t.config.Handler.OnConnection(conn); err != nil {
 		t.cleanup(peerKey)
@@ -279,8 +279,8 @@ func (t *Transport) handleConnection(qConn quic.Connection) *Conn {
 	return conn
 }
 
-// manageConnection handles connection storage and replacement
-func (t *Transport) manageConnection(peerKey ed25519.PublicKey, qConn quic.Connection) *Conn {
+// storeConnection handles connection storage and replacement
+func (t *Transport) storeConnection(peerKey ed25519.PublicKey, qConn quic.Connection) *Conn {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
