@@ -68,9 +68,15 @@ func (m *Memory) Write(address uint32, data []byte) error {
 	memSeg := m.inRange(address)
 	if memSeg == nil {
 		return &ErrPageFault{Reason: "address not in a valid range", Address: address}
-	} else if memSeg.access == ReadOnly {
-		return &ErrPageFault{Reason: "memory at address is read only", Address: address}
 	}
+
+	if memSeg.access != ReadWrite {
+		return &ErrPageFault{
+			Reason:  "memory at address is not writeable",
+			Address: address,
+		}
+	}
+
 	offset := int(address - memSeg.start)
 	offsetEnd := offset + len(data)
 	if offsetEnd > len(memSeg.data) {
@@ -96,6 +102,19 @@ func (m *Memory) SetAccess(pageIndex uint32, access MemoryAccess) error {
 		Reason:  "page out of valid range",
 		Address: pageStart,
 	}
+}
+
+func (m *Memory) GetAccess(pageIndex uint32) MemoryAccess {
+	pageStart := pageIndex * VMPageSize
+	pageEnd := pageStart + VMPageSize - 1
+
+	for _, seg := range m.data {
+		if seg.start <= pageStart && seg.end >= pageEnd {
+			return seg.access
+		}
+	}
+
+	return Inaccessible
 }
 
 type Registers [13]uint64
