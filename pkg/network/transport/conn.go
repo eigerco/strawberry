@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
-	"github.com/quic-go/quic-go"
+	"sync"
 	"time"
+
+	"github.com/quic-go/quic-go"
 )
 
 // StreamTimeout defines the maximum duration to wait for stream operations
@@ -17,6 +19,7 @@ const StreamTimeout = 5 * time.Second
 type Conn struct {
 	qConn     quic.Connection
 	transport *Transport
+	mu        sync.RWMutex // Protects peerKey
 	peerKey   ed25519.PublicKey
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -47,8 +50,11 @@ func newConn(qConn quic.Connection, transport *Transport) *Conn {
 // cleanup removes the connection from the transport's connection map.
 // Called automatically when the connection context is cancelled.
 func (c *Conn) cleanup() {
-	if c.peerKey != nil {
-		c.transport.cleanup(c.peerKey)
+	c.mu.RLock()
+	peerKey := c.peerKey
+	c.mu.RUnlock()
+	if peerKey != nil {
+		c.transport.cleanup(peerKey)
 	}
 }
 
@@ -78,7 +84,16 @@ func (c *Conn) AcceptStream() (quic.Stream, error) {
 // PeerKey returns the public key of the connected peer.
 // This key uniquely identifies the remote peer.
 func (c *Conn) PeerKey() ed25519.PublicKey {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.peerKey
+}
+
+// SetPeerKey sets the peer's public key
+func (c *Conn) SetPeerKey(key ed25519.PublicKey) {
+	c.mu.Lock()
+	c.peerKey = key
+	c.mu.Unlock()
 }
 
 // Close closes the connection and cancels all associated streams.
