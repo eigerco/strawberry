@@ -295,7 +295,7 @@ func (t *Transport) storeConnection(peerKey ed25519.PublicKey, qConn quic.Connec
 
 	// Create and store new connection
 	conn := newConn(qConn, t)
-	conn.peerKey = peerKey
+	conn.SetPeerKey(peerKey)
 	t.conns[string(peerKey)] = conn
 
 	return conn
