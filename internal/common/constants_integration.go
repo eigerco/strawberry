@@ -17,5 +17,6 @@ const (
 	MaxWorkPackageSize                           = 12 * 1 << 20
 	ErasureCodingChunkSize                       = 684
 	MaxAllocatedGasAccumulation                  = 100_000
+	MaxAllocatedGasIsAuthorized                  = 1_000_000
 	WorkReportMaxSumOfDependencies               = 8
 )
