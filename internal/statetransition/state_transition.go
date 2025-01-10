@@ -475,8 +475,8 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 	// n ≡ [{y ▸ Y(ip), r ▸ ir} S i <− ET]
 	tickets := make([]block.Ticket, len(ticketProofs))
 	for i, tp := range ticketProofs {
-		// Equation 74: r ∈ NN implies entry index must be 0 or 1 (v.0.4.5)
-		if tp.EntryIndex > 1 {
+		// Equation 6.29: r ∈ N_N (v.0.5.4)
+		if tp.EntryIndex >= common.MaxTicketAttempts {
 			return []block.Ticket{}, errors.New("bad ticket attempt")
 		}
 
@@ -584,6 +584,18 @@ func UpdateSafroleState(
 		if len(allTickets) > jamtime.TimeslotsPerEpoch {
 			allTickets = allTickets[:jamtime.TimeslotsPerEpoch]
 		}
+
+		// Ensure all incoming tickets exist in the accumulator. No useless
+		// tickets are allowed. Equation 6.35: n ⊆ γ′a (v.0.5.4)
+		existingIds := make(map[crypto.BandersnatchOutputHash]struct{}, len(allTickets))
+		for _, ticket := range allTickets {
+			existingIds[ticket.Identifier] = struct{}{}
+		}
+		for _, ticket := range tickets {
+			if _, ok := existingIds[ticket.Identifier]; !ok {
+				return entropyPool, validatorState, SafroleOutput{}, errors.New("useless ticket")
+			}
+		}
 		newValidatorState.SafroleState.TicketAccumulator = allTickets
 	}
 
@@ -640,9 +652,10 @@ func UpdateSafroleState(
 		}
 
 		// Compute epoch marker (H_e).
-		// Equation 72: He ≡ (η′1, [kb S k <− γ′k]) if e′ > e (v.0.4.5)
+		// Equation 6.27: He ≡ (η0, n1, [kb S k <− γ′k]) if e′ > e (v.0.5.4)
 		output.EpochMark = &block.EpochMarker{
-			Entropy: newEntropyPool[1],
+			Entropy:        entropyPool[0],
+			TicketsEntropy: entropyPool[1],
 		}
 		for i, vd := range newValidatorState.SafroleState.NextValidators {
 			output.EpochMark.Keys[i] = vd.Bandersnatch
