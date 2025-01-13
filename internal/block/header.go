@@ -38,6 +38,29 @@ type EpochMarker struct {
 
 type WinningTicketMarker [jamtime.TimeslotsPerEpoch]Ticket
 
+// Hash returns the hash of the header
+func (h Header) Hash() (crypto.Hash, error) {
+	jamBytes, err := jam.Marshal(h)
+	if err != nil {
+		return crypto.Hash{}, fmt.Errorf("marshal header: %w", err)
+	}
+	return crypto.HashData(jamBytes), nil
+}
+
+// Bytes returns the Jam encoded bytes of the header
+func (h Header) Bytes() ([]byte, error) {
+	return jam.Marshal(h)
+}
+
+// HeaderFromBytes unmarshals a header from Jam encoded bytes
+func HeaderFromBytes(data []byte) (Header, error) {
+	var header Header
+	if err := jam.Unmarshal(data, &header); err != nil {
+		return Header{}, fmt.Errorf("unmarshal header: %w", err)
+	}
+	return header, nil
+}
+
 // AncestorStoreSingleton the in memory store for headers that need to be kept for 24 hours
 // TODO: Add 24 hours TTL
 var AncestorStoreSingleton = NewAncestorStore()
