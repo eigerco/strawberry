@@ -1,6 +1,9 @@
 package host_call
 
 import (
+	"bytes"
+	"errors"
+	"log"
 	"math"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -8,8 +11,10 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	. "github.com/eigerco/strawberry/internal/polkavm"
+	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 // HistoricalLookup ΩH(ϱ, ω, µ, (m, e), s, d, t)
@@ -366,7 +371,91 @@ func Invoke(
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	return gas, regs, mem, ctxPair, nil
+	if gas < InvokeCost {
+		return gas, regs, mem, ctxPair, ErrOutOfGas
+	}
+	gas -= InvokeCost
+	// let [n, o] = ω7,8
+	pvmKey, addr := regs[A0], regs[A1]
+
+	// let (g, w) = (g, w) ∶ E8(g) ⌢ E#8(w) = μo⋅⋅⋅+112 if No⋅⋅⋅+112 ⊂ V∗μ
+	invokeGas, err := readNumber[Gas](mem, uint32(addr), 8)
+	if err != nil {
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
+	var invokeRegs Registers // w
+	for i := range 13 {
+		invokeReg, err := readNumber[uint64](mem, uint32(addr+(uint64(i+1)*8)), 8)
+		if err != nil {
+			return gas, withCode(regs, OOB), mem, ctxPair, nil
+		}
+		invokeRegs[i] = invokeReg
+	}
+
+	// let (c, i′, g′, w′, u′) = Ψ(m[n]p, m[n]i, g, w, m[n]u)
+	pvm, ok := ctxPair.IntegratedPVMMap[pvmKey]
+	if !ok { // if n ∉ m
+		return gas, withCode(regs, WHO), mem, ctxPair, nil // (WHO, ω8, μ, m)
+	}
+	updateIntegratedPVM := func(isHostCall bool, resultInstr uint32, resultMem Memory) {
+		pvm.Ram = resultMem
+		if isHostCall {
+			// m*[n]i = i′ + 1 if c ∈ {̵h} × NR
+			pvm.InstructionCounter = resultInstr + 1
+		} else {
+			// m*[n]i = i′
+			pvm.InstructionCounter = resultInstr
+		}
+		ctxPair.IntegratedPVMMap[pvmKey] = pvm
+	}
+
+	// we only parse the code and jump table as we are not expected to invoke a full program
+	program := &Program{}
+	if err := ParseCodeAndJumpTable(uint32(len(pvm.Code)), NewReader(bytes.NewReader(pvm.Code)), program); err != nil {
+		return gas, withCode(regs, PANIC), mem, ctxPair, nil
+	}
+
+	log.Println("invokeGas", invokeGas)
+	log.Println("invokeRegs", invokeRegs)
+	resultInstr, resultGas, resultRegs, resultMem, hostCall, invokeErr := interpreter.Invoke(program, nil, pvm.InstructionCounter, invokeGas, invokeRegs, pvm.Ram)
+
+	if bb, err := jam.Marshal([14]uint64(append([]uint64{uint64(resultGas)}, resultRegs[:]...))); err != nil {
+		return gas, withCode(regs, OOB), mem, ctxPair, nil // (OOB, ω8, μ, m)
+	} else if err := mem.Write(uint32(addr), bb); err != nil {
+		return gas, withCode(regs, OOB), mem, ctxPair, nil // (OOB, ω8, μ, m)
+	}
+	if invokeErr != nil {
+		if errors.Is(invokeErr, ErrOutOfGas) {
+			updateIntegratedPVM(false, resultInstr, resultMem)
+			return gas, withCode(regs, OOG), mem, ctxPair, nil // (OOG, ω8, μ*, m*)
+		}
+		if errors.Is(invokeErr, ErrHalt) {
+			updateIntegratedPVM(false, resultInstr, resultMem)
+			return gas, withCode(regs, HALT), mem, ctxPair, nil // (HALT, ω8, μ*, m*)
+		}
+		if errors.Is(invokeErr, ErrHostCall) {
+			updateIntegratedPVM(true, resultInstr, resultMem)
+			regs[A1] = uint64(hostCall)
+			return gas, withCode(regs, HOST), mem, ctxPair, nil // (HOST, h, μ*, m*)
+		}
+		pageFault := &ErrPageFault{}
+		if errors.As(invokeErr, &pageFault) {
+			updateIntegratedPVM(false, resultInstr, resultMem)
+			regs[A1] = uint64(pageFault.Address)
+			return gas, withCode(regs, FAULT), mem, ctxPair, nil
+		}
+		panicErr := &ErrPanic{}
+		if errors.As(invokeErr, &panicErr) {
+			updateIntegratedPVM(false, resultInstr, resultMem)
+			return gas, withCode(regs, PANIC), mem, ctxPair, nil
+		}
+
+		// must never occur
+		panic(invokeErr)
+	}
+
+	updateIntegratedPVM(false, resultInstr, resultMem)
+	return gas, withCode(regs, HALT), mem, ctxPair, nil // (HALT, ω8, μ*, m*)
 }
 
 // Expunge ΩX(ϱ, ω, µ, (m, e))

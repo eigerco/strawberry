@@ -79,6 +79,15 @@ const (
 	OK   Code = 0
 )
 
+// Inner pvm invocations have their own set of result codes
+const (
+	HALT  = 0 // The invocation completed and halted normally.
+	PANIC = 1 // The invocation completed with a panic.
+	FAULT = 2 // The invocation completed with a page fault.
+	HOST  = 3 // The invocation completed with a host-call fault.
+	OOG   = 4 // The invocation completed by running out of gas.
+)
+
 func (r Code) String() string {
 	switch r {
 	case NONE:
@@ -107,7 +116,7 @@ func (r Code) String() string {
 	return "unknown"
 }
 
-func readNumber[U interface{ ~uint32 | ~uint64 }](mem Memory, addr uint32, length int) (u U, err error) {
+func readNumber[U interface{ ~uint32 | ~uint64 | ~int64 }](mem Memory, addr uint32, length int) (u U, err error) {
 	b := make([]byte, length)
 	if err = mem.Read(addr, b); err != nil {
 		return
