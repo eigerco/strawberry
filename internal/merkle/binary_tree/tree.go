@@ -3,6 +3,7 @@ package binary_tree
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"math"
+	"math/bits"
 )
 
 // ComputeWellBalancedRoot computes the root hash of a well-balanced Binary Merkle tree.
@@ -35,17 +36,17 @@ func ComputeConstantDepthRoot(blobs [][]byte, hashFunc func([]byte) crypto.Hash)
 }
 
 // GeneratePageProof implements Jx (Merkle path to a single page). Graypaper 0.5.4
-func GeneratePageProof(v [][]byte, i, x int, H func([]byte) crypto.Hash) []crypto.Hash {
-	if len(v) == 0 {
+func GeneratePageProof(blobs [][]byte, pageIndex, x int, hashFunc func([]byte) crypto.Hash) []crypto.Hash {
+	if len(blobs) == 0 {
 		return []crypto.Hash{}
 	}
 
 	// T(C(v,H), 2^x*i, H)...max(0,⌊log₂(max(1,|v|))⌋-x)
-	preprocessed := preprocessForConstantDepth(v, H)
-	fullTrace := ComputeTrace(preprocessed, (1<<x)*i, H)
+	preprocessed := preprocessForConstantDepth(blobs, hashFunc)
+	fullTrace := ComputeTrace(preprocessed, (1<<x)*pageIndex, hashFunc)
 
 	// Apply length limiting to trace
-	maxLen := max(0, int(math.Floor(math.Log2(math.Max(1, float64(len(v))))))-x)
+	maxLen := max(0, int(math.Floor(math.Log2(math.Max(1, float64(len(blobs))))))-x)
 	if maxLen == 0 {
 		return []crypto.Hash{}
 	}
@@ -55,7 +56,7 @@ func GeneratePageProof(v [][]byte, i, x int, H func([]byte) crypto.Hash) []crypt
 
 // GetLeafPage implements Lx (retrieves a single page of hashed leaves). Graypaper 0.5.4
 func GetLeafPage(blobs [][]byte, pageIndex, x int, hashFunc func([]byte) crypto.Hash) []crypto.Hash {
-	if len(blobs) == 0 {
+	if len(blobs) == 0 || x >= bits.UintSize {
 		return []crypto.Hash{}
 	}
 
