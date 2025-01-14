@@ -5,6 +5,7 @@ import (
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree/testutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"math/bits"
 	"testing"
 )
 
@@ -127,6 +128,13 @@ func TestGetLeafPage(t *testing.T) {
 		x        int
 		expected []crypto.Hash
 	}{
+		{
+			name:     "x_too_large",
+			v:        [][]byte{[]byte("1")},
+			i:        0,
+			x:        bits.UintSize,
+			expected: []crypto.Hash{},
+		},
 		{
 			name:     "empty_vector",
 			v:        [][]byte{},
