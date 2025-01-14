@@ -4,6 +4,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree/testutils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -277,6 +278,95 @@ func TestGeneratePageProof(t *testing.T) {
 			assert.Equal(t, tc.expected, result)
 		})
 	}
+}
+
+func TestPageProofReconstruction(t *testing.T) {
+	// Test data
+	blobs := [][]byte{
+		[]byte("blob1"),
+		[]byte("blob2"),
+		[]byte("blob3"),
+		[]byte("blob4"),
+	}
+
+	// Test different page sizes (x values)
+	testCases := []struct {
+		name      string
+		x         int // Page size exponent
+		pageIndex int
+	}{
+		{"single_item_page", 0, 0}, // 2^0 = 1 item per page
+		{"two_item_page", 1, 0},    // 2^1 = 2 items per page
+		{"four_item_page", 2, 0},   // 2^2 = 4 items per page
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Generate proof for the specified page
+			proof := GeneratePageProof(blobs, tc.pageIndex, tc.x, testutils.MockHashData)
+
+			// Get the leaf page
+			leafPage := GetLeafPage(blobs, tc.pageIndex, tc.x, testutils.MockHashData)
+
+			// Verify proof leads to same root
+			expected := ComputeConstantDepthRoot(blobs, testutils.MockHashData)
+
+			// Start with the leaf page hashes combined in a balanced way
+			current := make([]byte, 0)
+			leafLen := len(leafPage)
+
+			// Build a balanced tree from the leaf page
+			level := leafPage
+			for len(level) > 1 {
+				nextLevel := make([]crypto.Hash, (len(level)+1)/2)
+				for i := 0; i < len(level); i += 2 {
+					if i+1 < len(level) {
+						nodeInput := append([]byte("$node"),
+							append(convertHashToBlob(level[i]),
+								convertHashToBlob(level[i+1])...)...)
+						nextLevel[i/2] = testutils.MockHashData(nodeInput)
+					} else {
+						// Odd number of nodes, promote the last one
+						nextLevel[i/2] = level[i]
+					}
+				}
+				level = nextLevel
+			}
+
+			if leafLen > 0 {
+				current = convertHashToBlob(level[0])
+			}
+
+			// Apply proof elements
+			idx := tc.pageIndex
+			for i := len(proof) - 1; i >= 0; i-- {
+				var combined []byte
+				if idx%2 == 0 {
+					combined = append([]byte("$node"), append(current, convertHashToBlob(proof[i])...)...)
+				} else {
+					combined = append([]byte("$node"), append(convertHashToBlob(proof[i]), current...)...)
+				}
+				current = convertHashToBlob(testutils.MockHashData(combined))
+				idx /= 2
+			}
+
+			// Final verification
+			require.Equal(t, expected[:], current,
+				"Proof verification failed for page size 2^%d at index %d",
+				tc.x, tc.pageIndex)
+		})
+	}
+
+	// Test error cases
+	t.Run("empty_blobs", func(t *testing.T) {
+		proof := GeneratePageProof([][]byte{}, 0, 0, testutils.MockHashData)
+		require.Empty(t, proof, "Proof for empty blobs should be empty")
+	})
+
+	t.Run("out_of_bounds_page", func(t *testing.T) {
+		proof := GeneratePageProof(blobs, 5, 0, testutils.MockHashData)
+		require.NotNil(t, proof, "Should handle out of bounds page index")
+	})
 }
 
 // Property tests
