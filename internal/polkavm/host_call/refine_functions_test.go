@@ -15,6 +15,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 var initialGas = uint64(100)
@@ -602,6 +603,103 @@ func TestVoid(t *testing.T) {
 		polkavm.GasCosts[polkavm.JumpIndirect]
 	assert.Equal(t, expectedGasRemaining, gasRemaining)
 }
+
+func TestInvoke(t *testing.T) {
+	pp := &polkavm.Program{
+		Instructions: []polkavm.Instruction{
+			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		},
+	}
+
+	memoryMap, err := polkavm.NewMemoryMap(0, 128*1024, 0, 0)
+	require.NoError(t, err)
+
+	mem := memoryMap.NewMemory(nil, nil, nil)
+
+	bb, err := jam.Marshal([14]uint64{
+		10000, // gas
+		0,     // regs
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		1,
+		2,
+		0,
+		0,
+		0,
+		0,
+	})
+	require.NoError(t, err)
+
+	addr := memoryMap.RWDataAddress
+	if err := mem.Write(addr, bb); err != nil {
+		t.Fatal(err)
+	}
+
+	pvmKey := uint64(0)
+
+	ctxPair := polkavm.RefineContextPair{
+		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{pvmKey: {
+			Code:               addInstrProgram,
+			Ram:                polkavm.Memory{}, // we don't use memory in tests yet
+			InstructionCounter: 0,
+		}},
+	}
+
+	initialRegs := polkavm.Registers{
+		polkavm.RA: polkavm.VmAddressReturnToHost,
+		polkavm.SP: uint64(memoryMap.StackAddressHigh),
+		polkavm.A0: pvmKey,
+		polkavm.A1: uint64(addr),
+	}
+
+	hostCall := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers,
+		mm polkavm.Memory, x struct{},
+	) (polkavm.Gas, polkavm.Registers, polkavm.Memory, struct{}, error) {
+		gasOut, regsOut, memOut, ctxOut, err := host_call.Invoke(gasCounter, regs, mm, ctxPair)
+		require.NoError(t, err)
+		ctxPair = ctxOut
+		return gasOut, regsOut, memOut, x, err
+	}
+
+	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(
+		pp,
+		memoryMap,
+		0,
+		initialGas,
+		initialRegs,
+		mem,
+		hostCall,
+		struct{}{},
+	)
+	require.ErrorIs(t, err, polkavm.ErrHalt)
+
+	assert.Equal(t, uint64(host_call.PANIC), regsOut[polkavm.A0])
+
+	expectedGasRemaining := polkavm.Gas(initialGas) -
+		host_call.InvokeCost -
+		polkavm.GasCosts[polkavm.Ecalli] -
+		polkavm.GasCosts[polkavm.JumpIndirect]
+	assert.Equal(t, expectedGasRemaining, gasRemaining)
+
+	invokeResult := make([]byte, 112)
+	err = mem.Read(addr, invokeResult)
+	require.NoError(t, err)
+
+	invokeGasAndRegs := [14]uint64{}
+	err = jam.Unmarshal(invokeResult, &invokeGasAndRegs)
+	require.NoError(t, err)
+
+	assert.Equal(t, uint32(3), ctxPair.IntegratedPVMMap[pvmKey].InstructionCounter)
+	assert.Equal(t, uint64(9998), invokeGasAndRegs[0])
+	assert.Equal(t, []uint64{0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0}, invokeGasAndRegs[1:])
+}
+
+var addInstrProgram = []byte{0, 0, 3, 8, 135, 9, 1} // copied from testvectors
 
 func TestExpunge(t *testing.T) {
 	pp := &polkavm.Program{
