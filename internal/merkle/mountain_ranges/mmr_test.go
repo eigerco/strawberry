@@ -1,6 +1,7 @@
 package mountain_ranges
 
 import (
+	"bytes"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -85,6 +86,73 @@ func TestMMR(t *testing.T) {
 			encoded, err := mmr.Encode(peaks)
 			require.NoError(t, err)
 			assert.NotNil(t, encoded)
+		})
+	}
+}
+
+func TestSuperPeak(t *testing.T) {
+	tests := []struct {
+		name     string
+		peaks    []*crypto.Hash
+		expected crypto.Hash
+	}{
+		{
+			name:     "empty_peaks",
+			peaks:    []*crypto.Hash{},
+			expected: crypto.Hash(bytes.Repeat([]byte{0}, 32)),
+		},
+		{
+			name: "single_peak",
+			peaks: func() []*crypto.Hash {
+				h := mockHashData([]byte("1"))
+				return []*crypto.Hash{&h}
+			}(),
+			expected: func() crypto.Hash {
+				h := mockHashData([]byte("1"))
+				return h
+			}(),
+		},
+		{
+			name: "two_peaks",
+			peaks: func() []*crypto.Hash {
+				h1 := mockHashData([]byte("1"))
+				h2 := mockHashData([]byte("2"))
+				return []*crypto.Hash{&h1, &h2}
+			}(),
+			expected: func() crypto.Hash {
+				h1 := mockHashData([]byte("1"))
+				h2 := mockHashData([]byte("2"))
+				combined := append([]byte("$peak"), h1[:]...)
+				combined = append(combined, h2[:]...)
+				hash := mockHashData(combined)
+				return hash
+			}(),
+		},
+		{
+			name: "peaks_with_nil",
+			peaks: func() []*crypto.Hash {
+				h1 := mockHashData([]byte("1"))
+				h2 := mockHashData([]byte("2"))
+				return []*crypto.Hash{nil, &h1, nil, nil, &h2}
+			}(),
+			expected: func() crypto.Hash {
+				h1 := mockHashData([]byte("1"))
+				h2 := mockHashData([]byte("2"))
+				combined := append([]byte("$peak"), h1[:]...)
+				combined = append(combined, h2[:]...)
+				hash := mockHashData(combined)
+				return hash
+			}(),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mmr := New()
+			result := mmr.SuperPeak(tc.peaks, mockHashData)
+
+			require.NotNil(t, result)
+			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
