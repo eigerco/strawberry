@@ -1515,25 +1515,16 @@ func anchorBlockInRecentBlocks(context block.RefinementContext, currentState *st
 			return false, fmt.Errorf("bad state root")
 		}
 
-		// TODO: Implement new MMR super-peak function M_R, in the meantime don't check
-		// Block found, check MMR
-		//mmrBytes, err := jam.Marshal(y.AccumulationResultMMR)
-		//if err != nil {
-		//	continue
-		//}
-		//
-		//log.Printf("MMR bytes (hex): %x", mmrBytes)
-		//beefyRoot := crypto.KeccakData(mmrBytes)
-		//log.Printf("Computed beefy root: %x", beefyRoot)
-		//log.Printf("Expected beefy root: %x", context.Anchor.PosteriorBeefyRoot)
-		//
+		//// TODO: [Issue 219] MMR check should work, but it doesn't with current test vectors and current super-peak function. Graypaper 0.5.4. Skip for now.
+		//// Block found, check MMR
+		//mountainRange := mountain_ranges.New()
+		//beefyRoot := mountainRange.SuperPeak(y.AccumulationResultMMR, crypto.KeccakData)
 		//if context.Anchor.PosteriorBeefyRoot == beefyRoot {
 		//	return true, nil
 		//}
 		//
 		//// Found block but beefy root doesn't match
 		//return false, fmt.Errorf("bad beefy mmr root")
-
 		return true, nil
 	}
 	// No matching block found
@@ -1791,7 +1782,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		slices.Concat(
 			slices.Concat(currentState.AccumulationQueue[timeslotPerEpoch:]...), // ⋃(ϑm...)
 			slices.Concat(currentState.AccumulationQueue[:timeslotPerEpoch]...), // ⋃(ϑ...m)
-			queuedWorkReports, // WQ
+			queuedWorkReports,                                                   // WQ
 		),
 		getWorkPackageHashes(immediatelyAccWorkReports), // P(W!)
 	)
@@ -2422,10 +2413,10 @@ func (a *Accumulator) ParallelDelta(
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
-	uint64, // total gas used
-	state.AccumulationState, // updated context
+	uint64,                     // total gas used
+	state.AccumulationState,    // updated context
 	[]service.DeferredTransfer, // all transfers
-	ServiceHashPairs, // accumulation outputs
+	ServiceHashPairs,           // accumulation outputs
 ) {
 	// Get all unique service indices involved (s)
 	// s = {rs S w ∈ w, r ∈ wr} ∪ K(f)
@@ -2541,7 +2532,7 @@ func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
-	serviceIndex block.ServiceId, // NS
+	serviceIndex block.ServiceId,             // NS
 ) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)
