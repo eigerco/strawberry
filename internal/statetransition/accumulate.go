@@ -2,9 +2,10 @@ package statetransition
 
 import (
 	"errors"
-	"github.com/eigerco/strawberry/internal/jamtime"
 	"log"
 	"maps"
+
+	"github.com/eigerco/strawberry/internal/jamtime"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -92,6 +93,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
 		case host_call.InfoID:
 			gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, serviceIndex, ctx.RegularCtx.AccumulationState.ServiceState)
+			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
 		case host_call.BlessID:
 			gasCounter, regs, mem, ctx, err = host_call.Bless(gasCounter, regs, mem, ctx)
 		case host_call.AssignID:
@@ -106,12 +108,16 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 			gasCounter, regs, mem, ctx, err = host_call.Upgrade(gasCounter, regs, mem, ctx)
 		case host_call.TransferID:
 			gasCounter, regs, mem, ctx, err = host_call.Transfer(gasCounter, regs, mem, ctx)
-		case host_call.QuitID:
-			gasCounter, regs, mem, ctx, err = host_call.Quit(gasCounter, regs, mem, ctx)
+		case host_call.EjectID:
+			gasCounter, regs, mem, ctx, err = host_call.Eject(gasCounter, regs, mem, ctx, a.header.TimeSlotIndex)
+		case host_call.QueryID:
+			gasCounter, regs, mem, ctx, err = host_call.Query(gasCounter, regs, mem, ctx)
 		case host_call.SolicitID:
 			gasCounter, regs, mem, ctx, err = host_call.Solicit(gasCounter, regs, mem, ctx, a.header.TimeSlotIndex)
 		case host_call.ForgetID:
 			gasCounter, regs, mem, ctx, err = host_call.Forget(gasCounter, regs, mem, ctx, a.header.TimeSlotIndex)
+		case host_call.YieldID:
+			gasCounter, regs, mem, ctx, err = host_call.Yield(gasCounter, regs, mem, ctx)
 		default:
 			regs[polkavm.A0] = uint64(host_call.WHAT)
 			gasCounter -= AccumulateCost
@@ -142,8 +148,7 @@ func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.Servi
 	serviceState := maps.Clone(u.ServiceState)
 	delete(serviceState, serviceIndex)
 	ctx := polkavm.AccumulateContext{
-		ServiceState: serviceState,
-		ServiceId:    serviceIndex,
+		ServiceId: serviceIndex,
 		AccumulationState: state.AccumulationState{
 			ServiceState: map[block.ServiceId]service.ServiceAccount{
 				serviceIndex: u.ServiceState[serviceIndex],

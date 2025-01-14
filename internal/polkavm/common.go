@@ -1,6 +1,8 @@
 package polkavm
 
 import (
+	"crypto"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/service"
@@ -241,18 +243,18 @@ type Mutator interface {
 	JumpIndirect(base Reg, offset uint32) error
 }
 
-// AccumulateContext Equation 254
+// AccumulateContext B.6 (v0.5.4)
 type AccumulateContext struct {
-	ServiceState      service.ServiceState       // d
 	ServiceId         block.ServiceId            // s
 	AccumulationState state.AccumulationState    // u
 	NewServiceId      block.ServiceId            // i
 	DeferredTransfers []service.DeferredTransfer // t
+	AccumulationHash  *crypto.Hash               // y
 }
 
 // ServiceAccount x_s
 func (s *AccumulateContext) ServiceAccount() service.ServiceAccount {
-	return s.ServiceState[s.ServiceId]
+	return s.AccumulationState.ServiceState[s.ServiceId]
 }
 
 type AccumulateContextPair struct {
