@@ -602,3 +602,70 @@ func TestVoid(t *testing.T) {
 		polkavm.GasCosts[polkavm.JumpIndirect]
 	assert.Equal(t, expectedGasRemaining, gasRemaining)
 }
+
+func TestExpunge(t *testing.T) {
+	pp := &polkavm.Program{
+		Instructions: []polkavm.Instruction{
+			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		},
+	}
+
+	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	require.NoError(t, err)
+
+	mem := memoryMap.NewMemory(nil, nil, nil)
+
+	n, ic := uint64(7), uint32(42)
+
+	ctxPair := polkavm.RefineContextPair{
+		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
+	}
+
+	ctxPair.IntegratedPVMMap[n] = polkavm.IntegratedPVM{
+		Ram:                mem,
+		InstructionCounter: ic,
+	}
+
+	initialRegs := polkavm.Registers{
+		polkavm.RA: polkavm.VmAddressReturnToHost,
+		polkavm.SP: uint64(memoryMap.StackAddressHigh),
+		polkavm.A0: n,
+	}
+
+	hostCallFn := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers,
+		mm polkavm.Memory, x service.ServiceAccount,
+	) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
+
+		gasOut, regsOut, memOut, ctxOut, err := host_call.Expunge(
+			gasCounter,
+			regs,
+			mm,
+			ctxPair,
+		)
+		require.NoError(t, err)
+		ctxPair = ctxOut
+		return gasOut, regsOut, memOut, x, err
+	}
+
+	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(
+		pp,
+		memoryMap,
+		0,
+		100,
+		initialRegs,
+		mem,
+		hostCallFn,
+		service.ServiceAccount{},
+	)
+	require.ErrorIs(t, err, polkavm.ErrHalt)
+
+	assert.Equal(t, uint64(ic), regsOut[polkavm.A0])
+
+	expectedGasRemaining := polkavm.Gas(100) -
+		host_call.ExpungeCost -
+		polkavm.GasCosts[polkavm.Ecalli] -
+		polkavm.GasCosts[polkavm.JumpIndirect]
+
+	assert.Equal(t, expectedGasRemaining, gasRemaining)
+}

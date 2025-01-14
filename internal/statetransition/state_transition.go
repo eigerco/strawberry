@@ -50,10 +50,6 @@ func UpdateState(s *state.State, newBlock block.Block) error {
 	}
 
 	intermediateCoreAssignments := CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
-	intermediateCoreAssignments, err := CalculateIntermediateCoreAssignmentsFromAvailability(newBlock.Extrinsic.EA, intermediateCoreAssignments, newBlock.Header)
-	if err != nil {
-		return fmt.Errorf("intermediate core assignments calculation from availability failed, err: %w", err)
-	}
 
 	// Update SAFROLE state.
 	safroleInput, err := NewSafroleInputFromBlock(newBlock)
@@ -65,7 +61,7 @@ func UpdateState(s *state.State, newBlock block.Block) error {
 		return err
 	}
 
-	intermediateCoreAssignments, err = CalculateIntermediateCoreFromAssurances(newValidatorState.CurrentValidators, intermediateCoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
+	intermediateCoreAssignments, _, err = CalculateIntermediateCoreFromAssurances(newValidatorState.CurrentValidators, intermediateCoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
 	if err != nil {
 		return err
 	}
@@ -232,7 +228,7 @@ func CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeEx
 
 // CalculateIntermediateCoreAssignmentsFromAvailability implements equation 26: ρ‡ ≺ (EA, ρ†)
 // It calculates the intermediate core assignments based on availability assurances.
-func CalculateIntermediateCoreAssignmentsFromAvailability(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments, header block.Header) (state.CoreAssignments, error) {
+func CalculateIntermediateCoreAssignmentsFromAvailability(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments, header block.Header) (state.CoreAssignments, []*block.WorkReport, error) {
 	// Initialize availability count for each core
 	availabilityCounts := make(map[uint16]int)
 
@@ -243,18 +239,18 @@ func CalculateIntermediateCoreAssignmentsFromAvailability(assurances block.Assur
 			// Check if the bit corresponding to this core is set (1) in the Bitfield
 			if block.HasAssuranceForCore(assurance, coreIndex) {
 				if coreAssignments[coreIndex] == nil {
-					return coreAssignments, ErrCoreNotEngaged
+					return coreAssignments, nil, ErrCoreNotEngaged
 				}
 				// If set, increment the availability count for this core
 				availabilityCounts[coreIndex]++
-				//if header.TimeSlotIndex >= coreAssignments[coreIndex].Time+common.WorkReportTimeoutPeriod {
 				if isAssignmentStale(coreAssignments[coreIndex], header.TimeSlotIndex) {
-					return coreAssignments, ErrReportTimeout
+					return coreAssignments, nil, ErrReportTimeout
 				}
 			}
 		}
 	}
 
+	var removedReports []*block.WorkReport
 	// Update assignments based on availability
 	// This implements equation 130: ∀c ∈ NC : ρ‡[c] ≡ { ∅ if ρ[c]w ∈ W, ρ†[c] otherwise }
 	for coreIndex := range common.TotalNumberOfCores {
@@ -263,13 +259,17 @@ func CalculateIntermediateCoreAssignmentsFromAvailability(assurances block.Assur
 		// 1. there is no availability value for core
 		// 2. There is some availability, but it's less than the required threshold
 		// 3. Assignment report is stale
-		if (ok && availCountForCore > common.AvailabilityThreshold) || isAssignmentStale(coreAssignments[coreIndex], header.TimeSlotIndex) {
+		if ok && availCountForCore > common.AvailabilityThreshold {
+			removedReports = append(removedReports, coreAssignments[coreIndex].WorkReport)
+			coreAssignments[coreIndex] = nil
+		}
+		if isAssignmentStale(coreAssignments[coreIndex], header.TimeSlotIndex) {
 			coreAssignments[coreIndex] = nil
 		}
 	}
 
 	// Return the new intermediate CoreAssignments (ρ‡)
-	return coreAssignments, nil
+	return coreAssignments, removedReports, nil
 }
 
 // Final State Calculation Functions
@@ -475,8 +475,8 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 	// n ≡ [{y ▸ Y(ip), r ▸ ir} S i <− ET]
 	tickets := make([]block.Ticket, len(ticketProofs))
 	for i, tp := range ticketProofs {
-		// Equation 74: r ∈ NN implies entry index must be 0 or 1 (v.0.4.5)
-		if tp.EntryIndex > 1 {
+		// Equation 6.29: r ∈ N_N (v.0.5.4)
+		if tp.EntryIndex >= common.MaxTicketAttempts {
 			return []block.Ticket{}, errors.New("bad ticket attempt")
 		}
 
@@ -584,6 +584,18 @@ func UpdateSafroleState(
 		if len(allTickets) > jamtime.TimeslotsPerEpoch {
 			allTickets = allTickets[:jamtime.TimeslotsPerEpoch]
 		}
+
+		// Ensure all incoming tickets exist in the accumulator. No useless
+		// tickets are allowed. Equation 6.35: n ⊆ γ′a (v.0.5.4)
+		existingIds := make(map[crypto.BandersnatchOutputHash]struct{}, len(allTickets))
+		for _, ticket := range allTickets {
+			existingIds[ticket.Identifier] = struct{}{}
+		}
+		for _, ticket := range tickets {
+			if _, ok := existingIds[ticket.Identifier]; !ok {
+				return entropyPool, validatorState, SafroleOutput{}, errors.New("useless ticket")
+			}
+		}
 		newValidatorState.SafroleState.TicketAccumulator = allTickets
 	}
 
@@ -640,9 +652,10 @@ func UpdateSafroleState(
 		}
 
 		// Compute epoch marker (H_e).
-		// Equation 72: He ≡ (η′1, [kb S k <− γ′k]) if e′ > e (v.0.4.5)
+		// Equation 6.27: He ≡ (η0, n1, [kb S k <− γ′k]) if e′ > e (v.0.5.4)
 		output.EpochMark = &block.EpochMarker{
-			Entropy: newEntropyPool[1],
+			Entropy:        entropyPool[0],
+			TicketsEntropy: entropyPool[1],
 		}
 		for i, vd := range newValidatorState.SafroleState.NextValidators {
 			output.EpochMark.Keys[i] = vd.Bandersnatch
@@ -2112,13 +2125,13 @@ func assuranceIsOrderedByValidatorIndex(assurances block.AssurancesExtrinsic) bo
 	})
 }
 
-func CalculateIntermediateCoreFromAssurances(validators safrole.ValidatorsData, assignments state.CoreAssignments, header block.Header, assurances block.AssurancesExtrinsic) (state.CoreAssignments, error) {
+func CalculateIntermediateCoreFromAssurances(validators safrole.ValidatorsData, assignments state.CoreAssignments, header block.Header, assurances block.AssurancesExtrinsic) (state.CoreAssignments, []*block.WorkReport, error) {
 	if err := validateAssurancesSignature(validators, header, assurances); err != nil {
-		return assignments, err
+		return assignments, nil, err
 	}
 
 	if !assuranceIsOrderedByValidatorIndex(assurances) {
-		return assignments, ErrBadOrder
+		return assignments, nil, ErrBadOrder
 	}
 
 	return CalculateIntermediateCoreAssignmentsFromAvailability(assurances, assignments, header)

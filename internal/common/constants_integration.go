@@ -12,10 +12,12 @@ const (
 	WorkReportTimeoutPeriod                      = jamtime.Timeslot(5)
 	ValidatorRotationPeriod                      = jamtime.Timeslot(4)
 	MaxTicketExtrinsicSize                       = 16
+	MaxTicketAttempts                            = 3
 	MaxHistoricalTimeslotsForPreimageMeta        = 3
 	SizeOfSegment                                = 4104
 	MaxWorkPackageSize                           = 12 * 1 << 20
 	ErasureCodingChunkSize                       = 684
 	MaxAllocatedGasAccumulation                  = 100_000
+	MaxAllocatedGasIsAuthorized                  = 1_000_000
 	WorkReportMaxSumOfDependencies               = 8
 )

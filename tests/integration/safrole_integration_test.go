@@ -122,8 +122,8 @@ func TestSafrole(t *testing.T) {
 				}
 			}
 
-			offenders := make([]ed25519.PublicKey, len(tv.Input.PostOffenders))
-			for i, po := range tv.Input.PostOffenders {
+			offenders := make([]ed25519.PublicKey, len(tv.PreState.PostOffenders))
+			for i, po := range tv.PreState.PostOffenders {
 				offenders[i] = ed25519.PublicKey(testutils.MustFromHex(t, po))
 			}
 
@@ -155,6 +155,7 @@ func TestSafrole(t *testing.T) {
 				if expectedOutput.EpochMark != nil {
 					expectedEpochMarker := &block.EpochMarker{}
 					expectedEpochMarker.Entropy = crypto.Hash(testutils.MustFromHex(t, expectedOutput.EpochMark.Entropy))
+					expectedEpochMarker.TicketsEntropy = crypto.Hash(testutils.MustFromHex(t, expectedOutput.EpochMark.TicketsEntropy))
 					for i, v := range expectedOutput.EpochMark.Validators {
 						expectedEpochMarker.Keys[i] = crypto.BandersnatchPublicKey(testutils.MustFromHex(t, v))
 					}
@@ -303,8 +304,9 @@ type SafroleTestVectorTicketEnvelope struct {
 }
 
 type SafroleTestVectorEpochMark struct {
-	Entropy    string   `json:"entropy"`
-	Validators []string `json:"validators"`
+	Entropy        string   `json:"entropy"`
+	TicketsEntropy string   `json:"tickets_entropy"`
+	Validators     []string `json:"validators"`
 }
 
 type SafroleTestVectorOutputMarks struct {
@@ -313,22 +315,22 @@ type SafroleTestVectorOutputMarks struct {
 }
 
 type SafroleTestVectorState struct {
-	Tau    uint32                           `json:"tau"`
-	Eta    [4]string                        `json:"eta"`
-	Lambda []SafroleTestVectorValidatorData `json:"lambda"`
-	Kappa  []SafroleTestVectorValidatorData `json:"kappa"`
-	GammaK []SafroleTestVectorValidatorData `json:"gamma_k"`
-	Iota   []SafroleTestVectorValidatorData `json:"iota"`
-	GammaA []SafroleTestVectorTicketBody    `json:"gamma_a"`
-	GammaS SafroleTestVectorTicketsOrKeys   `json:"gamma_s"`
-	GammaZ string                           `json:"gamma_z"`
+	Tau           uint32                           `json:"tau"`
+	Eta           [4]string                        `json:"eta"`
+	Lambda        []SafroleTestVectorValidatorData `json:"lambda"`
+	Kappa         []SafroleTestVectorValidatorData `json:"kappa"`
+	GammaK        []SafroleTestVectorValidatorData `json:"gamma_k"`
+	Iota          []SafroleTestVectorValidatorData `json:"iota"`
+	GammaA        []SafroleTestVectorTicketBody    `json:"gamma_a"`
+	GammaS        SafroleTestVectorTicketsOrKeys   `json:"gamma_s"`
+	GammaZ        string                           `json:"gamma_z"`
+	PostOffenders []string                         `json:"post_offenders"`
 }
 
 type SafroleTestVectorInput struct {
-	Slot          uint32                            `json:"slot"`
-	Entropy       string                            `json:"entropy"`
-	Extrinsic     []SafroleTestVectorTicketEnvelope `json:"extrinsic"`
-	PostOffenders []string                          `json:"post_offenders"`
+	Slot      uint32                            `json:"slot"`
+	Entropy   string                            `json:"entropy"`
+	Extrinsic []SafroleTestVectorTicketEnvelope `json:"extrinsic"`
 }
 
 type SafroleTestVectorOutput struct {

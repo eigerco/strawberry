@@ -376,6 +376,22 @@ func Expunge(
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
+	if gas < ExpungeCost {
+		return gas, regs, mem, ctxPair, ErrOutOfGas
+	}
+	gas -= ExpungeCost
+
+	n := regs[A0]
+
+	pvm, exists := ctxPair.IntegratedPVMMap[n]
+	if !exists {
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
+
+	// (ω′7, m′) = (m[n]i, m ∖ n)
+	regs[A0] = uint64(pvm.InstructionCounter)
+	delete(ctxPair.IntegratedPVMMap, n)
+
 	return gas, regs, mem, ctxPair, nil
 }
 
