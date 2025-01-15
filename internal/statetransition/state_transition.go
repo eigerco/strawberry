@@ -731,6 +731,7 @@ func CalculateNewCoreAuthorizations(header block.Header, guarantees block.Guaran
 }
 
 // removeAuthorizer removes an authorizer from a list while maintaining order
+//
 //lint:ignore U1000
 func removeAuthorizer(auths []crypto.Hash, toRemove crypto.Hash) []crypto.Hash {
 	for i := 0; i < len(auths); i++ {
