@@ -95,7 +95,7 @@ type WorkResult struct {
 	ServiceID   int               `json:"service_id"`
 	CodeHash    string            `json:"code_hash"`
 	PayloadHash string            `json:"payload_hash"`
-	Gas         int               `d .json:"gas"`
+	Gas         int               `json:"accumulate_gas"`
 	Result      map[string]string `json:"result"`
 }
 
@@ -288,16 +288,16 @@ func TestReports(t *testing.T) {
 		t.Run(file.Name(), func(t *testing.T) {
 			switch file.Name() {
 			case "bad_signature-1.json", "wrong_assignment-1.json":
-				failsOnValidateExtrinsicsGuarantees = false
-			case "bad_beefy_mmr-1.json":
-				t.Skip("[Issue 219] MMR verification currently disabled as MMR super-peak function spec (GP 0.5.4) doesn't seem to work with current test vectors peaks")
-			case "high_work_report_gas-1.json":
-				t.Skip("Gas limit in test vector seems to not match specification")
+				failsOnValidateExtrinsicsGuarantees = false // These tests are NOT expected to fail on ValidateExtrinsicGuarantees, but later
 			}
-
 			filePath := fmt.Sprintf("vectors/reports/tiny/%s", file.Name())
 			data, err := ReadJSONFile(filePath)
 			require.NoError(t, err, "failed to read JSON file: %s", filePath)
+
+			log.Printf("Initial auth pools state:")
+			for i, pool := range data.PreState.AuthPools {
+				log.Printf("Core %d: %v", i, pool)
+			}
 
 			preState := mapState(data.PreState)
 
@@ -328,6 +328,11 @@ func TestReports(t *testing.T) {
 					EA: block.AssurancesExtrinsic{},
 					ED: block.DisputeExtrinsic{},
 				},
+			}
+
+			log.Printf("\nGuarantees:")
+			for _, g := range guarantees {
+				log.Printf("Core: %d, AuthorizerHash: %x", g.WorkReport.CoreIndex, g.WorkReport.AuthorizerHash)
 			}
 
 			newTimeState := statetransition.CalculateNewTimeState(newBlock.Header)
@@ -362,6 +367,16 @@ func TestReports(t *testing.T) {
 			)
 
 			newCoreAuthorizations := statetransition.CalculateNewCoreAuthorizations(newBlock.Header, newBlock.Extrinsic.EG, newPendingCoreAuthorizations, preState.CoreAuthorizersPool)
+
+			log.Printf("\nNew core authorizations:")
+			for i := range newCoreAuthorizations {
+				log.Printf("Core %d: %x", i, newCoreAuthorizations[i])
+			}
+
+			log.Printf("\nExpected post state core authorizations:")
+			for i, pool := range data.PostState.AuthPools {
+				log.Printf("Core %d: %v", i, pool)
+			}
 
 			expectedPostState := mapState(data.PostState)
 

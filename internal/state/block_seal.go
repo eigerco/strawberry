@@ -108,7 +108,7 @@ func createSealSignature(header *block.Header, state *State, privateKey crypto.B
 // Implements equation 61 Hv ∈ F[]Ha⟨XE ⌢ Y(Hs)⟩
 func createVRFSignature(header *block.Header, privateKey crypto.BandersnatchPrivateKey) error {
 	// XE is the constant context string
-	XE := []byte("$jam_entropy")
+	XE := []byte("jam_entropy")
 	// Generate Y(Hs)
 	sealOutputHash, err := bandersnatch.OutputHash(header.BlockSealSignature)
 	if err != nil {

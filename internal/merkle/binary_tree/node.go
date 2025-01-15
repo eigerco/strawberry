@@ -20,8 +20,8 @@ func ComputeNode(blobs [][]byte, hashFunc func([]byte) crypto.Hash) []byte {
 	left := ComputeNode(blobs[:mid], hashFunc)
 	right := ComputeNode(blobs[mid:], hashFunc)
 
-	// Concatenate "$node", left, and right
-	combined := append([]byte("$node"), append(left, right...)...)
+	// Concatenate "node", left, and right
+	combined := append([]byte("node"), append(left, right...)...)
 
 	return convertHashToBlob(hashFunc(combined))
 }

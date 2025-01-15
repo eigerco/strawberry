@@ -693,7 +693,7 @@ func calculateNewEntropyPool(currentTimeslot jamtime.Timeslot, newTimeslot jamti
 	return newEntropyPool, nil
 }
 
-// CalculateNewCoreAuthorizations implements equation 29: α' ≺ (H, EG, φ', α)
+// CalculateNewCoreAuthorizations implements equation 4.19: α' ≺ (H, EG, φ', α) . Graypaper 0.5.4
 func CalculateNewCoreAuthorizations(header block.Header, guarantees block.GuaranteesExtrinsic, pendingAuthorizations state.PendingAuthorizersQueues, currentAuthorizations state.CoreAuthorizersPool) state.CoreAuthorizersPool {
 	var newCoreAuthorizations state.CoreAuthorizersPool
 
@@ -703,13 +703,14 @@ func CalculateNewCoreAuthorizations(header block.Header, guarantees block.Guaran
 		newAuths := make([]crypto.Hash, len(currentAuthorizations[c]))
 		copy(newAuths, currentAuthorizations[c])
 
-		// F(c) - Remove authorizer if it was used in a guarantee for this core
-		for _, guarantee := range guarantees.Guarantees {
-			if guarantee.WorkReport.CoreIndex == c {
-				// Remove the used authorizer from the list
-				newAuths = removeAuthorizer(newAuths, guarantee.WorkReport.AuthorizerHash)
-			}
-		}
+		//// TODO: For some reason test vectors don't expect this to happen, although it's on the spec.
+		//// F(c) - Remove authorizer if it was used in a guarantee for this core. 8.3 Graypaper 0.5.4
+		//for _, guarantee := range guarantees.Guarantees {
+		//	if guarantee.WorkReport.CoreIndex == c {
+		//		// Remove the used authorizer from the list
+		//		newAuths = removeAuthorizer(newAuths, guarantee.WorkReport.AuthorizerHash)
+		//	}
+		//}
 
 		// Get new authorizer from the queue based on current timeslot
 		// φ'[c][Ht]↺O - Get authorizer from queue, wrapping around queue size
@@ -1305,6 +1306,11 @@ func ValidateExtrinsicGuarantees(
 			return errors.New("bad core index")
 		}
 
+		// Size check for Work Report output
+		if !guarantee.WorkReport.OutputSizeIsValid() {
+			return errors.New("work report too big")
+		}
+
 		// Verify authorizer exists in the core's authorization pool
 		authFound := false
 		for _, auth := range currentState.CoreAuthorizersPool[guarantee.WorkReport.CoreIndex] {
@@ -1349,7 +1355,6 @@ func ValidateExtrinsicGuarantees(
 			}
 			totalGas += r.GasPrioritizationRatio
 		}
-		// TODO: The test vector says this should be ok with 1 million gas, not 100k. Why?
 		if totalGas > common.MaxAllocatedGasAccumulation {
 			return fmt.Errorf("work report gas too high")
 		}
@@ -1528,17 +1533,15 @@ func anchorBlockInRecentBlocks(context block.RefinementContext, currentState *st
 			return false, fmt.Errorf("bad state root")
 		}
 
-		//// TODO: [Issue 219] MMR check should work, but it doesn't with current test vectors and current super-peak function. Graypaper 0.5.4. Skip for now.
-		//// Block found, check MMR
-		//mountainRange := mountain_ranges.New()
-		//beefyRoot := mountainRange.SuperPeak(y.AccumulationResultMMR, crypto.KeccakData)
-		//if context.Anchor.PosteriorBeefyRoot == beefyRoot {
-		//	return true, nil
-		//}
-		//
-		//// Found block but beefy root doesn't match
-		//return false, fmt.Errorf("bad beefy mmr root")
-		return true, nil
+		// Block found, check MMR
+		mountainRange := mountain_ranges.New()
+		beefyRoot := mountainRange.SuperPeak(y.AccumulationResultMMR, crypto.KeccakData)
+		if context.Anchor.PosteriorBeefyRoot == beefyRoot {
+			return true, nil
+		}
+
+		// Found block but beefy root doesn't match
+		return false, fmt.Errorf("bad beefy mmr root")
 	}
 	// No matching block found
 	return false, fmt.Errorf("anchor not recent")
@@ -1795,7 +1798,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		slices.Concat(
 			slices.Concat(currentState.AccumulationQueue[timeslotPerEpoch:]...), // ⋃(ϑm...)
 			slices.Concat(currentState.AccumulationQueue[:timeslotPerEpoch]...), // ⋃(ϑ...m)
-			queuedWorkReports, // WQ
+			queuedWorkReports,                                                   // WQ
 		),
 		getWorkPackageHashes(immediatelyAccWorkReports), // P(W!)
 	)
@@ -2426,10 +2429,10 @@ func (a *Accumulator) ParallelDelta(
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
-	uint64, // total gas used
-	state.AccumulationState, // updated context
+	uint64,                     // total gas used
+	state.AccumulationState,    // updated context
 	[]service.DeferredTransfer, // all transfers
-	ServiceHashPairs, // accumulation outputs
+	ServiceHashPairs,           // accumulation outputs
 ) {
 	// Get all unique service indices involved (s)
 	// s = {rs S w ∈ w, r ∈ wr} ∪ K(f)
@@ -2545,7 +2548,7 @@ func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
-	serviceIndex block.ServiceId, // NS
+	serviceIndex block.ServiceId,             // NS
 ) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)

@@ -122,7 +122,7 @@ func TestSuperPeak(t *testing.T) {
 			expected: func() crypto.Hash {
 				h1 := mockHashData([]byte("1"))
 				h2 := mockHashData([]byte("2"))
-				combined := append([]byte("$peak"), h1[:]...)
+				combined := append([]byte("node"), h1[:]...)
 				combined = append(combined, h2[:]...)
 				hash := mockHashData(combined)
 				return hash
@@ -138,7 +138,7 @@ func TestSuperPeak(t *testing.T) {
 			expected: func() crypto.Hash {
 				h1 := mockHashData([]byte("1"))
 				h2 := mockHashData([]byte("2"))
-				combined := append([]byte("$peak"), h1[:]...)
+				combined := append([]byte("node"), h1[:]...)
 				combined = append(combined, h2[:]...)
 				hash := mockHashData(combined)
 				return hash
