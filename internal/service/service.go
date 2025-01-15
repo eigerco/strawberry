@@ -21,7 +21,7 @@ type ServiceState map[block.ServiceId]ServiceAccount
 type ServiceAccount struct {
 	Storage                map[crypto.Hash][]byte                          // Dictionary of key-value pairs for storage (s)
 	PreimageLookup         map[crypto.Hash][]byte                          // Dictionary of preimage lookups (p)
-	PreimageMeta           map[PreImageMetaKey]PreimageHistoricalTimeslots // Metadata for preimageLookup (l) - TODO: There is a MaxTimeslotsForPreimage.
+	PreimageMeta           map[PreImageMetaKey]PreimageHistoricalTimeslots // Metadata for preimageLookup (o) Graypaper 0.5.4 - TODO: There is a MaxTimeslotsForPreimage.
 	CodeHash               crypto.Hash                                     // Hash of the service code (c)
 	Balance                uint64                                          // Balance of the service (b)
 	GasLimitForAccumulator uint64                                          // Gas limit for accumulation (g)

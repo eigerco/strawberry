@@ -10,6 +10,7 @@ import (
 )
 
 // SerializeState serializes the given state into a map of crypto.Hash to byte arrays, for merklization.
+// Graypaper 0.5.4.
 func SerializeState(state state.State) (map[crypto.Hash][]byte, error) {
 	serializedState := make(map[crypto.Hash][]byte)
 
@@ -129,7 +130,7 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 		return err
 	}
 
-	totalFootprintSize := calculateFootprintSize(serviceAccount.Storage, serviceAccount.PreimageMeta) // al
+	totalFootprintSize := calculateFootprintSize(serviceAccount.Storage, serviceAccount.PreimageMeta) // ao graypaper 0.5.4
 	encodedFootprintSize, err := jam.Marshal(totalFootprintSize)
 	if err != nil {
 		return err

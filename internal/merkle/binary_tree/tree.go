@@ -3,6 +3,7 @@ package binary_tree
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"math"
+	"math/bits"
 )
 
 // ComputeWellBalancedRoot computes the root hash of a well-balanced Binary Merkle tree.
@@ -24,7 +25,7 @@ func ComputeWellBalancedRoot(blobs [][]byte, hashFunc func([]byte) crypto.Hash) 
 
 // ComputeConstantDepthRoot computes the root hash of a constant-depth Binary Merkle tree.
 // Preprocesses data with leaf prefix and pads to power of 2 size, making it
-// suitable for larger data items and constant-size proofs.
+// suitable for larger data items and constant-size proofs. Graypaper 0.5.4
 func ComputeConstantDepthRoot(blobs [][]byte, hashFunc func([]byte) crypto.Hash) crypto.Hash {
 	if len(blobs) == 0 {
 		return crypto.Hash{} // return zero hash for empty input
@@ -34,28 +35,43 @@ func ComputeConstantDepthRoot(blobs [][]byte, hashFunc func([]byte) crypto.Hash)
 	return crypto.Hash(ComputeNode(preprocessed, hashFunc))
 }
 
-// GenerateJustification implements the justification generation function from equation (324)
-func GenerateJustification(blobs [][]byte, index int, hashFunc func([]byte) crypto.Hash) []crypto.Hash {
-	// J(v, i, H) = T(C(v, H), i, H)
-	preprocessed := preprocessForConstantDepth(blobs, hashFunc)
-	return convertBlobsToHashes(ComputeTrace(preprocessed, index, hashFunc))
-}
+// GeneratePageProof implements Jx (Merkle path to a single page). Graypaper 0.5.4
+func GeneratePageProof(blobs [][]byte, pageIndex, x int, hashFunc func([]byte) crypto.Hash) []crypto.Hash {
+	if len(blobs) == 0 {
+		return []crypto.Hash{}
+	}
 
-// GenerateLimitedJustification implements the limited justification generation function from equation (325)
-func GenerateLimitedJustification(blobs [][]byte, index int, hashFunc func([]byte) crypto.Hash) []crypto.Hash {
+	// T(C(v,H), 2^x*i, H)...max(0,⌊log₂(max(1,|v|))⌋-x)
 	preprocessed := preprocessForConstantDepth(blobs, hashFunc)
-	trace := ComputeTrace(preprocessed, index, hashFunc)
+	fullTrace := ComputeTrace(preprocessed, (1<<x)*pageIndex, hashFunc)
 
-	// Limit trace to max(0, ⌊log₂(max(1,|v|))⌋-x)
-	maxLen := int(math.Floor(math.Log2(math.Max(1, float64(len(blobs))))))
+	// Apply length limiting to trace
+	maxLen := max(0, int(math.Floor(math.Log2(math.Max(1, float64(len(blobs))))))-x)
 	if maxLen == 0 {
 		return []crypto.Hash{}
 	}
 
-	if len(trace) > maxLen {
-		trace = trace[:maxLen]
+	return convertBlobsToHashes(fullTrace[:maxLen])
+}
+
+// GetLeafPage implements Lx (retrieves a single page of hashed leaves). Graypaper 0.5.4
+func GetLeafPage(blobs [][]byte, pageIndex, x int, hashFunc func([]byte) crypto.Hash) []crypto.Hash {
+	if len(blobs) == 0 || x >= bits.UintSize {
+		return []crypto.Hash{}
 	}
-	return convertBlobsToHashes(trace)
+
+	// Calculate range bounds for leaf page
+	pageStart := (1 << x) * pageIndex          // 2^x * i
+	pageEnd := min(pageStart+1<<x, len(blobs)) // min(2^x * i + 2^x, |v|)
+
+	// Select and hash leaves from the range with "$leaf" prefix
+	leaveHashes := make([]crypto.Hash, 0, pageEnd-pageStart)
+	for j := pageStart; j < pageEnd; j++ {
+		prefixedLeaf := append([]byte("$leaf"), blobs[j]...)
+		leaveHashes = append(leaveHashes, hashFunc(prefixedLeaf))
+	}
+
+	return leaveHashes
 }
 
 // preprocessForConstantDepth implements the preprocessing function C from equation (326)

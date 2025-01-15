@@ -1528,25 +1528,16 @@ func anchorBlockInRecentBlocks(context block.RefinementContext, currentState *st
 			return false, fmt.Errorf("bad state root")
 		}
 
-		// TODO: Implement new MMR super-peak function M_R, in the meantime don't check
-		// Block found, check MMR
-		//mmrBytes, err := jam.Marshal(y.AccumulationResultMMR)
-		//if err != nil {
-		//	continue
-		//}
-		//
-		//log.Printf("MMR bytes (hex): %x", mmrBytes)
-		//beefyRoot := crypto.KeccakData(mmrBytes)
-		//log.Printf("Computed beefy root: %x", beefyRoot)
-		//log.Printf("Expected beefy root: %x", context.Anchor.PosteriorBeefyRoot)
-		//
+		//// TODO: [Issue 219] MMR check should work, but it doesn't with current test vectors and current super-peak function. Graypaper 0.5.4. Skip for now.
+		//// Block found, check MMR
+		//mountainRange := mountain_ranges.New()
+		//beefyRoot := mountainRange.SuperPeak(y.AccumulationResultMMR, crypto.KeccakData)
 		//if context.Anchor.PosteriorBeefyRoot == beefyRoot {
 		//	return true, nil
 		//}
 		//
 		//// Found block but beefy root doesn't match
 		//return false, fmt.Errorf("bad beefy mmr root")
-
 		return true, nil
 	}
 	// No matching block found

@@ -290,7 +290,7 @@ func TestReports(t *testing.T) {
 			case "bad_signature-1.json", "wrong_assignment-1.json":
 				failsOnValidateExtrinsicsGuarantees = false
 			case "bad_beefy_mmr-1.json":
-				t.Skip("MMR verification currently disabled pending implementation of new MMR super-peak function")
+				t.Skip("[Issue 219] MMR verification currently disabled as MMR super-peak function spec (GP 0.5.4) doesn't seem to work with current test vectors peaks")
 			case "high_work_report_gas-1.json":
 				t.Skip("Gas limit in test vector seems to not match specification")
 			}

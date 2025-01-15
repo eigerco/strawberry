@@ -1,6 +1,8 @@
 package trie
 
-import "github.com/eigerco/strawberry/internal/crypto"
+import (
+	"github.com/eigerco/strawberry/internal/crypto"
+)
 
 const (
 	// NodeSize is the size of a node in bytes.
