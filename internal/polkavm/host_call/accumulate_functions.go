@@ -1,8 +1,6 @@
 package host_call
 
 import (
-	"maps"
-
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -225,8 +223,7 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	}
 
 	// let d = xd ∪ (xu)d
-	allServices := maps.Clone(ctxPair.RegularCtx.AccumulationState.ServiceState)
-	maps.Copy(allServices, ctxPair.RegularCtx.AccumulationState.ServiceState)
+	allServices := ctxPair.RegularCtx.AccumulationState.ServiceState
 
 	receiverService, ok := allServices[block.ServiceId(receiverId)]
 	// if d !∈ K(δ ∪ xn)
