@@ -15,7 +15,7 @@ func BumpIndex(serviceIndex block.ServiceId) block.ServiceId {
 	return (serviceIndex-bit8+42)%(bit32-bit9) + bit8
 }
 
-// CheckIndex Equation 260: checks if the identifier is unique across all services
+// CheckIndex Equation B.13 (v0.5.4): checks if the identifier is unique across all services
 func CheckIndex(serviceIndex block.ServiceId, serviceState ServiceState) block.ServiceId {
 	if _, ok := serviceState[serviceIndex]; !ok {
 		return serviceIndex

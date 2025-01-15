@@ -20,9 +20,11 @@ const (
 	NewCost
 	UpgradeCost
 	TransferBaseCost
-	QuitCost
+	EjectCost
+	QueryCost
 	SolicitCost
 	ForgetCost
+	YieldCost
 	HistoricalLookupCost
 	ImportCost
 	ExportCost
@@ -48,9 +50,11 @@ const (
 	NewID
 	UpgradeID
 	TransferID
-	QuitID
+	EjectID
+	QueryID
 	SolicitID
 	ForgetID
+	YieldID
 	HistoricalLookupID
 	ImportID
 	ExportID
@@ -66,17 +70,16 @@ const (
 type Code uint64
 
 const (
-	NONE Code = math.MaxUint64
-	WHAT Code = math.MaxUint64 - 1
-	OOB  Code = math.MaxUint64 - 2
-	WHO  Code = math.MaxUint64 - 3
-	FULL Code = math.MaxUint64 - 4
-	CORE Code = math.MaxUint64 - 5
-	CASH Code = math.MaxUint64 - 6
-	LOW  Code = math.MaxUint64 - 7
-	HIGH Code = math.MaxUint64 - 8
-	HUH  Code = math.MaxUint64 - 9
-	OK   Code = 0
+	NONE Code = math.MaxUint64 - iota
+	WHAT
+	OOB
+	WHO
+	FULL
+	CORE
+	CASH
+	LOW
+	HUH
+	OK Code = 0
 )
 
 // Inner pvm invocations have their own set of result codes
@@ -106,8 +109,6 @@ func (r Code) String() string {
 		return "insufficient funds"
 	case LOW:
 		return "gas limit too low"
-	case HIGH:
-		return "gas limit too high"
 	case HUH:
 		return "the item is already solicited or cannot be forgotten"
 	case OK:
