@@ -12,7 +12,7 @@ import (
 func TestSerializationTrivialNatural(t *testing.T) {
 	testCases := []struct {
 		x        any
-		l        uint8
+		l        uint
 		expected []byte
 	}{
 		{uint8(0), 0, []byte{}},

@@ -86,3 +86,63 @@ func TestMarshalUnmarshalWithPointer(t *testing.T) {
 
 	assert.Equal(t, original, unmarshaled)
 }
+
+func TestLengthTag(t *testing.T) {
+	// simple struct without tags
+	type NoTag struct {
+		Uint32 uint32
+	}
+	noTag := NoTag{10}
+	marshaledData, err := jam.Marshal(noTag)
+	require.NoError(t, err)
+	require.Len(t, marshaledData, 4)
+	require.Equal(t, []byte{10, 0, 0, 0}, marshaledData)
+
+	var noTagUnmarshaled NoTag
+	err = jam.Unmarshal(marshaledData, &noTagUnmarshaled)
+	require.NoError(t, err)
+	assert.Equal(t, noTag, noTagUnmarshaled)
+
+	// simple struct with tag
+	type WithTag struct {
+		Uint32 uint32 `jam:"length=32"`
+	}
+	withTag := WithTag{50}
+	marshaledData, err = jam.Marshal(withTag)
+	require.NoError(t, err)
+	require.Len(t, marshaledData, 32)
+	expectedBytes := append([]byte{50}, make([]byte, 31)...)
+	assert.Equal(t, expectedBytes, marshaledData)
+
+	var withTagUnmarshaled WithTag
+	err = jam.Unmarshal(marshaledData, &withTagUnmarshaled)
+	require.NoError(t, err)
+	assert.Equal(t, withTag, withTagUnmarshaled)
+
+	// more complex struct to check alias and pointers
+	type Alias uint16
+	type CustomStruct struct {
+		Alias      Alias   `jam:"length=6"`
+		Uint32     uint32  `jam:"length=32"`
+		NilPointer *uint8  `jam:"length=4"`
+		Pointer    *uint64 `jam:"length=10"`
+		Bool       bool
+	}
+
+	p := uint64(40)
+	original := CustomStruct{
+		Alias:   5,
+		Uint32:  50,
+		Pointer: &p,
+		Bool:    true,
+	}
+
+	marshaledData, err = jam.Marshal(original)
+	require.NoError(t, err)
+
+	var unmarshaled CustomStruct
+	err = jam.Unmarshal(marshaledData, &unmarshaled)
+	require.NoError(t, err)
+
+	assert.Equal(t, original, unmarshaled)
+}
