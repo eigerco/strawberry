@@ -7,6 +7,7 @@ import (
 	"io"
 	"reflect"
 	"sort"
+	"strconv"
 )
 
 func Marshal(v interface{}) ([]byte, error) {
@@ -33,19 +34,23 @@ func (bw *byteWriter) marshal(in interface{}) error {
 		return bw.encodeEnumType(v)
 	}
 
-	switch in := in.(type) {
+	switch v := in.(type) {
 	case int:
-		return bw.encodeUint(uint(in))
+		return bw.encodeUint(uint(v))
 	case uint:
-		return bw.encodeUint(in)
+		return bw.encodeUint(v)
 	case uint8, uint16, uint32, uint64:
-		return bw.encodeFixedWidthUint(in)
+		l, err := IntLength(v)
+		if err != nil {
+			return err
+		}
+		return bw.encodeFixedWidth(v, l)
 	case []byte:
-		return bw.encodeBytes(in)
+		return bw.encodeBytes(v)
 	case bool:
-		return bw.encodeBool(in)
+		return bw.encodeBool(v)
 	default:
-		return bw.handleReflectTypes(in)
+		return bw.handleReflectTypes(v)
 	}
 }
 
@@ -56,18 +61,14 @@ func (bw *byteWriter) handleReflectTypes(in interface{}) error {
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return bw.encodeCustomPrimitive(in)
 	case reflect.Ptr:
-		elem := reflect.ValueOf(in).Elem()
-		switch elem.IsValid() {
-		case false:
-			_, err := bw.Write([]byte{0})
+		err := bw.writePointerMarker(val.IsNil())
+		if err != nil {
 			return err
-		default:
-			_, err := bw.Write([]byte{1})
-			if err != nil {
-				return err
-			}
-			return bw.marshal(elem.Interface())
 		}
+		if val.IsNil() {
+			return nil
+		}
+		return bw.marshal(val.Elem().Interface())
 	case reflect.Struct:
 		return bw.encodeStruct(in)
 	case reflect.Array:
@@ -287,23 +288,38 @@ func (bw *byteWriter) encodeBytes(b []byte) error {
 	return err
 }
 
-func (bw *byteWriter) encodeFixedWidthUint(i interface{}) error {
-	var data []byte
+func (bw *byteWriter) encodeFixedWidth(i interface{}, l uint) error {
+	val := reflect.ValueOf(i)
 
-	switch v := i.(type) {
-	case uint8:
-		data = serializeTrivialNatural(v, 1)
-	case uint16:
-		data = serializeTrivialNatural(v, 2)
-	case uint32:
-		data = serializeTrivialNatural(v, 4)
-	case uint64:
-		data = serializeTrivialNatural(v, 8)
+	// Handle pointers
+	if val.Kind() == reflect.Ptr {
+		err := bw.writePointerMarker(val.IsNil())
+		if err != nil {
+			return err
+		}
+		if val.IsNil() {
+			return nil
+		}
+		val = val.Elem() // Dereference non-nil pointer
+	}
+
+	typ := val.Type()
+	switch typ.Kind() {
+	case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
+		data := serializeTrivialNatural(val.Uint(), l)
+		_, err := bw.Write(data)
+		return err
 	default:
 		return fmt.Errorf(ErrUnsupportedType, i)
 	}
+}
 
-	_, err := bw.Write(data)
+func (bw *byteWriter) writePointerMarker(isNil bool) error {
+	marker := byte(0x00)
+	if !isNil {
+		marker = byte(0x01)
+	}
+	_, err := bw.Write([]byte{marker})
 	return err
 }
 
@@ -322,6 +338,20 @@ func (bw *byteWriter) encodeStruct(in interface{}) error {
 		}
 		if tag, ok := fieldType.Tag.Lookup("jam"); ok {
 			if tag == "-" {
+				continue
+			}
+
+			tagValues := parseTag(tag)
+			if length, found := tagValues["length"]; found {
+				size, err := strconv.ParseUint(length, 10, 64)
+				if err != nil {
+					return fmt.Errorf(ErrInvalidLengthValue, fieldType.Name, err)
+				}
+
+				err = bw.encodeFixedWidth(field.Interface(), uint(size))
+				if err != nil {
+					return fmt.Errorf(ErrEncodingStructField, fieldType.Name, err)
+				}
 				continue
 			}
 		}

@@ -4,9 +4,9 @@ import (
 	"math"
 )
 
-func serializeTrivialNatural[T ~uint8 | ~uint16 | ~uint32 | ~uint64](x T, l uint8) []byte {
+func serializeTrivialNatural[T ~uint8 | ~uint16 | ~uint32 | ~uint64](x T, l uint) []byte {
 	bytes := make([]byte, l)
-	for i := uint8(0); i < l; i++ {
+	for i := uint(0); i < l; i++ {
 		bytes[i] = byte((x >> (8 * i)) & T(math.MaxUint8))
 	}
 	return bytes

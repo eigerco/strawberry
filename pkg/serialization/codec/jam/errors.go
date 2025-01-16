@@ -23,4 +23,5 @@ var (
 	ErrDecodingMapValue        = "error decoding map value: %v"
 	ErrEncodingStructField     = "encoding struct field '%s': %w"
 	ErrDecodingStructField     = "decoding struct field '%s': %w"
+	ErrInvalidLengthValue      = "invalid length value in jam tag for field %s: %v"
 )

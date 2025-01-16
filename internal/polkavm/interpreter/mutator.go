@@ -1,8 +1,9 @@
 package interpreter
 
 import (
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"math"
+
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
@@ -44,8 +45,13 @@ func load[T number](m *Mutator, dst polkavm.Reg, base *polkavm.Reg, offset uint3
 	}
 	address += offset
 	value := T(0)
-	slice := make([]byte, jam.IntLength(value))
-	err := m.instance.memory.Read(address, slice)
+	l, err := jam.IntLength(value)
+	if err != nil {
+		return err
+	}
+
+	slice := make([]byte, l)
+	err = m.instance.memory.Read(address, slice)
 	if err != nil {
 		return err
 	}
