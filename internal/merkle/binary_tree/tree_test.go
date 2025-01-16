@@ -34,7 +34,7 @@ func TestComputeWellBalancedRoot(t *testing.T) {
 			expected: func() crypto.Hash {
 				left := testutils.MockHashData([]byte("blob1"))
 				right := testutils.MockHashData([]byte("blob2"))
-				combined := append([]byte("$node"), append(convertHashToBlob(left), convertHashToBlob(right)...)...)
+				combined := append([]byte("node"), append(convertHashToBlob(left), convertHashToBlob(right)...)...)
 				return testutils.MockHashData(combined)
 			}(),
 		},
@@ -46,8 +46,8 @@ func TestComputeWellBalancedRoot(t *testing.T) {
 				[]byte("blob3"),
 			},
 			expected: func() crypto.Hash {
-				// Should expect just one $node prefix
-				return testutils.MockHashData(append([]byte("$node"), []byte("blob1")...))
+				// Should expect just one node prefix
+				return testutils.MockHashData(append([]byte("node"), []byte("blob1")...))
 			}(),
 		},
 	}
@@ -75,7 +75,7 @@ func TestComputeConstantDepthRoot(t *testing.T) {
 			name:  "single_blob",
 			blobs: [][]byte{[]byte("blob1")},
 			expected: func() crypto.Hash {
-				leafHash := testutils.MockHashData(append([]byte("$leaf"), []byte("blob1")...))
+				leafHash := testutils.MockHashData(append([]byte("leaf"), []byte("blob1")...))
 				return leafHash
 			}(),
 		},
@@ -86,9 +86,9 @@ func TestComputeConstantDepthRoot(t *testing.T) {
 				[]byte("blob2"),
 			},
 			expected: func() crypto.Hash {
-				h1 := testutils.MockHashData(append([]byte("$leaf"), []byte("blob1")...))
-				h2 := testutils.MockHashData(append([]byte("$leaf"), []byte("blob2")...))
-				combined := append([]byte("$node"), append(convertHashToBlob(h1), convertHashToBlob(h2)...)...)
+				h1 := testutils.MockHashData(append([]byte("leaf"), []byte("blob1")...))
+				h2 := testutils.MockHashData(append([]byte("leaf"), []byte("blob2")...))
+				combined := append([]byte("node"), append(convertHashToBlob(h1), convertHashToBlob(h2)...)...)
 				return testutils.MockHashData(combined)
 			}(),
 		},
@@ -100,13 +100,13 @@ func TestComputeConstantDepthRoot(t *testing.T) {
 				[]byte("blob3"),
 			},
 			expected: func() crypto.Hash {
-				h1 := testutils.MockHashData(append([]byte("$leaf"), []byte("blob1")...))
-				h2 := testutils.MockHashData(append([]byte("$leaf"), []byte("blob2")...))
-				h12 := testutils.MockHashData(append([]byte("$node"), append(convertHashToBlob(h1), convertHashToBlob(h2)...)...))
-				h3 := testutils.MockHashData(append([]byte("$leaf"), []byte("blob3")...))
+				h1 := testutils.MockHashData(append([]byte("leaf"), []byte("blob1")...))
+				h2 := testutils.MockHashData(append([]byte("leaf"), []byte("blob2")...))
+				h12 := testutils.MockHashData(append([]byte("node"), append(convertHashToBlob(h1), convertHashToBlob(h2)...)...))
+				h3 := testutils.MockHashData(append([]byte("leaf"), []byte("blob3")...))
 				h4 := crypto.Hash{} // Zero hash for padding
-				h34 := testutils.MockHashData(append([]byte("$node"), append(convertHashToBlob(h3), convertHashToBlob(h4)...)...))
-				combined := append([]byte("$node"), append(convertHashToBlob(h12), convertHashToBlob(h34)...)...)
+				h34 := testutils.MockHashData(append([]byte("node"), append(convertHashToBlob(h3), convertHashToBlob(h4)...)...))
+				combined := append([]byte("node"), append(convertHashToBlob(h12), convertHashToBlob(h34)...)...)
 				return testutils.MockHashData(combined)
 			}(),
 		},
@@ -148,7 +148,7 @@ func TestGetLeafPage(t *testing.T) {
 			i:    0,
 			x:    0,
 			expected: []crypto.Hash{
-				testutils.MockHashData(append([]byte("$leaf"), []byte("1")...)),
+				testutils.MockHashData(append([]byte("leaf"), []byte("1")...)),
 			},
 		},
 		{
@@ -159,8 +159,8 @@ func TestGetLeafPage(t *testing.T) {
 			i: 0,
 			x: 1,
 			expected: []crypto.Hash{
-				testutils.MockHashData(append([]byte("$leaf"), []byte("1")...)),
-				testutils.MockHashData(append([]byte("$leaf"), []byte("2")...)),
+				testutils.MockHashData(append([]byte("leaf"), []byte("1")...)),
+				testutils.MockHashData(append([]byte("leaf"), []byte("2")...)),
 			},
 		},
 		{
@@ -171,8 +171,8 @@ func TestGetLeafPage(t *testing.T) {
 			i: 1,
 			x: 1,
 			expected: []crypto.Hash{
-				testutils.MockHashData(append([]byte("$leaf"), []byte("3")...)),
-				testutils.MockHashData(append([]byte("$leaf"), []byte("4")...)),
+				testutils.MockHashData(append([]byte("leaf"), []byte("3")...)),
+				testutils.MockHashData(append([]byte("leaf"), []byte("4")...)),
 			},
 		},
 		{
@@ -183,7 +183,7 @@ func TestGetLeafPage(t *testing.T) {
 			i: 2,
 			x: 1,
 			expected: []crypto.Hash{
-				testutils.MockHashData(append([]byte("$leaf"), []byte("5")...)),
+				testutils.MockHashData(append([]byte("leaf"), []byte("5")...)),
 			},
 		},
 		{
@@ -195,10 +195,10 @@ func TestGetLeafPage(t *testing.T) {
 			i: 0,
 			x: 2,
 			expected: []crypto.Hash{
-				testutils.MockHashData(append([]byte("$leaf"), []byte("1")...)),
-				testutils.MockHashData(append([]byte("$leaf"), []byte("2")...)),
-				testutils.MockHashData(append([]byte("$leaf"), []byte("3")...)),
-				testutils.MockHashData(append([]byte("$leaf"), []byte("4")...)),
+				testutils.MockHashData(append([]byte("leaf"), []byte("1")...)),
+				testutils.MockHashData(append([]byte("leaf"), []byte("2")...)),
+				testutils.MockHashData(append([]byte("leaf"), []byte("3")...)),
+				testutils.MockHashData(append([]byte("leaf"), []byte("4")...)),
 			},
 		},
 	}
@@ -241,10 +241,10 @@ func TestGeneratePageProof(t *testing.T) {
 			i: 0,
 			x: 1,
 			expected: func() []crypto.Hash {
-				h34 := testutils.MockHashData(append([]byte("$node"),
+				h34 := testutils.MockHashData(append([]byte("node"),
 					append(
-						convertHashToBlob(testutils.MockHashData(append([]byte("$leaf"), []byte("3")...))),
-						convertHashToBlob(testutils.MockHashData(append([]byte("$leaf"), []byte("4")...)))...,
+						convertHashToBlob(testutils.MockHashData(append([]byte("leaf"), []byte("3")...))),
+						convertHashToBlob(testutils.MockHashData(append([]byte("leaf"), []byte("4")...)))...,
 					)...,
 				))
 				return []crypto.Hash{h34}
@@ -259,18 +259,18 @@ func TestGeneratePageProof(t *testing.T) {
 			i: 0,
 			x: 2,
 			expected: func() []crypto.Hash {
-				h5678 := testutils.MockHashData(append([]byte("$node"),
+				h5678 := testutils.MockHashData(append([]byte("node"),
 					append(
-						convertHashToBlob(testutils.MockHashData(append([]byte("$node"),
+						convertHashToBlob(testutils.MockHashData(append([]byte("node"),
 							append(
-								convertHashToBlob(testutils.MockHashData(append([]byte("$leaf"), []byte("5")...))),
-								convertHashToBlob(testutils.MockHashData(append([]byte("$leaf"), []byte("6")...)))...,
+								convertHashToBlob(testutils.MockHashData(append([]byte("leaf"), []byte("5")...))),
+								convertHashToBlob(testutils.MockHashData(append([]byte("leaf"), []byte("6")...)))...,
 							)...,
 						))),
-						convertHashToBlob(testutils.MockHashData(append([]byte("$node"),
+						convertHashToBlob(testutils.MockHashData(append([]byte("node"),
 							append(
-								convertHashToBlob(testutils.MockHashData(append([]byte("$leaf"), []byte("7")...))),
-								convertHashToBlob(testutils.MockHashData(append([]byte("$leaf"), []byte("8")...)))...,
+								convertHashToBlob(testutils.MockHashData(append([]byte("leaf"), []byte("7")...))),
+								convertHashToBlob(testutils.MockHashData(append([]byte("leaf"), []byte("8")...)))...,
 							)...,
 						)))...,
 					)...,
@@ -329,7 +329,7 @@ func TestPageProofReconstruction(t *testing.T) {
 				nextLevel := make([]crypto.Hash, (len(level)+1)/2)
 				for i := 0; i < len(level); i += 2 {
 					if i+1 < len(level) {
-						nodeInput := append([]byte("$node"),
+						nodeInput := append([]byte("node"),
 							append(convertHashToBlob(level[i]),
 								convertHashToBlob(level[i+1])...)...)
 						nextLevel[i/2] = testutils.MockHashData(nodeInput)
@@ -350,9 +350,9 @@ func TestPageProofReconstruction(t *testing.T) {
 			for i := len(proof) - 1; i >= 0; i-- {
 				var combined []byte
 				if idx%2 == 0 {
-					combined = append([]byte("$node"), append(current, convertHashToBlob(proof[i])...)...)
+					combined = append([]byte("node"), append(current, convertHashToBlob(proof[i])...)...)
 				} else {
-					combined = append([]byte("$node"), append(convertHashToBlob(proof[i]), current...)...)
+					combined = append([]byte("node"), append(convertHashToBlob(proof[i]), current...)...)
 				}
 				current = convertHashToBlob(testutils.MockHashData(combined))
 				idx /= 2

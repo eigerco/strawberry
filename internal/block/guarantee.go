@@ -2,7 +2,7 @@ package block
 
 import (
 	"fmt"
-
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -166,4 +166,16 @@ func (w *WorkReport) Hash() (crypto.Hash, error) {
 		return crypto.Hash{}, err
 	}
 	return crypto.HashData(jsonData), nil
+}
+
+func (w *WorkReport) OutputSizeIsValid() bool {
+	totalOutputSize := 0
+	for _, result := range w.WorkResults {
+		if result.IsSuccessful() {
+			totalOutputSize += len(result.Output.Inner.([]byte))
+		}
+	}
+	totalOutputSize += len(w.Output)
+
+	return totalOutputSize <= common.MaxWorkPackageSizeBytes
 }

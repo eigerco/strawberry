@@ -64,10 +64,10 @@ func GetLeafPage(blobs [][]byte, pageIndex, x int, hashFunc func([]byte) crypto.
 	pageStart := (1 << x) * pageIndex          // 2^x * i
 	pageEnd := min(pageStart+1<<x, len(blobs)) // min(2^x * i + 2^x, |v|)
 
-	// Select and hash leaves from the range with "$leaf" prefix
+	// Select and hash leaves from the range with "leaf" prefix
 	leaveHashes := make([]crypto.Hash, 0, pageEnd-pageStart)
 	for j := pageStart; j < pageEnd; j++ {
-		prefixedLeaf := append([]byte("$leaf"), blobs[j]...)
+		prefixedLeaf := append([]byte("leaf"), blobs[j]...)
 		leaveHashes = append(leaveHashes, hashFunc(prefixedLeaf))
 	}
 
@@ -88,7 +88,7 @@ func preprocessForConstantDepth(blobs [][]byte, hashFunc func([]byte) crypto.Has
 
 	// Process each input: H($leaf ~ vi) for i < |v|
 	for i := 0; i < len(blobs); i++ {
-		combined := append([]byte("$leaf"), blobs[i]...)
+		combined := append([]byte("leaf"), blobs[i]...)
 		result[i] = convertHashToBlob(hashFunc(combined))
 	} // positions ≥ len(blobs) are already zero hashes, so no action needed
 

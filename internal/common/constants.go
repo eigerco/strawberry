@@ -17,7 +17,10 @@ const (
 	SizeOfSegment                                = 4104                             // WG = WP*WE = 4104: The size of a segment in octets.
 	MaxWorkPackageSize                           = 12 * 1 << 20                     // WB = 12 MB: The maximum size of an encoded work-package in octets (including extrinsic data and import implications).
 	ErasureCodingChunkSize                       = 684                              // WE = 684: The basic size of erasure-coded pieces in octets.
-	MaxAllocatedGasAccumulation                  = 100_000                          // GA = 100,000: The gas allocated to invoke a work-report’s Accumulation logic.
-	MaxAllocatedGasIsAuthorized                  = 1_000_000                        // GI = 1,000,000: The gas allocated to invoke a work-package’s Is-Authorized logic.
+	MaxAllocatedGasAccumulation                  = 10_000_000                       // GA: The gas allocated to invoke a work-report’s Accumulation logic.
+	MaxAllocatedGasIsAuthorized                  = 50_000_000                       // GI: The gas allocated to invoke a work-package’s Is-Authorized logic.
 	WorkReportMaxSumOfDependencies               = 8                                // (J) The maximum sum of dependency items in a work-report.
+	MinWorkPackageResultsSize                    = 1                                // () The minimum amount of work items in a package.
+	MaxWorkPackageResultsSize                    = 4                                // (I) The maximum amount of work items in a package.
+	MaxWorkPackageSizeBytes                      = 48 * 1024                        // (WR) Maximum size of a serialized work-package in bytes
 )

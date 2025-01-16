@@ -58,7 +58,7 @@ func (m *MMR) Encode(peaks []*crypto.Hash) ([]byte, error) {
 	return encoded, nil
 }
 
-// SuperPeak implements M_R function from equation (E.10) Graypaper 0.5.4
+// SuperPeak implements M_R function from equation (E.10) Graypaper 0.5.3
 func (m *MMR) SuperPeak(peaks []*crypto.Hash, hashFunc func([]byte) crypto.Hash) crypto.Hash {
 	// Filter out nil peaks while preserving order
 	validPeaks := make([]*crypto.Hash, 0, len(peaks))
@@ -78,12 +78,13 @@ func (m *MMR) SuperPeak(peaks []*crypto.Hash, hashFunc func([]byte) crypto.Hash)
 		return *validPeaks[0]
 	}
 
-	// H_K($peak ~ M_R(h...|h|-1) ~ h|h|-1)
+	// H_K($peak ~ M_R(h...|h|-1) ~ h|h|-1).
 	lastHash := *validPeaks[len(validPeaks)-1]
 
 	subPeak := m.SuperPeak(validPeaks[:len(validPeaks)-1], hashFunc)
 
-	combined := append([]byte("$peak"), subPeak[:]...)
+	combined := append([]byte("node"), subPeak[:]...) // Graypaper 0.5.3
+	//combined := append([]byte("peak"), subPeak[:]...)  // Graypaper 0.5.4  TODO: [Issue 219] Uncomment once test vectors are updated).
 	combined = append(combined, lastHash[:]...)
 	result := hashFunc(combined)
 

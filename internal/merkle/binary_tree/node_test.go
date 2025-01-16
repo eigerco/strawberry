@@ -49,7 +49,7 @@ func TestComputeNode(t *testing.T) {
 			expected: func() []byte {
 				hash1 := convertHashToBlob(testutils.MockHashData([]byte("blob1")))
 				hash2 := convertHashToBlob(testutils.MockHashData([]byte("blob2")))
-				combined := append([]byte("$node"), append(hash1, hash2...)...)
+				combined := append([]byte("node"), append(hash1, hash2...)...)
 				return convertHashToBlob(testutils.MockHashData(combined))
 			}(),
 		},
@@ -64,14 +64,14 @@ func TestComputeNode(t *testing.T) {
 				// Right side (blob2 and blob3)
 				hash2 := convertHashToBlob(testutils.MockHashData([]byte("blob2")))
 				hash3 := convertHashToBlob(testutils.MockHashData([]byte("blob3")))
-				rightNode := append([]byte("$node"), append(hash2, hash3...)...)
+				rightNode := append([]byte("node"), append(hash2, hash3...)...)
 				rightHash := convertHashToBlob(testutils.MockHashData(rightNode))
 
 				// Left side (blob1)
 				leftHash := convertHashToBlob(testutils.MockHashData([]byte("blob1")))
 
 				// Combine
-				combined := append([]byte("$node"), append(leftHash, rightHash...)...)
+				combined := append([]byte("node"), append(leftHash, rightHash...)...)
 				return convertHashToBlob(testutils.MockHashData(combined))
 			}(),
 		},
@@ -87,16 +87,16 @@ func TestComputeNode(t *testing.T) {
 				// Left subtree
 				hash1 := convertHashToBlob(testutils.MockHashData([]byte("blob1")))
 				hash2 := convertHashToBlob(testutils.MockHashData([]byte("blob2")))
-				leftNode := append([]byte("$node"), append(hash1, hash2...)...)
+				leftNode := append([]byte("node"), append(hash1, hash2...)...)
 				leftHash := convertHashToBlob(testutils.MockHashData(leftNode))
 
 				// Right subtree
 				hash3 := convertHashToBlob(testutils.MockHashData([]byte("blob3")))
 				hash4 := convertHashToBlob(testutils.MockHashData([]byte("blob4")))
-				rightNode := append([]byte("$node"), append(hash3, hash4...)...)
+				rightNode := append([]byte("node"), append(hash3, hash4...)...)
 				rightHash := convertHashToBlob(testutils.MockHashData(rightNode))
 
-				combined := append([]byte("$node"), append(leftHash, rightHash...)...)
+				combined := append([]byte("node"), append(leftHash, rightHash...)...)
 				return convertHashToBlob(testutils.MockHashData(combined))
 			}(),
 		},
@@ -109,10 +109,10 @@ func TestComputeNode(t *testing.T) {
 			},
 			expected: func() []byte {
 				emptyHash := convertHashToBlob(testutils.MockHashData([]byte{}))
-				rightNode := append([]byte("$node"), append(emptyHash, emptyHash...)...)
+				rightNode := append([]byte("node"), append(emptyHash, emptyHash...)...)
 				rightHash := convertHashToBlob(testutils.MockHashData(rightNode))
 				leftHash := convertHashToBlob(testutils.MockHashData([]byte{}))
-				combined := append([]byte("$node"), append(leftHash, rightHash...)...)
+				combined := append([]byte("node"), append(leftHash, rightHash...)...)
 				return convertHashToBlob(testutils.MockHashData(combined))
 			}(),
 		},
@@ -125,7 +125,7 @@ func TestComputeNode(t *testing.T) {
 			expected: func() []byte {
 				hash1 := convertHashToBlob(testutils.MockHashData(createBlob(1024)))
 				hash2 := convertHashToBlob(testutils.MockHashData(createBlob(2048)))
-				combined := append([]byte("$node"), append(hash1, hash2...)...)
+				combined := append([]byte("node"), append(hash1, hash2...)...)
 				return convertHashToBlob(testutils.MockHashData(combined))
 			}(),
 		},
@@ -140,13 +140,13 @@ func TestComputeNode(t *testing.T) {
 				// Right side (large blob and empty blob)
 				hash2 := convertHashToBlob(testutils.MockHashData(createBlob(1024)))
 				hash3 := convertHashToBlob(testutils.MockHashData([]byte("")))
-				rightNode := append([]byte("$node"), append(hash2, hash3...)...)
+				rightNode := append([]byte("node"), append(hash2, hash3...)...)
 				rightHash := convertHashToBlob(testutils.MockHashData(rightNode))
 
 				// Left side (small blob)
 				leftHash := convertHashToBlob(testutils.MockHashData([]byte("small")))
 
-				combined := append([]byte("$node"), append(leftHash, rightHash...)...)
+				combined := append([]byte("node"), append(leftHash, rightHash...)...)
 				return convertHashToBlob(testutils.MockHashData(combined))
 			}(),
 		},

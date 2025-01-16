@@ -716,6 +716,7 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 	})
 
 	t.Run("remove used authorizer and add new one", func(t *testing.T) {
+		t.Skip("[Issue 223] Due to reports test vector not expecting this logic")
 		header := block.Header{
 			TimeSlotIndex: 1,
 		}

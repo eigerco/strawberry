@@ -95,7 +95,7 @@ type WorkResult struct {
 	ServiceID   int               `json:"service_id"`
 	CodeHash    string            `json:"code_hash"`
 	PayloadHash string            `json:"payload_hash"`
-	Gas         int               `d .json:"gas"`
+	Gas         int               `json:"accumulate_gas"`
 	Result      map[string]string `json:"result"`
 }
 
@@ -288,13 +288,8 @@ func TestReports(t *testing.T) {
 		t.Run(file.Name(), func(t *testing.T) {
 			switch file.Name() {
 			case "bad_signature-1.json", "wrong_assignment-1.json":
-				failsOnValidateExtrinsicsGuarantees = false
-			case "bad_beefy_mmr-1.json":
-				t.Skip("[Issue 219] MMR verification currently disabled as MMR super-peak function spec (GP 0.5.4) doesn't seem to work with current test vectors peaks")
-			case "high_work_report_gas-1.json":
-				t.Skip("Gas limit in test vector seems to not match specification")
+				failsOnValidateExtrinsicsGuarantees = false // These tests are NOT expected to fail on ValidateExtrinsicGuarantees, but later
 			}
-
 			filePath := fmt.Sprintf("vectors/reports/tiny/%s", file.Name())
 			data, err := ReadJSONFile(filePath)
 			require.NoError(t, err, "failed to read JSON file: %s", filePath)
@@ -468,10 +463,6 @@ func mapRecentBlocks(blocks []BlockState) []state.BlockState {
 	result := make([]state.BlockState, len(blocks))
 
 	for i, b := range blocks {
-		log.Printf("Mapping block %d", i)
-		log.Printf("  Header hash: %s", b.HeaderHash)
-		log.Printf("  Number of reported packages: %d", len(b.Reported))
-
 		// Map work report hashes
 		workReportHashes := make(map[crypto.Hash]crypto.Hash)
 		for _, r := range b.Reported {
