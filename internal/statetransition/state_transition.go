@@ -23,6 +23,7 @@ import (
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
@@ -38,14 +39,14 @@ const (
 // TODO: all the calculations which are not dependent on intermediate / new state can be done in parallel
 //
 //	it might be worth making State immutable and make it so that UpdateState returns a new State with all the updated fields
-func UpdateState(s *state.State, newBlock block.Block) error {
+func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error {
 	if newBlock.Header.TimeSlotIndex.IsInFuture() {
 		return errors.New("invalid block, it is in the future")
 	}
 
 	newTimeState := CalculateNewTimeState(newBlock.Header)
 
-	if err := ValidateExtrinsicGuarantees(newBlock.Header, s, newBlock.Extrinsic.EG, s.CoreAssignments, newTimeState, block.AncestorStoreSingleton); err != nil {
+	if err := ValidateExtrinsicGuarantees(newBlock.Header, s, newBlock.Extrinsic.EG, s.CoreAssignments, newTimeState, chain); err != nil {
 		return fmt.Errorf("extrinsic guarantees validation failed, err: %w", err)
 	}
 
@@ -1254,7 +1255,7 @@ func ValidateExtrinsicGuarantees(
 	guarantees block.GuaranteesExtrinsic,
 	currentAssignment state.CoreAssignments,
 	newTimeslot jamtime.Timeslot,
-	ancestorStore *block.AncestorStore,
+	chain *store.Chain,
 ) error {
 	// [⋃ x∈β] K(x_p) ∪ [⋃ x∈ξ] x ∪ q ∪ a
 	pastWorkPackages := make(map[crypto.Hash]struct{})
@@ -1432,15 +1433,12 @@ func ValidateExtrinsicGuarantees(
 		}
 
 		// ∀x ∈ x ∶ ∃h ∈ A ∶ ht = xt ∧ H(h) = xl (eq. 11.34 0.5.0)
-		_, err = ancestorStore.FindAncestor(func(ancestor block.Header) bool {
-			encodedHeader, err := jam.Marshal(ancestor)
+		_, err = chain.FindHeader(func(ancestor block.Header) bool {
+			ancestorHash, err := ancestor.Hash()
 			if err != nil {
 				return false
 			}
-			if ancestor.TimeSlotIndex == context.LookupAnchor.Timeslot && crypto.HashData(encodedHeader) == context.LookupAnchor.HeaderHash {
-				return true
-			}
-			return false
+			return ancestor.TimeSlotIndex == context.LookupAnchor.Timeslot && ancestorHash == context.LookupAnchor.HeaderHash
 		})
 		if err != nil {
 			return fmt.Errorf("no record of header found: %w", err)

@@ -7,12 +7,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/validator"
 	"io"
 	"log"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/store"
+	"github.com/eigerco/strawberry/internal/validator"
+	"github.com/eigerco/strawberry/pkg/db/pebble"
 
 	"github.com/eigerco/strawberry/internal/statetransition"
 
@@ -279,6 +282,12 @@ func TestReports(t *testing.T) {
 	files, err := os.ReadDir("vectors/reports/tiny")
 	require.NoError(t, err, "failed to read tiny directory")
 
+	db, err := pebble.NewKVStore()
+	require.NoError(t, err)
+
+	chain := store.NewChain(db)
+	defer chain.Close()
+
 	for _, file := range files {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
@@ -295,16 +304,6 @@ func TestReports(t *testing.T) {
 			require.NoError(t, err, "failed to read JSON file: %s", filePath)
 
 			preState := mapState(data.PreState)
-
-			// For lookup anchors, store in singleton
-			for _, blockState := range data.PreState.RecentBlocks {
-				header := block.Header{
-					TimeSlotIndex: jamtime.Timeslot(data.Input.Slot),
-					ParentHash:    crypto.Hash(stringToHex(blockState.HeaderHash)),
-				}
-				err := block.AncestorStoreSingleton.StoreHeader(header)
-				require.NoError(t, err)
-			}
 
 			// Create block
 			header := block.Header{
@@ -326,7 +325,7 @@ func TestReports(t *testing.T) {
 			}
 
 			newTimeState := statetransition.CalculateNewTimeState(newBlock.Header)
-			err = statetransition.ValidateExtrinsicGuarantees(newBlock.Header, &preState, newBlock.Extrinsic.EG, preState.CoreAssignments, newTimeState, block.AncestorStoreSingleton)
+			err = statetransition.ValidateExtrinsicGuarantees(newBlock.Header, &preState, newBlock.Extrinsic.EG, preState.CoreAssignments, newTimeState, chain)
 			//Verify results
 			if data.Output.Err != "" && failsOnValidateExtrinsicsGuarantees {
 				require.Error(t, err)

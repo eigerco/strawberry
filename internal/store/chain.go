@@ -13,8 +13,9 @@ import (
 )
 
 var (
-	ErrBlockNotFound = errors.New("block not found")
-	ErrChainClosed   = errors.New("chain store is closed")
+	ErrBlockNotFound  = errors.New("block not found")
+	ErrHeaderNotFound = errors.New("header not found")
+	ErrChainClosed    = errors.New("chain store is closed")
 )
 
 const (
@@ -33,22 +34,100 @@ func NewChain(db db.KVStore) *Chain {
 	return &Chain{db: db}
 }
 
+// PutHeader stores a header in the chain store
+func (c *Chain) PutHeader(h block.Header) error {
+	if c.closed.Load() {
+		return ErrChainClosed
+	}
+	bytes, err := h.Bytes()
+	if err != nil {
+		return fmt.Errorf("marshal header: %w", err)
+	}
+	hash, err := h.Hash()
+	if err != nil {
+		return fmt.Errorf("hash header: %w", err)
+	}
+	if err := c.db.Put(makeKey(prefixHeader, hash[:]), bytes); err != nil {
+		return fmt.Errorf("store header: %w", err)
+	}
+	return nil
+}
+
+// GetHeader retrieves a header by its hash
+func (c *Chain) GetHeader(hash crypto.Hash) (block.Header, error) {
+	if c.closed.Load() {
+		return block.Header{}, ErrChainClosed
+	}
+
+	headerBytes, err := c.db.Get(makeKey(prefixHeader, hash[:]))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return block.Header{}, ErrHeaderNotFound
+		}
+		return block.Header{}, fmt.Errorf("get header: %w", err)
+	}
+
+	return block.HeaderFromBytes(headerBytes)
+}
+
+// FindHeader searches for a header that matches the given predicate function.
+// Returns the first matching header and nil error if found.
+// Returns zero header and nil error if no match is found.
+// Returns zero header and error if the chain is closed or if database operations fail.
+func (c *Chain) FindHeader(fn func(header block.Header) bool) (block.Header, error) {
+	if c.closed.Load() {
+		return block.Header{}, ErrChainClosed
+	}
+
+	// Create iterator for header prefix
+	iter, err := c.db.NewIterator([]byte{prefixHeader}, []byte{prefixHeader + 1})
+	if err != nil {
+		return block.Header{}, fmt.Errorf("create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	// Iterate through headers
+	for iter.Next() {
+		headerBytes, err := iter.Value()
+		if err != nil {
+			return block.Header{}, fmt.Errorf("get header value: %w", err)
+		}
+
+		header, err := block.HeaderFromBytes(headerBytes)
+		if err != nil {
+			return block.Header{}, fmt.Errorf("parse header from bytes: %w", err)
+		}
+
+		if fn(header) {
+			return header, nil
+		}
+	}
+
+	return block.Header{}, nil
+}
+
 // PutBlock stores a block and its header atomically
 func (c *Chain) PutBlock(b block.Block) error {
 	if c.closed.Load() {
 		return ErrChainClosed
 	}
-
 	// Create new batch for atomic operations
 	batch := c.db.NewBatch()
 	defer batch.Close()
-
 	headerHash, err := b.Header.Hash()
 	if err != nil {
 		return fmt.Errorf("hash header: %w", err)
 	}
 
-	// TODO: We should probably store the header here and refactor the Header file storage (AncestorStore)
+	// Store the header
+	headerBytes, err := b.Header.Bytes()
+	if err != nil {
+		return fmt.Errorf("marshal header: %w", err)
+	}
+	if err := batch.Put(makeKey(prefixHeader, headerHash[:]), headerBytes); err != nil {
+		return fmt.Errorf("store header: %w", err)
+	}
+
 	// Store full block
 	blockBytes, err := b.Bytes()
 	if err != nil {
@@ -57,12 +136,10 @@ func (c *Chain) PutBlock(b block.Block) error {
 	if err := batch.Put(makeKey(prefixBlock, headerHash[:]), blockBytes); err != nil {
 		return fmt.Errorf("store block: %w", err)
 	}
-
 	// Commit the batch
 	if err := batch.Commit(); err != nil {
 		return fmt.Errorf("commit batch: %w", err)
 	}
-
 	return nil
 }
 
