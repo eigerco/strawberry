@@ -86,3 +86,31 @@ func TestMarshalUnmarshalWithPointer(t *testing.T) {
 
 	assert.Equal(t, original, unmarshaled)
 }
+
+func TestLengthTag(t *testing.T) {
+	type Alias uint16
+	type CustomStruct struct {
+		Alias      Alias   `jam:"length=6"`
+		Uint32     uint32  `jam:"length=32"`
+		NilPointer *uint8  `jam:"length=4"`
+		Pointer    *uint64 `jam:"length=10"`
+		Bool       bool
+	}
+
+	p := uint64(40)
+	original := CustomStruct{
+		Alias:   5,
+		Uint32:  50,
+		Pointer: &p,
+		Bool:    true,
+	}
+
+	marshaledData, err := jam.Marshal(original)
+	require.NoError(t, err)
+
+	var unmarshaled CustomStruct
+	err = jam.Unmarshal(marshaledData, &unmarshaled)
+	require.NoError(t, err)
+
+	assert.Equal(t, original, unmarshaled)
+}
