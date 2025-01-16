@@ -294,11 +294,6 @@ func TestReports(t *testing.T) {
 			data, err := ReadJSONFile(filePath)
 			require.NoError(t, err, "failed to read JSON file: %s", filePath)
 
-			log.Printf("Initial auth pools state:")
-			for i, pool := range data.PreState.AuthPools {
-				log.Printf("Core %d: %v", i, pool)
-			}
-
 			preState := mapState(data.PreState)
 
 			// For lookup anchors, store in singleton
@@ -328,11 +323,6 @@ func TestReports(t *testing.T) {
 					EA: block.AssurancesExtrinsic{},
 					ED: block.DisputeExtrinsic{},
 				},
-			}
-
-			log.Printf("\nGuarantees:")
-			for _, g := range guarantees {
-				log.Printf("Core: %d, AuthorizerHash: %x", g.WorkReport.CoreIndex, g.WorkReport.AuthorizerHash)
 			}
 
 			newTimeState := statetransition.CalculateNewTimeState(newBlock.Header)
@@ -367,16 +357,6 @@ func TestReports(t *testing.T) {
 			)
 
 			newCoreAuthorizations := statetransition.CalculateNewCoreAuthorizations(newBlock.Header, newBlock.Extrinsic.EG, newPendingCoreAuthorizations, preState.CoreAuthorizersPool)
-
-			log.Printf("\nNew core authorizations:")
-			for i := range newCoreAuthorizations {
-				log.Printf("Core %d: %x", i, newCoreAuthorizations[i])
-			}
-
-			log.Printf("\nExpected post state core authorizations:")
-			for i, pool := range data.PostState.AuthPools {
-				log.Printf("Core %d: %v", i, pool)
-			}
 
 			expectedPostState := mapState(data.PostState)
 
@@ -483,10 +463,6 @@ func mapRecentBlocks(blocks []BlockState) []state.BlockState {
 	result := make([]state.BlockState, len(blocks))
 
 	for i, b := range blocks {
-		log.Printf("Mapping block %d", i)
-		log.Printf("  Header hash: %s", b.HeaderHash)
-		log.Printf("  Number of reported packages: %d", len(b.Reported))
-
 		// Map work report hashes
 		workReportHashes := make(map[crypto.Hash]crypto.Hash)
 		for _, r := range b.Reported {
