@@ -8,7 +8,6 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/testutils"
-	"github.com/stretchr/testify/require"
 )
 
 func SetupValidatorState(t *testing.T) *ValidatorState {
@@ -22,14 +21,13 @@ func SetupValidatorState(t *testing.T) *ValidatorState {
 	for i := 0; i < jamtime.TimeslotsPerEpoch; i++ {
 		safroleState.TicketAccumulator[i] = RandomTicket(t)
 	}
-	safroleState.SealingKeySeries = safrole.TicketsOrKeys{}
+	safroleState.SealingKeySeries = safrole.TicketAccumulator{}
 	var epochKeys crypto.EpochKeys
 	for i := 0; i < jamtime.TimeslotsPerEpoch; i++ {
 		epochKeys[i] = testutils.RandomBandersnatchPublicKey(t)
 	}
-	err := safroleState.SealingKeySeries.SetValue(epochKeys)
+	safroleState.SealingKeySeries.Set(epochKeys)
 	validatorState.SafroleState = safroleState
-	require.NoError(t, err)
 	return &validatorState
 }
 

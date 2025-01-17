@@ -636,20 +636,14 @@ func UpdateSafroleState(
 			ticketAccumulatorFull {
 			// Use tickets for sealing keys. Apply the Z function on the ticket accumulator.
 			sealingTickets := safrole.OutsideInSequence(newValidatorState.SafroleState.TicketAccumulator)
-			err := newValidatorState.SafroleState.SealingKeySeries.SetValue(safrole.TicketsBodies(sealingTickets))
-			if err != nil {
-				return entropyPool, validatorState, SafroleOutput{}, err
-			}
+			newValidatorState.SafroleState.SealingKeySeries.Set(safrole.TicketsBodies(sealingTickets))
 		} else {
 			// Use bandersnatch keys for sealing keys.
 			fallbackKeys, err := safrole.SelectFallbackKeys(newEntropyPool[2], newValidatorState.CurrentValidators)
 			if err != nil {
 				return entropyPool, validatorState, SafroleOutput{}, err
 			}
-			err = newValidatorState.SafroleState.SealingKeySeries.SetValue(fallbackKeys)
-			if err != nil {
-				return entropyPool, validatorState, SafroleOutput{}, err
-			}
+			newValidatorState.SafroleState.SealingKeySeries.Set(fallbackKeys)
 		}
 
 		// Compute epoch marker (H_e).
@@ -687,11 +681,18 @@ func calculateNewEntropyPool(currentTimeslot jamtime.Timeslot, newTimeslot jamti
 	newEntropyPool := entropyPool
 
 	if newTimeslot.ToEpoch() > currentTimeslot.ToEpoch() {
-		newEntropyPool = state.RotateEntropyPool(entropyPool)
+		newEntropyPool = rotateEntropyPool(entropyPool)
 	}
 
 	newEntropyPool[0] = crypto.HashData(append(entropyPool[0][:], entropyInput[:]...))
 	return newEntropyPool, nil
+}
+
+func rotateEntropyPool(pool state.EntropyPool) state.EntropyPool {
+	pool[3] = pool[2]
+	pool[2] = pool[1]
+	pool[1] = pool[0]
+	return pool
 }
 
 // CalculateNewCoreAuthorizations implements equation 4.19: α' ≺ (H, EG, φ', α) . Graypaper 0.5.4
