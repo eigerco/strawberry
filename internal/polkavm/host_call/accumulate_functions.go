@@ -1,6 +1,8 @@
 package host_call
 
 import (
+	"bytes"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -8,6 +10,7 @@ import (
 	. "github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 // Bless ΩB(ϱ, ω, μ, (x, y))
@@ -253,9 +256,63 @@ func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, t
 	}
 	gas -= EjectCost
 
-	// TODO: implement method
+	d, o := regs[A0], regs[A1]
 
-	return gas, regs, mem, ctxPair, nil
+	// let h = μo..o+32 if Zo..o+32 ⊂ Vμ
+	h := make([]byte, 32)
+	if err := mem.Read(uint32(o), h); err != nil {
+		// otherwise ∇
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
+
+	if block.ServiceId(d) == ctxPair.RegularCtx.ServiceId {
+		// d = x_s => WHO
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
+
+	// if d ∈ K((x_u)_d)
+	serviceAccount, ok := ctxPair.RegularCtx.AccumulationState.ServiceState[block.ServiceId(d)]
+	if !ok {
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
+
+	encodedXs, err := jam.Marshal(struct {
+		ServiceId block.ServiceId `jam:"length=32"`
+	}{ctxPair.RegularCtx.ServiceId})
+	if err != nil || !bytes.Equal(serviceAccount.CodeHash[:], encodedXs) {
+		// d_c ≠ E32(x_s) => WHO
+		return gas, withCode(regs, WHO), mem, ctxPair, err
+	}
+
+	if serviceAccount.TotalItems() != 2 {
+		// d_i ≠ 2 => HUH
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
+	}
+
+	// l = max(81, d_o) - 81
+	l := max(81, len(serviceAccount.Code())) - 81
+
+	key := service.PreImageMetaKey{Hash: crypto.Hash(h), Length: service.PreimageLength(l)}
+	dL, ok := serviceAccount.PreimageMeta[key]
+	if !ok {
+		// (h, l) ∉ d_l => HUH
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
+	}
+
+	// if d_l[h, l] = [x, y], y < t − D => OK
+	if len(dL) == 2 && dL[1] < timeslot-jamtime.PreimageExpulsionPeriod {
+		xs := ctxPair.RegularCtx.ServiceAccount()
+		// s'_b = ((x_u)d)[x_s]b + d_b
+		xs.Balance += serviceAccount.Balance
+
+		delete(ctxPair.RegularCtx.AccumulationState.ServiceState, block.ServiceId(d))
+		ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = xs
+
+		return gas, withCode(regs, OK), mem, ctxPair, nil
+	}
+
+	// otherwise => HUH
+	return gas, withCode(regs, HUH), mem, ctxPair, nil
 }
 
 // Query ΩQ(ϱ, ω, μ, (x, y))
