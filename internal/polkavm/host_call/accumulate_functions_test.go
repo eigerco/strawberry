@@ -283,6 +283,71 @@ func TestAccumulate(t *testing.T) {
 			},
 		},
 		{
+			name:       "eject",
+			fn:         fnTms(Eject),
+			initialGas: 100,
+			timeslot:   200,
+			initialRegs: deltaRegs{
+				A0: 999,
+			},
+			alloc: alloc{
+				A1: hash2bytes(randomHash),
+			},
+			X: AccumulateContext{
+				ServiceId: 222,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						// d = 999 (the ejected service)
+						999: func() service.ServiceAccount {
+							e32, err := jam.Marshal(struct {
+								ServiceId block.ServiceId `jam:"length=32"`
+							}{222})
+							require.NoError(t, err)
+
+							var codeHash crypto.Hash
+							copy(codeHash[:], e32)
+
+							preImgLookup := map[crypto.Hash][]byte{
+								codeHash: make([]byte, 81),
+							}
+
+							preImgMeta := map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+								{Hash: randomHash, Length: 0}: {50, 100},
+							}
+
+							return service.ServiceAccount{
+								CodeHash:       codeHash,
+								Balance:        100, // d_b
+								PreimageLookup: preImgLookup,
+								PreimageMeta:   preImgMeta,
+							}
+						}(),
+						// x_s
+						222: {
+							Balance: 1000,
+						},
+					},
+				},
+			},
+			expectedGas: 88,
+			expectedDeltaRegs: deltaRegs{
+				A0: uint64(OK),
+			},
+			// After success:
+			//   - The ejected service 999 is removed
+			//   - x_s(222).Balance = 1000+100=1100
+			expectedX: AccumulateContext{
+				ServiceId: 222,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						222: {
+							Balance: 1100,
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "solicit_out_of_gas",
 			fn:   fnTms(Solicit),
 			alloc: alloc{
