@@ -45,9 +45,20 @@ func (m GridMapper) GetAllEpochsNeighborValidators(index uint16) ([]*crypto.Vali
 		return nil, fmt.Errorf("failed to get current epoch neighbor validators: %w", err)
 	}
 
-	// Add the two validators (from the previous epoch and the next epoch) with the same index
+	// Initialize with capacity for same epoch neighbors plus potentially two more
 	neighbors := make([]*crypto.ValidatorKey, 0, len(neighborsSameEpoch)+2)
-	neighbors = append(neighbors, m.archivedValidators[index], m.queuedValidators[index])
+
+	// Add previous epoch validator if index exists
+	if index < uint16(len(m.archivedValidators)) {
+		neighbors = append(neighbors, m.archivedValidators[index])
+	}
+
+	// Add next epoch validator if index exists
+	if index < uint16(len(m.queuedValidators)) {
+		neighbors = append(neighbors, m.queuedValidators[index])
+	}
+
+	// Add current epoch neighbors
 	neighbors = append(neighbors, neighborsSameEpoch...)
 
 	return neighbors, nil
@@ -164,16 +175,36 @@ func findValidatorIndexInSlice(validators safrole.ValidatorsData, key ed25519.Pu
 // - The same column (index % gridWidth)
 // The returned slice excludes the input validatorIndex itself.
 func getCurrentEpochNeighborIndices(validatorIndex uint16) []uint16 {
-	neighbors := make([]uint16, 0)
+	gridWidth := getGridWidth()
 
-	// Loop through all validators and check if they are neighbors
-	for i := uint16(0); i < common.NumberOfValidators; i++ {
-		if i != validatorIndex && areGridNeighbors(validatorIndex, i) {
+	// Pre-allocate with maximum possible capacity
+	// Maximum size is (gridWidth - 1) for row + (gridWidth - 1) for column
+	neighbors := make([]uint16, 0, 2*(gridWidth-1))
+
+	// Calculate row neighbors
+	rowStart := (validatorIndex / gridWidth) * gridWidth
+	rowEnd := min(rowStart+gridWidth, common.NumberOfValidators)
+	for i := rowStart; i < rowEnd; i++ {
+		if i != validatorIndex {
+			neighbors = append(neighbors, i)
+		}
+	}
+
+	// Calculate column neighbors
+	for i := validatorIndex % gridWidth; i < common.NumberOfValidators; i += gridWidth {
+		if i != validatorIndex {
 			neighbors = append(neighbors, i)
 		}
 	}
 
 	return neighbors
+}
+
+func min(a, b uint16) uint16 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // areGridNeighbors determines if two validators within the same epoch are neighbors
