@@ -105,6 +105,18 @@ func (mr *MockMutatorMockRecorder) AndImm(arg0, arg1, arg2 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AndImm", reflect.TypeOf((*MockMutator)(nil).AndImm), arg0, arg1, arg2)
 }
 
+// AndInv mocks base method.
+func (m *MockMutator) AndInv(arg0, arg1, arg2 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AndInv", arg0, arg1, arg2)
+}
+
+// AndInv indicates an expected call of AndInv.
+func (mr *MockMutatorMockRecorder) AndInv(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AndInv", reflect.TypeOf((*MockMutator)(nil).AndInv), arg0, arg1, arg2)
+}
+
 // BranchEq mocks base method.
 func (m *MockMutator) BranchEq(arg0, arg1 Reg, arg2 uint32) {
 	m.ctrl.T.Helper()
@@ -345,6 +357,30 @@ func (mr *MockMutatorMockRecorder) CmovIfZeroImm(arg0, arg1, arg2 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CmovIfZeroImm", reflect.TypeOf((*MockMutator)(nil).CmovIfZeroImm), arg0, arg1, arg2)
 }
 
+// CountSetBits32 mocks base method.
+func (m *MockMutator) CountSetBits32(arg0, arg1 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CountSetBits32", arg0, arg1)
+}
+
+// CountSetBits32 indicates an expected call of CountSetBits32.
+func (mr *MockMutatorMockRecorder) CountSetBits32(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountSetBits32", reflect.TypeOf((*MockMutator)(nil).CountSetBits32), arg0, arg1)
+}
+
+// CountSetBits64 mocks base method.
+func (m *MockMutator) CountSetBits64(arg0, arg1 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CountSetBits64", arg0, arg1)
+}
+
+// CountSetBits64 indicates an expected call of CountSetBits64.
+func (mr *MockMutatorMockRecorder) CountSetBits64(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountSetBits64", reflect.TypeOf((*MockMutator)(nil).CountSetBits64), arg0, arg1)
+}
+
 // DivSigned32 mocks base method.
 func (m *MockMutator) DivSigned32(arg0, arg1, arg2 Reg) {
 	m.ctrl.T.Helper()
@@ -429,6 +465,30 @@ func (m *MockMutator) JumpIndirect(arg0 Reg, arg1 uint32) error {
 func (mr *MockMutatorMockRecorder) JumpIndirect(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JumpIndirect", reflect.TypeOf((*MockMutator)(nil).JumpIndirect), arg0, arg1)
+}
+
+// LeadingZeroBits32 mocks base method.
+func (m *MockMutator) LeadingZeroBits32(arg0, arg1 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "LeadingZeroBits32", arg0, arg1)
+}
+
+// LeadingZeroBits32 indicates an expected call of LeadingZeroBits32.
+func (mr *MockMutatorMockRecorder) LeadingZeroBits32(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LeadingZeroBits32", reflect.TypeOf((*MockMutator)(nil).LeadingZeroBits32), arg0, arg1)
+}
+
+// LeadingZeroBits64 mocks base method.
+func (m *MockMutator) LeadingZeroBits64(arg0, arg1 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "LeadingZeroBits64", arg0, arg1)
+}
+
+// LeadingZeroBits64 indicates an expected call of LeadingZeroBits64.
+func (mr *MockMutatorMockRecorder) LeadingZeroBits64(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LeadingZeroBits64", reflect.TypeOf((*MockMutator)(nil).LeadingZeroBits64), arg0, arg1)
 }
 
 // LoadI16 mocks base method.
@@ -677,6 +737,54 @@ func (mr *MockMutatorMockRecorder) LoadU8(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadU8", reflect.TypeOf((*MockMutator)(nil).LoadU8), arg0, arg1)
 }
 
+// Max mocks base method.
+func (m *MockMutator) Max(arg0, arg1, arg2 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Max", arg0, arg1, arg2)
+}
+
+// Max indicates an expected call of Max.
+func (mr *MockMutatorMockRecorder) Max(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Max", reflect.TypeOf((*MockMutator)(nil).Max), arg0, arg1, arg2)
+}
+
+// MaxU mocks base method.
+func (m *MockMutator) MaxU(arg0, arg1, arg2 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "MaxU", arg0, arg1, arg2)
+}
+
+// MaxU indicates an expected call of MaxU.
+func (mr *MockMutatorMockRecorder) MaxU(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxU", reflect.TypeOf((*MockMutator)(nil).MaxU), arg0, arg1, arg2)
+}
+
+// Min mocks base method.
+func (m *MockMutator) Min(arg0, arg1, arg2 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Min", arg0, arg1, arg2)
+}
+
+// Min indicates an expected call of Min.
+func (mr *MockMutatorMockRecorder) Min(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Min", reflect.TypeOf((*MockMutator)(nil).Min), arg0, arg1, arg2)
+}
+
+// MinU mocks base method.
+func (m *MockMutator) MinU(arg0, arg1, arg2 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "MinU", arg0, arg1, arg2)
+}
+
+// MinU indicates an expected call of MinU.
+func (mr *MockMutatorMockRecorder) MinU(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinU", reflect.TypeOf((*MockMutator)(nil).MinU), arg0, arg1, arg2)
+}
+
 // MoveReg mocks base method.
 func (m *MockMutator) MoveReg(arg0, arg1 Reg) {
 	m.ctrl.T.Helper()
@@ -821,6 +929,18 @@ func (mr *MockMutatorMockRecorder) OrImm(arg0, arg1, arg2 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrImm", reflect.TypeOf((*MockMutator)(nil).OrImm), arg0, arg1, arg2)
 }
 
+// OrInv mocks base method.
+func (m *MockMutator) OrInv(arg0, arg1, arg2 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OrInv", arg0, arg1, arg2)
+}
+
+// OrInv indicates an expected call of OrInv.
+func (mr *MockMutatorMockRecorder) OrInv(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrInv", reflect.TypeOf((*MockMutator)(nil).OrInv), arg0, arg1, arg2)
+}
+
 // RemSigned32 mocks base method.
 func (m *MockMutator) RemSigned32(arg0, arg1, arg2 Reg) {
 	m.ctrl.T.Helper()
@@ -867,6 +987,114 @@ func (m *MockMutator) RemUnsigned64(arg0, arg1, arg2 Reg) {
 func (mr *MockMutatorMockRecorder) RemUnsigned64(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemUnsigned64", reflect.TypeOf((*MockMutator)(nil).RemUnsigned64), arg0, arg1, arg2)
+}
+
+// ReverseBytes mocks base method.
+func (m *MockMutator) ReverseBytes(arg0, arg1 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ReverseBytes", arg0, arg1)
+}
+
+// ReverseBytes indicates an expected call of ReverseBytes.
+func (mr *MockMutatorMockRecorder) ReverseBytes(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReverseBytes", reflect.TypeOf((*MockMutator)(nil).ReverseBytes), arg0, arg1)
+}
+
+// RotL32 mocks base method.
+func (m *MockMutator) RotL32(arg0, arg1, arg2 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RotL32", arg0, arg1, arg2)
+}
+
+// RotL32 indicates an expected call of RotL32.
+func (mr *MockMutatorMockRecorder) RotL32(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotL32", reflect.TypeOf((*MockMutator)(nil).RotL32), arg0, arg1, arg2)
+}
+
+// RotL64 mocks base method.
+func (m *MockMutator) RotL64(arg0, arg1, arg2 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RotL64", arg0, arg1, arg2)
+}
+
+// RotL64 indicates an expected call of RotL64.
+func (mr *MockMutatorMockRecorder) RotL64(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotL64", reflect.TypeOf((*MockMutator)(nil).RotL64), arg0, arg1, arg2)
+}
+
+// RotR32 mocks base method.
+func (m *MockMutator) RotR32(arg0, arg1, arg2 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RotR32", arg0, arg1, arg2)
+}
+
+// RotR32 indicates an expected call of RotR32.
+func (mr *MockMutatorMockRecorder) RotR32(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR32", reflect.TypeOf((*MockMutator)(nil).RotR32), arg0, arg1, arg2)
+}
+
+// RotR32Imm mocks base method.
+func (m *MockMutator) RotR32Imm(arg0, arg1 Reg, arg2 uint32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RotR32Imm", arg0, arg1, arg2)
+}
+
+// RotR32Imm indicates an expected call of RotR32Imm.
+func (mr *MockMutatorMockRecorder) RotR32Imm(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR32Imm", reflect.TypeOf((*MockMutator)(nil).RotR32Imm), arg0, arg1, arg2)
+}
+
+// RotR32ImmAlt mocks base method.
+func (m *MockMutator) RotR32ImmAlt(arg0, arg1 Reg, arg2 uint32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RotR32ImmAlt", arg0, arg1, arg2)
+}
+
+// RotR32ImmAlt indicates an expected call of RotR32ImmAlt.
+func (mr *MockMutatorMockRecorder) RotR32ImmAlt(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR32ImmAlt", reflect.TypeOf((*MockMutator)(nil).RotR32ImmAlt), arg0, arg1, arg2)
+}
+
+// RotR64 mocks base method.
+func (m *MockMutator) RotR64(arg0, arg1, arg2 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RotR64", arg0, arg1, arg2)
+}
+
+// RotR64 indicates an expected call of RotR64.
+func (mr *MockMutatorMockRecorder) RotR64(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR64", reflect.TypeOf((*MockMutator)(nil).RotR64), arg0, arg1, arg2)
+}
+
+// RotR64Imm mocks base method.
+func (m *MockMutator) RotR64Imm(arg0, arg1 Reg, arg2 uint32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RotR64Imm", arg0, arg1, arg2)
+}
+
+// RotR64Imm indicates an expected call of RotR64Imm.
+func (mr *MockMutatorMockRecorder) RotR64Imm(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR64Imm", reflect.TypeOf((*MockMutator)(nil).RotR64Imm), arg0, arg1, arg2)
+}
+
+// RotR64ImmAlt mocks base method.
+func (m *MockMutator) RotR64ImmAlt(arg0, arg1 Reg, arg2 uint32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RotR64ImmAlt", arg0, arg1, arg2)
+}
+
+// RotR64ImmAlt indicates an expected call of RotR64ImmAlt.
+func (mr *MockMutatorMockRecorder) RotR64ImmAlt(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR64ImmAlt", reflect.TypeOf((*MockMutator)(nil).RotR64ImmAlt), arg0, arg1, arg2)
 }
 
 // Sbrk mocks base method.
@@ -1171,6 +1399,30 @@ func (mr *MockMutatorMockRecorder) ShiftLogicalRightImmAlt64(arg0, arg1, arg2 in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ShiftLogicalRightImmAlt64", reflect.TypeOf((*MockMutator)(nil).ShiftLogicalRightImmAlt64), arg0, arg1, arg2)
 }
 
+// SignExtend16 mocks base method.
+func (m *MockMutator) SignExtend16(arg0, arg1 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SignExtend16", arg0, arg1)
+}
+
+// SignExtend16 indicates an expected call of SignExtend16.
+func (mr *MockMutatorMockRecorder) SignExtend16(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignExtend16", reflect.TypeOf((*MockMutator)(nil).SignExtend16), arg0, arg1)
+}
+
+// SignExtend8 mocks base method.
+func (m *MockMutator) SignExtend8(arg0, arg1 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SignExtend8", arg0, arg1)
+}
+
+// SignExtend8 indicates an expected call of SignExtend8.
+func (mr *MockMutatorMockRecorder) SignExtend8(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignExtend8", reflect.TypeOf((*MockMutator)(nil).SignExtend8), arg0, arg1)
+}
+
 // StoreImmIndirectU16 mocks base method.
 func (m *MockMutator) StoreImmIndirectU16(arg0 Reg, arg1, arg2 uint32) error {
 	m.ctrl.T.Helper()
@@ -1419,6 +1671,30 @@ func (mr *MockMutatorMockRecorder) Sub64(arg0, arg1, arg2 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sub64", reflect.TypeOf((*MockMutator)(nil).Sub64), arg0, arg1, arg2)
 }
 
+// TrailingZeroBits32 mocks base method.
+func (m *MockMutator) TrailingZeroBits32(arg0, arg1 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "TrailingZeroBits32", arg0, arg1)
+}
+
+// TrailingZeroBits32 indicates an expected call of TrailingZeroBits32.
+func (mr *MockMutatorMockRecorder) TrailingZeroBits32(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrailingZeroBits32", reflect.TypeOf((*MockMutator)(nil).TrailingZeroBits32), arg0, arg1)
+}
+
+// TrailingZeroBits64 mocks base method.
+func (m *MockMutator) TrailingZeroBits64(arg0, arg1 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "TrailingZeroBits64", arg0, arg1)
+}
+
+// TrailingZeroBits64 indicates an expected call of TrailingZeroBits64.
+func (mr *MockMutatorMockRecorder) TrailingZeroBits64(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrailingZeroBits64", reflect.TypeOf((*MockMutator)(nil).TrailingZeroBits64), arg0, arg1)
+}
+
 // Trap mocks base method.
 func (m *MockMutator) Trap() error {
 	m.ctrl.T.Helper()
@@ -1431,6 +1707,18 @@ func (m *MockMutator) Trap() error {
 func (mr *MockMutatorMockRecorder) Trap() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Trap", reflect.TypeOf((*MockMutator)(nil).Trap))
+}
+
+// Xnor mocks base method.
+func (m *MockMutator) Xnor(arg0, arg1, arg2 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Xnor", arg0, arg1, arg2)
+}
+
+// Xnor indicates an expected call of Xnor.
+func (mr *MockMutatorMockRecorder) Xnor(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Xnor", reflect.TypeOf((*MockMutator)(nil).Xnor), arg0, arg1, arg2)
 }
 
 // Xor mocks base method.
@@ -1455,4 +1743,16 @@ func (m *MockMutator) XorImm(arg0, arg1 Reg, arg2 uint32) {
 func (mr *MockMutatorMockRecorder) XorImm(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XorImm", reflect.TypeOf((*MockMutator)(nil).XorImm), arg0, arg1, arg2)
+}
+
+// ZeroExtend16 mocks base method.
+func (m *MockMutator) ZeroExtend16(arg0, arg1 Reg) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ZeroExtend16", arg0, arg1)
+}
+
+// ZeroExtend16 indicates an expected call of ZeroExtend16.
+func (mr *MockMutatorMockRecorder) ZeroExtend16(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ZeroExtend16", reflect.TypeOf((*MockMutator)(nil).ZeroExtend16), arg0, arg1)
 }
