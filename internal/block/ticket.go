@@ -13,6 +13,8 @@ type Ticket struct {
 	EntryIndex uint8                         // r ∈ Nn (0, 1)
 }
 
+func (t Ticket) TicketOrKeyType() {}
+
 // TicketProof represents a proof of a valid ticket
 type TicketProof struct {
 	EntryIndex uint8                 // r ∈ Nn (0, 1)

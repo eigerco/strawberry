@@ -257,9 +257,8 @@ func RandomJudgements(t *testing.T) state.Judgements {
 }
 
 func RandomSafroleStateWithTicketBodies(t *testing.T) safrole.State {
-	sealingKeySeries := safrole.TicketsOrKeys{}
-	err := sealingKeySeries.SetValue(RandomTicketBodies(t))
-	require.NoError(t, err)
+	sealingKeySeries := safrole.TicketAccumulator{}
+	sealingKeySeries.Set(RandomTicketBodies(t))
 
 	return safrole.State{
 		NextValidators:    RandomValidatorsData(t),
@@ -270,9 +269,8 @@ func RandomSafroleStateWithTicketBodies(t *testing.T) safrole.State {
 }
 
 func RandomSafroleStateWithEpochKeys(t *testing.T) safrole.State {
-	sealingKeySeries := safrole.TicketsOrKeys{}
-	err := sealingKeySeries.SetValue(RandomEpochKeys(t))
-	require.NoError(t, err)
+	sealingKeySeries := safrole.TicketAccumulator{}
+	sealingKeySeries.Set(RandomEpochKeys(t))
 
 	return safrole.State{
 		NextValidators:    RandomValidatorsData(t),

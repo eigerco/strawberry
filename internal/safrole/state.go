@@ -13,7 +13,7 @@ import (
 type State struct {
 	NextValidators    ValidatorsData        // (γk) Validator keys for the following epoch.
 	TicketAccumulator []block.Ticket        // (γa) Sealing-key contest ticket accumulator.
-	SealingKeySeries  TicketsOrKeys         // (γs) Sealing-key series of the current epoch.
+	SealingKeySeries  TicketAccumulator     // (γs) Sealing-key series of the current epoch.
 	RingCommitment    crypto.RingCommitment // (γz) Bandersnatch ring commitment.
 }
 
