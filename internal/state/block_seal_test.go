@@ -57,9 +57,21 @@ func TestSealBlockTicket(t *testing.T) {
 	assert.NotEmpty(t, header.BlockSealSignature)
 	assert.NotEmpty(t, header.VRFSignature)
 
+	// Sanity checks that we did sign.
 	expectedTicketID, err := bandersnatch.OutputHash(header.BlockSealSignature)
 	require.NoError(t, err)
+	// Check that our seal produces the same output hash used by the ticket.
 	assert.Equal(t, expectedTicketID, ticket.Identifier)
+	publicKey, err := bandersnatch.Public(privateKey)
+	require.NoError(t, err)
+	// Check Hv.
+	ok, _ := bandersnatch.Verify(
+		publicKey,
+		buildVRFSContext(expectedTicketID),
+		[]byte{},
+		header.VRFSignature,
+	)
+	require.True(t, ok)
 }
 
 func TestSealBlockFallback(t *testing.T) {
@@ -108,10 +120,21 @@ func TestSealBlockFallback(t *testing.T) {
 	assert.NotEmpty(t, header.BlockSealSignature)
 	assert.NotEmpty(t, header.VRFSignature)
 
-	// Sanity check that our private key did sign.
+	// Sanity checks that we did sign.
 	vrfInput := buildTicketFallbackContext(entropy)
 	require.NoError(t, err)
+	// Check Hs.
 	ok, _ := bandersnatch.Verify(publicKey, vrfInput, unsealedHeader, header.BlockSealSignature)
+	require.True(t, ok)
+	sealOutputHash, err := bandersnatch.OutputHash(header.BlockSealSignature)
+	require.NoError(t, err)
+	// Check Hv.
+	ok, _ = bandersnatch.Verify(
+		publicKey,
+		buildVRFSContext(sealOutputHash),
+		[]byte{},
+		header.VRFSignature,
+	)
 	require.True(t, ok)
 
 }

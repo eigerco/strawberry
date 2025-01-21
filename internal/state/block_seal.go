@@ -211,8 +211,7 @@ func SignBlockWithFallback(
 // Helper to build the fallback sealing context.
 func buildTicketFallbackContext(entropy crypto.Hash) []byte {
 	// Build the context: XF ⌢ η′3
-	sealContext := append([]byte(FallbackSealContext), entropy[:]...)
-	return sealContext
+	return append([]byte(FallbackSealContext), entropy[:]...)
 }
 
 // Helper to produce the VRFS signature.
@@ -222,7 +221,7 @@ func signBlockVRFS(
 	privateKey crypto.BandersnatchPrivateKey,
 ) (crypto.BandersnatchSignature, error) {
 	// Construct the message: XE ⌢ Y(Hs)
-	vrfContext := append([]byte(EntropyContext), sealOutputHash[:]...)
+	vrfContext := buildVRFSContext(sealOutputHash)
 
 	// Sign the constructed message to get Hv.
 	vrfSignature, err := bandersnatch.Sign(privateKey, vrfContext, []byte{})
@@ -231,6 +230,12 @@ func signBlockVRFS(
 	}
 
 	return vrfSignature, nil
+}
+
+// Helper to build the fallback sealing context.
+func buildVRFSContext(sealOutputHash crypto.BandersnatchOutputHash) []byte {
+	// Construct the message: XE ⌢ Y(Hs)
+	return append([]byte(EntropyContext), sealOutputHash[:]...)
 }
 
 // Help to get unsealed header bytes. Essentially this strips off the header
