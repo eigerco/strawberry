@@ -200,12 +200,7 @@ func getCurrentEpochNeighborIndices(validatorIndex uint16) []uint16 {
 	return neighbors
 }
 
-func min(a, b uint16) uint16 {
-	if a < b {
-		return a
-	}
-	return b
-}
+
 
 // areGridNeighbors determines if two validators within the same epoch are neighbors
 // in the grid structure by checking if they share the same row or column.
