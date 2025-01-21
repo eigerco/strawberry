@@ -1798,7 +1798,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		slices.Concat(
 			slices.Concat(currentState.AccumulationQueue[timeslotPerEpoch:]...), // ⋃(ϑm...)
 			slices.Concat(currentState.AccumulationQueue[:timeslotPerEpoch]...), // ⋃(ϑ...m)
-			queuedWorkReports, // WQ
+			queuedWorkReports,                                                   // WQ
 		),
 		getWorkPackageHashes(immediatelyAccWorkReports), // P(W!)
 	)
@@ -2424,8 +2424,8 @@ func (a *Accumulator) SequentialDelta(
 	return uint32(maxReports), newCtx, transfers, hashPairs
 }
 
-func getMapKeys[K comparable, V any](m map[K]V) map[K]struct{} {
-	m2 := make(map[K]struct{}, len(m))
+func getServiceIdsAsSet(m map[block.ServiceId]service.ServiceAccount) map[block.ServiceId]struct{} {
+	m2 := make(map[block.ServiceId]struct{}, len(m))
 	for k := range m {
 		m2[k] = struct{}{}
 	}
@@ -2438,10 +2438,10 @@ func (a *Accumulator) ParallelDelta(
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
-	uint64, // total gas used
-	state.AccumulationState, // updated context
+	uint64,                     // total gas used
+	state.AccumulationState,    // updated context
 	[]service.DeferredTransfer, // all transfers
-	ServiceHashPairs, // accumulation outputs
+	ServiceHashPairs,           // accumulation outputs
 ) {
 	// Get all unique service indices involved (s)
 	// s = {rs | w ∈ w, r ∈ wr} ∪ K(f)
@@ -2515,7 +2515,7 @@ func (a *Accumulator) ParallelDelta(
 
 			maps.Copy(allResultServices, resultServices)
 
-			initialServicesKeys := getMapKeys(initialAccState.ServiceState)
+			initialServicesKeys := getServiceIdsAsSet(initialAccState.ServiceState)
 			maps.DeleteFunc(initialServicesKeys, func(id block.ServiceId, _ struct{}) bool {
 				_, ok := accState.ServiceState[id]
 				return ok
@@ -2589,7 +2589,7 @@ func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
-	serviceIndex block.ServiceId, // NS
+	serviceIndex block.ServiceId,             // NS
 ) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)
