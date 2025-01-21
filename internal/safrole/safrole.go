@@ -2,6 +2,7 @@ package safrole
 
 import (
 	"fmt"
+
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -11,48 +12,58 @@ import (
 
 type TicketsBodies [jamtime.TimeslotsPerEpoch]block.Ticket
 
-// TicketsOrKeys is enum
-type TicketsOrKeys struct {
-	inner any
+func (t TicketsBodies) TicketsOrKeysType() {}
+
+// TicketAccumulator is enum/union that represents ya. It should contain either
+// TicketBodies which is an array of tickets, or in the fallback case
+// crypto.EpochKeys, an array of bandersnatch public keys.
+type TicketAccumulator struct {
+	inner TicketsOrKeys
 }
 
-type TicketsOrKeysValues interface {
-	crypto.EpochKeys | TicketsBodies
+// TicketsOrKeys represents the union of either TicketBodies or
+// crypto.EpochKeys.
+type TicketsOrKeys interface {
+	TicketsOrKeysType()
 }
 
-func setTicketsOrKeys[Value TicketsOrKeysValues](tok *TicketsOrKeys, value Value) {
-	tok.inner = value
+func (ta *TicketAccumulator) Set(value TicketsOrKeys) {
+	ta.inner = value
 }
 
-func (tok *TicketsOrKeys) SetValue(value any) error {
+func (ta *TicketAccumulator) Get() TicketsOrKeys {
+	return ta.inner
+}
+
+func (ta *TicketAccumulator) SetValue(value any) error {
 	switch value := value.(type) {
 	case crypto.EpochKeys:
-		setTicketsOrKeys(tok, value)
+		ta.inner = value
 		return nil
 	case TicketsBodies:
-		setTicketsOrKeys(tok, value)
+		ta.inner = value
 		return nil
 	default:
 		return fmt.Errorf(jam.ErrUnsupportedType, value)
 	}
 }
 
-func (tok TicketsOrKeys) IndexValue() (uint, any, error) {
-	switch tok.inner.(type) {
+func (ta TicketAccumulator) IndexValue() (uint, any, error) {
+	switch ta.inner.(type) {
 	case crypto.EpochKeys:
-		return 1, tok.inner, nil
+		return 1, ta.inner, nil
 	case TicketsBodies:
-		return 0, tok.inner, nil
+		return 0, ta.inner, nil
 	}
 	return 0, nil, jam.ErrUnsupportedEnumTypeValue
 }
 
-func (tok TicketsOrKeys) Value() (value any, err error) {
-	_, value, err = tok.IndexValue()
+func (ta TicketAccumulator) Value() (value any, err error) {
+	_, value, err = ta.IndexValue()
 	return
 }
 
-func (tok TicketsOrKeys) ValueAt(index uint) (any, error) {
+func (ta TicketAccumulator) ValueAt(index uint) (any, error) {
 	switch index {
 	case 1:
 		return crypto.EpochKeys{}, nil

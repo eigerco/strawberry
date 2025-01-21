@@ -1,13 +1,14 @@
 package state
 
 import (
+	"errors"
 	"fmt"
+
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
-	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 )
 
@@ -17,17 +18,21 @@ const (
 	EntropyContext      = "jam_entropy"
 )
 
-// TODO currently unused, should be used in section 19
-// t ∈ {0, 1} 1 if ticket, 0 if fallback key
-var T byte
+var (
+	ErrBlockSealInvalidAuthor = errors.New("invalid block seal author")
+)
 
-// Gets the winning ticket or key for the current timeslot
-func getWinningTicketOrKey(header *block.Header, state *State) (interface{}, error) {
-	index := header.TimeSlotIndex % jamtime.TimeslotsPerEpoch
-	sealingKeys, err := state.ValidatorState.SafroleState.SealingKeySeries.Value()
-	if err != nil {
-		return nil, err
-	}
+// This represents a union of either a block.Ticket or a
+// crypto.BandersnatchPublic key as a fallback.
+type TicketOrKey interface {
+	TicketOrKeyType()
+}
+
+// Gets the winning ticket or key for the current timeslot.
+// Implements part of equation 6.15 in the graypaper: γ′s[Ht]^↺ (v0.5.4)
+func getWinningTicketOrKey(header *block.Header, state *State) (TicketOrKey, error) {
+	index := header.TimeSlotIndex.TimeslotInEpoch()
+	sealingKeys := state.ValidatorState.SafroleState.SealingKeySeries.Get()
 	switch value := sealingKeys.(type) {
 	case safrole.TicketsBodies:
 		return value[index], nil
@@ -38,150 +43,211 @@ func getWinningTicketOrKey(header *block.Header, state *State) (interface{}, err
 	}
 }
 
-// TODO: Bandersnatch implement this function. This is just a mock.
-func isWinningKey(key crypto.BandersnatchPublicKey, header *block.Header, state *State) bool {
+// Attempts to a seal a block and add a block seal signature (Hs) and a VRFS
+// signature (Hv) to the header. Uses either a ticket in most cases but uses a
+// bandersnatch public key as a fallback. Checks that the private key given was
+// either used to generate the winning ticket or otherwise if it's public key
+// matches the winning public key in the case of fallback.
+// Implements equations 6.15-6.20 in the graypaper. (v0.5.4)
+func SealBlock(
+	header *block.Header,
+	state *State,
+	privateKey crypto.BandersnatchPrivateKey,
+) error {
 	winningTicketOrKey, err := getWinningTicketOrKey(header, state)
 	if err != nil {
-		return false
+		return err
 	}
-	return key == winningTicketOrKey
+
+	entropy := state.EntropyPool[3] // η_3
+
+	var (
+		sealSignature crypto.BandersnatchSignature
+		vrfsSignature crypto.BandersnatchSignature
+	)
+
+	sealSignature, vrfsSignature, err = SignBlock(*header, winningTicketOrKey, privateKey, entropy)
+	if err != nil {
+		return err
+	}
+
+	header.BlockSealSignature = sealSignature
+	header.VRFSignature = vrfsSignature
+
+	return nil
 }
 
+// Produces a seal signature and VRFS signature for the unsealed header bytes of
+// the given header using either a winning ticket or a public key in the case of
+// fallback. This will error if the private key can't be associated with the
+// given ticket or public key in the case of fallback.
+// Implements equations 6.15-6.20 in the graypaper. (v0.5.4)
+func SignBlock(
+	header block.Header,
+	ticketOrKey TicketOrKey,
+	privateKey crypto.BandersnatchPrivateKey, // Ha
+	entropy crypto.Hash, // η′3
+) (
+	sealSignature crypto.BandersnatchSignature,
+	vrfsSignature crypto.BandersnatchSignature,
+	err error,
+) {
+	switch tok := ticketOrKey.(type) {
+	case block.Ticket:
+		return SignBlockWithTicket(header, tok, privateKey, entropy)
+	case crypto.BandersnatchPublicKey:
+		return SignBlockWithFallback(header, tok, privateKey, entropy)
+	default:
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, fmt.Errorf("unexpected type for ticketOrKey: %T", tok)
+	}
+}
+
+// Produces a seal signature and VRFS signature for the unsealed header bytes of
+// the given header using a winning ticket. This will error if the private key
+// can't be associated with the given ticket.
+// Implements equations 6.15 and 6.17-6.20 in the graypaper. (v0.5.4)
+func SignBlockWithTicket(
+	header block.Header,
+	ticket block.Ticket,
+	privateKey crypto.BandersnatchPrivateKey, // Ha
+	entropy crypto.Hash, // η′3
+) (
+	sealSignature crypto.BandersnatchSignature,
+	vrfsSignature crypto.BandersnatchSignature,
+	err error,
+) {
+	unsealedHeader, err := encodeUnsealedHeader(header)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	// Build the context: XT ⌢ η′3 ++ ir
+	sealContext := buildTicketSealContext(entropy, ticket.EntryIndex)
+
+	sealSignature, err = bandersnatch.Sign(privateKey, sealContext, unsealedHeader)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	sealOutputHash, err := bandersnatch.OutputHash(sealSignature)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	// Extra safety check. See equation 6.29 in the graypaper. (v0.5.4)
+	// The VRF output hash of the seal signature should be the same as the VRF
+	// output hash of the ticket if the same private key was used to produce
+	// both.
+	if sealOutputHash != ticket.Identifier {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, ErrBlockSealInvalidAuthor
+	}
+
+	vrfsSignature, err = signBlockVRFS(sealOutputHash, privateKey)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	return sealSignature, vrfsSignature, nil
+}
+
+// Helper to build the ticket sealing context.
+func buildTicketSealContext(entropy crypto.Hash, ticketAttempt uint8) []byte {
+	// Build the context: XT ⌢ η′3 ++ ir
+	sealContext := append([]byte(TicketSealContext), entropy[:]...)
+	sealContext = append(sealContext, byte(ticketAttempt))
+	return sealContext
+}
+
+// Produces a seal signature and VRFS signature for the unsealed header bytes of
+// the given header using a winning public key. This is the fallback case. This
+// will error if the private key can't be associated with the given public key.
+// Implements equations 6.16 and 6.17-6.20 in the graypaper. (v0.5.4)
+func SignBlockWithFallback(
+	header block.Header,
+	winningKey crypto.BandersnatchPublicKey,
+	privateKey crypto.BandersnatchPrivateKey, // Ha
+	entropy crypto.Hash, // // η′3
+) (
+	sealSignature crypto.BandersnatchSignature,
+	vrfsSignature crypto.BandersnatchSignature,
+	err error,
+) {
+	// Extra safety check. Ha's public key should match the winning public key.
+	ownerPublicKey, err := bandersnatch.Public(privateKey)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+	if ownerPublicKey != winningKey {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, ErrBlockSealInvalidAuthor
+	}
+
+	unsealedHeader, err := encodeUnsealedHeader(header)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	// Build the context: XF ⌢ η′3
+	sealContext := buildTicketFallbackContext(entropy)
+
+	sealSignature, err = bandersnatch.Sign(privateKey, sealContext, unsealedHeader)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	sealOutputHash, err := bandersnatch.OutputHash(sealSignature)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	vrfsSignature, err = signBlockVRFS(sealOutputHash, privateKey)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	return sealSignature, vrfsSignature, nil
+
+}
+
+// Helper to build the fallback sealing context.
+func buildTicketFallbackContext(entropy crypto.Hash) []byte {
+	// Build the context: XF ⌢ η′3
+	return append([]byte(FallbackSealContext), entropy[:]...)
+}
+
+// Helper to produce the VRFS signature.
+// Implements equation 6.17 in the graypaper. (v0.5.4)
+func signBlockVRFS(
+	sealOutputHash crypto.BandersnatchOutputHash,
+	privateKey crypto.BandersnatchPrivateKey,
+) (crypto.BandersnatchSignature, error) {
+	// Construct the message: XE ⌢ Y(Hs)
+	vrfContext := buildVRFSContext(sealOutputHash)
+
+	// Sign the constructed message to get Hv.
+	vrfSignature, err := bandersnatch.Sign(privateKey, vrfContext, []byte{})
+	if err != nil {
+		return crypto.BandersnatchSignature{}, err
+	}
+
+	return vrfSignature, nil
+}
+
+// Helper to build the fallback sealing context.
+func buildVRFSContext(sealOutputHash crypto.BandersnatchOutputHash) []byte {
+	// Construct the message: XE ⌢ Y(Hs)
+	return append([]byte(EntropyContext), sealOutputHash[:]...)
+}
+
+// Help to get unsealed header bytes. Essentially this strips off the header
+// seal.
 func encodeUnsealedHeader(header block.Header) ([]byte, error) {
-	header.BlockSealSignature = crypto.BandersnatchSignature{}
-	// Use the regular serialization from Appendix C
-	return jam.Marshal(header)
-}
-
-func buildSealContextForFallbackKeys(state *State) []byte {
-	// Equation 60: γ's ∈ ⟦HB⟧
-	context := append([]byte(FallbackSealContext), state.EntropyPool[3][:]...) // η_3
-	T = 0
-	return context
-}
-func buildSealContextForTickets(state *State, ticket block.Ticket) []byte {
-	var context []byte
-	// Equation 59: γ's ∈ ⟦C⟧
-	context = append([]byte(TicketSealContext), state.EntropyPool[3][:]...) // η_3
-	context = append(context, byte(ticket.EntryIndex))
-	T = 1
-	return context
-}
-
-func buildSealContext(header *block.Header, state *State) ([]byte, error) {
-	var context []byte
-
-	winningTicketOrKey, err := getWinningTicketOrKey(header, state)
+	// Use the regular serialization from Appendix C in the graypaper.
+	bytes, err := jam.Marshal(header)
 	if err != nil {
 		return nil, err
 	}
-	// case switch if winningTicketOrKey is of type crypto.BandersnatchPublicKey or block.Ticket
-	switch tok := winningTicketOrKey.(type) {
-	case block.Ticket:
-		// Equation 59: γ's ∈ ⟦C⟧
-		context = buildSealContextForTickets(state, tok)
-	case crypto.BandersnatchPublicKey:
-		// Equation 60: γ's ∈ ⟦HB⟧
-		context = buildSealContextForFallbackKeys(state)
-	default:
-		return nil, fmt.Errorf("unknown sealing key type: %T", winningTicketOrKey)
-	}
-	return context, nil
-}
-
-func createSealSignature(header *block.Header, state *State, privateKey crypto.BandersnatchPrivateKey) error {
-	context, err := buildSealContext(header, state)
-	if err != nil {
-		return err
-	}
-
-	unsealedHeader, err := encodeUnsealedHeader(*header)
-	if err != nil {
-		return err
-	}
-	// Hs(BlockSealSignaure) ∈ FEU(H)Ha⟨...⟩
-	header.BlockSealSignature, err = bandersnatch.Sign(privateKey, context, unsealedHeader)
-
-	return err
-}
-
-// Implements equation 61 Hv ∈ F[]Ha⟨XE ⌢ Y(Hs)⟩
-func createVRFSignature(header *block.Header, privateKey crypto.BandersnatchPrivateKey) error {
-	// XE is the constant context string
-	XE := []byte("jam_entropy")
-	// Generate Y(Hs)
-	sealOutputHash, err := bandersnatch.OutputHash(header.BlockSealSignature)
-	if err != nil {
-		return err
-	}
-	// Construct the message: XE ⌢ Y(Hs)
-	vrfInputData := append(XE, sealOutputHash[:]...)
-
-	// Sign the constructed message to get Hv
-	signature, err := bandersnatch.Sign(privateKey, vrfInputData, []byte{})
-	if err != nil {
-		return err
-	}
-	// Set the signature as Hv in the header
-	header.VRFSignature = signature
-
-	return nil
-}
-
-// TODO: Bandersnatch Mock implementation of verifying the VRF proof
-func ExtractVRFOutput(header block.Header) (crypto.BandersnatchOutputHash, error) {
-	return crypto.BandersnatchOutputHash{}, nil
-}
-
-// Implements equations 66 and 67
-func updateEntropyAccumulator(header *block.Header, state *State) error {
-	outputHash, err := bandersnatch.OutputHash(header.VRFSignature)
-	if err != nil {
-		return err
-	}
-
-	// Equation 66: η'0 ≡ H(η0 ⌢ Y(Hv))
-	newEntropy := crypto.HashData(append(state.EntropyPool[0][:], outputHash[:]...))
-	entropyPool := EntropyPool{}
-
-	// Equation 67: Rotate entropy accumulators on epoch change
-	if header.TimeSlotIndex.IsFirstTimeslotInEpoch() {
-		entropyPool = RotateEntropyPool(state.EntropyPool)
-	}
-	entropyPool[0] = newEntropy
-	state.EntropyPool = entropyPool
-	return nil
-}
-
-func RotateEntropyPool(pool EntropyPool) EntropyPool {
-	pool[3] = pool[2]
-	pool[2] = pool[1]
-	pool[1] = pool[0]
-	return pool
-}
-
-// Should be called after a check if the validator has are winning key.
-func sealBlockAndUpdateEntropy(header *block.Header, state *State, privateKey crypto.BandersnatchPrivateKey) error {
-	if err := createSealSignature(header, state, privateKey); err != nil {
-		return err
-	}
-	if err := createVRFSignature(header, privateKey); err != nil {
-		return err
-	}
-	return updateEntropyAccumulator(header, state)
-}
-
-// Main function to implement all of section 6.4
-func AttemptBlockSealing(header *block.Header, state *State, privateKey crypto.BandersnatchPrivateKey) error {
-	publicKey, err := bandersnatch.Public(privateKey)
-	if err != nil {
-		return fmt.Errorf("failed to get public key: %w", err)
-	}
-	if !isWinningKey(publicKey, header, state) {
-		return fmt.Errorf("key does not have privilege to seal the block")
-	}
-	if err := sealBlockAndUpdateEntropy(header, state, privateKey); err != nil {
-		return fmt.Errorf("failed to seal block: %w", err)
-	}
-	return nil
+	// Hs will be the last 96 zeros, so strip those off to get the unsealed
+	// header bytes.
+	// See equation C.19 in the graypaper. (v0.5.4)
+	return bytes[:len(bytes)-96], nil
 }
