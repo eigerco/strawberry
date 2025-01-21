@@ -200,8 +200,6 @@ func getCurrentEpochNeighborIndices(validatorIndex uint16) []uint16 {
 	return neighbors
 }
 
-
-
 // areGridNeighbors determines if two validators within the same epoch are neighbors
 // in the grid structure by checking if they share the same row or column.
 // The grid width is calculated as floor(sqrt(total_validators)).
