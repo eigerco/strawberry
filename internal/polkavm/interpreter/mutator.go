@@ -1,6 +1,7 @@
 package interpreter
 
 import (
+	"log"
 	"math"
 
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -148,7 +149,36 @@ func (m *Mutator) Sbrk(dst polkavm.Reg, sizeReg polkavm.Reg) error {
 	m.setNext32(dst, heapTop)
 	return nil
 }
-
+func (m *Mutator) CountSetBits64(d polkavm.Reg, s polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) CountSetBits32(d polkavm.Reg, s polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) LeadingZeroBits64(d polkavm.Reg, s polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) LeadingZeroBits32(d polkavm.Reg, s polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) TrailingZeroBits64(d polkavm.Reg, s polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) TrailingZeroBits32(d polkavm.Reg, s polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) SignExtend8(d polkavm.Reg, s polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) SignExtend16(d polkavm.Reg, s polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) ZeroExtend16(d polkavm.Reg, s polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) ReverseBytes(d polkavm.Reg, s polkavm.Reg) {
+	panic("todo: implement")
+}
 func (m *Mutator) MoveReg(d polkavm.Reg, s polkavm.Reg) {
 	m.setNext32(d, m.get32(s))
 }
@@ -219,7 +249,7 @@ func (m *Mutator) ShiftArithmeticRightImm64(d polkavm.Reg, s1 polkavm.Reg, s2 ui
 	m.setNext64(d, uint64(int64(m.get64(s1))>>s2))
 }
 func (m *Mutator) ShiftArithmeticRightImmAlt32(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
-	m.setNext32(d, uint32(int32(s1)>>m.get32(s2)))
+	m.setNext32(d, uint32(int32(uint32(s1))>>m.get32(s2)))
 }
 func (m *Mutator) ShiftArithmeticRightImmAlt64(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
 	m.setNext64(d, uint64(int64(s1)>>m.get64(s2)))
@@ -237,7 +267,19 @@ func (m *Mutator) SetGreaterThanSignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint
 	m.setNext32(d, bool2uint32(int32(m.get32(s1)) > int32(s2)))
 }
 func (m *Mutator) ShiftLogicalRightImmAlt32(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
-	m.setNext32(d, s1>>m.get32(s2))
+	m.setNext32(d, uint32(s1)>>m.get32(s2))
+}
+func (m *Mutator) RotR64Imm(d polkavm.Reg, c polkavm.Reg, s uint32) {
+	panic("todo: implement")
+}
+func (m *Mutator) RotR64ImmAlt(d polkavm.Reg, c polkavm.Reg, s uint32) {
+	panic("todo: implement")
+}
+func (m *Mutator) RotR32Imm(d polkavm.Reg, c polkavm.Reg, s uint32) {
+	panic("todo: implement")
+}
+func (m *Mutator) RotR32ImmAlt(d polkavm.Reg, c polkavm.Reg, s uint32) {
+	panic("todo: implement")
 }
 func (m *Mutator) ShiftLogicalRightImmAlt64(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
 	m.setNext32(d, s1>>m.get32(s2))
@@ -455,6 +497,39 @@ func (m *Mutator) CmovIfNotZero(d polkavm.Reg, s, c polkavm.Reg) {
 	}
 	m.instance.NextOffsets()
 }
+func (m *Mutator) RotL64(d polkavm.Reg, s, c polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) RotL32(d polkavm.Reg, s, c polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) RotR64(d polkavm.Reg, s, c polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) RotR32(d polkavm.Reg, s, c polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) AndInv(d polkavm.Reg, s, c polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) OrInv(d polkavm.Reg, s, c polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) Xnor(d polkavm.Reg, s, c polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) Max(d polkavm.Reg, s, c polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) MaxU(d polkavm.Reg, s, c polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) Min(d polkavm.Reg, s, c polkavm.Reg) {
+	panic("todo: implement")
+}
+func (m *Mutator) MinU(d polkavm.Reg, s, c polkavm.Reg) {
+	panic("todo: implement")
+}
 func (m *Mutator) CmovIfNotZeroImm(d polkavm.Reg, c polkavm.Reg, s uint32) {
 	if m.get32(c) != 0 {
 		m.set32(d, s)
@@ -569,8 +644,10 @@ func (m *Mutator) LoadImmAndJumpIndirect(ra polkavm.Reg, base polkavm.Reg, value
 	return m.djump(target)
 }
 func (m *Mutator) Jump(target uint32) {
-	m.instance.instructionOffset = target
 	m.instance.startBasicBlock(m.program)
+	log.Println("target", target, (target>>31) == 1, (target<<1)>>1, m.instance.instructionIndex)
+
+	m.branch(true, target)
 }
 
 func (m *Mutator) JumpIndirect(base polkavm.Reg, offset uint32) error {
