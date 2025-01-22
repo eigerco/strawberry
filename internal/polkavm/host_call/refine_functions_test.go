@@ -699,7 +699,7 @@ func TestInvoke(t *testing.T) {
 	assert.Equal(t, []uint64{0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0}, invokeGasAndRegs[1:])
 }
 
-var addInstrProgram = []byte{0, 0, 3, 8, 135, 9, 1} // copied from testvectors
+var addInstrProgram = []byte{0, 0, 3, 190, 135, 9, 1} // copied from the future testvectors :P
 
 func TestExpunge(t *testing.T) {
 	pp := &polkavm.Program{
