@@ -190,7 +190,7 @@ func Verify(
 }
 
 // Takes a bandersnatch signature and produces it's corresponding output hash (Y
-// function).  This is a way to go diretly from the signature to output hash.
+// function).  This is a way to go directly from the signature to output hash.
 func OutputHash(signature crypto.BandersnatchSignature) (outputHash crypto.BandersnatchOutputHash, err error) {
 	result := ietfVrfOutputHash(signature[:], outputHash[:])
 	if result != 0 {

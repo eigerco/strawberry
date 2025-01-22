@@ -16,7 +16,7 @@ func uintToSeed(i uint) (seed crypto.BandersnatchSeedKey) {
 }
 
 func TestInitRingSize(t *testing.T) {
-	// Confirm that the ring size is being correctly intialized within the init() fn.
+	// Confirm that the ring size is being correctly initialized within the init() fn.
 	require.Equal(t, uint(common.NumberOfValidators), GetRingSize())
 }
 

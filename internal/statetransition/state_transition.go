@@ -314,7 +314,7 @@ func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesEx
 // UpdateRecentBlocks updates β. It takes the final inputs from
 // Equation 83: let n = {p, h ▸▸ H(H), b, s ▸▸ H_0} and
 // produces Equation 84: β′ ≡ ←────── β† n_H.
-// We separate out this logic for ease of testing aganist the recent history
+// We separate out this logic for ease of testing against the recent history
 // test vectors.
 func UpdateRecentBlocks(
 	headerHash crypto.Hash,
@@ -674,7 +674,7 @@ func UpdateSafroleState(
 }
 
 // Implements equations 67 and 68 from the graypaper. (v.0.4.5)
-// The entropyInput is assumed to be bandersnatch output hash from the block vrf siganture, Y(Hv).
+// The entropyInput is assumed to be bandersnatch output hash from the block vrf signature, Y(Hv).
 // The entryPool is defined as equation 66.
 // Calculates η′0 ≡ H(η0 ⌢ Y(Hv)) every slot, and rotates the entropies on epoch change.
 func calculateNewEntropyPool(currentTimeslot jamtime.Timeslot, newTimeslot jamtime.Timeslot, entropyInput crypto.BandersnatchOutputHash, entropyPool state.EntropyPool) (state.EntropyPool, error) {
@@ -779,7 +779,7 @@ func addUniqueEdPubKey(slice []ed25519.PublicKey, key ed25519.PublicKey) []ed255
 	return append(slice, key)
 }
 
-// calculateNewJudgements Equation 23: ψ′ ≺ (ED, ψ)
+// CalculateNewJudgements Equation 23: ψ′ ≺ (ED, ψ)
 // Equations 112-115:(v0.4.5)
 // ψ'g ≡ ψg ∪ {r | {r, ⌊2/3V⌋ + 1} ∈ V}
 // ψ'b ≡ ψb ∪ {r | {r, 0} ∈ V}
