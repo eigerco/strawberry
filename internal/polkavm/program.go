@@ -355,7 +355,7 @@ func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruc
 	if opcode == LoadImm64 {
 		reg1 := min(12, code[0]&0b1111)
 		imm := uint64(0)
-		if err := jam.Unmarshal(code[1:9], imm); err != nil {
+		if err := jam.Unmarshal(code[1:9], &imm); err != nil {
 			return 0, Instruction{}, err
 		}
 		return nextOffset, Instruction{
@@ -367,10 +367,12 @@ func parseInstruction(code, bitmask []byte, instructionOffset int) (int, Instruc
 		}, nil
 	}
 
+	log.Println("opcode", opcode)
 	regs, imm, err := parseArgsTable[opcode](chunk[1:], uint32(instructionOffset), uint32(len(chunk[1:])))
 	if err != nil {
 		return 0, Instruction{}, err
 	}
+	log.Println("opcode, regs, imm", opcode, regs, imm)
 	return nextOffset, Instruction{
 		Opcode: opcode,
 		Reg:    regs,
