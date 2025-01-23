@@ -322,11 +322,11 @@ func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	}
 	gas -= QueryCost
 
-	o, z := regs[A0], regs[A1]
+	addr, preimageMetaKeyLength := regs[A0], regs[A1]
 
 	// let h = μo..o+32 if Zo..o+32 ⊂ Vμ
 	h := make([]byte, 32)
-	if err := mem.Read(uint32(o), h); err != nil {
+	if err := mem.Read(uint32(addr), h); err != nil {
 		// otherwise ∇ => OOB
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
@@ -335,7 +335,7 @@ func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	serviceAccount := ctxPair.RegularCtx.ServiceAccount()
 	key := service.PreImageMetaKey{
 		Hash:   crypto.Hash(h),
-		Length: service.PreimageLength(z),
+		Length: service.PreimageLength(preimageMetaKeyLength),
 	}
 	a, exists := serviceAccount.PreimageMeta[key]
 	if !exists {
