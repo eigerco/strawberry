@@ -348,6 +348,178 @@ func TestAccumulate(t *testing.T) {
 			},
 		},
 		{
+			name:       "query_empty_timeslots",
+			fn:         fnStd(Query),
+			initialGas: 100,
+			initialRegs: deltaRegs{
+				A1: 123,
+			},
+			alloc: alloc{
+				A0: hash2bytes(randomHash),
+			},
+			X: AccumulateContext{
+				ServiceId: 999,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						999: {
+							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+								{
+									Hash:   randomHash,
+									Length: 123,
+								}: {},
+							},
+						},
+					},
+				},
+			},
+			expectedDeltaRegs: deltaRegs{
+				A0: 0,
+				A1: 0,
+			},
+			expectedGas: 88,
+			expectedX: AccumulateContext{
+				ServiceId: 999,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						999: {
+							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+								{Hash: randomHash, Length: 123}: {},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "query_1timeslot",
+			fn:         fnStd(Query),
+			initialGas: 100,
+			initialRegs: deltaRegs{
+				A1: 123,
+			},
+			alloc: alloc{
+				A0: hash2bytes(randomHash),
+			},
+			X: AccumulateContext{
+				ServiceId: 999,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						999: {
+							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+								{
+									Hash:   randomHash,
+									Length: 123,
+								}: {11},
+							},
+						},
+					},
+				},
+			},
+			expectedDeltaRegs: deltaRegs{
+				A0: 1 + (uint64(11) << 32),
+				A1: 0,
+			},
+			expectedGas: 88,
+			expectedX: AccumulateContext{
+				ServiceId: 999,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						999: {
+							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+								{Hash: randomHash, Length: 123}: {11},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "query_2timeslots",
+			fn:         fnStd(Query),
+			initialGas: 100,
+			initialRegs: deltaRegs{
+				A1: 123,
+			},
+			alloc: alloc{
+				A0: hash2bytes(randomHash),
+			},
+			X: AccumulateContext{
+				ServiceId: 999,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						999: {
+							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+								{
+									Hash:   randomHash,
+									Length: 123,
+								}: {11, 12},
+							},
+						},
+					},
+				},
+			},
+			expectedDeltaRegs: deltaRegs{
+				A0: 2 + (uint64(11) << 32),
+				A1: uint64(12),
+			},
+			expectedGas: 88,
+			expectedX: AccumulateContext{
+				ServiceId: 999,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						999: {
+							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+								{Hash: randomHash, Length: 123}: {11, 12},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "query_3timeslots",
+			fn:         fnStd(Query),
+			initialGas: 100,
+			initialRegs: deltaRegs{
+				A1: 123,
+			},
+			alloc: alloc{
+				A0: hash2bytes(randomHash),
+			},
+			X: AccumulateContext{
+				ServiceId: 999,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						999: {
+							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+								{
+									Hash:   randomHash,
+									Length: 123,
+								}: {11, 12, 13},
+							},
+						},
+					},
+				},
+			},
+			expectedDeltaRegs: deltaRegs{
+				A0: 3 + (uint64(11) << 32),
+				A1: uint64(12) + (uint64(13) << 32),
+			},
+			expectedGas: 88,
+			expectedX: AccumulateContext{
+				ServiceId: 999,
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						999: {
+							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+								{Hash: randomHash, Length: 123}: {11, 12, 13},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "solicit_out_of_gas",
 			fn:   fnTms(Solicit),
 			alloc: alloc{
