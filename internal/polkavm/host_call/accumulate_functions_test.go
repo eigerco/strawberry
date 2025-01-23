@@ -866,6 +866,25 @@ func TestAccumulate(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:       "yield",
+			fn:         fnStd(Yield),
+			initialGas: 100,
+			alloc: alloc{
+				A0: hash2bytes(randomHash),
+			},
+			X: AccumulateContext{
+				ServiceId: 999,
+			},
+			expectedDeltaRegs: deltaRegs{
+				A0: uint64(OK),
+			},
+			expectedGas: 88,
+			expectedX: AccumulateContext{
+				ServiceId:        999,
+				AccumulationHash: &randomHash,
+			},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
