@@ -100,7 +100,7 @@ func (sa ServiceAccount) AddPreimage(p []byte, currentTimeslot jamtime.Timeslot)
 	return nil
 }
 
-// LookupPreimage implements the historical lookup function (Λ) as defined in Equation (9.7 v0.5.0).
+// LookupPreimage implements the historical lookup function (Λ) as defined in Equation (9.7 v0.5.4).
 func (sa ServiceAccount) LookupPreimage(t jamtime.Timeslot, h crypto.Hash) []byte {
 	p, exists := sa.PreimageLookup[h]
 	if !exists {

@@ -26,8 +26,7 @@ type CredentialSignature struct {
 	Signature      [crypto.Ed25519SignatureSize]byte // The Ed25519 signature
 }
 
-// WorkReport represents a work report in the JAM state (equation 11.2 v0.5.0)
-// TODO: The total serialized size of a work-report may be no greater than MaxWorkPackageSizeBytes.
+// WorkReport represents a work report in the JAM state (equation 11.2 v0.5.4)
 type WorkReport struct {
 	WorkPackageSpecification WorkPackageSpecification    // Work-package specification (s)
 	RefinementContext        RefinementContext           // Refinement context (x)
@@ -46,11 +45,11 @@ type WorkPackageSpecification struct {
 	SegmentCount              uint16      // Segment count (n)
 }
 
-// RefinementContext describes the context of the chain at the point that the report’s corresponding work-package was evaluated.
+// RefinementContext describes the context of the chain at the point that the report’s corresponding work-package was evaluated. 11.4 GP 0.5.4
 type RefinementContext struct {
 	Anchor                  RefinementContextAnchor       // Historical block anchor
 	LookupAnchor            RefinementContextLookupAnchor // Historical block anchor
-	PrerequisiteWorkPackage []crypto.Hash                 // Prerequisite work package (p) (optional)
+	PrerequisiteWorkPackage []crypto.Hash                 // Prerequisite work package (p)
 }
 
 type RefinementContextAnchor struct {
