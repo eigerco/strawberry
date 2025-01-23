@@ -1,5 +1,7 @@
 # Contributing
 
+**Due to the JAM Prize rules, we do not accept any external contributions at the moment.**
+
 ## Strawberry
 
 To contribute to the Strawberry implementation, start with the proper development copy.
