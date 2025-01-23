@@ -175,7 +175,7 @@ func (m *Mutator) SignExtend16(d polkavm.Reg, s polkavm.Reg) {
 	m.set64(d, uint64(int64(int16(uint16(m.get64(s))))))
 }
 func (m *Mutator) ZeroExtend16(d polkavm.Reg, s polkavm.Reg) {
-	m.set64(d, uint64(int16(m.get64(s))))
+	m.set64(d, uint64(uint16(m.get64(s))))
 }
 func (m *Mutator) ReverseBytes(d polkavm.Reg, s polkavm.Reg) {
 	m.set64(d, bits.ReverseBytes64(m.get64(s)))
