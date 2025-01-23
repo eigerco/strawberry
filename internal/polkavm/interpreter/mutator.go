@@ -270,17 +270,17 @@ func (m *Mutator) SetGreaterThanSignedImm(d polkavm.Reg, s1 polkavm.Reg, s2 uint
 func (m *Mutator) ShiftLogicalRightImmAlt32(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
 	m.setNext32(d, uint32(s1)>>m.get32(s2))
 }
-func (m *Mutator) RotR64Imm(d polkavm.Reg, c polkavm.Reg, s uint32) {
-	panic("todo: implement")
+func (m *Mutator) RotR64Imm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.set64(d, bits.RotateLeft64(m.get64(s1), -int(s2)))
 }
-func (m *Mutator) RotR64ImmAlt(d polkavm.Reg, c polkavm.Reg, s uint32) {
-	panic("todo: implement")
+func (m *Mutator) RotR64ImmAlt(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.set64(d, bits.RotateLeft64(uint64(s2), -int(m.get64(s1))))
 }
-func (m *Mutator) RotR32Imm(d polkavm.Reg, c polkavm.Reg, s uint32) {
-	panic("todo: implement")
+func (m *Mutator) RotR32Imm(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.set32(d, bits.RotateLeft32(m.get32(s1), -int(s2)))
 }
-func (m *Mutator) RotR32ImmAlt(d polkavm.Reg, c polkavm.Reg, s uint32) {
-	panic("todo: implement")
+func (m *Mutator) RotR32ImmAlt(d polkavm.Reg, s1 polkavm.Reg, s2 uint32) {
+	m.set32(d, bits.RotateLeft32(s2, -int(m.get32(s1))))
 }
 func (m *Mutator) ShiftLogicalRightImmAlt64(d polkavm.Reg, s2 polkavm.Reg, s1 uint32) {
 	m.setNext32(d, s1>>m.get32(s2))
@@ -498,37 +498,37 @@ func (m *Mutator) CmovIfNotZero(d polkavm.Reg, s, c polkavm.Reg) {
 	}
 	m.instance.NextOffsets()
 }
-func (m *Mutator) RotL64(d polkavm.Reg, s, c polkavm.Reg) {
+func (m *Mutator) RotL64(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.set64(d, bits.RotateLeft64(m.get64(s1), int(m.get64(s2))))
+}
+func (m *Mutator) RotL32(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.set32(d, bits.RotateLeft32(m.get32(s1), int(m.get32(s2))))
+}
+func (m *Mutator) RotR64(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.set64(d, bits.RotateLeft64(m.get64(s1), -int(m.get64(s2))))
+}
+func (m *Mutator) RotR32(d polkavm.Reg, s1, s2 polkavm.Reg) {
+	m.set32(d, bits.RotateLeft32(m.get32(s1), -int(m.get32(s2))))
+}
+func (m *Mutator) AndInv(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	panic("todo: implement")
 }
-func (m *Mutator) RotL32(d polkavm.Reg, s, c polkavm.Reg) {
+func (m *Mutator) OrInv(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	panic("todo: implement")
 }
-func (m *Mutator) RotR64(d polkavm.Reg, s, c polkavm.Reg) {
+func (m *Mutator) Xnor(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	panic("todo: implement")
 }
-func (m *Mutator) RotR32(d polkavm.Reg, s, c polkavm.Reg) {
+func (m *Mutator) Max(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	panic("todo: implement")
 }
-func (m *Mutator) AndInv(d polkavm.Reg, s, c polkavm.Reg) {
+func (m *Mutator) MaxU(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	panic("todo: implement")
 }
-func (m *Mutator) OrInv(d polkavm.Reg, s, c polkavm.Reg) {
+func (m *Mutator) Min(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	panic("todo: implement")
 }
-func (m *Mutator) Xnor(d polkavm.Reg, s, c polkavm.Reg) {
-	panic("todo: implement")
-}
-func (m *Mutator) Max(d polkavm.Reg, s, c polkavm.Reg) {
-	panic("todo: implement")
-}
-func (m *Mutator) MaxU(d polkavm.Reg, s, c polkavm.Reg) {
-	panic("todo: implement")
-}
-func (m *Mutator) Min(d polkavm.Reg, s, c polkavm.Reg) {
-	panic("todo: implement")
-}
-func (m *Mutator) MinU(d polkavm.Reg, s, c polkavm.Reg) {
+func (m *Mutator) MinU(d polkavm.Reg, s1, s2 polkavm.Reg) {
 	panic("todo: implement")
 }
 func (m *Mutator) CmovIfNotZeroImm(d polkavm.Reg, c polkavm.Reg, s uint32) {
