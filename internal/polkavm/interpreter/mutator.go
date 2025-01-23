@@ -3,6 +3,7 @@ package interpreter
 import (
 	"log"
 	"math"
+	"math/bits"
 
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
@@ -150,34 +151,34 @@ func (m *Mutator) Sbrk(dst polkavm.Reg, sizeReg polkavm.Reg) error {
 	return nil
 }
 func (m *Mutator) CountSetBits64(d polkavm.Reg, s polkavm.Reg) {
-	panic("todo: implement")
+	m.set64(d, uint64(bits.OnesCount64(m.get64(s))))
 }
 func (m *Mutator) CountSetBits32(d polkavm.Reg, s polkavm.Reg) {
-	panic("todo: implement")
+	m.set32(d, uint32(bits.OnesCount32(m.get32(s))))
 }
 func (m *Mutator) LeadingZeroBits64(d polkavm.Reg, s polkavm.Reg) {
-	panic("todo: implement")
+	m.set64(d, uint64(bits.LeadingZeros64(m.get64(s))))
 }
 func (m *Mutator) LeadingZeroBits32(d polkavm.Reg, s polkavm.Reg) {
-	panic("todo: implement")
+	m.set32(d, uint32(bits.LeadingZeros32(m.get32(s))))
 }
 func (m *Mutator) TrailingZeroBits64(d polkavm.Reg, s polkavm.Reg) {
-	panic("todo: implement")
+	m.set64(d, uint64(bits.TrailingZeros64(m.get64(s))))
 }
 func (m *Mutator) TrailingZeroBits32(d polkavm.Reg, s polkavm.Reg) {
-	panic("todo: implement")
+	m.set32(d, uint32(bits.TrailingZeros32(m.get32(s))))
 }
 func (m *Mutator) SignExtend8(d polkavm.Reg, s polkavm.Reg) {
-	panic("todo: implement")
+	m.set64(d, uint64(int64(int8(uint8(m.get64(s))))))
 }
 func (m *Mutator) SignExtend16(d polkavm.Reg, s polkavm.Reg) {
-	panic("todo: implement")
+	m.set64(d, uint64(int64(int16(uint16(m.get64(s))))))
 }
 func (m *Mutator) ZeroExtend16(d polkavm.Reg, s polkavm.Reg) {
-	panic("todo: implement")
+	m.set64(d, uint64(uint16(m.get64(s))))
 }
 func (m *Mutator) ReverseBytes(d polkavm.Reg, s polkavm.Reg) {
-	panic("todo: implement")
+	m.set64(d, bits.ReverseBytes64(m.get64(s)))
 }
 func (m *Mutator) MoveReg(d polkavm.Reg, s polkavm.Reg) {
 	m.setNext32(d, m.get32(s))
