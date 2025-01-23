@@ -475,7 +475,18 @@ func Yield(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	}
 	gas -= YieldCost
 
-	// TODO: implement method
+	addr := regs[A0]
 
-	return gas, regs, mem, ctxPair, nil
+	// let h = μo..o+32 if Zo..o+32 ⊂ Vμ otherwise ∇
+	hBytes := make([]byte, 32)
+	if err := mem.Read(uint32(addr), hBytes); err != nil {
+		// (ω′7, x′_y) = (OOB, x_y) if h = ∇
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
+
+	// (ω′7, x′_y) = (OK, h) otherwise
+	h := crypto.Hash(hBytes)
+	ctxPair.RegularCtx.AccumulationHash = &h
+
+	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
