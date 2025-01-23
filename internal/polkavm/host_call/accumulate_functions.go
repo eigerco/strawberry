@@ -322,7 +322,42 @@ func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	}
 	gas -= QueryCost
 
-	// TODO: implement method
+	addr, preimageMetaKeyLength := regs[A0], regs[A1]
+
+	// let h = μo..o+32 if Zo..o+32 ⊂ Vμ
+	h := make([]byte, 32)
+	if err := mem.Read(uint32(addr), h); err != nil {
+		// otherwise ∇ => OOB
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
+
+	// let a = (xs)l[h, z] if (h, z) ∈ K((xs)l)
+	serviceAccount := ctxPair.RegularCtx.ServiceAccount()
+	key := service.PreImageMetaKey{
+		Hash:   crypto.Hash(h),
+		Length: service.PreimageLength(preimageMetaKeyLength),
+	}
+	a, exists := serviceAccount.PreimageMeta[key]
+	if !exists {
+		// a = ∇ => (NONE, 0)
+		regs[A1] = 0
+		return gas, withCode(regs, NONE), mem, ctxPair, nil
+	}
+
+	switch len(a) {
+	case 0:
+		// a = [] => (0, 0)
+		regs[A0], regs[A1] = 0, 0
+	case 1:
+		// a = [x] => (1 + 2^32 * x, 0)
+		regs[A0], regs[A1] = 1+(uint64(a[0])<<32), 0
+	case 2:
+		// a = [x, y] => (2 + 2^32 * x, y)
+		regs[A0], regs[A1] = 2+(uint64(a[0])<<32), uint64(a[1])
+	case 3:
+		// a = [x, y, z] => (3 + 2^32 * x, y + 2^32 * z)
+		regs[A0], regs[A1] = 3+(uint64(a[0])<<32), uint64(a[1])+(uint64(a[2])<<32)
+	}
 
 	return gas, regs, mem, ctxPair, nil
 }
