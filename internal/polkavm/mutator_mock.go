@@ -105,16 +105,16 @@ func (mr *MockMutatorMockRecorder) AndImm(arg0, arg1, arg2 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AndImm", reflect.TypeOf((*MockMutator)(nil).AndImm), arg0, arg1, arg2)
 }
 
-// AndInv mocks base method.
-func (m *MockMutator) AndInv(arg0, arg1, arg2 Reg) {
+// AndInverted mocks base method.
+func (m *MockMutator) AndInverted(arg0, arg1, arg2 Reg) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AndInv", arg0, arg1, arg2)
+	m.ctrl.Call(m, "AndInverted", arg0, arg1, arg2)
 }
 
-// AndInv indicates an expected call of AndInv.
-func (mr *MockMutatorMockRecorder) AndInv(arg0, arg1, arg2 interface{}) *gomock.Call {
+// AndInverted indicates an expected call of AndInverted.
+func (mr *MockMutatorMockRecorder) AndInverted(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AndInv", reflect.TypeOf((*MockMutator)(nil).AndInv), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AndInverted", reflect.TypeOf((*MockMutator)(nil).AndInverted), arg0, arg1, arg2)
 }
 
 // BranchEq mocks base method.
@@ -749,16 +749,16 @@ func (mr *MockMutatorMockRecorder) Max(arg0, arg1, arg2 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Max", reflect.TypeOf((*MockMutator)(nil).Max), arg0, arg1, arg2)
 }
 
-// MaxU mocks base method.
-func (m *MockMutator) MaxU(arg0, arg1, arg2 Reg) {
+// MaxUnsigned mocks base method.
+func (m *MockMutator) MaxUnsigned(arg0, arg1, arg2 Reg) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "MaxU", arg0, arg1, arg2)
+	m.ctrl.Call(m, "MaxUnsigned", arg0, arg1, arg2)
 }
 
-// MaxU indicates an expected call of MaxU.
-func (mr *MockMutatorMockRecorder) MaxU(arg0, arg1, arg2 interface{}) *gomock.Call {
+// MaxUnsigned indicates an expected call of MaxUnsigned.
+func (mr *MockMutatorMockRecorder) MaxUnsigned(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxU", reflect.TypeOf((*MockMutator)(nil).MaxU), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxUnsigned", reflect.TypeOf((*MockMutator)(nil).MaxUnsigned), arg0, arg1, arg2)
 }
 
 // Min mocks base method.
@@ -773,16 +773,16 @@ func (mr *MockMutatorMockRecorder) Min(arg0, arg1, arg2 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Min", reflect.TypeOf((*MockMutator)(nil).Min), arg0, arg1, arg2)
 }
 
-// MinU mocks base method.
-func (m *MockMutator) MinU(arg0, arg1, arg2 Reg) {
+// MinUnsigned mocks base method.
+func (m *MockMutator) MinUnsigned(arg0, arg1, arg2 Reg) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "MinU", arg0, arg1, arg2)
+	m.ctrl.Call(m, "MinUnsigned", arg0, arg1, arg2)
 }
 
-// MinU indicates an expected call of MinU.
-func (mr *MockMutatorMockRecorder) MinU(arg0, arg1, arg2 interface{}) *gomock.Call {
+// MinUnsigned indicates an expected call of MinUnsigned.
+func (mr *MockMutatorMockRecorder) MinUnsigned(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinU", reflect.TypeOf((*MockMutator)(nil).MinU), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinUnsigned", reflect.TypeOf((*MockMutator)(nil).MinUnsigned), arg0, arg1, arg2)
 }
 
 // MoveReg mocks base method.
@@ -929,16 +929,16 @@ func (mr *MockMutatorMockRecorder) OrImm(arg0, arg1, arg2 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrImm", reflect.TypeOf((*MockMutator)(nil).OrImm), arg0, arg1, arg2)
 }
 
-// OrInv mocks base method.
-func (m *MockMutator) OrInv(arg0, arg1, arg2 Reg) {
+// OrInverted mocks base method.
+func (m *MockMutator) OrInverted(arg0, arg1, arg2 Reg) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OrInv", arg0, arg1, arg2)
+	m.ctrl.Call(m, "OrInverted", arg0, arg1, arg2)
 }
 
-// OrInv indicates an expected call of OrInv.
-func (mr *MockMutatorMockRecorder) OrInv(arg0, arg1, arg2 interface{}) *gomock.Call {
+// OrInverted indicates an expected call of OrInverted.
+func (mr *MockMutatorMockRecorder) OrInverted(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrInv", reflect.TypeOf((*MockMutator)(nil).OrInv), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrInverted", reflect.TypeOf((*MockMutator)(nil).OrInverted), arg0, arg1, arg2)
 }
 
 // RemSigned32 mocks base method.
@@ -1001,100 +1001,100 @@ func (mr *MockMutatorMockRecorder) ReverseBytes(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReverseBytes", reflect.TypeOf((*MockMutator)(nil).ReverseBytes), arg0, arg1)
 }
 
-// RotL32 mocks base method.
-func (m *MockMutator) RotL32(arg0, arg1, arg2 Reg) {
+// RotateLeft32 mocks base method.
+func (m *MockMutator) RotateLeft32(arg0, arg1, arg2 Reg) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RotL32", arg0, arg1, arg2)
+	m.ctrl.Call(m, "RotateLeft32", arg0, arg1, arg2)
 }
 
-// RotL32 indicates an expected call of RotL32.
-func (mr *MockMutatorMockRecorder) RotL32(arg0, arg1, arg2 interface{}) *gomock.Call {
+// RotateLeft32 indicates an expected call of RotateLeft32.
+func (mr *MockMutatorMockRecorder) RotateLeft32(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotL32", reflect.TypeOf((*MockMutator)(nil).RotL32), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateLeft32", reflect.TypeOf((*MockMutator)(nil).RotateLeft32), arg0, arg1, arg2)
 }
 
-// RotL64 mocks base method.
-func (m *MockMutator) RotL64(arg0, arg1, arg2 Reg) {
+// RotateLeft64 mocks base method.
+func (m *MockMutator) RotateLeft64(arg0, arg1, arg2 Reg) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RotL64", arg0, arg1, arg2)
+	m.ctrl.Call(m, "RotateLeft64", arg0, arg1, arg2)
 }
 
-// RotL64 indicates an expected call of RotL64.
-func (mr *MockMutatorMockRecorder) RotL64(arg0, arg1, arg2 interface{}) *gomock.Call {
+// RotateLeft64 indicates an expected call of RotateLeft64.
+func (mr *MockMutatorMockRecorder) RotateLeft64(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotL64", reflect.TypeOf((*MockMutator)(nil).RotL64), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateLeft64", reflect.TypeOf((*MockMutator)(nil).RotateLeft64), arg0, arg1, arg2)
 }
 
-// RotR32 mocks base method.
-func (m *MockMutator) RotR32(arg0, arg1, arg2 Reg) {
+// RotateRight32 mocks base method.
+func (m *MockMutator) RotateRight32(arg0, arg1, arg2 Reg) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RotR32", arg0, arg1, arg2)
+	m.ctrl.Call(m, "RotateRight32", arg0, arg1, arg2)
 }
 
-// RotR32 indicates an expected call of RotR32.
-func (mr *MockMutatorMockRecorder) RotR32(arg0, arg1, arg2 interface{}) *gomock.Call {
+// RotateRight32 indicates an expected call of RotateRight32.
+func (mr *MockMutatorMockRecorder) RotateRight32(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR32", reflect.TypeOf((*MockMutator)(nil).RotR32), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateRight32", reflect.TypeOf((*MockMutator)(nil).RotateRight32), arg0, arg1, arg2)
 }
 
-// RotR32Imm mocks base method.
-func (m *MockMutator) RotR32Imm(arg0, arg1 Reg, arg2 uint32) {
+// RotateRight32Imm mocks base method.
+func (m *MockMutator) RotateRight32Imm(arg0, arg1 Reg, arg2 uint32) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RotR32Imm", arg0, arg1, arg2)
+	m.ctrl.Call(m, "RotateRight32Imm", arg0, arg1, arg2)
 }
 
-// RotR32Imm indicates an expected call of RotR32Imm.
-func (mr *MockMutatorMockRecorder) RotR32Imm(arg0, arg1, arg2 interface{}) *gomock.Call {
+// RotateRight32Imm indicates an expected call of RotateRight32Imm.
+func (mr *MockMutatorMockRecorder) RotateRight32Imm(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR32Imm", reflect.TypeOf((*MockMutator)(nil).RotR32Imm), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateRight32Imm", reflect.TypeOf((*MockMutator)(nil).RotateRight32Imm), arg0, arg1, arg2)
 }
 
-// RotR32ImmAlt mocks base method.
-func (m *MockMutator) RotR32ImmAlt(arg0, arg1 Reg, arg2 uint32) {
+// RotateRight32ImmAlt mocks base method.
+func (m *MockMutator) RotateRight32ImmAlt(arg0, arg1 Reg, arg2 uint32) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RotR32ImmAlt", arg0, arg1, arg2)
+	m.ctrl.Call(m, "RotateRight32ImmAlt", arg0, arg1, arg2)
 }
 
-// RotR32ImmAlt indicates an expected call of RotR32ImmAlt.
-func (mr *MockMutatorMockRecorder) RotR32ImmAlt(arg0, arg1, arg2 interface{}) *gomock.Call {
+// RotateRight32ImmAlt indicates an expected call of RotateRight32ImmAlt.
+func (mr *MockMutatorMockRecorder) RotateRight32ImmAlt(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR32ImmAlt", reflect.TypeOf((*MockMutator)(nil).RotR32ImmAlt), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateRight32ImmAlt", reflect.TypeOf((*MockMutator)(nil).RotateRight32ImmAlt), arg0, arg1, arg2)
 }
 
-// RotR64 mocks base method.
-func (m *MockMutator) RotR64(arg0, arg1, arg2 Reg) {
+// RotateRight64 mocks base method.
+func (m *MockMutator) RotateRight64(arg0, arg1, arg2 Reg) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RotR64", arg0, arg1, arg2)
+	m.ctrl.Call(m, "RotateRight64", arg0, arg1, arg2)
 }
 
-// RotR64 indicates an expected call of RotR64.
-func (mr *MockMutatorMockRecorder) RotR64(arg0, arg1, arg2 interface{}) *gomock.Call {
+// RotateRight64 indicates an expected call of RotateRight64.
+func (mr *MockMutatorMockRecorder) RotateRight64(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR64", reflect.TypeOf((*MockMutator)(nil).RotR64), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateRight64", reflect.TypeOf((*MockMutator)(nil).RotateRight64), arg0, arg1, arg2)
 }
 
-// RotR64Imm mocks base method.
-func (m *MockMutator) RotR64Imm(arg0, arg1 Reg, arg2 uint32) {
+// RotateRight64Imm mocks base method.
+func (m *MockMutator) RotateRight64Imm(arg0, arg1 Reg, arg2 uint32) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RotR64Imm", arg0, arg1, arg2)
+	m.ctrl.Call(m, "RotateRight64Imm", arg0, arg1, arg2)
 }
 
-// RotR64Imm indicates an expected call of RotR64Imm.
-func (mr *MockMutatorMockRecorder) RotR64Imm(arg0, arg1, arg2 interface{}) *gomock.Call {
+// RotateRight64Imm indicates an expected call of RotateRight64Imm.
+func (mr *MockMutatorMockRecorder) RotateRight64Imm(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR64Imm", reflect.TypeOf((*MockMutator)(nil).RotR64Imm), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateRight64Imm", reflect.TypeOf((*MockMutator)(nil).RotateRight64Imm), arg0, arg1, arg2)
 }
 
-// RotR64ImmAlt mocks base method.
-func (m *MockMutator) RotR64ImmAlt(arg0, arg1 Reg, arg2 uint32) {
+// RotateRight64ImmAlt mocks base method.
+func (m *MockMutator) RotateRight64ImmAlt(arg0, arg1 Reg, arg2 uint32) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RotR64ImmAlt", arg0, arg1, arg2)
+	m.ctrl.Call(m, "RotateRight64ImmAlt", arg0, arg1, arg2)
 }
 
-// RotR64ImmAlt indicates an expected call of RotR64ImmAlt.
-func (mr *MockMutatorMockRecorder) RotR64ImmAlt(arg0, arg1, arg2 interface{}) *gomock.Call {
+// RotateRight64ImmAlt indicates an expected call of RotateRight64ImmAlt.
+func (mr *MockMutatorMockRecorder) RotateRight64ImmAlt(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotR64ImmAlt", reflect.TypeOf((*MockMutator)(nil).RotR64ImmAlt), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateRight64ImmAlt", reflect.TypeOf((*MockMutator)(nil).RotateRight64ImmAlt), arg0, arg1, arg2)
 }
 
 // Sbrk mocks base method.
