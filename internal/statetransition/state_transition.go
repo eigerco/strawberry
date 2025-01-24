@@ -1814,12 +1814,13 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	gasLimit := max(service.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
 
 	// let (n, o, t, C) = ∆+(g, W∗, (χ, δ, ι, φ), χg ) (eq. 12.21)
-	maxReports, newAccumulationState, transfers, hashPairs := NewAccumulator(currentState, header, newTimeslot).SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
-		PrivilegedServices:       currentState.PrivilegedServices,
-		ServiceState:             currentState.Services,
-		ValidatorKeys:            currentState.ValidatorState.QueuedValidators,
-		PendingAuthorizersQueues: currentState.PendingAuthorizersQueues,
-	}, currentState.PrivilegedServices)
+	maxReports, newAccumulationState, transfers, hashPairs := NewAccumulator(currentState, header, newTimeslot).
+		SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
+			PrivilegedServices:       currentState.PrivilegedServices,
+			ServiceState:             currentState.Services,
+			ValidatorKeys:            currentState.ValidatorState.QueuedValidators,
+			PendingAuthorizersQueues: currentState.PendingAuthorizersQueues,
+		}, currentState.PrivilegedServices)
 
 	// (χ′, δ†, ι′, φ′) ≡ o (eq. 12.22)
 	intermediateServiceState := newAccumulationState.ServiceState
@@ -2424,6 +2425,14 @@ func (a *Accumulator) SequentialDelta(
 	return uint32(maxReports), newCtx, transfers, hashPairs
 }
 
+func getServiceIdsAsSet(m map[block.ServiceId]service.ServiceAccount) map[block.ServiceId]struct{} {
+	m2 := make(map[block.ServiceId]struct{}, len(m))
+	for k := range m {
+		m2[k] = struct{}{}
+	}
+	return m2
+}
+
 // ParallelDelta implements equation 12.17 (∆*)
 func (a *Accumulator) ParallelDelta(
 	initialAccState state.AccumulationState,
@@ -2436,7 +2445,7 @@ func (a *Accumulator) ParallelDelta(
 	ServiceHashPairs, // accumulation outputs
 ) {
 	// Get all unique service indices involved (s)
-	// s = {rs S w ∈ w, r ∈ wr} ∪ K(f)
+	// s = {rs | w ∈ w, r ∈ wr} ∪ K(f)
 	serviceIndices := make(map[block.ServiceId]struct{})
 
 	// From work reports
@@ -2460,6 +2469,12 @@ func (a *Accumulator) ParallelDelta(
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+
+	// n = ⋃[s∈s]({(∆1(o, w, f , s)o)d ∖ K(d ∖ {s})})
+	allResultServices := make(map[block.ServiceId]service.ServiceAccount)
+
+	// m = ⋃[s∈s](K(d) ∖ K((∆1(o, w, f , s)o)d))
+	resultServicesExclude := make(map[block.ServiceId]struct{})
 
 	for svcId := range serviceIndices {
 		wg.Add(1)
@@ -2487,10 +2502,28 @@ func (a *Accumulator) ParallelDelta(
 				})
 			}
 
-			// d′ = {s ↦ ds S s ∈ K(d) ∖ s} ∪ [⋃ s∈s] ((∆1(o, w, f , s)o)d
-			for serviceId, serviceAccount := range accState.ServiceState {
-				newAccState.ServiceState[serviceId] = serviceAccount
-			}
+			resultServices := maps.Clone(accState.ServiceState)
+
+			// (∆1(o, w, f , s)o)d ∖ K(d ∖ {s})
+			maps.DeleteFunc(resultServices, func(id block.ServiceId, _ service.ServiceAccount) bool {
+				if id == serviceId {
+					return false
+				}
+
+				_, ok := initialAccState.ServiceState[id]
+				return ok
+			})
+
+			maps.Copy(allResultServices, resultServices)
+
+			initialServicesKeys := getServiceIdsAsSet(initialAccState.ServiceState)
+			maps.DeleteFunc(initialServicesKeys, func(id block.ServiceId, _ struct{}) bool {
+				_, ok := accState.ServiceState[id]
+				return ok
+			})
+
+			maps.Copy(resultServicesExclude, initialServicesKeys)
+
 		}(svcId)
 	}
 
@@ -2536,6 +2569,14 @@ func (a *Accumulator) ParallelDelta(
 	// Wait for all goroutines to complete
 	wg.Wait()
 
+	// (d ∪ n) ∖ m
+	maps.Copy(newAccState.ServiceState, initialAccState.ServiceState)
+	maps.Copy(newAccState.ServiceState, allResultServices)
+	maps.DeleteFunc(newAccState.ServiceState, func(id block.ServiceId, _ service.ServiceAccount) bool {
+		_, ok := resultServicesExclude[id]
+		return ok
+	})
+
 	// Sort accumulation pairs by service ID to ensure deterministic output
 	sort.Slice(accumHashPairs, func(i, j int) bool {
 		return accumHashPairs[i].ServiceId < accumHashPairs[j].ServiceId
@@ -2544,7 +2585,7 @@ func (a *Accumulator) ParallelDelta(
 	return totalGasUsed, newAccState, allTransfers, accumHashPairs
 }
 
-// Delta1 implements equation 12.19 (∆1)
+// Delta1 implements equation 12.19 ∆1 (U, ⟦W⟧, D⟨NS → NG⟩, NS ) → (U, ⟦T⟧, H?, NG)
 func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
