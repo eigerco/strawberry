@@ -620,13 +620,13 @@ func (i *Instruction) Mutate(mutator Mutator) (uint32, error) {
 	case CmovIfNotZeroImm:
 		mutator.CmovIfNotZeroImm(i.Reg[0], i.Reg[1], i.Imm[0])
 	case RotR64Imm:
-		mutator.RotR64Imm(i.Reg[0], i.Reg[1], i.Imm[0])
+		mutator.RotateRight64Imm(i.Reg[0], i.Reg[1], i.Imm[0])
 	case RotR64ImmAlt:
-		mutator.RotR64ImmAlt(i.Reg[0], i.Reg[1], i.Imm[0])
+		mutator.RotateRight64ImmAlt(i.Reg[0], i.Reg[1], i.Imm[0])
 	case RotR32Imm:
-		mutator.RotR32Imm(i.Reg[0], i.Reg[1], i.Imm[0])
+		mutator.RotateRight32Imm(i.Reg[0], i.Reg[1], i.Imm[0])
 	case RotR32ImmAlt:
-		mutator.RotR32ImmAlt(i.Reg[0], i.Reg[1], i.Imm[0])
+		mutator.RotateRight32ImmAlt(i.Reg[0], i.Reg[1], i.Imm[0])
 	case BranchEq:
 		mutator.BranchEq(i.Reg[0], i.Reg[1], i.Imm[0])
 	case BranchNotEq:
@@ -700,27 +700,27 @@ func (i *Instruction) Mutate(mutator Mutator) (uint32, error) {
 	case CmovIfNotZero:
 		mutator.CmovIfNotZero(i.Reg[0], i.Reg[1], i.Reg[2])
 	case RotL64:
-		mutator.RotL64(i.Reg[0], i.Reg[1], i.Reg[2])
+		mutator.RotateLeft64(i.Reg[0], i.Reg[1], i.Reg[2])
 	case RotL32:
-		mutator.RotL32(i.Reg[0], i.Reg[1], i.Reg[2])
+		mutator.RotateLeft32(i.Reg[0], i.Reg[1], i.Reg[2])
 	case RotR64:
-		mutator.RotR64(i.Reg[0], i.Reg[1], i.Reg[2])
+		mutator.RotateRight64(i.Reg[0], i.Reg[1], i.Reg[2])
 	case RotR32:
-		mutator.RotR32(i.Reg[0], i.Reg[1], i.Reg[2])
+		mutator.RotateRight32(i.Reg[0], i.Reg[1], i.Reg[2])
 	case AndInv:
-		mutator.AndInv(i.Reg[0], i.Reg[1], i.Reg[2])
+		mutator.AndInverted(i.Reg[0], i.Reg[1], i.Reg[2])
 	case OrInv:
-		mutator.OrInv(i.Reg[0], i.Reg[1], i.Reg[2])
+		mutator.OrInverted(i.Reg[0], i.Reg[1], i.Reg[2])
 	case Xnor:
 		mutator.Xnor(i.Reg[0], i.Reg[1], i.Reg[2])
 	case Max:
 		mutator.Max(i.Reg[0], i.Reg[1], i.Reg[2])
 	case MaxU:
-		mutator.MaxU(i.Reg[0], i.Reg[1], i.Reg[2])
+		mutator.MaxUnsigned(i.Reg[0], i.Reg[1], i.Reg[2])
 	case Min:
 		mutator.Min(i.Reg[0], i.Reg[1], i.Reg[2])
 	case MinU:
-		mutator.MinU(i.Reg[0], i.Reg[1], i.Reg[2])
+		mutator.MinUnsigned(i.Reg[0], i.Reg[1], i.Reg[2])
 	case Jump:
 		mutator.Jump(i.Imm[0])
 	case Ecalli:
