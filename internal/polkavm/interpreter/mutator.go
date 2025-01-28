@@ -12,19 +12,17 @@ import (
 
 var _ polkavm.Mutator = &Mutator{}
 
-func NewMutator(i *instance, program *polkavm.Program, memoryMap *polkavm.MemoryMap) *Mutator {
+func NewMutator(i *instance, program *polkavm.Program) *Mutator {
 	v := &Mutator{
-		instance:  i,
-		memoryMap: memoryMap,
-		program:   program,
+		instance: i,
+		program:  program,
 	}
 	return v
 }
 
 type Mutator struct {
-	instance  *instance
-	program   *polkavm.Program
-	memoryMap *polkavm.MemoryMap
+	instance *instance
+	program  *polkavm.Program
 }
 
 func (m *Mutator) branch(condition bool, target uint32) {
@@ -83,9 +81,9 @@ func store[T number](m *Mutator, src T, base polkavm.Reg, offset uint32) error {
 	return nil
 }
 
-// djump Equation 249 v0.4.5
+// djump (eq. A.14)
 func (m *Mutator) djump(target uint32) error {
-	if target == polkavm.VmAddressReturnToHost {
+	if target == polkavm.AddressReturnToHost {
 		return polkavm.ErrHalt
 	}
 	instructionOffset := m.program.JumpTableGetByAddress(target)
@@ -130,23 +128,10 @@ func (m *Mutator) Fallthrough() {
 }
 func (m *Mutator) Sbrk(dst polkavm.Reg, sizeReg polkavm.Reg) error {
 	size := m.get32(sizeReg)
-	if size == 0 {
-		// The guest wants to know the current heap pointer.
-		m.setNext32(dst, m.instance.heapSize)
-		return nil
+	heapTop, err := m.instance.memory.Sbrk(size)
+	if err != nil {
+		return err
 	}
-
-	newHeapSize := m.instance.heapSize + size
-	if newHeapSize > m.memoryMap.MaxHeapSize {
-		return polkavm.ErrPanicf("max heap size exceeded")
-	}
-
-	m.instance.heapSize = newHeapSize
-	heapTop := m.memoryMap.HeapBase + newHeapSize
-	if err := m.instance.memory.Sbrk(heapTop); err != nil {
-		return polkavm.ErrPanicf(err.Error())
-	}
-
 	m.setNext32(dst, heapTop)
 	return nil
 }
