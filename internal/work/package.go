@@ -113,9 +113,8 @@ func ComputePagedProofs(segments []polkavm.Segment) ([]polkavm.Segment, error) {
 	for i, seg := range segments {
 		blobs[i] = seg[:]
 	}
-	numPages := len(segments) / SegmentsPerPage
+	numPages := (len(segments) + SegmentsPerPage - 1) / SegmentsPerPage
 	pagedProofs := make([]polkavm.Segment, numPages)
-
 	for pageIndex := 0; pageIndex < numPages; pageIndex++ {
 		// Get leaf hashes and proof for page
 		leafHashes := binary_tree.GetLeafPage(blobs, pageIndex, NumberOfErasureCodecPiecesInSegment, crypto.HashData)
