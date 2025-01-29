@@ -1,7 +1,6 @@
 package interpreter
 
 import (
-	"bytes"
 	"errors"
 	"slices"
 
@@ -16,16 +15,15 @@ import (
 // - ErrPanic (☇)
 // - ErrPageFault (F)
 func InvokeWholeProgram[X any](p []byte, entryPoint uint32, gas uint64, args []byte, hostFunc polkavm.HostCall[X], x X) (polkavm.Gas, []byte, X, error) {
-	program, err := polkavm.ParseBlob(polkavm.NewReader(bytes.NewReader(p)))
+	program, err := polkavm.ParseBlob(p)
 	if err != nil {
 		return 0, nil, x, polkavm.ErrPanicf(err.Error())
 	}
-	memMap, err := polkavm.NewMemoryMap(program.RODataSize, program.RWDataSize, program.StackSize, uint32(len(args)))
+	ram, regs, err := polkavm.InitializeStandardProgram(program, args)
 	if err != nil {
 		return 0, nil, x, polkavm.ErrPanicf(err.Error())
 	}
-	memory := memMap.NewMemory(program.RWData, program.ROData, args)
-	gasRemaining, regs, memory1, x1, err := InvokeHostCall(program, memMap, entryPoint, gas, InitRegs(args), memory, hostFunc, x)
+	gasRemaining, regs, memory1, x1, err := InvokeHostCall(program, entryPoint, gas, regs, ram, hostFunc, x)
 	if err != nil {
 		return 0, nil, x, err
 	}
@@ -40,7 +38,7 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint32, gas uint64, args []b
 
 // InvokeHostCall host call invocation (ΨH)
 func InvokeHostCall[X any](
-	program *polkavm.Program, memMap *polkavm.MemoryMap,
+	program *polkavm.Program,
 	instructionCounter uint32, initialGas uint64, regs polkavm.Registers, mem polkavm.Memory,
 	hostCall polkavm.HostCall[X], x X,
 ) (polkavm.Gas, polkavm.Registers, polkavm.Memory, X, error) {
@@ -50,19 +48,19 @@ func InvokeHostCall[X any](
 		gas           = polkavm.Gas(initialGas)
 	)
 	for {
-		instructionCounter, gas, regs, mem, hostCallIndex, err = Invoke(program, memMap, instructionCounter, gas, regs, mem)
+		instructionCounter, gas, regs, mem, hostCallIndex, err = Invoke(program, instructionCounter, gas, regs, mem)
 		if err != nil && errors.Is(err, polkavm.ErrHostCall) {
 			gas, regs, mem, x, err = hostCall(hostCallIndex, gas, regs, mem, x)
 			if err != nil {
 				return gas, regs, mem, x, err
 			}
-			index := slices.IndexFunc(program.Instructions, func(i polkavm.Instruction) bool {
+			index := slices.IndexFunc(program.CodeAndJumpTable.Instructions, func(i polkavm.Instruction) bool {
 				return i.Offset == instructionCounter
 			})
 			if index < 0 {
 				return gas, regs, mem, x, polkavm.ErrPanicf("no instructions for offset")
 			}
-			instructionCounter += program.Instructions[index].Length
+			instructionCounter += program.CodeAndJumpTable.Instructions[index].Length
 			continue
 		}
 
@@ -74,11 +72,11 @@ func InvokeHostCall[X any](
 
 // Invoke basic definition (Ψ)
 func Invoke(
-	program *polkavm.Program, memMap *polkavm.MemoryMap,
+	program *polkavm.Program,
 	instructionCounter uint32, gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory,
 ) (uint32, polkavm.Gas, polkavm.Registers, polkavm.Memory, uint32, error) {
 	i := Instantiate(instructionCounter, gas, regs, mem)
-	m := NewMutator(i, program, memMap)
+	m := NewMutator(i, program)
 	m.instance.startBasicBlock(m.program)
 	for {
 		// single-step invocation (Ψ1)

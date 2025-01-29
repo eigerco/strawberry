@@ -4,16 +4,6 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
-// InitRegs Equation 270 v0.4.5: standard program initialization, registers
-func InitRegs(args []byte) polkavm.Registers {
-	regs := polkavm.Registers{}
-	regs[polkavm.RA] = 1<<32 - 1<<16
-	regs[polkavm.SP] = 1<<32 - 2*(1<<16) - 2<<24
-	regs[polkavm.A0] = 1<<32 - 1<<16 - 2<<24
-	regs[polkavm.A1] = uint64(len(args))
-	return regs
-}
-
 func Instantiate(instructionOffset uint32, gasLimit polkavm.Gas, regs polkavm.Registers, memory polkavm.Memory) *instance {
 	return &instance{
 		memory:              memory,
@@ -25,8 +15,7 @@ func Instantiate(instructionOffset uint32, gasLimit polkavm.Gas, regs polkavm.Re
 }
 
 type instance struct {
-	memory              polkavm.Memory // The memory sequence; a member of the set M (μ)
-	heapSize            uint32
+	memory              polkavm.Memory    // The memory sequence; a member of the set M (μ)
 	regs                polkavm.Registers // The registers (ω)
 	instructionOffset   uint32            // The instruction counter (ı)
 	instructionLength   uint32
@@ -42,9 +31,9 @@ func (i *instance) startBasicBlock(program *polkavm.Program) {
 		i.instructionIndex = compiledOffset
 	} else {
 		i.instructionIndex = len(i.instructions)
-		for index, instr := range program.Instructions {
+		for index, instr := range program.CodeAndJumpTable.Instructions {
 			if instr.Offset == i.instructionOffset {
-				i.addInstructionsForBlock(program.Instructions[index:])
+				i.addInstructionsForBlock(program.CodeAndJumpTable.Instructions[index:])
 				break
 			}
 		}
