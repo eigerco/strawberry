@@ -22,12 +22,17 @@ import (
 
 func TestAccumulate(t *testing.T) {
 	pp := &Program{
-		RODataSize: 0,
-		RWDataSize: 256,
-		StackSize:  512,
-		Instructions: []Instruction{
-			{Opcode: Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-			{Opcode: JumpIndirect, Imm: []uint32{0}, Reg: []Reg{RA}, Offset: 1, Length: 2},
+		ProgramMemorySizes: ProgramMemorySizes{
+			RODataSize:       0,
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 200,
+		},
+		CodeAndJumpTable: CodeAndJumpTable{
+			Instructions: []Instruction{
+				{Opcode: Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+				{Opcode: JumpIndirect, Imm: []uint32{0}, Reg: []Reg{RA}, Offset: 1, Length: 2},
+			},
 		},
 	}
 
@@ -888,22 +893,18 @@ func TestAccumulate(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			memoryMap, err := NewMemoryMap(0, 0, 1<<19, 0)
-			require.NoError(t, err)
-
-			mem := memoryMap.NewMemory(nil, nil, nil)
-			initialRegs := Registers{
-				RA: VmAddressReturnToHost,
-				SP: uint64(memoryMap.StackAddressHigh),
+			mem, initialRegs, err := InitializeStandardProgram(pp, nil)
+			if err != nil {
+				t.Fatal(err)
 			}
-			stackAddress := memoryMap.StackAddressLow
+			rwAddress := RWAddressBase
 			for addrReg, v := range tc.alloc {
 				require.Greater(t, addrReg, S1)
-				err = mem.Write(stackAddress, v)
+				err = mem.Write(rwAddress, v)
 				require.NoError(t, err)
 
-				initialRegs[addrReg] = uint64(stackAddress)
-				stackAddress = stackAddress + uint32(len(v))
+				initialRegs[addrReg] = uint64(rwAddress)
+				rwAddress = rwAddress + uint32(len(v))
 			}
 			for i, v := range tc.initialRegs {
 				initialRegs[i] = v
@@ -914,8 +915,7 @@ func TestAccumulate(t *testing.T) {
 				return gasCounter, regs, mem, x, nil
 			}
 			gasRemaining, regs, _, ctxPair, err := interpreter.InvokeHostCall(
-				pp, memoryMap,
-				0, tc.initialGas, initialRegs, mem,
+				pp, 0, tc.initialGas, initialRegs, mem,
 				hostCall, AccumulateContextPair{
 					RegularCtx:     tc.X,
 					ExceptionalCtx: tc.Y,

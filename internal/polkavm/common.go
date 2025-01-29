@@ -16,103 +16,124 @@ const (
 	ReadWrite                        // W (Read-Write)
 )
 
-// Memory Equation: 34 (M)
+// Memory M ≡ (V ∈ Y_(2^32), A ∈ ⟦{W, R, ∅}⟧p) (eq. 4.24)
+// for practical reasons we define each memory segment separately
+// so we don't have to allocate [2^32]byte unnecessarily
 type Memory struct {
-	data []*memorySegment // data (V ∈ Y, A ∈ ⟦{W, R, ∅})
+	ro    memorySegment
+	rw    memorySegment
+	stack memorySegment
+	args  memorySegment
 }
 
 type memorySegment struct {
-	start, end uint32
-	access     MemoryAccess
-	data       []byte
+	address uint32
+	data    []byte
+	access  MemoryAccess
 }
 
 // Read reads from the set of readable indices (Vμ)
 func (m *Memory) Read(address uint32, data []byte) error {
-	memSeg := m.inRange(address)
-	if memSeg == nil || memSeg.access == Inaccessible {
+	var memoryData []byte
+	var access MemoryAccess
+	if address >= m.stack.address && address+uint32(len(data)) <= m.stack.address+uint32(len(m.stack.data)) {
+		memoryData = m.stack.data[address-m.stack.address : address-m.stack.address+uint32(len(data))]
+		access = m.stack.access
+	} else if address >= m.rw.address && address+uint32(len(data)) <= m.rw.address+uint32(len(m.rw.data)) {
+		memoryData = m.rw.data[address-m.rw.address : address-m.rw.address+uint32(len(data))]
+		access = m.rw.access
+	} else if address >= m.ro.address && address+uint32(len(data)) <= m.ro.address+uint32(len(m.ro.data)) {
+		memoryData = m.ro.data[address-m.ro.address : address-m.ro.address+uint32(len(data))]
+		access = m.ro.access
+	} else if address >= m.args.address && address+uint32(len(data)) <= m.args.address+uint32(len(m.args.data)) {
+		memoryData = m.args.data[address-m.args.address : address-m.args.address+uint32(len(data))]
+		access = m.args.access
+	} else {
 		return &ErrPageFault{Reason: "inaccessible memory", Address: address}
 	}
-
-	offset := int(address - memSeg.start)
-	offsetEnd := offset + len(data)
-	if offsetEnd > len(memSeg.data) {
-		return &ErrPageFault{Reason: "memory exceeds page size, growing memory not supported", Address: address}
+	if access == Inaccessible {
+		return &ErrPageFault{Reason: "inaccessible memory", Address: address}
 	}
-	copy(data, memSeg.data[offset:offsetEnd])
-	return nil
-}
-
-func (m *Memory) inRange(address uint32) *memorySegment {
-	for _, r := range m.data {
-		if address >= r.start && address <= r.end {
-			return r
-		}
-	}
-	return nil
-}
-
-func (m *Memory) Sbrk(heapTop uint32) error {
-	if heapTop > m.data[2].end {
-		nextPage, err := AlignToNextPage(heapTop)
-		if err != nil {
-			return err
-		}
-
-		m.data[2].end += nextPage
-	}
+	copy(data, memoryData)
 	return nil
 }
 
 // Write writes to the set of writeable indices (Vμ*)
 func (m *Memory) Write(address uint32, data []byte) error {
-	memSeg := m.inRange(address)
-	if memSeg == nil {
-		return &ErrPageFault{Reason: "address not in a valid range", Address: address}
+	var memoryData []byte
+	var access MemoryAccess
+	if address >= m.stack.address && address+uint32(len(data)) <= m.stack.address+uint32(len(m.stack.data)) {
+		memoryData = m.stack.data[address-m.stack.address : address-m.stack.address+uint32(len(data))]
+		access = m.stack.access
+	} else if address >= m.rw.address && address+uint32(len(data)) <= m.rw.address+uint32(len(m.rw.data)) {
+		memoryData = m.rw.data[address-m.rw.address : address-m.rw.address+uint32(len(data))]
+		access = m.rw.access
+	} else if address >= m.ro.address && address+uint32(len(data)) <= m.ro.address+uint32(len(m.ro.data)) {
+		memoryData = m.ro.data[address-m.ro.address : address-m.ro.address+uint32(len(data))]
+		access = m.ro.access
+	} else if address >= m.args.address && address+uint32(len(data)) <= m.args.address+uint32(len(m.args.data)) {
+		memoryData = m.args.data[address-m.args.address : address-m.args.address+uint32(len(data))]
+		access = m.args.access
+	} else {
+		return &ErrPageFault{Reason: "inaccessible memory", Address: address}
 	}
-
-	if memSeg.access != ReadWrite {
-		return &ErrPageFault{
-			Reason:  "memory at address is not writeable",
-			Address: address,
-		}
+	if access != ReadWrite {
+		return &ErrPageFault{Reason: "memory at address is not writeable", Address: address}
 	}
-
-	offset := int(address - memSeg.start)
-	offsetEnd := offset + len(data)
-	if offsetEnd > len(memSeg.data) {
-		return &ErrPageFault{Reason: "memory exceeds page size, growing memory not supported", Address: address}
-	}
-	copy(memSeg.data[offset:offsetEnd], data)
+	copy(memoryData, data)
 	return nil
+}
+
+func (m *Memory) Sbrk(size uint32) (uint32, error) {
+	currentHeapPointer := m.rw.address + uint32(len(m.rw.data)) // h
+	if size == 0 {
+		return currentHeapPointer, nil
+	}
+
+	newHeapPointer := currentHeapPointer + size
+	if newHeapPointer >= m.stack.address { // where the next memory segment begins
+		return 0, &ErrPageFault{Reason: "allocation failed heap pointer exceeds maximum allowed", Address: newHeapPointer}
+	}
+
+	if newHeapPointer > currentHeapPointer {
+		m.rw.data = make([]byte, alignToPage(newHeapPointer))
+	}
+
+	return m.rw.address + uint32(len(m.rw.data)), nil
 }
 
 // SetAccess updates the access mode
 func (m *Memory) SetAccess(pageIndex uint32, access MemoryAccess) error {
-	pageStart := pageIndex * VMPageSize
-	pageEnd := pageStart + VMPageSize - 1
+	address := pageIndex * PageSize
 
-	for _, seg := range m.data {
-		if seg.start <= pageStart && seg.end >= pageEnd {
-			seg.access = access
-			return nil
-		}
+	if address >= m.stack.address && address <= m.stack.address+uint32(len(m.stack.data)) {
+		m.stack.access = access
+		return nil
+	} else if address >= m.rw.address && address <= m.rw.address+uint32(len(m.rw.data)) {
+		m.rw.access = access
+		return nil
+	} else if address >= m.ro.address && address <= m.ro.address+uint32(len(m.ro.data)) {
+		m.ro.access = access
+		return nil
+	} else if address >= m.args.address && address <= m.args.address+uint32(len(m.args.data)) {
+		m.args.access = access
+		return nil
 	}
 
-	return &ErrPageFault{
-		Reason:  "page out of valid range",
-		Address: pageStart,
-	}
+	return &ErrPageFault{Reason: "page out of valid range", Address: address}
 }
 
 func (m *Memory) GetAccess(pageIndex uint32) MemoryAccess {
-	pageStart := pageIndex * VMPageSize
-	pageEnd := pageStart + VMPageSize - 1
+	address := pageIndex * PageSize
 
-	for _, seg := range m.data {
-		if seg.start <= pageStart && seg.end >= pageEnd {
-			return seg.access
-		}
+	if address >= m.stack.address && address <= m.stack.address+uint32(len(m.stack.data)) {
+		return m.stack.access
+	} else if address >= m.rw.address && address <= m.rw.address+uint32(len(m.rw.data)) {
+		return m.rw.access
+	} else if address >= m.ro.address && address <= m.ro.address+uint32(len(m.ro.data)) {
+		return m.ro.access
+	} else if address >= m.args.address && address <= m.args.address+uint32(len(m.args.data)) {
+		return m.args.access
 	}
 
 	return Inaccessible

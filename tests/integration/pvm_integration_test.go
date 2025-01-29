@@ -65,13 +65,12 @@ func Test_Vectors(t *testing.T) {
 				t.Fatal(file.Name(), err)
 			}
 
-			pp := &polkavm.Program{}
-			if err := polkavm.ParseCodeAndJumpTable(uint32(len(tc.Program)), polkavm.NewReader(bytes.NewReader(tc.Program)), pp); err != nil {
+			pp := polkavm.CodeAndJumpTable{}
+			if err := polkavm.ParseCodeAndJumpTable(uint32(len(tc.Program)), polkavm.NewReader(bytes.NewReader(tc.Program)), &pp); err != nil {
 				t.Fatal(err)
 			}
 
-			mm := getMemoryMap(tc.InitialPageMap)
-			mem := mm.NewMemory(nil, nil, nil)
+			mem := getMemoryMap(tc.InitialPageMap)
 
 			for _, initialMem := range tc.InitialMemory {
 				err := mem.Write(initialMem.Address, initialMem.Contents)
@@ -79,7 +78,7 @@ func Test_Vectors(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			instructionCounter, gas, regs, mem, _, err := interpreter.Invoke(pp, mm, tc.InitialPc, tc.InitialGas, tc.InitialRegs, mem)
+			instructionCounter, gas, regs, mem, _, err := interpreter.Invoke(&polkavm.Program{CodeAndJumpTable: pp}, tc.InitialPc, tc.InitialGas, tc.InitialRegs, mem)
 			assert.Equal(t, int(tc.ExpectedPc), int(instructionCounter))
 			for i := range regs {
 				assert.Equal(t, uint32(tc.ExpectedRegs[i]), uint32(regs[i])) // TODO temp fix
@@ -98,21 +97,21 @@ func Test_Vectors(t *testing.T) {
 	}
 }
 
-func getMemoryMap(pageMap []Page) *polkavm.MemoryMap {
-	mm := &polkavm.MemoryMap{ArgsDataAddress: 1<<32 - 1}
+func getMemoryMap(pageMap []Page) polkavm.Memory {
+	var roAddr, rwAddr, stackAddr, roSize, rwSize, stackSize uint32
 	for _, page := range pageMap {
 		if !page.IsWritable {
-			mm.RODataAddress = page.Address
-			mm.RODataSize = page.Length
-		} else if page.IsWritable && mm.StackAddressLow == 0 {
-			mm.StackAddressLow = page.Address
-			mm.StackSize = page.Length
+			roAddr = page.Address
+			roSize = page.Length
+		} else if page.IsWritable && stackAddr == 0 {
+			stackAddr = page.Address
+			stackSize = page.Length
 		} else {
-			mm.RWDataAddress = page.Address
-			mm.RWDataSize = page.Length
+			rwAddr = page.Address
+			rwSize = page.Length
 		}
 	}
-	return mm
+	return polkavm.InitializeCustomMemory(roAddr, rwAddr, stackAddr, 1<<32-1, roSize, rwSize, stackSize, 0)
 }
 
 func error2status(err error) string {

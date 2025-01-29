@@ -22,13 +22,20 @@ var initialGas = uint64(100)
 
 func TestHistoricalLookup(t *testing.T) {
 	pp := &polkavm.Program{
-		Instructions: []polkavm.Instruction{
-			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 10,
+		},
+		CodeAndJumpTable: polkavm.CodeAndJumpTable{
+			Instructions: []polkavm.Instruction{
+				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+			},
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	serviceId := block.ServiceId(1)
@@ -59,20 +66,15 @@ func TestHistoricalLookup(t *testing.T) {
 	hashData := make([]byte, 32)
 	copy(hashData, preimage)
 
-	ho := memoryMap.RWDataAddress
-	bo := memoryMap.RWDataAddress + 100
+	ho := polkavm.RWAddressBase
+	bo := polkavm.RWAddressBase + 100
 	bz := uint32(64)
 
-	initialRegs := polkavm.Registers{
-		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: uint64(memoryMap.StackAddressHigh),
-		polkavm.A0: uint64(serviceId),
-		polkavm.A1: uint64(ho),
-		polkavm.A2: uint64(bo),
-		polkavm.A3: uint64(bz),
-	}
+	initialRegs[polkavm.A0] = uint64(serviceId)
+	initialRegs[polkavm.A1] = uint64(ho)
+	initialRegs[polkavm.A2] = uint64(bo)
+	initialRegs[polkavm.A3] = uint64(bz)
 
-	mem := memoryMap.NewMemory(nil, nil, nil)
 	err = mem.Write(ho, hashData)
 	require.NoError(t, err)
 
@@ -95,7 +97,7 @@ func TestHistoricalLookup(t *testing.T) {
 		return gasCounterOut, regsOut, memOut, x, err
 	}
 
-	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, sa)
+	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, sa)
 	require.ErrorIs(t, err, polkavm.ErrHalt)
 
 	actualValue := make([]byte, len(preimage))
@@ -111,13 +113,20 @@ func TestHistoricalLookup(t *testing.T) {
 
 func TestImport(t *testing.T) {
 	pp := &polkavm.Program{
-		Instructions: []polkavm.Instruction{
-			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 10,
+		},
+		CodeAndJumpTable: polkavm.CodeAndJumpTable{
+			Instructions: []polkavm.Instruction{
+				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+			},
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	segmentData := [common.SizeOfSegment]byte{}
@@ -126,18 +135,12 @@ func TestImport(t *testing.T) {
 	}
 	importedSegments := []polkavm.Segment{segmentData}
 
-	bo := memoryMap.RWDataAddress + 100
+	bo := polkavm.RWAddressBase + 100
 	bz := uint32(50)
 
-	initialRegs := polkavm.Registers{
-		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: uint64(memoryMap.StackAddressHigh),
-		polkavm.A0: uint64(0),
-		polkavm.A1: uint64(bo),
-		polkavm.A2: uint64(bz),
-	}
-
-	mem := memoryMap.NewMemory(nil, nil, nil)
+	initialRegs[polkavm.A0] = uint64(0)
+	initialRegs[polkavm.A1] = uint64(bo)
+	initialRegs[polkavm.A2] = uint64(bz)
 
 	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 		gasCounterOut, regsOut, memOut, _, err := host_call.Import(
@@ -151,7 +154,7 @@ func TestImport(t *testing.T) {
 		return gasCounterOut, regsOut, memOut, x, err
 	}
 
-	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
+	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
 	require.ErrorIs(t, err, polkavm.ErrHalt)
 
 	actualValue := make([]byte, bz)
@@ -172,30 +175,32 @@ func TestImport(t *testing.T) {
 
 func TestExport(t *testing.T) {
 	pp := &polkavm.Program{
-		Instructions: []polkavm.Instruction{
-			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 10,
+		},
+		CodeAndJumpTable: polkavm.CodeAndJumpTable{
+			Instructions: []polkavm.Instruction{
+				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+			},
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	dataToExport := []byte("export_data")
-	p := memoryMap.RWDataAddress
+	p := polkavm.RWAddressBase
 
-	mem := memoryMap.NewMemory(nil, nil, nil)
 	err = mem.Write(p, dataToExport)
 	require.NoError(t, err)
 
 	exportOffset := uint64(10)
 
-	initialRegs := polkavm.Registers{
-		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: uint64(memoryMap.StackAddressHigh),
-		polkavm.A0: uint64(p),
-		polkavm.A1: uint64(len(dataToExport)),
-	}
+	initialRegs[polkavm.A0] = uint64(p)
+	initialRegs[polkavm.A1] = uint64(len(dataToExport))
 
 	ctxPair := polkavm.RefineContextPair{
 		Segments: []polkavm.Segment{},
@@ -215,7 +220,7 @@ func TestExport(t *testing.T) {
 		return gasCounterOut, regsOut, memOut, x, err
 	}
 
-	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
+	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
 	require.ErrorIs(t, err, polkavm.ErrHalt)
 
 	// We expect ω7 = ς + |e| = 10 + 1 = 11
@@ -233,31 +238,33 @@ func TestExport(t *testing.T) {
 
 func TestMachine(t *testing.T) {
 	pp := &polkavm.Program{
-		Instructions: []polkavm.Instruction{
-			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 10,
+		},
+		CodeAndJumpTable: polkavm.CodeAndJumpTable{
+			Instructions: []polkavm.Instruction{
+				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+			},
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	dataToMachine := []byte("machine_code")
-	po := memoryMap.RWDataAddress
+	po := polkavm.RWAddressBase
 	pz := len(dataToMachine)
 	i := uint64(42)
 
-	mem := memoryMap.NewMemory(nil, nil, nil)
 	err = mem.Write(po, dataToMachine)
 	require.NoError(t, err)
 
-	initialRegs := polkavm.Registers{
-		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: uint64(memoryMap.StackAddressHigh),
-		polkavm.A0: uint64(po),
-		polkavm.A1: uint64(pz),
-		polkavm.A2: i,
-	}
+	initialRegs[polkavm.A0] = uint64(po)
+	initialRegs[polkavm.A1] = uint64(pz)
+	initialRegs[polkavm.A2] = i
 
 	ctxPair := polkavm.RefineContextPair{
 		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
@@ -276,7 +283,7 @@ func TestMachine(t *testing.T) {
 		return gasCounterOut, regsOut, memOut, x, err
 	}
 
-	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
+	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
 	require.ErrorIs(t, err, polkavm.ErrHalt)
 
 	assert.Equal(t, uint64(0), regsOut[polkavm.A0])
@@ -294,24 +301,29 @@ func TestMachine(t *testing.T) {
 
 func TestPeek(t *testing.T) {
 	pp := &polkavm.Program{
-		Instructions: []polkavm.Instruction{
-			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 10,
+		},
+		CodeAndJumpTable: polkavm.CodeAndJumpTable{
+			Instructions: []polkavm.Instruction{
+				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+			},
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	n := uint64(0)
-	o := memoryMap.RWDataAddress + 100
+	o := polkavm.RWAddressBase + 100
 	z := uint64(1)
 
 	uData := []byte("data_for_peek")
 
-	mem := memoryMap.NewMemory(nil, nil, nil)
-
-	uDataBase := memoryMap.RWDataAddress
+	uDataBase := polkavm.RWAddressBase
 	require.True(t, uDataBase+uint32(len(uData)) < math.MaxUint32)
 
 	err = mem.Write(uDataBase, uData)
@@ -332,14 +344,10 @@ func TestPeek(t *testing.T) {
 		Segments: []polkavm.Segment{},
 	}
 
-	initialRegs := polkavm.Registers{
-		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: uint64(memoryMap.StackAddressHigh),
-		polkavm.A0: n,
-		polkavm.A1: uint64(o),
-		polkavm.A2: s,
-		polkavm.A3: z,
-	}
+	initialRegs[polkavm.A0] = n
+	initialRegs[polkavm.A1] = uint64(o)
+	initialRegs[polkavm.A2] = s
+	initialRegs[polkavm.A3] = z
 
 	hostCall := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mm polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 		gasCounterOut, regsOut, memOut, ctxOut, err := host_call.Peek(
@@ -353,7 +361,7 @@ func TestPeek(t *testing.T) {
 		return gasCounterOut, regsOut, memOut, x, err
 	}
 
-	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
+	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
 	require.ErrorIs(t, err, polkavm.ErrHalt)
 
 	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
@@ -373,21 +381,26 @@ func TestPeek(t *testing.T) {
 
 func TestPoke(t *testing.T) {
 	pp := &polkavm.Program{
-		Instructions: []polkavm.Instruction{
-			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 10,
+		},
+		CodeAndJumpTable: polkavm.CodeAndJumpTable{
+			Instructions: []polkavm.Instruction{
+				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+			},
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	n := uint64(0)
-	s := uint64(memoryMap.RWDataAddress) + 100
-	o := uint64(memoryMap.RWDataAddress) + 200
+	s := uint64(polkavm.RWAddressBase) + 100
+	o := uint64(polkavm.RWAddressBase) + 200
 	z := uint64(4)
-
-	mem := memoryMap.NewMemory(nil, nil, nil)
 
 	sourceData := []byte("data_for_poke")
 
@@ -407,14 +420,10 @@ func TestPoke(t *testing.T) {
 		Segments: []polkavm.Segment{},
 	}
 
-	initialRegs := polkavm.Registers{
-		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: uint64(memoryMap.StackAddressHigh),
-		polkavm.A0: n,
-		polkavm.A1: s,
-		polkavm.A2: o,
-		polkavm.A3: z,
-	}
+	initialRegs[polkavm.A0] = n
+	initialRegs[polkavm.A1] = s
+	initialRegs[polkavm.A2] = o
+	initialRegs[polkavm.A3] = z
 
 	hostCall := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mm polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 		gasCounterOut, regsOut, memOut, ctxOut, err := host_call.Poke(
@@ -428,7 +437,7 @@ func TestPoke(t *testing.T) {
 		return gasCounterOut, regsOut, memOut, x, err
 	}
 
-	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(pp, memoryMap, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
+	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
 	require.ErrorIs(t, err, polkavm.ErrHalt)
 
 	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
@@ -446,40 +455,43 @@ func TestPoke(t *testing.T) {
 
 func TestZero(t *testing.T) {
 	pp := &polkavm.Program{
-		Instructions: []polkavm.Instruction{
-			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 10,
+		},
+		CodeAndJumpTable: polkavm.CodeAndJumpTable{
+			Instructions: []polkavm.Instruction{
+				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+			},
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(0, 128*1024, 0, 0)
+	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	require.NoError(t, err)
+	innerMem, _, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	n := uint64(0)
 	p := uint64(32)
 	c := uint64(2) // zero out pages #32 & #33
 
-	startAddr := p * uint64(polkavm.VMPageSize)
-	endAddr := (p + c) * uint64(polkavm.VMPageSize)
+	startAddr := p * uint64(polkavm.PageSize)
+	endAddr := (p + c) * uint64(polkavm.PageSize)
 
-	mem := memoryMap.NewMemory(nil, nil, nil)
 	for addr := startAddr; addr < endAddr; addr++ {
 		err := mem.Write(uint32(addr), []byte{0xFF})
 		require.NoError(t, err)
 	}
 
-	u := polkavm.IntegratedPVM{Ram: mem}
 	ctxPair := polkavm.RefineContextPair{
-		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{n: u},
+		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{n: {Ram: innerMem}},
 	}
 
-	initialRegs := polkavm.Registers{
-		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: uint64(memoryMap.StackAddressHigh),
-		polkavm.A0: n,
-		polkavm.A1: p,
-		polkavm.A2: c,
-	}
+	initialRegs[polkavm.A0] = n
+	initialRegs[polkavm.A1] = p
+	initialRegs[polkavm.A2] = c
 
 	hostCallFn := func(
 		hc uint32,
@@ -501,9 +513,8 @@ func TestZero(t *testing.T) {
 		return gasOut, regsOut, memOut, acc, err
 	}
 
-	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(
+	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(
 		pp,
-		memoryMap,
 		0,
 		initialGas,
 		initialRegs,
@@ -512,11 +523,12 @@ func TestZero(t *testing.T) {
 		service.ServiceAccount{},
 	)
 	require.ErrorIs(t, err, polkavm.ErrHalt)
-	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
+	require.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
 
 	for addr := startAddr; addr < endAddr; addr++ {
 		b := make([]byte, 1)
-		err = memOut.Read(uint32(addr), b)
+		innerPVMRam := ctxPair.IntegratedPVMMap[n].Ram
+		err = innerPVMRam.Read(uint32(addr), b)
 		require.NoError(t, err)
 		assert.Equal(t, byte(0), b[0])
 	}
@@ -530,19 +542,26 @@ func TestZero(t *testing.T) {
 
 func TestVoid(t *testing.T) {
 	pp := &polkavm.Program{
-		Instructions: []polkavm.Instruction{
-			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 100,
+		},
+		CodeAndJumpTable: polkavm.CodeAndJumpTable{
+			Instructions: []polkavm.Instruction{
+				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+			},
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(0, 128*1024, 0, 0)
+	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	require.NoError(t, err)
+	innerMem, _, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	p := uint64(32)
 	c := uint64(2)
-
-	mem := memoryMap.NewMemory(nil, nil, nil)
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
 		access := mem.GetAccess(uint32(pageIndex))
@@ -550,18 +569,13 @@ func TestVoid(t *testing.T) {
 	}
 
 	n := uint64(0)
-	u := polkavm.IntegratedPVM{Ram: mem}
 	ctxPair := polkavm.RefineContextPair{
-		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{n: u},
+		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{n: {Ram: innerMem}},
 	}
 
-	initialRegs := polkavm.Registers{
-		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: uint64(memoryMap.StackAddressHigh),
-		polkavm.A0: n,
-		polkavm.A1: p,
-		polkavm.A2: c,
-	}
+	initialRegs[polkavm.A0] = n
+	initialRegs[polkavm.A1] = p
+	initialRegs[polkavm.A2] = c
 
 	hostCall := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers,
 		mm polkavm.Memory, x service.ServiceAccount,
@@ -578,9 +592,8 @@ func TestVoid(t *testing.T) {
 		return gasOut, regsOut, memOut, x, err
 	}
 
-	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(
+	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(
 		pp,
-		memoryMap,
 		0,
 		initialGas,
 		initialRegs,
@@ -590,10 +603,11 @@ func TestVoid(t *testing.T) {
 	)
 	require.ErrorIs(t, err, polkavm.ErrHalt)
 
-	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
+	require.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
-		access := memOut.GetAccess(uint32(pageIndex))
+		innerPVMRam := ctxPair.IntegratedPVMMap[n].Ram
+		access := innerPVMRam.GetAccess(uint32(pageIndex))
 		assert.Equal(t, polkavm.Inaccessible, access)
 	}
 
@@ -606,16 +620,21 @@ func TestVoid(t *testing.T) {
 
 func TestInvoke(t *testing.T) {
 	pp := &polkavm.Program{
-		Instructions: []polkavm.Instruction{
-			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 10,
+		},
+		CodeAndJumpTable: polkavm.CodeAndJumpTable{
+			Instructions: []polkavm.Instruction{
+				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+			},
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(0, 128*1024, 0, 0)
+	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
-
-	mem := memoryMap.NewMemory(nil, nil, nil)
 
 	bb, err := jam.Marshal([14]uint64{
 		10000, // gas
@@ -635,7 +654,7 @@ func TestInvoke(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	addr := memoryMap.RWDataAddress
+	addr := polkavm.RWAddressBase
 	if err := mem.Write(addr, bb); err != nil {
 		t.Fatal(err)
 	}
@@ -650,12 +669,8 @@ func TestInvoke(t *testing.T) {
 		}},
 	}
 
-	initialRegs := polkavm.Registers{
-		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: uint64(memoryMap.StackAddressHigh),
-		polkavm.A0: pvmKey,
-		polkavm.A1: uint64(addr),
-	}
+	initialRegs[polkavm.A0] = pvmKey
+	initialRegs[polkavm.A1] = uint64(addr)
 
 	hostCall := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers,
 		mm polkavm.Memory, x struct{},
@@ -668,7 +683,6 @@ func TestInvoke(t *testing.T) {
 
 	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(
 		pp,
-		memoryMap,
 		0,
 		initialGas,
 		initialRegs,
@@ -703,16 +717,21 @@ var addInstrProgram = []byte{0, 0, 3, 190, 135, 9, 1} // copied from the future 
 
 func TestExpunge(t *testing.T) {
 	pp := &polkavm.Program{
-		Instructions: []polkavm.Instruction{
-			{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-			{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 10,
+		},
+		CodeAndJumpTable: polkavm.CodeAndJumpTable{
+			Instructions: []polkavm.Instruction{
+				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
+				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
+			},
 		},
 	}
 
-	memoryMap, err := polkavm.NewMemoryMap(0, 256, 512, 0)
+	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
-
-	mem := memoryMap.NewMemory(nil, nil, nil)
 
 	n, ic := uint64(7), uint32(42)
 
@@ -725,16 +744,11 @@ func TestExpunge(t *testing.T) {
 		InstructionCounter: ic,
 	}
 
-	initialRegs := polkavm.Registers{
-		polkavm.RA: polkavm.VmAddressReturnToHost,
-		polkavm.SP: uint64(memoryMap.StackAddressHigh),
-		polkavm.A0: n,
-	}
+	initialRegs[polkavm.A0] = n
 
 	hostCallFn := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers,
 		mm polkavm.Memory, x service.ServiceAccount,
 	) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-
 		gasOut, regsOut, memOut, ctxOut, err := host_call.Expunge(
 			gasCounter,
 			regs,
@@ -748,7 +762,6 @@ func TestExpunge(t *testing.T) {
 
 	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(
 		pp,
-		memoryMap,
 		0,
 		100,
 		initialRegs,

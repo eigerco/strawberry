@@ -3,7 +3,6 @@ package host_call
 import (
 	"bytes"
 	"errors"
-	"log"
 	"math"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -286,7 +285,7 @@ func Zero(
 	n, p, c := regs[A0], regs[A1], regs[A2]
 
 	// p < 16 ∨ p + c ≥  2^32 / ZP
-	if p < 16 || p+c >= VMMaxPageIndex {
+	if p < 16 || p+c >= MaxPageIndex {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
@@ -303,8 +302,8 @@ func Zero(
 		}
 
 		// (u′V)pZP..+cZP = [0, 0, ...]
-		start := uint32(pageIndex * uint64(VMPageSize))
-		zeroBuf := make([]byte, VMPageSize)
+		start := uint32(pageIndex * uint64(PageSize))
+		zeroBuf := make([]byte, PageSize)
 		if err := u.Ram.Write(start, zeroBuf); err != nil {
 			return gas, withCode(regs, OOB), mem, ctxPair, nil
 		}
@@ -345,8 +344,8 @@ func Void(
 		}
 
 		// (u′V)pZP..+cZP = [0, 0, ...]
-		start := uint32(pageIndex * uint64(VMPageSize))
-		zeroBuf := make([]byte, VMPageSize)
+		start := uint32(pageIndex * uint64(PageSize))
+		zeroBuf := make([]byte, PageSize)
 		if err := u.Ram.Write(start, zeroBuf); err != nil {
 			return gas, withCode(regs, OOB), mem, ctxPair, nil
 		}
@@ -411,13 +410,11 @@ func Invoke(
 
 	// we only parse the code and jump table as we are not expected to invoke a full program
 	program := &Program{}
-	if err := ParseCodeAndJumpTable(uint32(len(pvm.Code)), NewReader(bytes.NewReader(pvm.Code)), program); err != nil {
+	if err := ParseCodeAndJumpTable(uint32(len(pvm.Code)), NewReader(bytes.NewReader(pvm.Code)), &program.CodeAndJumpTable); err != nil {
 		return gas, withCode(regs, PANIC), mem, ctxPair, nil
 	}
 
-	log.Println("invokeGas", invokeGas)
-	log.Println("invokeRegs", invokeRegs)
-	resultInstr, resultGas, resultRegs, resultMem, hostCall, invokeErr := interpreter.Invoke(program, nil, pvm.InstructionCounter, invokeGas, invokeRegs, pvm.Ram)
+	resultInstr, resultGas, resultRegs, resultMem, hostCall, invokeErr := interpreter.Invoke(program, pvm.InstructionCounter, invokeGas, invokeRegs, pvm.Ram)
 
 	if bb, err := jam.Marshal([14]uint64(append([]uint64{uint64(resultGas)}, resultRegs[:]...))); err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil // (OOB, ω8, μ, m)
