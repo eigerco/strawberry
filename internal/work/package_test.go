@@ -1,6 +1,8 @@
 package work_test
 
 import (
+	"bytes"
+	"github.com/eigerco/strawberry/internal/polkavm"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,6 +15,22 @@ import (
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/work"
 )
+
+// Helper functions
+func createTestSegment(pattern byte) (seg polkavm.Segment) {
+	for i := range seg {
+		seg[i] = pattern
+	}
+	return seg
+}
+
+func createSegments(count int) []polkavm.Segment {
+	segments := make([]polkavm.Segment, count)
+	for i := range segments {
+		segments[i] = createTestSegment(0x42)
+	}
+	return segments
+}
 
 func Test_ValidateNumberOfEntries(t *testing.T) {
 	p := work.Package{
@@ -124,4 +142,63 @@ func Test_ComputeAuthorizerHashes(t *testing.T) {
 	p.AuthCodeHash = crypto.HashData([]byte("nonexistent"))
 	_, _, err = p.ComputeAuthorizerHashes(serviceState)
 	assert.Error(t, err)
+}
+
+func TestComputePagedProofs(t *testing.T) {
+	tests := []struct {
+		name          string
+		inputSegments []polkavm.Segment
+		expectError   bool
+		errorMessage  string
+	}{
+		{
+			name:          "empty segments",
+			inputSegments: []polkavm.Segment{},
+			expectError:   true,
+			errorMessage:  "no segments provided",
+		},
+		{
+			name:          "single page of segments",
+			inputSegments: createSegments(work.SegmentsPerPage),
+			expectError:   false,
+		},
+		{
+			name:          "multiple pages of segments",
+			inputSegments: createSegments(work.SegmentsPerPage * 2),
+			expectError:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			proofs, err := work.ComputePagedProofs(tt.inputSegments)
+
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMessage)
+				return
+			}
+
+			require.NoError(t, err)
+			expectedNumPages := len(tt.inputSegments) / work.SegmentsPerPage
+			assert.Equal(t, expectedNumPages, len(proofs))
+		})
+	}
+}
+
+func TestComputePagedProofsConsistency(t *testing.T) {
+	// Create two identical sets of segments
+	segments1 := createSegments(work.SegmentsPerPage)
+	segments2 := createSegments(work.SegmentsPerPage)
+
+	proofs1, err := work.ComputePagedProofs(segments1)
+	require.NoError(t, err)
+
+	proofs2, err := work.ComputePagedProofs(segments2)
+	require.NoError(t, err)
+
+	assert.Equal(t, len(proofs1), len(proofs2))
+	for i := range proofs1 {
+		assert.True(t, bytes.Equal(proofs1[i][:], proofs2[i][:]))
+	}
 }

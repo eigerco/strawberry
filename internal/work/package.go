@@ -2,14 +2,16 @@ package work
 
 import (
 	"fmt"
-
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
+	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-// Package represents P (14.2 v0.5.2)
+// Package represents P (14.2 v0.5.4)
 type Package struct {
 	AuthorizationToken []byte                  // j ∈ Y
 	AuthorizerService  uint32                  // h ∈ N_S
@@ -19,7 +21,7 @@ type Package struct {
 	WorkItems          []Item                  // w ∈ ⟦I⟧
 }
 
-// ValidateNumberOfEntries (14.4 v0.5.2)
+// ValidateNumberOfEntries (14.4 v0.5.4)
 func (wp *Package) ValidateNumberOfEntries() error {
 	var totalExported, totalImported uint16
 	for _, w := range wp.WorkItems {
@@ -37,7 +39,7 @@ func (wp *Package) ValidateNumberOfEntries() error {
 	return nil
 }
 
-// ValidateSize (14.5 v0.5.2)
+// ValidateSize (14.5 v0.5.4)
 func (wp *Package) ValidateSize() error {
 	totalSize := uint64(len(wp.AuthorizationToken)) + uint64(len(wp.Parameterization))
 
@@ -52,7 +54,7 @@ func (wp *Package) ValidateSize() error {
 	return nil
 }
 
-// ValidateGas (14.7 v0.5.2)
+// ValidateGas (14.7 v0.5.4)
 func (wp *Package) ValidateGas() error {
 	var totalAccumulate, totalRefine uint64
 	for _, w := range wp.WorkItems {
@@ -70,7 +72,7 @@ func (wp *Package) ValidateGas() error {
 	return nil
 }
 
-// ComputeAuthorizerHashes (14.9 v0.5.2)
+// ComputeAuthorizerHashes (14.9 v0.5.4)
 func (wp *Package) ComputeAuthorizerHashes(
 	serviceState service.ServiceState,
 ) (authorizationCode []byte, impliedAuthorizerHash crypto.Hash, err error) {
@@ -85,7 +87,7 @@ func (wp *Package) ComputeAuthorizerHashes(
 	return authorizationCode, impliedAuthorizerHash, nil
 }
 
-// GetAuthorizationCode pc = Λ(δ[p.h], (p.x)^t, p.u) (14.9 v0.5.2)
+// GetAuthorizationCode pc = Λ(δ[p.h], (p.x)^t, p.u) (14.9 v0.5.4)
 func (wp *Package) GetAuthorizationCode(serviceState service.ServiceState) ([]byte, error) {
 	// Retrieve the service account by authorizer service index p.h
 	sa, exists := serviceState[block.ServiceId(wp.AuthorizerService)]
@@ -100,4 +102,36 @@ func (wp *Package) GetAuthorizationCode(serviceState service.ServiceState) ([]by
 	}
 
 	return authorizationCode, nil
+}
+
+// ComputePagedProofs P(s) → [E(J₆(s,i), L₆(s,i))₍l₎ | i ∈ ℕ₍⌈|s|/64⌉₎] (14.10 v0.5.4)
+func ComputePagedProofs(segments []polkavm.Segment) ([]polkavm.Segment, error) {
+	if len(segments) == 0 {
+		return nil, fmt.Errorf("no segments provided")
+	}
+	blobs := make([][]byte, len(segments))
+	for i, seg := range segments {
+		blobs[i] = seg[:]
+	}
+	numPages := (len(segments) + SegmentsPerPage - 1) / SegmentsPerPage
+	pagedProofs := make([]polkavm.Segment, numPages)
+	for pageIndex := 0; pageIndex < numPages; pageIndex++ {
+		// Get leaf hashes and proof for page
+		leafHashes := binary_tree.GetLeafPage(blobs, pageIndex, NumberOfErasureCodecPiecesInSegment, crypto.HashData)
+		proof := binary_tree.GeneratePageProof(blobs, pageIndex, NumberOfErasureCodecPiecesInSegment, crypto.HashData)
+
+		// Encode leaves and proof
+		marshalledLeaves, err := jam.Marshal(leafHashes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal leaf hashes: %w", err)
+		}
+		marshalledProof, err := jam.Marshal(proof)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal proof: %w", err)
+		}
+		combined := append(marshalledLeaves, marshalledProof...)
+		padded := ZeroPadding(combined, SizeOfSegment)
+		copy(pagedProofs[pageIndex][:], padded)
+	}
+	return pagedProofs, nil
 }

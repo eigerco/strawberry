@@ -15,7 +15,7 @@ type Extrinsic struct {
 	Length uint32
 }
 
-// Item represents I (14.2 v0.5.2)
+// Item represents I (14.2 v0.5.4)
 type Item struct {
 	ServiceId          uint32            // s ∈ N_S
 	CodeHash           crypto.Hash       // c ∈ H
@@ -37,7 +37,7 @@ func (w *Item) Size() uint64 {
 	return total
 }
 
-// ToWorkResult item-to-result function C (14.8 v0.5.2)
+// ToWorkResult item-to-result function C (14.8 v0.5.4)
 func (w *Item) ToWorkResult(o block.WorkResultOutputOrError) block.WorkResult {
 	payloadHash := crypto.HashData(w.Payload)
 
