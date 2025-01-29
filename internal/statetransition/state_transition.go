@@ -1367,7 +1367,7 @@ func ValidateExtrinsicGuarantees(
 			prerequisitePackageHashes[key] = struct{}{}
 		}
 
-		// Check total dependencies
+		// Check total dependencies. 11.3 GP 0.5.4
 		totalDeps := len(guarantee.WorkReport.RefinementContext.PrerequisiteWorkPackage) +
 			len(guarantee.WorkReport.SegmentRootLookup)
 		if totalDeps > common.WorkReportMaxSumOfDependencies {

@@ -1,9 +1,14 @@
 package polkavm
 
 import (
+	"fmt"
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
+	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
-	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 )
@@ -297,4 +302,37 @@ type Segment [common.SizeOfSegment]byte
 type RefineContextPair struct {
 	IntegratedPVMMap map[uint64]IntegratedPVM //m
 	Segments         []Segment                //e
+}
+
+// ComputePagedProofs P(s) → [E(J₆(s,i), L₆(s,i))₍l₎ | i ∈ ℕ₍⌈|s|/64⌉₎] (14.10 v0.5.4)
+func ComputePagedProofs(r *RefineContextPair) ([]Segment, error) {
+	if len(r.Segments) == 0 {
+		return nil, fmt.Errorf("no segments provided")
+	}
+	blobs := make([][]byte, len(r.Segments))
+	for i, seg := range r.Segments {
+		blobs[i] = seg[:]
+	}
+	numPages := len(r.Segments) / work.SegmentsPerPage
+	pagedProofs := make([]Segment, numPages)
+
+	for pageIndex := 0; pageIndex < numPages; pageIndex++ {
+		// Get leaf hashes and proof for page
+		leafHashes := binary_tree.GetLeafPage(blobs, pageIndex, work.NumberOfErasureCodecPiecesInSegment, crypto.HashData)
+		proof := binary_tree.GeneratePageProof(blobs, pageIndex, work.NumberOfErasureCodecPiecesInSegment, crypto.HashData)
+
+		// Encode leaves and proof
+		marshalledLeaves, err := jam.Marshal(leafHashes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal leaf hashes: %w", err)
+		}
+		marshalledProof, err := jam.Marshal(proof)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal proof: %w", err)
+		}
+		combined := append(marshalledLeaves, marshalledProof...)
+		padded := work.ZeroPadding(combined, work.SizeOfSegment)
+		copy(pagedProofs[pageIndex][:], padded)
+	}
+	return pagedProofs, nil
 }
