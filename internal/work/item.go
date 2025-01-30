@@ -2,8 +2,12 @@ package work
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 )
+
+// Segment (G)
+type Segment [common.SizeOfSegment]byte
 
 type ImportedSegment struct {
 	Hash  crypto.Hash
@@ -29,8 +33,8 @@ type Item struct {
 
 func (w *Item) Size() uint64 {
 	// S(w) = |w.y| + |w.i| * WG + Σ(h,l)∈w.x l
-	total := uint64(len(w.Payload))                          // |w.y|
-	total += uint64(len(w.ImportedSegments)) * SizeOfSegment // |w.i| * WG
+	total := uint64(len(w.Payload))                                 // |w.y|
+	total += uint64(len(w.ImportedSegments)) * common.SizeOfSegment // |w.i| * WG
 	for _, bh := range w.Extrinsics {
 		total += uint64(bh.Length)
 	}

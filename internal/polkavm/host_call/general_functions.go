@@ -46,7 +46,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 	a := s
 	if uint64(omega7) != math.MaxUint64 && omega7 != uint64(serviceId) {
 		var exists bool
-		// Lookup service account by serviceId in the serviceState
+		// lookup service account by serviceId in the serviceState
 		a, exists = serviceState[serviceId]
 		if !exists {
 			regs[polkavm.A0] = uint64(NONE)
@@ -66,7 +66,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 	// Compute the hash H(µho..ho+32)
 	hash := crypto.HashData(memorySlice)
 
-	// Lookup value in storage (v) using the hash
+	// lookup value in storage (v) using the hash
 	v, exists := a.Storage[hash]
 	if !exists {
 		return gas, withCode(regs, NONE), mem, nil

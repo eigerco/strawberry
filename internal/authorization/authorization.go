@@ -14,6 +14,10 @@ const (
 	isAuthorizedCost = 10
 )
 
+type Auth interface {
+	InvokePVM(workPackage work.Package, coreIndex uint16) ([]byte, error)
+}
+
 type EmptyContext struct{}
 
 type Authorization struct {

@@ -15,6 +15,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -80,7 +81,7 @@ func TestHistoricalLookup(t *testing.T) {
 
 	ctxPair := polkavm.RefineContextPair{
 		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
-		Segments:         []polkavm.Segment{},
+		Segments:         []work.Segment{},
 	}
 
 	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
@@ -133,7 +134,7 @@ func TestImport(t *testing.T) {
 	for i := range segmentData {
 		segmentData[i] = byte('A')
 	}
-	importedSegments := []polkavm.Segment{segmentData}
+	importedSegments := []work.Segment{segmentData}
 
 	bo := polkavm.RWAddressBase + 100
 	bz := uint32(50)
@@ -203,7 +204,7 @@ func TestExport(t *testing.T) {
 	initialRegs[polkavm.A1] = uint64(len(dataToExport))
 
 	ctxPair := polkavm.RefineContextPair{
-		Segments: []polkavm.Segment{},
+		Segments: []work.Segment{},
 	}
 
 	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
@@ -268,7 +269,7 @@ func TestMachine(t *testing.T) {
 
 	ctxPair := polkavm.RefineContextPair{
 		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
-		Segments:         []polkavm.Segment{},
+		Segments:         []work.Segment{},
 	}
 
 	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
@@ -341,7 +342,7 @@ func TestPeek(t *testing.T) {
 		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{
 			n: u,
 		},
-		Segments: []polkavm.Segment{},
+		Segments: []work.Segment{},
 	}
 
 	initialRegs[polkavm.A0] = n
@@ -417,7 +418,7 @@ func TestPoke(t *testing.T) {
 		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{
 			n: u,
 		},
-		Segments: []polkavm.Segment{},
+		Segments: []work.Segment{},
 	}
 
 	initialRegs[polkavm.A0] = n

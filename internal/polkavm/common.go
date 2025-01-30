@@ -2,10 +2,10 @@ package polkavm
 
 import (
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/work"
 )
 
 type MemoryAccess int
@@ -313,9 +313,7 @@ type IntegratedPVM struct {
 	InstructionCounter uint32 //i  instruction counter
 }
 
-type Segment [common.SizeOfSegment]byte
-
 type RefineContextPair struct {
 	IntegratedPVMMap map[uint64]IntegratedPVM //m
-	Segments         []Segment                //e
+	Segments         []work.Segment           //e
 }
