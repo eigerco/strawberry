@@ -22,22 +22,6 @@ var (
 	ErrBig = errors.New("code beyond the maximum size allowed")        // BIG
 )
 
-type Refine interface {
-	InvokePVM(
-		serviceCodePredictionHash crypto.Hash,
-		gas uint64,
-		serviceIndex block.ServiceId,
-		workPackageHash crypto.Hash,
-		workPayload []byte,
-		refinementContext block.RefinementContext,
-		authorizerHash crypto.Hash,
-		authorizerHashOutput []byte,
-		importedSegments []work.Segment,
-		extrinsicData [][]byte,
-		exportOffset uint64,
-	) ([]byte, []work.Segment, error)
-}
-
 type RefineImpl struct {
 	state state.State
 }

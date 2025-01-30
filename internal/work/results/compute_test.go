@@ -35,7 +35,7 @@ func TestBuildImportedSegments(t *testing.T) {
 		segmentRootH: []byte("segment data #1"),
 	}
 
-	computation := NewComputation(mockAuthorization{}, mockRefine{}, nil, mockSegmentData, nil)
+	computation := NewComputation(mockAuthorizationInvoker{}, mockRefineInvoker{}, nil, mockSegmentData, nil)
 
 	item := work.Item{
 		ImportedSegments: []work.ImportedSegment{
@@ -58,7 +58,7 @@ func TestBuildExtrinsicData(t *testing.T) {
 		exHash: preimage,
 	}
 
-	computation := NewComputation(mockAuthorization{}, mockRefine{}, nil, nil, mockExtrinsicPreimages)
+	computation := NewComputation(mockAuthorizationInvoker{}, mockRefineInvoker{}, nil, nil, mockExtrinsicPreimages)
 
 	item := work.Item{
 		Extrinsics: []work.Extrinsic{
@@ -105,7 +105,7 @@ func TestBuildAuditableWorkPackage(t *testing.T) {
 		},
 	}
 
-	comp := NewComputation(mockAuthorization{}, mockRefine{}, nil, segmentData, extrPre)
+	comp := NewComputation(mockAuthorizationInvoker{}, mockRefineInvoker{}, nil, segmentData, extrPre)
 
 	audBlob, err := comp.buildAuditableWorkPackage(pkg)
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestComputeAvailabilitySpecifier(t *testing.T) {
 
 	packageHash := crypto.HashData([]byte("package"))
 
-	comp := NewComputation(mockAuthorization{}, mockRefine{}, nil, nil, nil)
+	comp := NewComputation(mockAuthorizationInvoker{}, mockRefineInvoker{}, nil, nil, nil)
 	spec, err := comp.computeAvailabilitySpecifier(packageHash, audBlob, exportedSegments)
 	require.NoError(t, err)
 	require.NotNil(t, spec)
@@ -167,8 +167,8 @@ func TestEvaluateWorkPackage(t *testing.T) {
 		},
 	}
 
-	mockAuth := mockAuthorization{}
-	mockRefine := mockRefine{}
+	mockAuth := mockAuthorizationInvoker{}
+	mockRefine := mockRefineInvoker{}
 	comp := NewComputation(mockAuth, mockRefine, nil, segmentData, extrPre)
 
 	report, err := comp.EvaluateWorkPackage(pkg, 1)
@@ -238,15 +238,15 @@ func TestComputePagedProofsConsistency(t *testing.T) {
 	}
 }
 
-type mockAuthorization struct{}
+type mockAuthorizationInvoker struct{}
 
-func (m mockAuthorization) InvokePVM(workPackage work.Package, coreIndex uint16) ([]byte, error) {
+func (m mockAuthorizationInvoker) InvokePVM(workPackage work.Package, coreIndex uint16) ([]byte, error) {
 	return []byte("Authorized"), nil
 }
 
-type mockRefine struct{}
+type mockRefineInvoker struct{}
 
-func (m mockRefine) InvokePVM(
+func (m mockRefineInvoker) InvokePVM(
 	serviceCodePredictionHash crypto.Hash,
 	gas uint64,
 	serviceIndex block.ServiceId,
