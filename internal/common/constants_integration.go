@@ -14,8 +14,9 @@ const (
 	MaxTicketExtrinsicSize                       = 16
 	MaxTicketAttempts                            = 3
 	MaxHistoricalTimeslotsForPreimageMeta        = 3
-	SizeOfSegment                                = 4104
+	SizeOfSegment                                = NumberOfErasureCodecPiecesInSegment * ErasureCodingChunkSize
 	MaxWorkPackageSize                           = 12 * 1 << 20
+	NumberOfErasureCodecPiecesInSegment          = 6
 	ErasureCodingChunkSize                       = 684
 	MaxAllocatedGasAccumulation                  = 10_000_000
 	MaxAllocatedGasIsAuthorized                  = 50_000_000

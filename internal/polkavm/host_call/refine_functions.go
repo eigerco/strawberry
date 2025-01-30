@@ -82,7 +82,7 @@ func Import(
 	regs Registers,
 	mem Memory,
 	ctxPair RefineContextPair,
-	importedSegments []Segment,
+	importedSegments []work.Segment,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	if gas < ImportCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -140,7 +140,7 @@ func Export(
 	// Apply zero-padding Pn to data to make it WG-sized
 	paddedData := work.ZeroPadding(data, common.SizeOfSegment)
 
-	var segmentData Segment
+	var segmentData work.Segment
 	copy(segmentData[:], paddedData)
 
 	currentCount := uint64(len(ctxPair.Segments))
