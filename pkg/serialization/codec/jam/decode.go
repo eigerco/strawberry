@@ -25,6 +25,43 @@ func Unmarshal(data []byte, dst interface{}) error {
 	return ds.unmarshal(indirect(dstv))
 }
 
+func NewDecoder(reader io.Reader) *Decoder {
+	return &Decoder{
+		byteReader{reader},
+	}
+}
+
+type Decoder struct {
+	byteReader
+}
+
+func (d *Decoder) Decode(dst any) error {
+	dstv := reflect.ValueOf(dst)
+	if dstv.Kind() != reflect.Ptr || dstv.IsNil() {
+		return fmt.Errorf(ErrUnsupportedType, dst)
+	}
+
+	return d.unmarshal(indirect(dstv))
+}
+
+func (d *Decoder) DecodeFixedLength(dst any, length uint) error {
+	dstv := reflect.ValueOf(dst)
+	if dstv.Kind() != reflect.Ptr || dstv.IsNil() {
+		return fmt.Errorf(ErrUnsupportedType, dst)
+	}
+	dstv = indirect(dstv)
+
+	in := dstv.Interface()
+	switch in.(type) {
+	case int8, uint8, int16, uint16, int32, uint32, int64, uint64:
+		return d.decodeFixedWidth(dstv, length)
+	case []byte:
+		return d.decodeBytesFixedLength(dstv, length)
+	default:
+		return fmt.Errorf(ErrUnsupportedType, dst)
+	}
+}
+
 type byteReader struct {
 	io.Reader
 }
@@ -38,7 +75,7 @@ func (br *byteReader) unmarshal(value reflect.Value) error {
 	}
 
 	in := value.Interface()
-	switch in.(type) {
+	switch v := in.(type) {
 
 	case int, uint:
 		return br.decodeUint(value)
@@ -50,6 +87,13 @@ func (br *byteReader) unmarshal(value reflect.Value) error {
 		return br.decodeFixedWidth(value, l)
 	case []byte:
 		return br.decodeBytes(value)
+	case []bool:
+		if err := br.decodeBits(&v); err != nil {
+			return err
+		}
+		inType := reflect.TypeOf(in)
+		value.Set(reflect.ValueOf(v).Convert(inType))
+		return nil
 	case bool:
 		return br.decodeBool(value)
 	default:
@@ -376,7 +420,11 @@ func (br *byteReader) decodeBytes(dstv reflect.Value) error {
 	if err != nil {
 		return err
 	}
+	return br.decodeBytesFixedLength(dstv, length)
+}
 
+// decodeBytes is used to decode with a destination of []byte
+func (br *byteReader) decodeBytesFixedLength(dstv reflect.Value, length uint) error {
 	if length > math.MaxUint32 {
 		return ErrExceedingByteArrayLimit
 	}
@@ -384,7 +432,7 @@ func (br *byteReader) decodeBytes(dstv reflect.Value) error {
 	b := make([]byte, length)
 
 	if length > 0 {
-		_, err = br.Read(b)
+		_, err := br.Read(b)
 		if err != nil {
 			return err
 		}
@@ -395,7 +443,27 @@ func (br *byteReader) decodeBytes(dstv reflect.Value) error {
 	dstv.Set(reflect.ValueOf(b).Convert(inType))
 	return nil
 }
+func (br *byteReader) decodeBits(v *[]bool) (err error) {
+	length := len(*v)
+	if length > math.MaxUint32 {
+		return ErrExceedingByteArrayLimit
+	}
+	var b byte
+	for i := range *v {
+		mod := i % 8
+		if mod == 0 {
+			b, err = br.ReadOctet() // take as many bytes as needed to fill the bit sequence
+			if err != nil {
+				return err
+			}
+		}
+		pow2 := byte(1 << mod)   // powers of 2
+		(*v)[i] = b&pow2 == pow2 // identify the bit
+	}
+	return nil
+}
 
+// decodeFixedWidth E_{l∈N}(N_{2^8l} → Yl) (eq. C.5)
 func (br *byteReader) decodeFixedWidth(dstv reflect.Value, length uint) error {
 	typ := dstv.Type()
 
