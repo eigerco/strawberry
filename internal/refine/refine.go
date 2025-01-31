@@ -22,17 +22,17 @@ var (
 	ErrBig = errors.New("code beyond the maximum size allowed")        // BIG
 )
 
-type Refine struct {
+type RefineImpl struct {
 	state state.State
 }
 
 // InvokePVM ΨR(H, NG, NS , H, Y, X, H, Y, ⟦G⟧, ⟦Y⟧, N) → (Y ∪ J, ⟦Y⟧)
-func (r *Refine) InvokePVM(
+func (r *RefineImpl) InvokePVM(
 	serviceCodePredictionHash crypto.Hash, gas uint64, serviceIndex block.ServiceId,
 	workPackageHash crypto.Hash, workPayload []byte, refinementContext block.RefinementContext,
-	authorizerHash crypto.Hash, authorizerHashOutput []byte, importedSegments []polkavm.Segment,
+	authorizerHash crypto.Hash, authorizerHashOutput []byte, importedSegments []work.Segment,
 	extrinsicDataBlobs [][]byte, exportOffset uint64,
-) ([]byte, []polkavm.Segment, error) {
+) ([]byte, []work.Segment, error) {
 	// let a = E(s, y, p, c, a, ↕o, ↕[↕x | x <− x])
 	args, err := jam.Marshal(struct {
 		ServiceIndex         block.ServiceId
@@ -106,7 +106,7 @@ func (r *Refine) InvokePVM(
 	// (g, r, (m, e)) = ΨM(Λ(δ[s], ct, c), 0, g, a, F, (∅, []))∶
 	_, result, ctxPair, err := interpreter.InvokeWholeProgram(code, 0, gas, args, hostCall, polkavm.RefineContextPair{
 		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
-		Segments:         []polkavm.Segment{},
+		Segments:         []work.Segment{},
 	})
 
 	// if r ∈ {∞, ☇} then (r, [])
