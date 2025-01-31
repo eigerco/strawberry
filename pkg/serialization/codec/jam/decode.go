@@ -13,6 +13,8 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 )
 
+type BitSequence []bool
+
 func Unmarshal(data []byte, dst interface{}) error {
 	dstv := reflect.ValueOf(dst)
 	if dstv.Kind() != reflect.Ptr || dstv.IsNil() {
@@ -87,7 +89,7 @@ func (br *byteReader) unmarshal(value reflect.Value) error {
 		return br.decodeFixedWidth(value, l)
 	case []byte:
 		return br.decodeBytes(value)
-	case []bool:
+	case BitSequence:
 		if err := br.decodeBits(&v); err != nil {
 			return err
 		}
@@ -443,7 +445,7 @@ func (br *byteReader) decodeBytesFixedLength(dstv reflect.Value, length uint) er
 	dstv.Set(reflect.ValueOf(b).Convert(inType))
 	return nil
 }
-func (br *byteReader) decodeBits(v *[]bool) (err error) {
+func (br *byteReader) decodeBits(v *BitSequence) (err error) {
 	length := len(*v)
 	if length > math.MaxUint32 {
 		return ErrExceedingByteArrayLimit
