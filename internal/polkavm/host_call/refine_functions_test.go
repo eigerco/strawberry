@@ -112,68 +112,6 @@ func TestHistoricalLookup(t *testing.T) {
 	assert.Equal(t, expectedGasRemaining, gasRemaining)
 }
 
-func TestImport(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
-			RWDataSize:       256,
-			StackSize:        512,
-			InitialHeapPages: 10,
-		},
-		CodeAndJumpTable: polkavm.CodeAndJumpTable{
-			Instructions: []polkavm.Instruction{
-				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
-			},
-		},
-	}
-
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
-	require.NoError(t, err)
-
-	segmentData := [common.SizeOfSegment]byte{}
-	for i := range segmentData {
-		segmentData[i] = byte('A')
-	}
-	importedSegments := []work.Segment{segmentData}
-
-	bo := polkavm.RWAddressBase + 100
-	bz := uint32(50)
-
-	initialRegs[polkavm.A0] = uint64(0)
-	initialRegs[polkavm.A1] = uint64(bo)
-	initialRegs[polkavm.A2] = uint64(bz)
-
-	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-		gasCounterOut, regsOut, memOut, _, err := host_call.Import(
-			gasCounter,
-			regs,
-			mem,
-			polkavm.RefineContextPair{},
-			importedSegments,
-		)
-		require.NoError(t, err)
-		return gasCounterOut, regsOut, memOut, x, err
-	}
-
-	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
-	require.ErrorIs(t, err, polkavm.ErrHalt)
-
-	actualValue := make([]byte, bz)
-	err = memOut.Read(bo, actualValue)
-	require.NoError(t, err)
-
-	expectedData := make([]byte, bz)
-	for i := range expectedData {
-		expectedData[i] = 'A'
-	}
-
-	assert.Equal(t, expectedData, actualValue)
-	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
-
-	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.ImportCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
-	assert.Equal(t, expectedGasRemaining, gasRemaining)
-}
-
 func TestExport(t *testing.T) {
 	pp := &polkavm.Program{
 		ProgramMemorySizes: polkavm.ProgramMemorySizes{

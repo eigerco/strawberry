@@ -21,7 +21,7 @@ type Extrinsic struct {
 
 // Item represents I (14.2 v0.5.4)
 type Item struct {
-	ServiceId          uint32            // s ∈ N_S
+	ServiceId          block.ServiceId   // s ∈ N_S
 	CodeHash           crypto.Hash       // c ∈ H
 	Payload            []byte            // y ∈ Y
 	GasLimitRefine     uint64            // g ∈ N_G
@@ -51,7 +51,7 @@ func (w *Item) ToWorkResult(o block.WorkResultOutputOrError) block.WorkResult {
 	}
 
 	return block.WorkResult{
-		ServiceId:              block.ServiceId(w.ServiceId),
+		ServiceId:              w.ServiceId,
 		ServiceHashCode:        w.CodeHash,
 		PayloadHash:            payloadHash,
 		GasPrioritizationRatio: gasPrioritizationRatio,
