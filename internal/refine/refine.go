@@ -22,45 +22,48 @@ var (
 	ErrBig = errors.New("code beyond the maximum size allowed")        // BIG
 )
 
-type RefineImpl struct {
+type Refine struct {
 	state state.State
 }
 
-// InvokePVM ΨR(H, NG, NS , H, Y, X, H, Y, ⟦G⟧, ⟦Y⟧, N) → (Y ∪ J, ⟦Y⟧)
-func (r *RefineImpl) InvokePVM(
-	serviceCodePredictionHash crypto.Hash, gas uint64, serviceIndex block.ServiceId,
-	workPackageHash crypto.Hash, workPayload []byte, refinementContext block.RefinementContext,
-	authorizerHash crypto.Hash, authorizerHashOutput []byte, importedSegments []work.Segment,
-	extrinsicDataBlobs [][]byte, exportOffset uint64,
+// InvokePVM ΨR(N,P,Y, ⟦⟦G⟧⟧, N) → (Y ∪ J, ⟦Y⟧)
+func (r *Refine) InvokePVM(
+	itemIndex uint32, // i
+	workPackage work.Package, // p
+	authorizerHashOutput []byte, // o
+	importedSegments []work.Segment, // i
+	exportOffset uint64, // ς
 ) ([]byte, []work.Segment, error) {
-	// let a = E(s, y, p, c, a, ↕o, ↕[↕x | x <− x])
-	args, err := jam.Marshal(struct {
-		ServiceIndex         block.ServiceId
-		WorkPayload          []byte
-		WorkPackageHash      crypto.Hash
-		RefinementContext    block.RefinementContext
-		AuthorizerHash       crypto.Hash
-		AuthorizerHashOutput []byte
-		ExtrinsicDataBlobs   [][]byte
-	}{
-		ServiceIndex:         serviceIndex,
-		WorkPayload:          workPayload,
-		WorkPackageHash:      workPackageHash,
-		RefinementContext:    refinementContext,
-		AuthorizerHash:       authorizerHash,
-		AuthorizerHashOutput: authorizerHashOutput,
-		ExtrinsicDataBlobs:   extrinsicDataBlobs, // we assume the extrinsic data is a ordered sequence
-	})
+	// w = p_w[i]
+	w := workPackage.WorkItems[itemIndex]
+
+	packageBytes, err := jam.Marshal(workPackage)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	// let a = E(ws, wy, H(p), px, pa)
+	args, err := jam.Marshal(struct {
+		ServiceIndex      block.ServiceId
+		WorkPayload       []byte
+		WorkPackageHash   crypto.Hash
+		RefinementContext block.RefinementContext
+		AuthorizerHash    crypto.Hash
+	}{
+		ServiceIndex:      w.ServiceId,
+		WorkPayload:       w.Payload,
+		WorkPackageHash:   crypto.HashData(packageBytes),
+		RefinementContext: workPackage.Context,
+		AuthorizerHash:    workPackage.AuthCodeHash,
+	})
+
 	// if s ∉ K(δ) ∨ Λ(δ[s], ct, c) = ∅ then (BAD, [])
-	service, ok := r.state.Services[serviceIndex]
+	service, ok := r.state.Services[w.ServiceId]
 	if !ok {
 		return nil, nil, ErrBad
 	}
-	code := service.LookupPreimage(refinementContext.LookupAnchor.Timeslot, serviceCodePredictionHash)
+
+	code := service.LookupPreimage(workPackage.Context.LookupAnchor.Timeslot, w.CodeHash)
 	if code == nil {
 		return nil, nil, ErrBad
 	}
@@ -74,9 +77,9 @@ func (r *RefineImpl) InvokePVM(
 	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctxPair polkavm.RefineContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.RefineContextPair, error) {
 		switch hostCall {
 		case host_call.HistoricalLookupID:
-			gasCounter, regs, mem, ctxPair, err = host_call.HistoricalLookup(gasCounter, regs, mem, ctxPair, serviceIndex, r.state.Services, refinementContext.LookupAnchor.Timeslot)
-		case host_call.ImportID:
-			gasCounter, regs, mem, ctxPair, err = host_call.Import(gasCounter, regs, mem, ctxPair, importedSegments)
+			gasCounter, regs, mem, ctxPair, err = host_call.HistoricalLookup(gasCounter, regs, mem, ctxPair, w.ServiceId, r.state.Services, workPackage.Context.LookupAnchor.Timeslot)
+		case host_call.FetchID:
+			gasCounter, regs, mem, ctxPair, err = host_call.Fetch(gasCounter, regs, mem, ctxPair, itemIndex, workPackage, authorizerHashOutput, importedSegments)
 		case host_call.ExportID:
 			gasCounter, regs, mem, ctxPair, err = host_call.Export(gasCounter, regs, mem, ctxPair, exportOffset)
 		case host_call.GasID:
@@ -103,8 +106,8 @@ func (r *RefineImpl) InvokePVM(
 		return gasCounter, regs, mem, ctxPair, nil
 	}
 
-	// (g, r, (m, e)) = ΨM(Λ(δ[s], ct, c), 0, g, a, F, (∅, []))∶
-	_, result, ctxPair, err := interpreter.InvokeWholeProgram(code, 0, gas, args, hostCall, polkavm.RefineContextPair{
+	// (g, r, (m, e)) = ΨM(Λ(δ[w_s], (p_x)t, w_c), 0, w_g, a, F, (∅, []))∶
+	_, result, ctxPair, err := interpreter.InvokeWholeProgram(code, 0, w.GasLimitRefine, args, hostCall, polkavm.RefineContextPair{
 		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
 		Segments:         []work.Segment{},
 	})

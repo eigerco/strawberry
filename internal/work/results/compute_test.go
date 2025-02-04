@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/work"
 )
@@ -247,16 +246,10 @@ func (m mockAuthorizationInvoker) InvokePVM(workPackage work.Package, coreIndex 
 type mockRefineInvoker struct{}
 
 func (m mockRefineInvoker) InvokePVM(
-	serviceCodePredictionHash crypto.Hash,
-	gas uint64,
-	serviceIndex block.ServiceId,
-	workPackageHash crypto.Hash,
-	workPayload []byte,
-	refinementContext block.RefinementContext,
-	authorizerHash crypto.Hash,
+	itemIndex uint32,
+	workPackage work.Package,
 	authorizerHashOutput []byte,
 	importedSegments []work.Segment,
-	extrinsicData [][]byte,
 	exportOffset uint64,
 ) ([]byte, []work.Segment, error) {
 	out := []byte("RefineOutput")

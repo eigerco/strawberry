@@ -394,7 +394,7 @@ func compareExtrinsicFields(t *testing.T, expected ExpectedExtrinsic, actual blo
 }
 
 func compareWorkItemFields(t *testing.T, expected ExpectedWorkItem, actual work.Item) {
-	require.Equal(t, expected.Service, actual.ServiceId)
+	require.Equal(t, expected.Service, uint32(actual.ServiceId))
 	require.Equal(t, expected.CodeHash, toHex(actual.CodeHash))
 	require.Equal(t, expected.Payload, toHex(actual.Payload))
 	require.Equal(t, expected.RefineGasLimit, actual.GasLimitRefine)
