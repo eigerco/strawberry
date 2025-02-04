@@ -26,7 +26,7 @@ const (
 	ForgetCost
 	YieldCost
 	HistoricalLookupCost
-	ImportCost
+	FetchCost
 	ExportCost
 	MachineCost
 	PeekCost
@@ -56,7 +56,7 @@ const (
 	ForgetID
 	YieldID
 	HistoricalLookupID
-	ImportID
+	FetchID
 	ExportID
 	MachineID
 	PeekID

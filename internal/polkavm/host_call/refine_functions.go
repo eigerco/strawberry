@@ -76,40 +76,25 @@ func HistoricalLookup(
 	return gas, regs, mem, ctxPair, nil
 }
 
-// Import ΩY(ϱ, ω, µ, (m, e), i)
-func Import(
+// Fetch ΩY(ϱ, ω, µ, (m, e), i, p, o, i)
+func Fetch(
 	gas Gas,
 	regs Registers,
 	mem Memory,
 	ctxPair RefineContextPair,
+	itemIndex uint32,
+	workPackage work.Package,
+	authorizerHashOutput []byte,
 	importedSegments []work.Segment,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	if gas < ImportCost {
+	if gas < FetchCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
-	gas -= ImportCost
+	gas -= FetchCost
 
-	index := regs[A0]  // ω7
-	offset := regs[A1] // ω8
-	length := regs[A2] // ω9
+	//TODO implement
 
-	// v = ∅
-	if index >= uint64(len(importedSegments)) {
-		// v = ∅, return NONE
-		return gas, withCode(regs, NONE), mem, ctxPair, nil
-	}
-
-	// v = i[ω7]
-	v := importedSegments[index][:]
-
-	l := min(length, common.SizeOfSegment)
-
-	segmentToWrite := v[:l]
-	if err := mem.Write(uint32(offset), segmentToWrite); err != nil {
-		return gas, withCode(regs, OOB), mem, ctxPair, nil
-	}
-
-	return gas, withCode(regs, OK), mem, ctxPair, nil
+	return gas, regs, mem, ctxPair, nil
 }
 
 // Export ΩE(ϱ, ω, µ, (m, e), ς)

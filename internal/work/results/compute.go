@@ -19,16 +19,10 @@ type AuthPVMInvoker interface {
 
 type RefinePVMInvoker interface {
 	InvokePVM(
-		serviceCodePredictionHash crypto.Hash,
-		gas uint64,
-		serviceIndex block.ServiceId,
-		workPackageHash crypto.Hash,
-		workPayload []byte,
-		refinementContext block.RefinementContext,
-		authorizerHash crypto.Hash,
+		itemIndex uint32,
+		workPackage work.Package,
 		authorizerHashOutput []byte,
 		importedSegments []work.Segment,
-		extrinsicData [][]byte,
 		exportOffset uint64,
 	) ([]byte, []work.Segment, error)
 }
@@ -288,29 +282,18 @@ func (c *Computation) EvaluateWorkPackage(
 	var allExportedSegments []work.Segment
 	exportOffset := uint64(0)
 
-	for _, item := range wp.WorkItems {
+	for index, item := range wp.WorkItems {
 		importedSegs, _, err := c.buildImportedSegments(item)
 		if err != nil {
 			return nil, fmt.Errorf("importedSegments: %w", err)
 		}
 
-		extrinsicData, err := c.buildExtrinsicData(item)
-		if err != nil {
-			return nil, fmt.Errorf("extrinsicData: %w", err)
-		}
-
-		// ΨR(wc, wg, ws, h, wy, px, pa, o, S(w,l), X(w), l) (14.11 v0.5.4)
+		// ΨR(j, p, o, i, ℓ) (14.11 v0.6.0)
 		refineOut, exported, refineErr := c.Refine.InvokePVM(
-			item.CodeHash,
-			item.GasLimitRefine,
-			block.ServiceId(item.ServiceId),
-			crypto.HashData(wp.Parameterization),
-			item.Payload,
-			wp.Context,
-			wp.AuthCodeHash,
+			uint32(index),
+			wp,
 			authOutput,
 			importedSegs,
-			extrinsicData,
 			exportOffset,
 		)
 
