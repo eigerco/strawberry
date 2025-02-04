@@ -23,6 +23,7 @@ type TestStruct struct {
 	LargeUint  uint
 	PubKey     *ed25519.PublicKey
 	InnerSlice []InnerStruct
+	Bits       jam.BitSequence
 }
 
 func TestMarshalUnmarshal(t *testing.T) {
@@ -39,6 +40,15 @@ func TestMarshalUnmarshal(t *testing.T) {
 			{1, 2, 3, 4},
 			{2, 3, 4, 5},
 			{3, 4, 5, 6},
+		},
+		Bits: jam.BitSequence{
+			true, true, true, true, true, true, true, true,
+			true, true, true, true, true, true, true, false,
+			true, true, true, true, true, true, false, false,
+			true, true, true, true, false, false, false, false,
+			true, true, false, false, false, false, false, false,
+			true, false, false, false, false, false, false, false,
+			false, false, false, false, false, false, false, false,
 		},
 	}
 

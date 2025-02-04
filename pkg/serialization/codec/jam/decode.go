@@ -54,14 +54,21 @@ func (d *Decoder) DecodeFixedLength(dst any, length uint) error {
 	dstv = indirect(dstv)
 
 	in := dstv.Interface()
-	switch in.(type) {
+	switch v := in.(type) {
 	case int8, uint8, int16, uint16, int32, uint32, int64, uint64:
 		return d.decodeFixedWidth(dstv, length)
 	case []byte:
 		return d.decodeBytesFixedLength(dstv, length)
+	case BitSequence:
+		if err := d.decodeBitsFixedLength(&v, length); err != nil {
+			return err
+		}
+		inType := reflect.TypeOf(in)
+		dstv.Set(reflect.ValueOf(v).Convert(inType))
 	default:
 		return fmt.Errorf(ErrUnsupportedType, dst)
 	}
+	return nil
 }
 
 type byteReader struct {
@@ -77,7 +84,7 @@ func (br *byteReader) unmarshal(value reflect.Value) error {
 	}
 
 	in := value.Interface()
-	switch v := in.(type) {
+	switch in.(type) {
 
 	case int, uint:
 		return br.decodeUint(value)
@@ -90,12 +97,7 @@ func (br *byteReader) unmarshal(value reflect.Value) error {
 	case []byte:
 		return br.decodeBytes(value)
 	case BitSequence:
-		if err := br.decodeBits(&v); err != nil {
-			return err
-		}
-		inType := reflect.TypeOf(in)
-		value.Set(reflect.ValueOf(v).Convert(inType))
-		return nil
+		return br.decodeBits(value)
 	case bool:
 		return br.decodeBool(value)
 	default:
@@ -117,6 +119,12 @@ func (br *byteReader) handleReflectTypes(value reflect.Value) error {
 	case reflect.Slice:
 		if value.Type() == reflect.TypeOf(ed25519.PublicKey{}) {
 			return br.decodeEd25519PublicKey(value)
+		}
+		if value.Type() == reflect.TypeOf(BitSequence{}) {
+			return br.decodeBits(value)
+		}
+		if value.Type() == reflect.TypeOf([]byte{}) {
+			return br.decodeBytes(value)
 		}
 		return br.decodeSlice(value)
 	case reflect.Map:
@@ -445,20 +453,35 @@ func (br *byteReader) decodeBytesFixedLength(dstv reflect.Value, length uint) er
 	dstv.Set(reflect.ValueOf(b).Convert(inType))
 	return nil
 }
-func (br *byteReader) decodeBits(v *BitSequence) (err error) {
-	length := len(*v)
-	if length > math.MaxUint32 {
+
+// decodeBytes is used to decode with a destination of []byte
+func (br *byteReader) decodeBits(dstv reflect.Value) error {
+	length, err := br.decodeLength()
+	if err != nil {
+		return err
+	}
+	var v BitSequence
+	if err := br.decodeBitsFixedLength(&v, length); err != nil {
+		return err
+	}
+	in := dstv.Interface()
+	inType := reflect.TypeOf(in)
+	dstv.Set(reflect.ValueOf(v).Convert(inType))
+	return nil
+}
+
+func (br *byteReader) decodeBitsFixedLength(v *BitSequence, bytesLength uint) (err error) {
+	if bytesLength > math.MaxUint32 {
 		return ErrExceedingByteArrayLimit
 	}
-	var b byte
+	bb := make([]byte, bytesLength)
+	if _, err = br.Reader.Read(bb); err != nil {
+		return err
+	}
+	*v = make(BitSequence, bytesLength*8)
 	for i := range *v {
 		mod := i % 8
-		if mod == 0 {
-			b, err = br.ReadOctet() // take as many bytes as needed to fill the bit sequence
-			if err != nil {
-				return err
-			}
-		}
+		b := bb[i/8]
 		pow2 := byte(1 << mod)   // powers of 2
 		(*v)[i] = b&pow2 == pow2 // identify the bit
 	}

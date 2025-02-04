@@ -47,11 +47,14 @@ func (bw *byteWriter) marshal(in interface{}) error {
 		return bw.encodeFixedWidth(v, l)
 	case []byte:
 		return bw.encodeBytes(v)
+	case BitSequence:
+		return bw.encodeBits(v)
 	case bool:
 		return bw.encodeBool(v)
 	default:
 		return bw.handleReflectTypes(v)
 	}
+	return nil
 }
 
 func (bw *byteWriter) handleReflectTypes(in interface{}) error {
@@ -285,6 +288,28 @@ func (bw *byteWriter) encodeBytes(b []byte) error {
 	}
 
 	_, err = bw.Write(b)
+	return err
+}
+
+func (bw *byteWriter) encodeBits(bitSequence BitSequence) error {
+	length := len(bitSequence) / 8
+	if length%8 == 0 {
+		length += 1
+	}
+	err := bw.encodeLength(length)
+	if err != nil {
+		return err
+	}
+
+	bb := make([]byte, length)
+	for i, b := range bitSequence {
+		if b {
+			pow2 := byte(1 << (i % 8)) // powers of 2
+			bb[i/8] |= pow2            // identify the bit
+		}
+	}
+
+	_, err = bw.Write(bb)
 	return err
 }
 
