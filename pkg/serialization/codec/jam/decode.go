@@ -478,6 +478,9 @@ func (br *byteReader) decodeBitsFixedLength(v *BitSequence, bytesLength uint) (e
 	if _, err = br.Reader.Read(bb); err != nil {
 		return err
 	}
+	if bytesLength == 0 {
+		return nil
+	}
 	*v = make(BitSequence, bytesLength*8)
 	for i := range *v {
 		mod := i % 8
