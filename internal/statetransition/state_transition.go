@@ -705,14 +705,13 @@ func CalculateNewCoreAuthorizations(header block.Header, guarantees block.Guaran
 		newAuths := make([]crypto.Hash, len(currentAuthorizations[c]))
 		copy(newAuths, currentAuthorizations[c])
 
-		//// TODO: [Issue 223] For some reason test vectors don't expect this to happen, although it's on the spec.
-		//// F(c) - Remove authorizer if it was used in a guarantee for this core. 8.3 Graypaper 0.5.4
-		//for _, guarantee := range guarantees.Guarantees {
-		//	if guarantee.WorkReport.CoreIndex == c {
-		//		// Remove the used authorizer from the list
-		//		newAuths = removeAuthorizer(newAuths, guarantee.WorkReport.AuthorizerHash)
-		//	}
-		//}
+		// F(c) - Remove authorizer if it was used in a guarantee for this core. 8.3 Graypaper 0.5.4
+		for _, guarantee := range guarantees.Guarantees {
+			if guarantee.WorkReport.CoreIndex == c {
+				// Remove the used authorizer from the list
+				newAuths = removeAuthorizer(newAuths, guarantee.WorkReport.AuthorizerHash)
+			}
+		}
 
 		// Get new authorizer from the queue based on current timeslot
 		// φ'[c][Ht]↺O - Get authorizer from queue, wrapping around queue size
@@ -1799,7 +1798,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		slices.Concat(
 			slices.Concat(currentState.AccumulationQueue[timeslotPerEpoch:]...), // ⋃(ϑm...)
 			slices.Concat(currentState.AccumulationQueue[:timeslotPerEpoch]...), // ⋃(ϑ...m)
-			queuedWorkReports, // WQ
+			queuedWorkReports,                                                   // WQ
 		),
 		getWorkPackageHashes(immediatelyAccWorkReports), // P(W!)
 	)
@@ -2439,10 +2438,10 @@ func (a *Accumulator) ParallelDelta(
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
-	uint64, // total gas used
-	state.AccumulationState, // updated context
+	uint64,                     // total gas used
+	state.AccumulationState,    // updated context
 	[]service.DeferredTransfer, // all transfers
-	ServiceHashPairs, // accumulation outputs
+	ServiceHashPairs,           // accumulation outputs
 ) {
 	// Get all unique service indices involved (s)
 	// s = {rs | w ∈ w, r ∈ wr} ∪ K(f)
@@ -2590,7 +2589,7 @@ func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
 	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
-	serviceIndex block.ServiceId, // NS
+	serviceIndex block.ServiceId,             // NS
 ) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)
