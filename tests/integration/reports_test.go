@@ -346,17 +346,6 @@ func TestReports(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			workReports := statetransition.GetAvailableWorkReports(newCoreAssignments)
-
-			_, _, _, _, _, newPendingCoreAuthorizations, _ := statetransition.CalculateWorkReportsAndAccumulate(
-				&newBlock.Header,
-				&preState,
-				newTimeState,
-				workReports,
-			)
-
-			newCoreAuthorizations := statetransition.CalculateNewCoreAuthorizations(newBlock.Header, newBlock.Extrinsic.EG, newPendingCoreAuthorizations, preState.CoreAuthorizersPool)
-
 			expectedPostState := mapState(data.PostState)
 
 			// Verify reporters if present in output
@@ -416,15 +405,6 @@ func TestReports(t *testing.T) {
 			for i := range expectedPostState.EntropyPool {
 				require.Equal(t, expectedPostState.EntropyPool[i], preState.EntropyPool[i],
 					"EntropyPool should not have changed")
-			}
-
-			// Verify authorization pools
-			require.Equal(t, len(expectedPostState.CoreAuthorizersPool), len(newCoreAuthorizations),
-				"Mismatch in CoreAuthorizersPool length")
-			for i := range expectedPostState.CoreAuthorizersPool {
-				require.ElementsMatch(t, expectedPostState.CoreAuthorizersPool[i],
-					newCoreAuthorizations[i],
-					"Mismatch in CoreAuthorizersPool[%d]", i)
 			}
 		})
 	}

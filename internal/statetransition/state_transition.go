@@ -705,14 +705,13 @@ func CalculateNewCoreAuthorizations(header block.Header, guarantees block.Guaran
 		newAuths := make([]crypto.Hash, len(currentAuthorizations[c]))
 		copy(newAuths, currentAuthorizations[c])
 
-		//// TODO: [Issue 223] For some reason test vectors don't expect this to happen, although it's on the spec.
-		//// F(c) - Remove authorizer if it was used in a guarantee for this core. 8.3 Graypaper 0.5.4
-		//for _, guarantee := range guarantees.Guarantees {
-		//	if guarantee.WorkReport.CoreIndex == c {
-		//		// Remove the used authorizer from the list
-		//		newAuths = removeAuthorizer(newAuths, guarantee.WorkReport.AuthorizerHash)
-		//	}
-		//}
+		// F(c) - Remove authorizer if it was used in a guarantee for this core. 8.3 Graypaper 0.5.4
+		for _, guarantee := range guarantees.Guarantees {
+			if guarantee.WorkReport.CoreIndex == c {
+				// Remove the used authorizer from the list
+				newAuths = removeAuthorizer(newAuths, guarantee.WorkReport.AuthorizerHash)
+			}
+		}
 
 		// Get new authorizer from the queue based on current timeslot
 		// φ'[c][Ht]↺O - Get authorizer from queue, wrapping around queue size
