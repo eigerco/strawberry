@@ -47,6 +47,8 @@ func (bw *byteWriter) marshal(in interface{}) error {
 		return bw.encodeFixedWidth(v, l)
 	case []byte:
 		return bw.encodeBytes(v)
+	case BitSequence:
+		return bw.encodeBits(v)
 	case bool:
 		return bw.encodeBool(v)
 	default:
@@ -74,10 +76,16 @@ func (bw *byteWriter) handleReflectTypes(in interface{}) error {
 	case reflect.Array:
 		return bw.encodeArray(in)
 	case reflect.Slice:
-		if pk, ok := in.(ed25519.PublicKey); ok {
-			return bw.encodeEd25519PublicKey(pk)
+		switch v := in.(type) {
+		case ed25519.PublicKey:
+			return bw.encodeEd25519PublicKey(v)
+		case BitSequence:
+			return bw.encodeBits(v)
+		case []byte:
+			return bw.encodeBytes(v)
+		default:
+			return bw.encodeSlice(in)
 		}
-		return bw.encodeSlice(in)
 	case reflect.Map:
 		return bw.encodeMap(in)
 	default:
@@ -285,6 +293,28 @@ func (bw *byteWriter) encodeBytes(b []byte) error {
 	}
 
 	_, err = bw.Write(b)
+	return err
+}
+
+func (bw *byteWriter) encodeBits(bitSequence BitSequence) error {
+	length := len(bitSequence) / 8
+	if length > 0 && length%8 == 0 {
+		length += 1
+	}
+	err := bw.encodeLength(length)
+	if err != nil {
+		return err
+	}
+
+	bb := make([]byte, length)
+	for i, b := range bitSequence {
+		if b {
+			pow2 := byte(1 << (i % 8)) // powers of 2
+			bb[i/8] |= pow2            // identify the bit
+		}
+	}
+
+	_, err = bw.Write(bb)
 	return err
 }
 
