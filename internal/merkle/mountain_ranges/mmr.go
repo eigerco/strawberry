@@ -83,8 +83,7 @@ func (m *MMR) SuperPeak(peaks []*crypto.Hash, hashFunc func([]byte) crypto.Hash)
 
 	subPeak := m.SuperPeak(validPeaks[:len(validPeaks)-1], hashFunc)
 
-	combined := append([]byte("node"), subPeak[:]...) // Graypaper 0.5.3
-	//combined := append([]byte("peak"), subPeak[:]...)  // Graypaper 0.5.4  TODO: [Issue 219] Uncomment once test vectors are updated).
+	combined := append([]byte("peak"), subPeak[:]...) // Graypaper 0.5.4
 	combined = append(combined, lastHash[:]...)
 	result := hashFunc(combined)
 
