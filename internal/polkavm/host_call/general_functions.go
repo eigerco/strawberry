@@ -54,38 +54,27 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 		}
 	}
 
-	ho := regs[polkavm.A1]
+	// let [h, o] = ω8..+2
+	h, o := regs[polkavm.A1], regs[polkavm.A2]
 
-	// Ensure the memory range is valid for hashing (µho..ho+32)
-	memorySlice := make([]byte, 32)
-	err := mem.Read(uint32(ho), memorySlice)
-	if err != nil {
-		return gas, withCode(regs, OOB), mem, err
+	key := make([]byte, 32)
+	if err := mem.Read(uint32(h), key); err != nil {
+		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
-	// Compute the hash H(µho..ho+32)
-	hash := crypto.HashData(memorySlice)
-
 	// lookup value in storage (v) using the hash
-	v, exists := a.Storage[hash]
+	v, exists := a.PreimageLookup[crypto.Hash(key)]
 	if !exists {
+		// v=∅ => (▸, NONE, μ)
 		return gas, withCode(regs, NONE), mem, nil
 	}
 
-	bo := regs[polkavm.A2]
-	bz := regs[polkavm.A3]
-
-	// Write value to memory if within bounds
-	if len(v) > 0 && len(v) <= int(bz) {
-		if err = mem.Write(uint32(bo), v); err != nil {
-			return gas, withCode(regs, OOB), mem, err
-		}
-	} else {
-		return gas, withCode(regs, OOB), mem, err
+	if err := writeFromOffset(mem, o, v, regs[polkavm.A3], regs[polkavm.A4]); err != nil {
+		return gas, regs, mem, err
 	}
 
 	regs[polkavm.A0] = uint64(len(v))
-	return gas, regs, mem, err
+	return gas, regs, mem, nil
 }
 
 // Read ΩR(ϱ, ω, μ, s, s, d)
@@ -96,28 +85,33 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 	gas -= ReadCost
 
 	omega7 := regs[polkavm.A0]
-	ko := regs[polkavm.A1]
-	kz := regs[polkavm.A2]
-	bo := regs[polkavm.A3]
-	bz := regs[polkavm.A4]
+	// s* = ω7
+	ss := block.ServiceId(omega7)
+	if uint64(omega7) == math.MaxUint64 {
+		ss = serviceId // s* = s
+	}
 
 	a := s
-	if uint64(omega7) != math.MaxUint64 && omega7 != uint64(serviceId) {
+	if ss != serviceId {
 		var exists bool
-		a, exists = serviceState[block.ServiceId(omega7)]
+		a, exists = serviceState[ss]
 		if !exists {
 			return gas, regs, mem, polkavm.ErrAccountNotFound
 		}
 	}
 
+	// let [ko, kz, o] = ω8..+3
+	ko, kz, o := regs[polkavm.A1], regs[polkavm.A2], regs[polkavm.A3]
+
 	// read key data from memory at ko..ko+kz
 	keyData := make([]byte, kz)
 	err := mem.Read(uint32(ko), keyData)
 	if err != nil {
-		return gas, withCode(regs, OOB), mem, nil
+		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
-	serviceIdBytes, err := jam.Marshal(omega7)
+	// k = H(E4(s*) ⌢ µko..ko+kz)
+	serviceIdBytes, err := jam.Marshal(ss)
 	if err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
@@ -135,18 +129,12 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		return gas, withCode(regs, NONE), mem, nil
 	}
 
-	writeLen := int(math.Min(float64(bz), float64(len(v))))
-
-	if writeLen > 0 {
-		if err = mem.Write(uint32(bo), v[:writeLen]); err != nil {
-			return gas, withCode(regs, OOB), mem, nil
-		}
-
-		regs[polkavm.A0] = uint64(len(v))
-		return gas, regs, mem, nil
+	if err = writeFromOffset(mem, o, v, regs[polkavm.A4], regs[polkavm.A5]); err != nil {
+		return gas, regs, mem, err
 	}
 
-	return gas, withCode(regs, NONE), mem, nil
+	regs[polkavm.A0] = uint64(len(v))
+	return gas, regs, mem, nil
 }
 
 // Write ΩW(ϱ, ω, μ, s, s)
@@ -164,12 +152,12 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 	keyData := make([]byte, kz)
 	err := mem.Read(uint32(ko), keyData)
 	if err != nil {
-		return gas, regs, mem, s, err
+		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 	}
 
 	serviceIdBytes, err := jam.Marshal(serviceId)
 	if err != nil {
-		return gas, regs, mem, s, err
+		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 	}
 	hashInput := append(serviceIdBytes, keyData...)
 	k := crypto.HashData(hashInput)
@@ -179,9 +167,9 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 		delete(a.Storage, k)
 	} else {
 		valueData := make([]byte, vz)
-		err := mem.Read(uint32(vo), valueData)
+		err = mem.Read(uint32(vo), valueData)
 		if err != nil {
-			return gas, withCode(regs, OOB), mem, s, err
+			return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 		}
 
 		a.Storage[k] = valueData
@@ -193,7 +181,7 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 	}
 
 	if a.ThresholdBalance() > a.Balance {
-		return gas, withCode(regs, FULL), mem, s, err
+		return gas, withCode(regs, FULL), mem, s, nil
 	}
 
 	// otherwise a.ThresholdBalance() <= a.Balance
@@ -232,11 +220,11 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 	// E(tc, tb, tt, tg , tm, tl, ti)
 	m, err := jam.Marshal(accountInfo)
 	if err != nil {
-		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
+		return gas, regs, mem, err
 	}
 
-	if err := mem.Write(uint32(omega8), m); err != nil {
-		return gas, withCode(regs, OOB), mem, nil
+	if err = mem.Write(uint32(omega8), m); err != nil {
+		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
 	return gas, withCode(regs, OK), mem, nil

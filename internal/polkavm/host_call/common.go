@@ -131,3 +131,24 @@ func withCode(regs Registers, s Code) Registers {
 	regs[A0] = uint64(s)
 	return regs
 }
+
+func writeFromOffset(
+	mem Memory,
+	addressToWrite uint64,
+	data []byte,
+	offset uint64,
+	length uint64,
+) error {
+	vLen := uint64(len(data))
+
+	f := min(offset, vLen)
+	l := min(length, vLen-f)
+
+	if l > 0 {
+		sliceToWrite := data[f : f+l]
+		if err := mem.Write(uint32(addressToWrite), sliceToWrite); err != nil {
+			return ErrPanicf("out-of-bounds write at address %d", addressToWrite)
+		}
+	}
+	return nil
+}
