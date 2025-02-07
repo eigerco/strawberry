@@ -12,7 +12,6 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	. "github.com/eigerco/strawberry/internal/polkavm"
-	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
@@ -27,12 +26,6 @@ func TestAccumulate(t *testing.T) {
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 200,
-		},
-		CodeAndJumpTable: CodeAndJumpTable{
-			Instructions: []Instruction{
-				{Opcode: Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-				{Opcode: JumpIndirect, Imm: []uint32{0}, Reg: []Reg{RA}, Offset: 1, Length: 2},
-			},
 		},
 	}
 
@@ -99,7 +92,7 @@ func TestAccumulate(t *testing.T) {
 			},
 
 			initialGas:  100,
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedX: AccumulateContext{
 				AccumulationState: state.AccumulationState{
 					PrivilegedServices: service.PrivilegedServices{
@@ -124,7 +117,7 @@ func TestAccumulate(t *testing.T) {
 				A0: 1, // core id
 			},
 			initialGas:  100,
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(OK),
 			},
@@ -143,7 +136,7 @@ func TestAccumulate(t *testing.T) {
 			},
 			initialRegs: deltaRegs{},
 			initialGas:  100,
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(OK),
 			},
@@ -157,9 +150,9 @@ func TestAccumulate(t *testing.T) {
 			fn:          fnStd(Checkpoint),
 			X:           checkpointCtx,
 			initialGas:  100,
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(89),
+				A0: uint64(90),
 			},
 			expectedX: checkpointCtx,
 			expectedY: checkpointCtx,
@@ -175,7 +168,7 @@ func TestAccumulate(t *testing.T) {
 				A0: uint64(newServiceID),
 			},
 			initialGas:  100,
-			expectedGas: 88,
+			expectedGas: 90,
 			X: AccumulateContext{
 				ServiceId:    currentServiceID,
 				NewServiceId: newServiceID,
@@ -220,7 +213,7 @@ func TestAccumulate(t *testing.T) {
 				A0: uint64(OK),
 			},
 			initialGas:  100,
-			expectedGas: 88,
+			expectedGas: 90,
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
 				AccumulationState: state.AccumulationState{
@@ -252,7 +245,7 @@ func TestAccumulate(t *testing.T) {
 				A0: uint64(OK),
 			},
 			initialGas:  100,
-			expectedGas: 8,
+			expectedGas: 10,
 			X: AccumulateContext{
 				ServiceId: block.ServiceId(123123123),
 				AccumulationState: state.AccumulationState{
@@ -334,7 +327,7 @@ func TestAccumulate(t *testing.T) {
 					},
 				},
 			},
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(OK),
 			},
@@ -381,7 +374,7 @@ func TestAccumulate(t *testing.T) {
 				A0: 0,
 				A1: 0,
 			},
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedX: AccumulateContext{
 				ServiceId: 999,
 				AccumulationState: state.AccumulationState{
@@ -424,7 +417,7 @@ func TestAccumulate(t *testing.T) {
 				A0: 1 + (uint64(11) << 32),
 				A1: 0,
 			},
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedX: AccumulateContext{
 				ServiceId: 999,
 				AccumulationState: state.AccumulationState{
@@ -467,7 +460,7 @@ func TestAccumulate(t *testing.T) {
 				A0: 2 + (uint64(11) << 32),
 				A1: uint64(12),
 			},
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedX: AccumulateContext{
 				ServiceId: 999,
 				AccumulationState: state.AccumulationState{
@@ -510,7 +503,7 @@ func TestAccumulate(t *testing.T) {
 				A0: 3 + (uint64(11) << 32),
 				A1: uint64(12) + (uint64(13) << 32),
 			},
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedX: AccumulateContext{
 				ServiceId: 999,
 				AccumulationState: state.AccumulationState{
@@ -534,7 +527,7 @@ func TestAccumulate(t *testing.T) {
 				A1: 256, // z: preimage length
 			},
 			timeslot:   jamtime.Timeslot(1000),
-			initialGas: 10, // Less than SolicitCost
+			initialGas: 9, // Less than SolicitCost
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
 				AccumulationState: state.AccumulationState{
@@ -546,7 +539,7 @@ func TestAccumulate(t *testing.T) {
 					},
 				},
 			},
-			expectedGas: 8, // Gas gets decremented by fixed amount (2) when processing instructions even on error
+			expectedGas: 9, // Gas gets decremented by fixed amount (2) when processing instructions even on error
 			expectedX: AccumulateContext{
 				ServiceId: currentServiceID,
 				AccumulationState: state.AccumulationState{
@@ -570,7 +563,7 @@ func TestAccumulate(t *testing.T) {
 			},
 			timeslot:    jamtime.Timeslot(1000),
 			initialGas:  100,
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(OK),
 			},
@@ -609,7 +602,7 @@ func TestAccumulate(t *testing.T) {
 			},
 			timeslot:    jamtime.Timeslot(1000),
 			initialGas:  100,
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(OK),
 			},
@@ -650,7 +643,7 @@ func TestAccumulate(t *testing.T) {
 			},
 			timeslot:    jamtime.Timeslot(1000),
 			initialGas:  100,
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(HUH),
 			},
@@ -691,7 +684,7 @@ func TestAccumulate(t *testing.T) {
 			},
 			timeslot:    jamtime.Timeslot(1000),
 			initialGas:  100,
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(FULL),
 			},
@@ -726,7 +719,7 @@ func TestAccumulate(t *testing.T) {
 			initialRegs:       deltaRegs{A1: 123},
 			expectedDeltaRegs: deltaRegs{A0: uint64(OK)},
 			initialGas:        100,
-			expectedGas:       88,
+			expectedGas:       90,
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
 				AccumulationState: state.AccumulationState{
@@ -762,7 +755,7 @@ func TestAccumulate(t *testing.T) {
 			initialRegs:       deltaRegs{A1: 123},
 			expectedDeltaRegs: deltaRegs{A0: uint64(OK)},
 			initialGas:        100,
-			expectedGas:       88,
+			expectedGas:       90,
 			timeslot:          randomTimeslot2,
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
@@ -801,7 +794,7 @@ func TestAccumulate(t *testing.T) {
 			initialRegs:       deltaRegs{A1: 123},
 			expectedDeltaRegs: deltaRegs{A0: uint64(OK)},
 			initialGas:        100,
-			expectedGas:       88,
+			expectedGas:       90,
 			timeslot:          randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1,
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
@@ -838,7 +831,7 @@ func TestAccumulate(t *testing.T) {
 			initialRegs:       deltaRegs{A1: 123},
 			expectedDeltaRegs: deltaRegs{A0: uint64(OK)},
 			initialGas:        100,
-			expectedGas:       88,
+			expectedGas:       90,
 			timeslot:          randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1,
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
@@ -884,7 +877,7 @@ func TestAccumulate(t *testing.T) {
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(OK),
 			},
-			expectedGas: 88,
+			expectedGas: 90,
 			expectedX: AccumulateContext{
 				ServiceId:        999,
 				AccumulationHash: &randomHash,
@@ -909,19 +902,11 @@ func TestAccumulate(t *testing.T) {
 			for i, v := range tc.initialRegs {
 				initialRegs[i] = v
 			}
-			hostCall := func(hostCall uint32, gasCounter Gas, regs Registers, mem Memory, x AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-				gasCounter, regs, mem, x, err = tc.fn(gasCounter, regs, mem, x, tc.timeslot)
-				require.ErrorIs(t, err, tc.err)
-				return gasCounter, regs, mem, x, nil
-			}
-			gasRemaining, regs, _, ctxPair, err := interpreter.InvokeHostCall(
-				pp, 0, tc.initialGas, initialRegs, mem,
-				hostCall, AccumulateContextPair{
-					RegularCtx:     tc.X,
-					ExceptionalCtx: tc.Y,
-				})
-			require.ErrorIs(t, err, ErrHalt)
-
+			gasRemaining, regs, mem, ctxPair, err := tc.fn(Gas(tc.initialGas), initialRegs, mem, AccumulateContextPair{
+				RegularCtx:     tc.X,
+				ExceptionalCtx: tc.Y,
+			}, tc.timeslot)
+			require.ErrorIs(t, err, tc.err)
 			expectedRegs := initialRegs
 			for i, reg := range tc.expectedDeltaRegs {
 				expectedRegs[i] = reg

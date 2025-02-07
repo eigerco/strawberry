@@ -3,11 +3,11 @@
 package integration_test
 
 import (
-	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"testing"
 
@@ -64,12 +64,6 @@ func Test_Vectors(t *testing.T) {
 			if err := json.NewDecoder(f).Decode(tc); err != nil {
 				t.Fatal(file.Name(), err)
 			}
-
-			pp := polkavm.CodeAndJumpTable{}
-			if err := polkavm.ParseCodeAndJumpTable(uint32(len(tc.Program)), polkavm.NewReader(bytes.NewReader(tc.Program)), &pp); err != nil {
-				t.Fatal(err)
-			}
-
 			mem := getMemoryMap(tc.InitialPageMap)
 
 			for _, initialMem := range tc.InitialMemory {
@@ -78,12 +72,17 @@ func Test_Vectors(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			instructionCounter, gas, regs, mem, _, err := interpreter.Invoke(&polkavm.Program{CodeAndJumpTable: pp}, tc.InitialPc, tc.InitialGas, tc.InitialRegs, mem)
+			i, err := interpreter.Instantiate(tc.Program, tc.InitialPc, tc.InitialGas, tc.InitialRegs, mem)
+			require.NoError(t, err)
+
+			_, err = interpreter.Invoke(i)
+			assert.Equal(t, tc.ExpectedStatus, error2status(err))
+			instructionCounter, gas, regs, mem := i.Results()
+
 			assert.Equal(t, int(tc.ExpectedPc), int(instructionCounter))
 			for i := range regs {
-				assert.Equal(t, uint32(tc.ExpectedRegs[i]), uint32(regs[i])) // TODO temp fix
+				assert.Equalf(t, uint32(tc.ExpectedRegs[i]), uint32(regs[i]), "reg: %v", polkavm.Reg(i))
 			}
-			assert.Equal(t, tc.ExpectedStatus, error2status(err))
 			for _, expectedMem := range tc.ExpectedMemory {
 				data := make([]byte, len(expectedMem.Contents))
 				err := mem.Read(expectedMem.Address, data)

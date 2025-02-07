@@ -6,7 +6,7 @@ import (
 
 const (
 	AddressSpaceSize               = 1 << 32
-	DynamicAddressAlignment uint32 = 2                           // Z_A = 2: The pvm dynamic address alignment factor. See equation A.15.
+	DynamicAddressAlignment        = 2                           // Z_A = 2: The pvm dynamic address alignment factor. See equation A.15.
 	InputDataSize                  = 1 << 24                     // Z_I: The standard pvm program initialization input data size (equation A.7)
 	MemoryZoneSize                 = 1 << 16                     // Z_Z: The standard pvm program initialization zone size (section A.7)
 	PageSize                       = 1 << 12                     // Z_P: The pvm memory page size (equation 4.25)
