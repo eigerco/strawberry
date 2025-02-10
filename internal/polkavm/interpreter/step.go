@@ -7,6 +7,7 @@ import (
 
 // step Ψ1(Y, B, ⟦NR⟧, NR, NG, ⟦NR⟧13, M) → ({☇, ∎, ▸} ∪ {F ,̵ h} × NR, NR, ZG, _⟦NR⟧13, M)
 func (i *Instance) step() (uint32, error) {
+	codeLength := uint32(len(i.code))
 	// ℓ ≡ skip(ı) (eq. A.18)
 	skip := polkavm.Skip(i.instructionCounter, i.bitmask)
 
@@ -30,6 +31,10 @@ func (i *Instance) step() (uint32, error) {
 	case polkavm.InstrImm:
 		// let lX = min(4, ℓ)
 		lenX := min(4, skip)
+		if codeLength < i.instructionCounter+1+lenX {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
+
 		// νX ≡ X_lX(E−1lX (ζı+1⋅⋅⋅+lX))
 		var valueX uint32
 		err := jam.Unmarshal(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX], &valueX)
@@ -45,6 +50,9 @@ func (i *Instance) step() (uint32, error) {
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
 	case polkavm.InstrRegImmExt:
+		if codeLength < i.instructionCounter+10 {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
 		// let rA = min(12, ζı+1 mod 16), ω′A ≡ ω′rA
 		regA := min(12, i.code[i.instructionCounter+1]%16)
 		// νX ≡ E−1_8(ζı+2⋅⋅⋅+8)
@@ -59,8 +67,18 @@ func (i *Instance) step() (uint32, error) {
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
 	case polkavm.InstrImm2:
+		if codeLength < i.instructionCounter+2 {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
 		// let lX = min(4, ζı+1 mod 8)
 		lenX := uint32(min(4, i.code[i.instructionCounter+1]%8))
+
+		// let lY = min(4, max(0, ℓ − lX − 1))
+		lenY := min(4, max(0, skip-lenX-1))
+
+		if codeLength < i.instructionCounter+2+lenX+lenY {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
 
 		// νX ≡ X_lX (E−1lX (ζı+2⋅⋅⋅+lX))
 		valueX := uint32(0)
@@ -69,8 +87,6 @@ func (i *Instance) step() (uint32, error) {
 		}
 		valueX = sext(valueX, lenX)
 
-		// let lY = min(4, max(0, ℓ − lX − 1))
-		lenY := min(4, max(0, skip-lenX-1))
 		// νY ≡ XlY (E−1lY (ζı+2+lX ⋅⋅⋅+lY))
 		valueY := uint32(0)
 		if err := jam.Unmarshal(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY], &valueY); err != nil {
@@ -91,13 +107,17 @@ func (i *Instance) step() (uint32, error) {
 		}
 	case polkavm.InstrOffset:
 		// let lX = min(4, ℓ)
-		lx := min(4, skip)
+		lenX := min(4, skip)
+		if codeLength < i.instructionCounter+1+lenX {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
+
 		// νX ≡ ı + Z_lX (E−1lX (ζı+1⋅⋅⋅+lX))
 		valueX := uint32(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+1:i.instructionCounter+1+lx], &valueX); err != nil {
+		if err := jam.Unmarshal(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX], &valueX); err != nil {
 			return 0, err
 		}
-		valueX = i.instructionCounter + sext(valueX, lx)
+		valueX = i.instructionCounter + sext(valueX, lenX)
 
 		switch opcode {
 		case polkavm.Jump:
@@ -106,16 +126,20 @@ func (i *Instance) step() (uint32, error) {
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
 	case polkavm.InstrRegImm:
+		// let lX = min(4, max(0, ℓ − 1))
+		lenX := min(4, max(0, skip-1))
+		if codeLength < i.instructionCounter+2+lenX {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
 		// let rA = min(12, ζı+1 mod 16), ω′A ≡ ω′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-		// let lX = min(4, max(0, ℓ − 1))
-		lx := min(4, max(0, skip-1))
+
 		// νX ≡ E−1_8(ζı+2⋅⋅⋅+8)
 		valueX := uint32(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lx], &valueX); err != nil {
+		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX], &valueX); err != nil {
 			return 0, err
 		}
-		valueX = sext(valueX, lx)
+		valueX = sext(valueX, lenX)
 
 		switch opcode {
 		case polkavm.JumpIndirect:
@@ -148,26 +172,35 @@ func (i *Instance) step() (uint32, error) {
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
 	case polkavm.InstrRegImm2:
+		if codeLength < i.instructionCounter+2 {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
+
 		// let rA = min(12, ζı+1 mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 		// let lX = min(4, ⌊ ζı+1 / 16 ⌋ mod 8)
-		lX := uint32(min(4, (i.code[i.instructionCounter+1]/16)%8))
+		lenX := uint32(min(4, (i.code[i.instructionCounter+1]/16)%8))
+
 		// let lY = min(4, max(0, ℓ − lX − 1))
-		lY := min(4, max(0, skip-lX-1))
+		lenY := min(4, max(0, skip-lenX-1))
+
+		if codeLength < i.instructionCounter+2+lenX+lenY {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
 
 		// νX = X_lX (E−1lX (ζı+2⋅⋅⋅+lX))
 		valueX := uint32(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lX], &valueX); err != nil {
+		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX], &valueX); err != nil {
 			return 0, err
 		}
-		valueX = sext(valueX, lX)
+		valueX = sext(valueX, lenX)
 
 		// νY = ı + ZlY (E−1lY (ζı+2+lX ⋅⋅⋅+lY))
 		valueY := uint32(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2+lX:i.instructionCounter+2+lX+lY], &valueY); err != nil {
+		if err := jam.Unmarshal(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY], &valueY); err != nil {
 			return 0, err
 		}
-		valueX = sext(valueX, lX)
+		valueX = sext(valueX, lenX)
 
 		switch opcode {
 		case polkavm.StoreImmIndirectU8:
@@ -182,24 +215,32 @@ func (i *Instance) step() (uint32, error) {
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
 	case polkavm.InstrRegImmOffset:
+		if codeLength < i.instructionCounter+2 {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
 		// let rA = min(12, ζı+1 mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 		// let lX = min(4, ⌊ ζı+1 / 16 ⌋ mod 8)
-		lX := uint32(min(4, (i.code[i.instructionCounter+1]/16)%8))
+		lenX := uint32(min(4, (i.code[i.instructionCounter+1]/16)%8))
 		// let lY = min(4, max(0, ℓ − lX − 1))
-		lY := min(4, max(0, skip-lX-1))
+		lenY := min(4, max(0, skip-lenX-1))
+
+		if codeLength < i.instructionCounter+2+lenX+lenY {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
+
 		// νX = X_lX(E−1lX (ζı+2...+lX))
 		valueX := uint32(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lX], &valueX); err != nil {
+		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX], &valueX); err != nil {
 			return 0, err
 		}
-		valueX = sext(valueX, lX)
+		valueX = sext(valueX, lenX)
 		// vY = X_lY(E−1lY (ζı+2+lX...+lY))
 		valueY := uint32(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2+lX:i.instructionCounter+2+lX+lY], &valueY); err != nil {
+		if err := jam.Unmarshal(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY], &valueY); err != nil {
 			return 0, err
 		}
-		valueY = i.instructionCounter + sext(valueY, lX)
+		valueY = i.instructionCounter + sext(valueY, lenX)
 
 		switch opcode {
 		case polkavm.LoadImmAndJump:
@@ -228,6 +269,10 @@ func (i *Instance) step() (uint32, error) {
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
 	case polkavm.InstrRegReg:
+		if codeLength < i.instructionCounter+1 {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
+
 		// let rD = min(12, (ζı+1) mod 16) , ωD ≡ ωrD , ω′D ≡ ω′rD
 		regDst := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 
@@ -263,13 +308,15 @@ func (i *Instance) step() (uint32, error) {
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
 	case polkavm.InstrReg2Imm:
+		// let lX = min(4, max(0, ℓ − 1))
+		lenX := min(4, max(0, skip-1))
+		if codeLength < i.instructionCounter+2+lenX {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
 		// let rA = min(12, (ζı+1) mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), ωB ≡ ωrB, ω′B ≡ ω′rB
 		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
-
-		// let lX = min(4, max(0, ℓ − 1))
-		lenX := min(4, max(0, skip-1))
 
 		// νX ≡ X_lX(E−1lX(ζı+2...+lX))
 		valueX := uint32(0)
@@ -367,12 +414,16 @@ func (i *Instance) step() (uint32, error) {
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
 	case polkavm.InstrReg2Offset:
+		// let lX = min(4, max(0, ℓ − 1))
+		lenX := min(4, max(0, skip-1))
+		if codeLength < i.instructionCounter+2+lenX {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
 		// let rA = min(12, (ζı+1) mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), ωB ≡ ωrB, ω′B ≡ ω′rB
 		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
-		// let lX = min(4, max(0, ℓ − 1))
-		lenX := min(4, max(0, skip-1))
+
 		// νX ≡ ı + Z_lX(E−1lX(ζı+2...+lX))
 		valueX := uint32(0)
 		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX], &valueX); err != nil {
@@ -397,19 +448,27 @@ func (i *Instance) step() (uint32, error) {
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
 	case polkavm.InstrReg2Imm2:
+		if codeLength < i.instructionCounter+3 {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
 		// let rA = min(12, (ζı+1) mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), ωB ≡ ωrB, ω′B ≡ ω′rB
 		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
 		// let lX = min(4, ζı+2 mod 8)
 		lenX := uint32(min(4, i.code[i.instructionCounter+2]%8))
+		// let lY = min(4, max(0, ℓ − lX − 2))
+		lenY := min(4, max(0, skip-lenX-2))
+
+		if codeLength < i.instructionCounter+3+lenX+lenY {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
+
 		// νX = X_lX (E−1lX (ζı+3⋅⋅⋅+lX))
 		valueX := uint32(0)
 		if err := jam.Unmarshal(i.code[i.instructionCounter+3:i.instructionCounter+3+lenX], &valueX); err != nil {
 			return 0, err
 		}
-		// let lY = min(4, max(0, ℓ − lX − 2))
-		lenY := min(4, max(0, skip-lenX-2))
 		// vY = X_lY (E−1lY (ζı+3+lX ⋅⋅⋅+lY))
 		valueY := uint32(0)
 		if err := jam.Unmarshal(i.code[i.instructionCounter+3+lenX:i.instructionCounter+3+lenX+lenY], &valueY); err != nil {
@@ -424,6 +483,10 @@ func (i *Instance) step() (uint32, error) {
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
 	case polkavm.InstrReg3:
+		if codeLength < i.instructionCounter+2 {
+			return 0, polkavm.ErrPanicf("out of bound code access")
+		}
+
 		// let rA = min(12, (ζı+1) mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), ωB ≡ ωrB, ω′B ≡ ω′rB

@@ -76,6 +76,7 @@ func Test_Vectors(t *testing.T) {
 			require.NoError(t, err)
 
 			_, err = interpreter.Invoke(i)
+			t.Log("err", err)
 			assert.Equal(t, tc.ExpectedStatus, error2status(err))
 			instructionCounter, gas, regs, mem := i.Results()
 

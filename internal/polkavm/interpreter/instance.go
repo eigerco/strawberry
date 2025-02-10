@@ -64,7 +64,7 @@ func (i *Instance) load(address uint32, length int, v any) error {
 		return err
 	}
 
-	if err := jam.Unmarshal(slice, &v); err != nil {
+	if err := jam.Unmarshal(slice, v); err != nil {
 		return err
 	}
 	return nil

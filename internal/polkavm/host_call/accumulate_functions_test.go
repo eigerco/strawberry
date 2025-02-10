@@ -539,7 +539,7 @@ func TestAccumulate(t *testing.T) {
 					},
 				},
 			},
-			expectedGas: 9, // Gas gets decremented by fixed amount (2) when processing instructions even on error
+			expectedGas: 9,
 			expectedX: AccumulateContext{
 				ServiceId: currentServiceID,
 				AccumulationState: state.AccumulationState{
