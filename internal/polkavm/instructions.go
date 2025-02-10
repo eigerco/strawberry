@@ -1,10 +1,5 @@
 package polkavm
 
-import (
-	"fmt"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-)
-
 type Opcode byte
 
 var GasCosts = map[Opcode]Gas{
@@ -266,517 +261,88 @@ var (
 	}
 )
 
-type InstrParseArgFunc func(chunk []byte, instructionOffset, argsLength uint32) ([]Reg, []uint32, error)
+type InstructionType byte
 
-var parseArgsTable = map[Opcode]InstrParseArgFunc{}
+var InstructionForType = map[Opcode]InstructionType{}
+
+const (
+	InstrNone = iota
+	InstrImm
+	InstrRegImmExt
+	InstrImm2
+	InstrOffset
+	InstrRegImm
+	InstrRegImm2
+	InstrRegImmOffset
+	InstrRegReg
+	InstrReg2Imm
+	InstrReg2Offset
+	InstrReg2Imm2
+	InstrReg3
+)
 
 func init() {
 	for _, code := range instrNone {
-		parseArgsTable[code] = parseArgsNone
+		InstructionForType[code] = InstrNone
 	}
 	for _, code := range instrRegImm {
-		parseArgsTable[code] = parseArgsRegImm
+		InstructionForType[code] = InstrRegImm
 	}
 	for _, code := range instrRegImmOffset {
-		parseArgsTable[code] = parseArgsRegImmOffset
+		InstructionForType[code] = InstrRegImmOffset
 	}
 	for _, code := range instrRegImm2 {
-		parseArgsTable[code] = parseArgsRegImm2
+		InstructionForType[code] = InstrRegImm2
 	}
 	for _, code := range instrReg2Imm {
-		parseArgsTable[code] = parseArgsRegs2Imm
+		InstructionForType[code] = InstrReg2Imm
 	}
 	for _, code := range instrReg2Offset {
-		parseArgsTable[code] = parseArgsRegs2Offset
+		InstructionForType[code] = InstrReg2Offset
 	}
 	for _, code := range instrReg3 {
-		parseArgsTable[code] = parseArgsRegs3
+		InstructionForType[code] = InstrReg3
 	}
 	for _, code := range instrOffset {
-		parseArgsTable[code] = parseArgsImmOffset
+		InstructionForType[code] = InstrOffset
 	}
 	for _, code := range instrImm {
-		parseArgsTable[code] = parseArgsImm
+		InstructionForType[code] = InstrImm
 	}
 	for _, code := range instrImm2 {
-		parseArgsTable[code] = parseArgsImm2
+		InstructionForType[code] = InstrImm2
 	}
 	for _, code := range instrRegReg {
-		parseArgsTable[code] = parseArgsRegs2
+		InstructionForType[code] = InstrRegReg
 	}
 	for _, code := range instrReg2Imm2 {
-		parseArgsTable[code] = parseArgsRegs2Imm2
+		InstructionForType[code] = InstrReg2Imm2
+	}
+	for _, code := range instrRegImmExt {
+		InstructionForType[code] = InstrRegImmExt
 	}
 }
 
-func clamp(start, end, value uint32) uint32 {
-	if value < start {
-		return start
-	} else if value > end {
-		return end
-	} else {
-		return value
-	}
-}
+// IsBasicBlockTermination (eq A.3)
+func (o Opcode) IsBasicBlockTermination() bool {
+	switch o {
+	case
+		// Trap and fallthrough: trap, fallthrough
+		Trap, Fallthrough,
 
-func sext(value uint32, length uint32) uint32 {
-	switch length {
-	case 0:
-		return 0
-	case 1:
-		return uint32(int32(int8(uint8(value))))
-	case 2:
-		return uint32(int32(int16(uint16(value))))
-	case 3:
-		return uint32((int32(value << 8)) >> 8)
-	case 4:
-		return value
-	default:
-		panic("unreachable")
-	}
-}
-func read(slice []byte, offset, length uint32) (uint32, error) {
-	slice = slice[offset : offset+length]
-	if length == 0 {
-		return 0, nil
-	}
-	imm := uint32(0)
-	if err := jam.Unmarshal(slice, &imm); err != nil {
-		return 0, fmt.Errorf("unexpected err %w", err)
-	}
-	return imm, nil
-}
+		// Jumps: jump, jump_ind
+		Jump, JumpIndirect,
 
-func parseArgsImm(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
-	immLength := min(4, skip)
-	imm, err := read(code, 0, immLength)
-	if err != nil {
-		return nil, nil, err
-	}
+		// Load-and-Jumps: load_imm_jump , load_imm_jump_ind
+		LoadImmAndJump, LoadImmAndJumpIndirect,
 
-	return nil, []uint32{sext(imm, immLength)}, nil
-}
+		// Branches: branch_eq, branch_ne, branch_ge_u, branch_ge_s, branch_lt_u, branch_lt_s, branch_eq_imm, branch_ne_imm
+		BranchEq, BranchNotEq, BranchGreaterOrEqualUnsigned, BranchGreaterOrEqualSigned,
+		BranchLessUnsigned, BranchLessSigned, BranchEqImm, BranchNotEqImm,
 
-func parseArgsImmOffset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32, error) {
-	_, imm, err := parseArgsImm(code, instructionOffset, skip)
-	if err != nil {
-		return nil, nil, err
-	}
-	return nil, []uint32{instructionOffset + imm[0]}, nil
-}
-
-func parseArgsImm2(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
-	imm1Length := min(4, uint32(code[0])&0b111)
-	imm2Length := clamp(0, 4, skip-imm1Length-1)
-	imm1, err := read(code, 1, imm1Length)
-	if err != nil {
-		return nil, nil, err
-	}
-	imm1 = sext(imm1, imm1Length)
-	imm2, err := read(code, 1+imm1Length, imm2Length)
-	if err != nil {
-		return nil, nil, err
-	}
-	imm2 = sext(imm2, imm2Length)
-	return nil, []uint32{imm1, imm2}, nil
-}
-
-func parseArgsNone(_ []byte, _, _ uint32) ([]Reg, []uint32, error) {
-	return nil, nil, nil
-}
-
-func parseArgsRegImm(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
-	reg := min(12, code[0]&0b1111)
-	immLength := clamp(0, 4, skip-1)
-	imm, err := read(code, 1, immLength)
-	if err != nil {
-		return nil, nil, err
-	}
-	imm = sext(imm, immLength)
-	return []Reg{Reg(reg)}, []uint32{imm}, nil
-}
-
-func parseArgsRegImmOffset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32, error) {
-	regs, imm, err := parseArgsRegImm2(code, instructionOffset, skip)
-	if err != nil {
-		return nil, nil, err
-	}
-	return regs, []uint32{imm[0], instructionOffset + imm[1]}, nil
-}
-
-func parseArgsRegImm2(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
-	reg := min(12, code[0]&0b1111)
-	imm1Length := min(4, uint32(code[0]>>4)&0b111)
-	imm2Length := clamp(0, 4, skip-imm1Length-1)
-	imm1, err := read(code, 1, imm1Length)
-	if err != nil {
-		return nil, nil, err
-	}
-	imm1 = sext(imm1, imm1Length)
-	imm2, err := read(code, 1+imm1Length, imm2Length)
-	if err != nil {
-		return nil, nil, err
-	}
-	imm2 = sext(imm2, imm2Length)
-	return []Reg{Reg(reg)}, []uint32{imm1, imm2}, nil
-}
-
-func parseArgsRegs2Imm2(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
-	reg1 := min(12, code[0]&0b1111)
-	reg2 := min(12, code[0]>>4)
-	imm1Length := min(4, uint32(code[1])&0b111)
-	imm2Length := clamp(0, 4, skip-imm1Length-2)
-	imm1, err := read(code, 2, imm1Length)
-	if err != nil {
-		return nil, nil, err
-	}
-	imm1 = sext(imm1, imm1Length)
-	imm2, err := read(code, 2+imm1Length, imm2Length)
-	if err != nil {
-		return nil, nil, err
-	}
-	imm2 = sext(imm2, imm2Length)
-	return []Reg{Reg(reg1), Reg(reg2)}, []uint32{imm1, imm2}, nil
-}
-
-func parseArgsRegs2Imm(code []byte, _, skip uint32) ([]Reg, []uint32, error) {
-	immLength := clamp(0, 4, uint32(skip)-1)
-	imm, err := read(code, 1, immLength)
-	if err != nil {
-		return nil, nil, err
-	}
-	imm = sext(imm, immLength)
-	return []Reg{
-		Reg(min(12, code[0]&0b1111)),
-		Reg(min(12, code[0]>>4)),
-	}, []uint32{imm}, nil
-}
-
-func parseArgsRegs3(code []byte, _, _ uint32) ([]Reg, []uint32, error) {
-	return []Reg{
-		Reg(min(12, code[1]&0b1111)),
-		Reg(min(12, code[0]&0b1111)),
-		Reg(min(12, code[0]>>4)),
-	}, nil, nil
-}
-
-func parseArgsRegs2(code []byte, _, _ uint32) ([]Reg, []uint32, error) {
-	return []Reg{Reg(min(12, code[0]&0b1111)), Reg(min(12, code[0]>>4))}, nil, nil
-}
-
-func parseArgsRegs2Offset(code []byte, instructionOffset, skip uint32) ([]Reg, []uint32, error) {
-	regs, imm, err := parseArgsRegs2Imm(code, instructionOffset, skip)
-	if err != nil {
-		return nil, nil, err
-	}
-	return regs, []uint32{instructionOffset + imm[0]}, nil
-}
-
-type Instruction struct {
-	Opcode Opcode
-	Imm    []uint32
-	ExtImm uint64
-	Reg    []Reg
-	Offset uint32
-	Length uint32
-}
-
-func (i *Instruction) Mutate(mutator Mutator) (uint32, error) {
-	switch i.Opcode {
-	case Trap:
-		return 0, mutator.Trap()
-	case Fallthrough:
-		mutator.Fallthrough()
-	case JumpIndirect:
-		return 0, mutator.JumpIndirect(i.Reg[0], i.Imm[0])
-	case LoadImm:
-		mutator.LoadImm(i.Reg[0], i.Imm[0])
-	case LoadU8:
-		return 0, mutator.LoadU8(i.Reg[0], i.Imm[0])
-	case LoadI8:
-		return 0, mutator.LoadI8(i.Reg[0], i.Imm[0])
-	case LoadU16:
-		return 0, mutator.LoadU16(i.Reg[0], i.Imm[0])
-	case LoadI16:
-		return 0, mutator.LoadI16(i.Reg[0], i.Imm[0])
-	case LoadU32:
-		return 0, mutator.LoadU32(i.Reg[0], i.Imm[0])
-	case LoadI32:
-		return 0, mutator.LoadI32(i.Reg[0], i.Imm[0])
-	case LoadU64:
-		return 0, mutator.LoadU64(i.Reg[0], i.Imm[0])
-	case StoreU8:
-		return 0, mutator.StoreU8(i.Reg[0], i.Imm[0])
-	case StoreU16:
-		return 0, mutator.StoreU16(i.Reg[0], i.Imm[0])
-	case StoreU32:
-		return 0, mutator.StoreU32(i.Reg[0], i.Imm[0])
-	case StoreU64:
-		return 0, mutator.StoreU64(i.Reg[0], i.Imm[0])
-	case LoadImmAndJump:
-		mutator.LoadImmAndJump(i.Reg[0], i.Imm[0], i.Imm[1])
-	case BranchEqImm:
-		mutator.BranchEqImm(i.Reg[0], i.Imm[0], i.Imm[1])
-	case BranchNotEqImm:
-		mutator.BranchNotEqImm(i.Reg[0], i.Imm[0], i.Imm[1])
-	case BranchLessUnsignedImm:
-		mutator.BranchLessUnsignedImm(i.Reg[0], i.Imm[0], i.Imm[1])
-	case BranchLessSignedImm:
-		mutator.BranchLessSignedImm(i.Reg[0], i.Imm[0], i.Imm[1])
-	case BranchGreaterOrEqualUnsignedImm:
-		mutator.BranchGreaterOrEqualUnsignedImm(i.Reg[0], i.Imm[0], i.Imm[1])
-	case BranchGreaterOrEqualSignedImm:
-		mutator.BranchGreaterOrEqualSignedImm(i.Reg[0], i.Imm[0], i.Imm[1])
-	case BranchLessOrEqualSignedImm:
-		mutator.BranchLessOrEqualSignedImm(i.Reg[0], i.Imm[0], i.Imm[1])
-	case BranchLessOrEqualUnsignedImm:
-		mutator.BranchLessOrEqualUnsignedImm(i.Reg[0], i.Imm[0], i.Imm[1])
-	case BranchGreaterSignedImm:
-		mutator.BranchGreaterSignedImm(i.Reg[0], i.Imm[0], i.Imm[1])
-	case BranchGreaterUnsignedImm:
-		mutator.BranchGreaterUnsignedImm(i.Reg[0], i.Imm[0], i.Imm[1])
-	case StoreImmIndirectU8:
-		return 0, mutator.StoreImmIndirectU8(i.Reg[0], i.Imm[0], i.Imm[1])
-	case StoreImmIndirectU16:
-		return 0, mutator.StoreImmIndirectU16(i.Reg[0], i.Imm[0], i.Imm[1])
-	case StoreImmIndirectU32:
-		return 0, mutator.StoreImmIndirectU32(i.Reg[0], i.Imm[0], i.Imm[1])
-	case StoreImmIndirectU64:
-		return 0, mutator.StoreImmIndirectU64(i.Reg[0], i.Imm[0], i.Imm[1])
-	case StoreIndirectU8:
-		return 0, mutator.StoreIndirectU8(i.Reg[0], i.Reg[1], i.Imm[0])
-	case StoreIndirectU16:
-		return 0, mutator.StoreIndirectU16(i.Reg[0], i.Reg[1], i.Imm[0])
-	case StoreIndirectU32:
-		return 0, mutator.StoreIndirectU32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case StoreIndirectU64:
-		return 0, mutator.StoreIndirectU64(i.Reg[0], i.Reg[1], i.Imm[0])
-	case LoadIndirectU8:
-		return 0, mutator.LoadIndirectU8(i.Reg[0], i.Reg[1], i.Imm[0])
-	case LoadIndirectI8:
-		return 0, mutator.LoadIndirectI8(i.Reg[0], i.Reg[1], i.Imm[0])
-	case LoadIndirectU16:
-		return 0, mutator.LoadIndirectU16(i.Reg[0], i.Reg[1], i.Imm[0])
-	case LoadIndirectI16:
-		return 0, mutator.LoadIndirectI16(i.Reg[0], i.Reg[1], i.Imm[0])
-	case LoadIndirectU32:
-		return 0, mutator.LoadIndirectU32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case LoadIndirectI32:
-		return 0, mutator.LoadIndirectI32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case LoadIndirectU64:
-		return 0, mutator.LoadIndirectU64(i.Reg[0], i.Reg[1], i.Imm[0])
-	case AddImm32:
-		mutator.AddImm32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case AddImm64:
-		mutator.AddImm64(i.Reg[0], i.Reg[1], i.Imm[0])
-	case AndImm:
-		mutator.AndImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case XorImm:
-		mutator.XorImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case OrImm:
-		mutator.OrImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case MulImm32:
-		mutator.MulImm32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case MulImm64:
-		mutator.MulImm64(i.Reg[0], i.Reg[1], i.Imm[0])
-	case SetLessThanUnsignedImm:
-		mutator.SetLessThanUnsignedImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case SetLessThanSignedImm:
-		mutator.SetLessThanSignedImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalLeftImm32:
-		mutator.ShiftLogicalLeftImm32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalLeftImm64:
-		mutator.ShiftLogicalLeftImm64(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalRightImm32:
-		mutator.ShiftLogicalRightImm32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalRightImm64:
-		mutator.ShiftLogicalRightImm64(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftArithmeticRightImm32:
-		mutator.ShiftArithmeticRightImm32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftArithmeticRightImm64:
-		mutator.ShiftArithmeticRightImm64(i.Reg[0], i.Reg[1], i.Imm[0])
-	case NegateAndAddImm32:
-		mutator.NegateAndAddImm32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case NegateAndAddImm64:
-		mutator.NegateAndAddImm64(i.Reg[0], i.Reg[1], i.Imm[0])
-	case SetGreaterThanUnsignedImm:
-		mutator.SetGreaterThanUnsignedImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case SetGreaterThanSignedImm:
-		mutator.SetGreaterThanSignedImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalRightImmAlt32:
-		mutator.ShiftLogicalRightImmAlt32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalRightImmAlt64:
-		mutator.ShiftLogicalRightImmAlt64(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftArithmeticRightImmAlt32:
-		mutator.ShiftArithmeticRightImmAlt32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftArithmeticRightImmAlt64:
-		mutator.ShiftArithmeticRightImmAlt64(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalLeftImmAlt32:
-		mutator.ShiftLogicalLeftImmAlt32(i.Reg[0], i.Reg[1], i.Imm[0])
-	case ShiftLogicalLeftImmAlt64:
-		mutator.ShiftLogicalLeftImmAlt64(i.Reg[0], i.Reg[1], i.Imm[0])
-	case CmovIfZeroImm:
-		mutator.CmovIfZeroImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case CmovIfNotZeroImm:
-		mutator.CmovIfNotZeroImm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case RotR64Imm:
-		mutator.RotateRight64Imm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case RotR64ImmAlt:
-		mutator.RotateRight64ImmAlt(i.Reg[0], i.Reg[1], i.Imm[0])
-	case RotR32Imm:
-		mutator.RotateRight32Imm(i.Reg[0], i.Reg[1], i.Imm[0])
-	case RotR32ImmAlt:
-		mutator.RotateRight32ImmAlt(i.Reg[0], i.Reg[1], i.Imm[0])
-	case BranchEq:
-		mutator.BranchEq(i.Reg[0], i.Reg[1], i.Imm[0])
-	case BranchNotEq:
-		mutator.BranchNotEq(i.Reg[0], i.Reg[1], i.Imm[0])
-	case BranchLessUnsigned:
-		mutator.BranchLessUnsigned(i.Reg[0], i.Reg[1], i.Imm[0])
-	case BranchLessSigned:
-		mutator.BranchLessSigned(i.Reg[0], i.Reg[1], i.Imm[0])
-	case BranchGreaterOrEqualUnsigned:
-		mutator.BranchGreaterOrEqualUnsigned(i.Reg[0], i.Reg[1], i.Imm[0])
-	case BranchGreaterOrEqualSigned:
-		mutator.BranchGreaterOrEqualSigned(i.Reg[0], i.Reg[1], i.Imm[0])
-	case Add32:
-		mutator.Add32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Add64:
-		mutator.Add64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Sub32:
-		mutator.Sub32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Sub64:
-		mutator.Sub64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case And:
-		mutator.And(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Xor:
-		mutator.Xor(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Or:
-		mutator.Or(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Mul32:
-		mutator.Mul32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Mul64:
-		mutator.Mul64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case MulUpperSignedSigned:
-		mutator.MulUpperSignedSigned(i.Reg[0], i.Reg[1], i.Reg[2])
-	case MulUpperUnsignedUnsigned:
-		mutator.MulUpperUnsignedUnsigned(i.Reg[0], i.Reg[1], i.Reg[2])
-	case MulUpperSignedUnsigned:
-		mutator.MulUpperSignedUnsigned(i.Reg[0], i.Reg[1], i.Reg[2])
-	case SetLessThanUnsigned:
-		mutator.SetLessThanUnsigned(i.Reg[0], i.Reg[1], i.Reg[2])
-	case SetLessThanSigned:
-		mutator.SetLessThanSigned(i.Reg[0], i.Reg[1], i.Reg[2])
-	case ShiftLogicalLeft32:
-		mutator.ShiftLogicalLeft32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case ShiftLogicalLeft64:
-		mutator.ShiftLogicalLeft64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case ShiftLogicalRight32:
-		mutator.ShiftLogicalRight32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case ShiftLogicalRight64:
-		mutator.ShiftLogicalRight64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case ShiftArithmeticRight32:
-		mutator.ShiftArithmeticRight32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case ShiftArithmeticRight64:
-		mutator.ShiftArithmeticRight64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case DivUnsigned32:
-		mutator.DivUnsigned32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case DivUnsigned64:
-		mutator.DivUnsigned64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case DivSigned32:
-		mutator.DivSigned32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case DivSigned64:
-		mutator.DivSigned64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case RemUnsigned32:
-		mutator.RemUnsigned32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case RemUnsigned64:
-		mutator.RemUnsigned64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case RemSigned32:
-		mutator.RemSigned32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case RemSigned64:
-		mutator.RemSigned64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case CmovIfZero:
-		mutator.CmovIfZero(i.Reg[0], i.Reg[1], i.Reg[2])
-	case CmovIfNotZero:
-		mutator.CmovIfNotZero(i.Reg[0], i.Reg[1], i.Reg[2])
-	case RotL64:
-		mutator.RotateLeft64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case RotL32:
-		mutator.RotateLeft32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case RotR64:
-		mutator.RotateRight64(i.Reg[0], i.Reg[1], i.Reg[2])
-	case RotR32:
-		mutator.RotateRight32(i.Reg[0], i.Reg[1], i.Reg[2])
-	case AndInv:
-		mutator.AndInverted(i.Reg[0], i.Reg[1], i.Reg[2])
-	case OrInv:
-		mutator.OrInverted(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Xnor:
-		mutator.Xnor(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Max:
-		mutator.Max(i.Reg[0], i.Reg[1], i.Reg[2])
-	case MaxU:
-		mutator.MaxUnsigned(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Min:
-		mutator.Min(i.Reg[0], i.Reg[1], i.Reg[2])
-	case MinU:
-		mutator.MinUnsigned(i.Reg[0], i.Reg[1], i.Reg[2])
-	case Jump:
-		mutator.Jump(i.Imm[0])
-	case Ecalli:
-		return i.Imm[0], ErrHostCall
-	case StoreImmU8:
-		return 0, mutator.StoreImmU8(i.Imm[0], i.Imm[1])
-	case StoreImmU16:
-		return 0, mutator.StoreImmU16(i.Imm[0], i.Imm[1])
-	case StoreImmU32:
-		return 0, mutator.StoreImmU32(i.Imm[0], i.Imm[1])
-	case StoreImmU64:
-		return 0, mutator.StoreImmU64(i.Imm[0], i.Imm[1])
-	case MoveReg:
-		mutator.MoveReg(i.Reg[0], i.Reg[1])
-	case Sbrk:
-		return 0, mutator.Sbrk(i.Reg[0], i.Reg[1])
-	case CountSetBits64:
-		mutator.CountSetBits64(i.Reg[0], i.Reg[1])
-	case CountSetBits32:
-		mutator.CountSetBits32(i.Reg[0], i.Reg[1])
-	case LeadingZeroBits64:
-		mutator.LeadingZeroBits64(i.Reg[0], i.Reg[1])
-	case LeadingZeroBits32:
-		mutator.LeadingZeroBits32(i.Reg[0], i.Reg[1])
-	case TrailingZeroBits64:
-		mutator.TrailingZeroBits64(i.Reg[0], i.Reg[1])
-	case TrailingZeroBits32:
-		mutator.TrailingZeroBits32(i.Reg[0], i.Reg[1])
-	case SignExtend8:
-		mutator.SignExtend8(i.Reg[0], i.Reg[1])
-	case SignExtend16:
-		mutator.SignExtend16(i.Reg[0], i.Reg[1])
-	case ZeroExtend16:
-		mutator.ZeroExtend16(i.Reg[0], i.Reg[1])
-	case ReverseBytes:
-		mutator.ReverseBytes(i.Reg[0], i.Reg[1])
-	case LoadImmAndJumpIndirect:
-		return 0, mutator.LoadImmAndJumpIndirect(i.Reg[0], i.Reg[1], i.Imm[0], i.Imm[1])
-	case LoadImm64:
-		mutator.LoadImm64(i.Reg[0], i.ExtImm)
-		return 0, nil
-	default:
-		return 0, fmt.Errorf("unsupported instruction opcode: %d", i.Opcode)
-	}
-	return 0, nil
-}
-
-func (i *Instruction) IsBasicBlockTermination() bool {
-	switch i.Opcode {
-	case Trap, Fallthrough, Jump, JumpIndirect, LoadImmAndJump,
-		LoadImmAndJumpIndirect, BranchEq, BranchEqImm,
-		BranchGreaterOrEqualSigned, BranchGreaterOrEqualSignedImm,
-		BranchGreaterOrEqualUnsigned, BranchGreaterOrEqualUnsignedImm,
-		BranchGreaterSignedImm, BranchGreaterUnsignedImm, BranchLessOrEqualSignedImm,
-		BranchLessOrEqualUnsignedImm, BranchLessSigned, BranchLessSignedImm,
-		BranchLessUnsigned, BranchLessUnsignedImm, BranchNotEq, BranchNotEqImm:
+		// Immediate branches: branch_lt_u_imm, branch_lt_s_imm, branch_le_u_imm, branch_le_s_imm, branch_ge_u_imm, branch_ge_s_imm, branch_gt_u_imm, branch_gt_s_imm
+		BranchLessUnsignedImm, BranchLessSignedImm, BranchLessOrEqualUnsignedImm, BranchLessOrEqualSignedImm,
+		BranchGreaterOrEqualUnsignedImm, BranchGreaterOrEqualSignedImm, BranchGreaterUnsignedImm, BranchGreaterSignedImm:
 		return true
 	}
 	return false

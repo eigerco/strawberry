@@ -21,6 +21,10 @@ func Unmarshal(data []byte, dst interface{}) error {
 		return fmt.Errorf(ErrUnsupportedType, dst)
 	}
 
+	// E(∅) ≡ [] (eq. C.1)
+	if len(data) == 0 {
+		return nil
+	}
 	ds := byteReader{}
 	ds.Reader = bytes.NewBuffer(data)
 

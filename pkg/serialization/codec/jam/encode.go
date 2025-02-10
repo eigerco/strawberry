@@ -298,7 +298,7 @@ func (bw *byteWriter) encodeBytes(b []byte) error {
 
 func (bw *byteWriter) encodeBits(bitSequence BitSequence) error {
 	length := len(bitSequence) / 8
-	if length > 0 && length%8 == 0 {
+	if len(bitSequence) > 0 && length%8 == 0 {
 		length += 1
 	}
 	err := bw.encodeLength(length)

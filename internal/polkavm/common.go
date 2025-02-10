@@ -146,146 +146,156 @@ type Gas int64
 // HostCall the generic Ω function definition Ωx(n, ϱ, ω, μ, x) defined in section A.6
 type HostCall[X any] func(hostCall uint32, gasCounter Gas, regs Registers, mem Memory, x X) (Gas, Registers, Memory, X, error)
 
-//go:generate go run github.com/golang/mock/mockgen --destination mutator_mock.go --package polkavm . Mutator
 type Mutator interface {
 	Trap() error
 	Fallthrough()
-	Sbrk(dst Reg, size Reg) error
-	CountSetBits64(d, s Reg)
-	CountSetBits32(d, s Reg)
-	LeadingZeroBits64(d, s Reg)
-	LeadingZeroBits32(d, s Reg)
-	TrailingZeroBits64(d, s Reg)
-	TrailingZeroBits32(d, s Reg)
-	SignExtend8(d, s Reg)
-	SignExtend16(d, s Reg)
-	ZeroExtend16(d, s Reg)
-	ReverseBytes(d, s Reg)
-	MoveReg(d Reg, s Reg)
-	BranchEq(s1 Reg, s2 Reg, target uint32)
-	BranchEqImm(s1 Reg, s2 uint32, target uint32)
-	BranchNotEq(s1 Reg, s2 Reg, target uint32)
-	BranchNotEqImm(s1 Reg, s2 uint32, target uint32)
-	BranchLessUnsigned(s1 Reg, s2 Reg, target uint32)
-	BranchLessUnsignedImm(s1 Reg, s2 uint32, target uint32)
-	BranchLessSigned(s1 Reg, s2 Reg, target uint32)
-	BranchLessSignedImm(s1 Reg, s2 uint32, target uint32)
-	BranchGreaterOrEqualUnsigned(s1 Reg, s2 Reg, target uint32)
-	BranchGreaterOrEqualUnsignedImm(s1 Reg, s2 uint32, target uint32)
-	BranchGreaterOrEqualSigned(s1 Reg, s2 Reg, target uint32)
-	BranchGreaterOrEqualSignedImm(s1 Reg, s2 uint32, target uint32)
-	BranchLessOrEqualUnsignedImm(s1 Reg, s2 uint32, target uint32)
-	BranchLessOrEqualSignedImm(s1 Reg, s2 uint32, target uint32)
-	BranchGreaterUnsignedImm(s1 Reg, s2 uint32, target uint32)
-	BranchGreaterSignedImm(s1 Reg, s2 uint32, target uint32)
-	SetLessThanUnsignedImm(d Reg, s1 Reg, s2 uint32)
-	SetLessThanSignedImm(d Reg, s1 Reg, s2 uint32)
-	ShiftLogicalLeftImm32(d Reg, s1 Reg, s2 uint32)
-	ShiftLogicalLeftImm64(d Reg, s1 Reg, s2 uint32)
-	ShiftArithmeticRightImm32(d Reg, s1 Reg, s2 uint32)
-	ShiftArithmeticRightImm64(d Reg, s1 Reg, s2 uint32)
-	ShiftArithmeticRightImmAlt32(d Reg, s1 Reg, s2 uint32)
-	ShiftArithmeticRightImmAlt64(d Reg, s1 Reg, s2 uint32)
-	NegateAndAddImm32(d Reg, s1 Reg, s2 uint32)
-	NegateAndAddImm64(d Reg, s1 Reg, s2 uint32)
-	SetGreaterThanUnsignedImm(d Reg, s1 Reg, s2 uint32)
-	SetGreaterThanSignedImm(d Reg, s1 Reg, s2 uint32)
-	ShiftLogicalRightImmAlt32(d Reg, s1 Reg, s2 uint32)
-	ShiftLogicalRightImmAlt64(d Reg, s1 Reg, s2 uint32)
-	ShiftLogicalLeftImmAlt32(d Reg, s1 Reg, s2 uint32)
-	ShiftLogicalLeftImmAlt64(d Reg, s1 Reg, s2 uint32)
-	Add32(d Reg, s1, s2 Reg)
-	Add64(d Reg, s1, s2 Reg)
-	AddImm32(d Reg, s1 Reg, s2 uint32)
-	AddImm64(d Reg, s1 Reg, s2 uint32)
-	Sub32(d Reg, s1, s2 Reg)
-	Sub64(d Reg, s1, s2 Reg)
-	And(d Reg, s1, s2 Reg)
-	AndImm(d Reg, s1 Reg, s2 uint32)
-	Xor(d Reg, s1, s2 Reg)
-	XorImm(d Reg, s1 Reg, s2 uint32)
-	Or(d Reg, s1, s2 Reg)
-	OrImm(d Reg, s1 Reg, s2 uint32)
-	Mul32(d Reg, s1, s2 Reg)
-	Mul64(d Reg, s1, s2 Reg)
-	MulImm32(d Reg, s1 Reg, s2 uint32)
-	MulImm64(d Reg, s1 Reg, s2 uint32)
-	MulUpperSignedSigned(d Reg, s1, s2 Reg)
-	MulUpperUnsignedUnsigned(d Reg, s1, s2 Reg)
-	MulUpperSignedUnsigned(d Reg, s1, s2 Reg)
-	SetLessThanUnsigned(d Reg, s1, s2 Reg)
-	SetLessThanSigned(d Reg, s1, s2 Reg)
-	ShiftLogicalLeft32(d Reg, s1, s2 Reg)
-	ShiftLogicalLeft64(d Reg, s1, s2 Reg)
-	ShiftLogicalRight32(d Reg, s1, s2 Reg)
-	ShiftLogicalRight64(d Reg, s1, s2 Reg)
-	ShiftLogicalRightImm32(d Reg, s1 Reg, s2 uint32)
-	ShiftLogicalRightImm64(d Reg, s1 Reg, s2 uint32)
-	ShiftArithmeticRight32(d Reg, s1, s2 Reg)
-	ShiftArithmeticRight64(d Reg, s1, s2 Reg)
-	DivUnsigned32(d Reg, s1, s2 Reg)
-	DivUnsigned64(d Reg, s1, s2 Reg)
-	DivSigned32(d Reg, s1, s2 Reg)
-	DivSigned64(d Reg, s1, s2 Reg)
-	RemUnsigned32(d Reg, s1, s2 Reg)
-	RemUnsigned64(d Reg, s1, s2 Reg)
-	RemSigned32(d Reg, s1, s2 Reg)
-	RemSigned64(d Reg, s1, s2 Reg)
-	CmovIfZero(d Reg, s, c Reg)
-	CmovIfZeroImm(d Reg, c Reg, s uint32)
-	CmovIfNotZero(d Reg, s, c Reg)
-	RotateLeft64(d Reg, s1, s2 Reg)
-	RotateLeft32(d Reg, s1, s2 Reg)
-	RotateRight64(d Reg, s1, s2 Reg)
-	RotateRight32(d Reg, s1, s2 Reg)
-	AndInverted(d Reg, s1, s2 Reg)
-	OrInverted(d Reg, s1, s2 Reg)
-	Xnor(d Reg, s1, s2 Reg)
-	Max(d Reg, s1, s2 Reg)
-	MaxUnsigned(d Reg, s1, s2 Reg)
-	Min(d Reg, s1, s2 Reg)
-	MinUnsigned(d Reg, s1, s2 Reg)
-	CmovIfNotZeroImm(d Reg, c Reg, s uint32)
-	RotateRight64Imm(d Reg, s1 Reg, s2 uint32)
-	RotateRight64ImmAlt(d Reg, s1 Reg, s2 uint32)
-	RotateRight32Imm(d Reg, s1 Reg, s2 uint32)
-	RotateRight32ImmAlt(d Reg, s1 Reg, s2 uint32)
-	StoreU8(src Reg, offset uint32) error
-	StoreU16(src Reg, offset uint32) error
-	StoreU32(src Reg, offset uint32) error
-	StoreU64(src Reg, offset uint32) error
-	StoreImmU8(offset uint32, value uint32) error
-	StoreImmU16(offset uint32, value uint32) error
-	StoreImmU32(offset uint32, value uint32) error
-	StoreImmU64(offset uint32, value uint32) error
-	StoreImmIndirectU8(base Reg, offset uint32, value uint32) error
-	StoreImmIndirectU16(base Reg, offset uint32, value uint32) error
-	StoreImmIndirectU32(base Reg, offset uint32, value uint32) error
-	StoreImmIndirectU64(base Reg, offset uint32, value uint32) error
-	StoreIndirectU8(src Reg, base Reg, offset uint32) error
-	StoreIndirectU16(src Reg, base Reg, offset uint32) error
-	StoreIndirectU32(src Reg, base Reg, offset uint32) error
-	StoreIndirectU64(src Reg, base Reg, offset uint32) error
-	LoadU8(dst Reg, offset uint32) error
-	LoadI8(dst Reg, offset uint32) error
-	LoadU16(dst Reg, offset uint32) error
-	LoadI16(dst Reg, offset uint32) error
-	LoadU32(dst Reg, offset uint32) error
-	LoadI32(dst Reg, offset uint32) error
-	LoadU64(dst Reg, offset uint32) error
-	LoadIndirectU8(dst Reg, base Reg, offset uint32) error
-	LoadIndirectI8(dst Reg, base Reg, offset uint32) error
-	LoadIndirectU16(dst Reg, base Reg, offset uint32) error
-	LoadIndirectI16(dst Reg, base Reg, offset uint32) error
-	LoadIndirectU32(dst Reg, base Reg, offset uint32) error
-	LoadIndirectI32(dst Reg, base Reg, offset uint32) error
-	LoadIndirectU64(dst Reg, base Reg, offset uint32) error
-	LoadImm(dst Reg, imm uint32)
-	LoadImm64(dst Reg, imm uint64)
-	LoadImmAndJump(ra Reg, value uint32, target uint32)
-	LoadImmAndJumpIndirect(ra Reg, base Reg, value, offset uint32) error
-	Jump(target uint32)
-	JumpIndirect(base Reg, offset uint32) error
+
+	LoadImm64(Reg, uint64)
+
+	StoreImmU8(uint32, uint32) error
+	StoreImmU16(uint32, uint32) error
+	StoreImmU32(uint32, uint32) error
+	StoreImmU64(uint32, uint32) error
+
+	Jump(uint32) error
+
+	JumpIndirect(Reg, uint32) error
+	LoadImm(Reg, uint32)
+	LoadU8(Reg, uint32) error
+	LoadI8(Reg, uint32) error
+	LoadU16(Reg, uint32) error
+	LoadI16(Reg, uint32) error
+	LoadU32(Reg, uint32) error
+	LoadI32(Reg, uint32) error
+	LoadU64(Reg, uint32) error
+	StoreU8(Reg, uint32) error
+	StoreU16(Reg, uint32) error
+	StoreU32(Reg, uint32) error
+	StoreU64(Reg, uint32) error
+
+	StoreImmIndirectU8(Reg, uint32, uint32) error
+	StoreImmIndirectU16(Reg, uint32, uint32) error
+	StoreImmIndirectU32(Reg, uint32, uint32) error
+	StoreImmIndirectU64(Reg, uint32, uint32) error
+
+	LoadImmAndJump(Reg, uint32, uint32) error
+	BranchEqImm(Reg, uint32, uint32) error
+	BranchNotEqImm(Reg, uint32, uint32) error
+	BranchLessUnsignedImm(Reg, uint32, uint32) error
+	BranchLessOrEqualUnsignedImm(Reg, uint32, uint32) error
+	BranchGreaterOrEqualUnsignedImm(Reg, uint32, uint32) error
+	BranchGreaterUnsignedImm(Reg, uint32, uint32) error
+	BranchLessSignedImm(Reg, uint32, uint32) error
+	BranchLessOrEqualSignedImm(Reg, uint32, uint32) error
+	BranchGreaterOrEqualSignedImm(Reg, uint32, uint32) error
+	BranchGreaterSignedImm(Reg, uint32, uint32) error
+
+	MoveReg(Reg, Reg)
+	Sbrk(Reg, Reg) error
+	CountSetBits64(Reg, Reg)
+	CountSetBits32(Reg, Reg)
+	LeadingZeroBits64(Reg, Reg)
+	LeadingZeroBits32(Reg, Reg)
+	TrailingZeroBits64(Reg, Reg)
+	TrailingZeroBits32(Reg, Reg)
+	SignExtend8(Reg, Reg)
+	SignExtend16(Reg, Reg)
+	ZeroExtend16(Reg, Reg)
+	ReverseBytes(Reg, Reg)
+
+	StoreIndirectU8(Reg, Reg, uint32) error
+	StoreIndirectU16(Reg, Reg, uint32) error
+	StoreIndirectU32(Reg, Reg, uint32) error
+	StoreIndirectU64(Reg, Reg, uint32) error
+	LoadIndirectU8(Reg, Reg, uint32) error
+	LoadIndirectI8(Reg, Reg, uint32) error
+	LoadIndirectU16(Reg, Reg, uint32) error
+	LoadIndirectI16(Reg, Reg, uint32) error
+	LoadIndirectU32(Reg, Reg, uint32) error
+	LoadIndirectI32(Reg, Reg, uint32) error
+	LoadIndirectU64(Reg, Reg, uint32) error
+	AddImm32(Reg, Reg, uint32)
+	AndImm(Reg, Reg, uint32)
+	XorImm(Reg, Reg, uint32)
+	OrImm(Reg, Reg, uint32)
+	MulImm32(Reg, Reg, uint32)
+	SetLessThanUnsignedImm(Reg, Reg, uint32)
+	SetLessThanSignedImm(Reg, Reg, uint32)
+	ShiftLogicalLeftImm32(Reg, Reg, uint32)
+	ShiftLogicalRightImm32(Reg, Reg, uint32)
+	ShiftArithmeticRightImm32(Reg, Reg, uint32)
+	NegateAndAddImm32(Reg, Reg, uint32)
+	SetGreaterThanUnsignedImm(Reg, Reg, uint32)
+	SetGreaterThanSignedImm(Reg, Reg, uint32)
+	ShiftLogicalLeftImmAlt32(Reg, Reg, uint32)
+	ShiftLogicalRightImmAlt32(Reg, Reg, uint32)
+	ShiftArithmeticRightImmAlt32(Reg, Reg, uint32)
+	CmovIfZeroImm(Reg, Reg, uint32)
+	CmovIfNotZeroImm(Reg, Reg, uint32)
+	AddImm64(Reg, Reg, uint32)
+	MulImm64(Reg, Reg, uint32)
+	ShiftLogicalLeftImm64(Reg, Reg, uint32)
+	ShiftLogicalRightImm64(Reg, Reg, uint32)
+	ShiftArithmeticRightImm64(Reg, Reg, uint32)
+	NegateAndAddImm64(Reg, Reg, uint32)
+	ShiftLogicalLeftImmAlt64(Reg, Reg, uint32)
+	ShiftLogicalRightImmAlt64(Reg, Reg, uint32)
+	ShiftArithmeticRightImmAlt64(Reg, Reg, uint32)
+	RotateRight64Imm(Reg, Reg, uint32)
+	RotateRight64ImmAlt(Reg, Reg, uint32)
+	RotateRight32Imm(Reg, Reg, uint32)
+	RotateRight32ImmAlt(Reg, Reg, uint32)
+
+	BranchEq(Reg, Reg, uint32) error
+	BranchNotEq(Reg, Reg, uint32) error
+	BranchLessUnsigned(Reg, Reg, uint32) error
+	BranchLessSigned(Reg, Reg, uint32) error
+	BranchGreaterOrEqualUnsigned(Reg, Reg, uint32) error
+	BranchGreaterOrEqualSigned(Reg, Reg, uint32) error
+
+	LoadImmAndJumpIndirect(Reg, Reg, uint32, uint32) error
+
+	Add32(Reg, Reg, Reg)
+	Sub32(Reg, Reg, Reg)
+	Mul32(Reg, Reg, Reg)
+	DivUnsigned32(Reg, Reg, Reg)
+	DivSigned32(Reg, Reg, Reg)
+	RemUnsigned32(Reg, Reg, Reg)
+	RemSigned32(Reg, Reg, Reg)
+	ShiftLogicalLeft32(Reg, Reg, Reg)
+	ShiftLogicalRight32(Reg, Reg, Reg)
+	ShiftArithmeticRight32(Reg, Reg, Reg)
+	Add64(Reg, Reg, Reg)
+	Sub64(Reg, Reg, Reg)
+	Mul64(Reg, Reg, Reg)
+	DivUnsigned64(Reg, Reg, Reg)
+	DivSigned64(Reg, Reg, Reg)
+	RemUnsigned64(Reg, Reg, Reg)
+	RemSigned64(Reg, Reg, Reg)
+	ShiftLogicalLeft64(Reg, Reg, Reg)
+	ShiftLogicalRight64(Reg, Reg, Reg)
+	ShiftArithmeticRight64(Reg, Reg, Reg)
+	And(Reg, Reg, Reg)
+	Xor(Reg, Reg, Reg)
+	Or(Reg, Reg, Reg)
+	MulUpperSignedSigned(Reg, Reg, Reg)
+	MulUpperUnsignedUnsigned(Reg, Reg, Reg)
+	MulUpperSignedUnsigned(Reg, Reg, Reg)
+	SetLessThanUnsigned(Reg, Reg, Reg)
+	SetLessThanSigned(Reg, Reg, Reg)
+	CmovIfZero(Reg, Reg, Reg)
+	CmovIfNotZero(Reg, Reg, Reg)
+	RotateLeft64(Reg, Reg, Reg)
+	RotateLeft32(Reg, Reg, Reg)
+	RotateRight64(Reg, Reg, Reg)
+	RotateRight32(Reg, Reg, Reg)
+	AndInverted(Reg, Reg, Reg)
+	OrInverted(Reg, Reg, Reg)
+	Xnor(Reg, Reg, Reg)
+	Max(Reg, Reg, Reg)
+	MaxUnsigned(Reg, Reg, Reg)
+	Min(Reg, Reg, Reg)
+	MinUnsigned(Reg, Reg, Reg)
 }
 
 // AccumulateContext B.6 (v0.5.4)

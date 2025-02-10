@@ -1,7 +1,6 @@
 package host_call
 
 import (
-	"bytes"
 	"errors"
 	"math"
 
@@ -385,14 +384,12 @@ func Invoke(
 		ctxPair.IntegratedPVMMap[pvmKey] = pvm
 	}
 
-	// we only parse the code and jump table as we are not expected to invoke a full program
-	program := &Program{}
-	if err := ParseCodeAndJumpTable(uint32(len(pvm.Code)), NewReader(bytes.NewReader(pvm.Code)), &program.CodeAndJumpTable); err != nil {
+	i, err := interpreter.Instantiate(pvm.Code, pvm.InstructionCounter, invokeGas, invokeRegs, pvm.Ram)
+	if err != nil {
 		return gas, withCode(regs, PANIC), mem, ctxPair, nil
 	}
-
-	resultInstr, resultGas, resultRegs, resultMem, hostCall, invokeErr := interpreter.Invoke(program, pvm.InstructionCounter, invokeGas, invokeRegs, pvm.Ram)
-
+	hostCall, invokeErr := interpreter.Invoke(i)
+	resultInstr, resultGas, resultRegs, resultMem := i.Results()
 	if bb, err := jam.Marshal([14]uint64(append([]uint64{uint64(resultGas)}, resultRegs[:]...))); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, ω8, μ, m)
 	} else if err := mem.Write(uint32(addr), bb); err != nil {

@@ -13,13 +13,12 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
-	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-var initialGas = uint64(100)
+const initialGas = 100
 
 func TestHistoricalLookup(t *testing.T) {
 	pp := &polkavm.Program{
@@ -27,12 +26,6 @@ func TestHistoricalLookup(t *testing.T) {
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
-		},
-		CodeAndJumpTable: polkavm.CodeAndJumpTable{
-			Instructions: []polkavm.Instruction{
-				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
-			},
 		},
 	}
 
@@ -81,22 +74,16 @@ func TestHistoricalLookup(t *testing.T) {
 		Segments:         []work.Segment{},
 	}
 
-	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-		gasCounterOut, regsOut, memOut, _, err := host_call.HistoricalLookup(
-			gasCounter,
-			regs,
-			mem,
-			ctxPair,
-			serviceId,
-			serviceState,
-			timeslot,
-		)
-		require.NoError(t, err)
-		return gasCounterOut, regsOut, memOut, x, err
-	}
-
-	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, sa)
-	require.ErrorIs(t, err, polkavm.ErrHalt)
+	gasRemaining, regsOut, memOut, _, err := host_call.HistoricalLookup(
+		initialGas,
+		initialRegs,
+		mem,
+		ctxPair,
+		serviceId,
+		serviceState,
+		timeslot,
+	)
+	require.NoError(t, err)
 
 	actualValue := make([]byte, len(preimage))
 	err = memOut.Read(bo, actualValue)
@@ -105,8 +92,7 @@ func TestHistoricalLookup(t *testing.T) {
 	assert.Equal(t, preimage, actualValue)
 	assert.Equal(t, uint64(len(preimage)), regsOut[polkavm.A0])
 
-	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.HistoricalLookupCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
-	assert.Equal(t, expectedGasRemaining, gasRemaining)
+	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
 
 func TestExport(t *testing.T) {
@@ -115,12 +101,6 @@ func TestExport(t *testing.T) {
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
-		},
-		CodeAndJumpTable: polkavm.CodeAndJumpTable{
-			Instructions: []polkavm.Instruction{
-				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
-			},
 		},
 	}
 
@@ -142,23 +122,14 @@ func TestExport(t *testing.T) {
 		Segments: []work.Segment{},
 	}
 
-	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-		gasCounterOut, regsOut, memOut, ctxOut, err := host_call.Export(
-			gasCounter,
-			regs,
-			mem,
-			ctxPair,
-			exportOffset,
-		)
-		require.NoError(t, err)
-
-		ctxPair = ctxOut
-		return gasCounterOut, regsOut, memOut, x, err
-	}
-
-	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
-	require.ErrorIs(t, err, polkavm.ErrHalt)
-
+	gasRemaining, regsOut, _, ctxPair, err := host_call.Export(
+		initialGas,
+		initialRegs,
+		mem,
+		ctxPair,
+		exportOffset,
+	)
+	require.NoError(t, err)
 	// We expect ω7 = ς + |e| = 10 + 1 = 11
 	assert.Equal(t, exportOffset+1, regsOut[polkavm.A0])
 
@@ -168,8 +139,7 @@ func TestExport(t *testing.T) {
 	copy(expectedSegment, dataToExport)
 	assert.Equal(t, expectedSegment, seg[:])
 
-	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.ExportCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
-	assert.Equal(t, expectedGasRemaining, gasRemaining)
+	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
 
 func TestMachine(t *testing.T) {
@@ -178,12 +148,6 @@ func TestMachine(t *testing.T) {
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
-		},
-		CodeAndJumpTable: polkavm.CodeAndJumpTable{
-			Instructions: []polkavm.Instruction{
-				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
-			},
 		},
 	}
 
@@ -207,20 +171,13 @@ func TestMachine(t *testing.T) {
 		Segments:         []work.Segment{},
 	}
 
-	hostCall := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-		gasCounterOut, regsOut, memOut, ctxOut, err := host_call.Machine(
-			gasCounter,
-			regs,
-			mem,
-			ctxPair,
-		)
-		require.NoError(t, err)
-		ctxPair = ctxOut
-		return gasCounterOut, regsOut, memOut, x, err
-	}
-
-	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
-	require.ErrorIs(t, err, polkavm.ErrHalt)
+	gasRemaining, regsOut, _, _, err := host_call.Machine(
+		initialGas,
+		initialRegs,
+		mem,
+		ctxPair,
+	)
+	require.NoError(t, err)
 
 	assert.Equal(t, uint64(0), regsOut[polkavm.A0])
 
@@ -231,8 +188,7 @@ func TestMachine(t *testing.T) {
 	assert.Equal(t, dataToMachine, vm.Code)
 	assert.Equal(t, uint32(i), vm.InstructionCounter)
 
-	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.MachineCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
-	assert.Equal(t, expectedGasRemaining, gasRemaining)
+	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
 
 func TestPeek(t *testing.T) {
@@ -241,12 +197,6 @@ func TestPeek(t *testing.T) {
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
-		},
-		CodeAndJumpTable: polkavm.CodeAndJumpTable{
-			Instructions: []polkavm.Instruction{
-				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
-			},
 		},
 	}
 
@@ -285,20 +235,13 @@ func TestPeek(t *testing.T) {
 	initialRegs[polkavm.A2] = s
 	initialRegs[polkavm.A3] = z
 
-	hostCall := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mm polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-		gasCounterOut, regsOut, memOut, ctxOut, err := host_call.Peek(
-			gasCounter,
-			regs,
-			mm,
-			ctxPair,
-		)
-		require.NoError(t, err)
-		ctxPair = ctxOut
-		return gasCounterOut, regsOut, memOut, x, err
-	}
-
-	gasRemaining, regsOut, memOut, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
-	require.ErrorIs(t, err, polkavm.ErrHalt)
+	gasRemaining, regsOut, memOut, _, err := host_call.Peek(
+		initialGas,
+		initialRegs,
+		mem,
+		ctxPair,
+	)
+	require.NoError(t, err)
 
 	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
 
@@ -311,8 +254,7 @@ func TestPeek(t *testing.T) {
 	expectedValue := uData[startOffset:endOffset]
 	assert.Equal(t, expectedValue, actualValue)
 
-	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.PeekCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
-	assert.Equal(t, expectedGasRemaining, gasRemaining)
+	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
 
 func TestPoke(t *testing.T) {
@@ -321,12 +263,6 @@ func TestPoke(t *testing.T) {
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
-		},
-		CodeAndJumpTable: polkavm.CodeAndJumpTable{
-			Instructions: []polkavm.Instruction{
-				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
-			},
 		},
 	}
 
@@ -361,20 +297,13 @@ func TestPoke(t *testing.T) {
 	initialRegs[polkavm.A2] = o
 	initialRegs[polkavm.A3] = z
 
-	hostCall := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mm polkavm.Memory, x service.ServiceAccount) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-		gasCounterOut, regsOut, memOut, ctxOut, err := host_call.Poke(
-			gasCounter,
-			regs,
-			mm,
-			ctxPair,
-		)
-		require.NoError(t, err)
-		ctxPair = ctxOut
-		return gasCounterOut, regsOut, memOut, x, err
-	}
-
-	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(pp, 0, initialGas, initialRegs, mem, hostCall, service.ServiceAccount{})
-	require.ErrorIs(t, err, polkavm.ErrHalt)
+	gasRemaining, regsOut, _, _, err := host_call.Poke(
+		initialGas,
+		initialRegs,
+		mem,
+		ctxPair,
+	)
+	require.NoError(t, err)
 
 	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
 
@@ -385,8 +314,7 @@ func TestPoke(t *testing.T) {
 	expected := sourceData[:z]
 	assert.Equal(t, expected, actual)
 
-	expectedGasRemaining := polkavm.Gas(initialGas) - host_call.PokeCost - polkavm.GasCosts[polkavm.Ecalli] - polkavm.GasCosts[polkavm.JumpIndirect]
-	assert.Equal(t, expectedGasRemaining, gasRemaining)
+	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
 
 func TestZero(t *testing.T) {
@@ -395,12 +323,6 @@ func TestZero(t *testing.T) {
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
-		},
-		CodeAndJumpTable: polkavm.CodeAndJumpTable{
-			Instructions: []polkavm.Instruction{
-				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
-			},
 		},
 	}
 
@@ -429,38 +351,15 @@ func TestZero(t *testing.T) {
 	initialRegs[polkavm.A1] = p
 	initialRegs[polkavm.A2] = c
 
-	hostCallFn := func(
-		hc uint32,
-		gasCounter polkavm.Gas,
-		regs polkavm.Registers,
-		mm polkavm.Memory,
-		acc service.ServiceAccount,
-	) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-
-		gasOut, regsOut, memOut, ctxOut, err := host_call.Zero(
-			gasCounter,
-			regs,
-			mm,
-			ctxPair,
-		)
-		require.NoError(t, err)
-
-		ctxPair = ctxOut
-		return gasOut, regsOut, memOut, acc, err
-	}
-
-	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(
-		pp,
-		0,
+	gasRemaining, regsOut, _, _, err := host_call.Zero(
 		initialGas,
 		initialRegs,
 		mem,
-		hostCallFn,
-		service.ServiceAccount{},
+		ctxPair,
 	)
-	require.ErrorIs(t, err, polkavm.ErrHalt)
-	require.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
+	require.NoError(t, err)
 
+	require.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
 	for addr := startAddr; addr < endAddr; addr++ {
 		b := make([]byte, 1)
 		innerPVMRam := ctxPair.IntegratedPVMMap[n].Ram
@@ -469,11 +368,7 @@ func TestZero(t *testing.T) {
 		assert.Equal(t, byte(0), b[0])
 	}
 
-	expectedGasRemaining := polkavm.Gas(initialGas) -
-		host_call.ZeroCost -
-		polkavm.GasCosts[polkavm.Ecalli] -
-		polkavm.GasCosts[polkavm.JumpIndirect]
-	assert.Equal(t, expectedGasRemaining, gasRemaining)
+	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
 
 func TestVoid(t *testing.T) {
@@ -482,12 +377,6 @@ func TestVoid(t *testing.T) {
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 100,
-		},
-		CodeAndJumpTable: polkavm.CodeAndJumpTable{
-			Instructions: []polkavm.Instruction{
-				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
-			},
 		},
 	}
 
@@ -513,32 +402,13 @@ func TestVoid(t *testing.T) {
 	initialRegs[polkavm.A1] = p
 	initialRegs[polkavm.A2] = c
 
-	hostCall := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers,
-		mm polkavm.Memory, x service.ServiceAccount,
-	) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-
-		gasOut, regsOut, memOut, ctxOut, err := host_call.Void(
-			gasCounter,
-			regs,
-			mm,
-			ctxPair,
-		)
-		require.NoError(t, err)
-		ctxPair = ctxOut
-		return gasOut, regsOut, memOut, x, err
-	}
-
-	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(
-		pp,
-		0,
+	gasRemaining, regsOut, _, _, err := host_call.Void(
 		initialGas,
 		initialRegs,
 		mem,
-		hostCall,
-		service.ServiceAccount{},
+		ctxPair,
 	)
-	require.ErrorIs(t, err, polkavm.ErrHalt)
-
+	require.NoError(t, err)
 	require.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
@@ -547,11 +417,7 @@ func TestVoid(t *testing.T) {
 		assert.Equal(t, polkavm.Inaccessible, access)
 	}
 
-	expectedGasRemaining := polkavm.Gas(initialGas) -
-		host_call.VoidCost -
-		polkavm.GasCosts[polkavm.Ecalli] -
-		polkavm.GasCosts[polkavm.JumpIndirect]
-	assert.Equal(t, expectedGasRemaining, gasRemaining)
+	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
 
 func TestInvoke(t *testing.T) {
@@ -560,12 +426,6 @@ func TestInvoke(t *testing.T) {
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
-		},
-		CodeAndJumpTable: polkavm.CodeAndJumpTable{
-			Instructions: []polkavm.Instruction{
-				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
-			},
 		},
 	}
 
@@ -608,33 +468,11 @@ func TestInvoke(t *testing.T) {
 	initialRegs[polkavm.A0] = pvmKey
 	initialRegs[polkavm.A1] = uint64(addr)
 
-	hostCall := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers,
-		mm polkavm.Memory, x struct{},
-	) (polkavm.Gas, polkavm.Registers, polkavm.Memory, struct{}, error) {
-		gasOut, regsOut, memOut, ctxOut, err := host_call.Invoke(gasCounter, regs, mm, ctxPair)
-		require.NoError(t, err)
-		ctxPair = ctxOut
-		return gasOut, regsOut, memOut, x, err
-	}
-
-	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(
-		pp,
-		0,
-		initialGas,
-		initialRegs,
-		mem,
-		hostCall,
-		struct{}{},
-	)
-	require.ErrorIs(t, err, polkavm.ErrHalt)
-
+	gasRemaining, regsOut, _, _, err := host_call.Invoke(initialGas, initialRegs, mem, ctxPair)
+	require.NoError(t, err)
 	assert.Equal(t, uint64(host_call.PANIC), regsOut[polkavm.A0])
 
-	expectedGasRemaining := polkavm.Gas(initialGas) -
-		host_call.InvokeCost -
-		polkavm.GasCosts[polkavm.Ecalli] -
-		polkavm.GasCosts[polkavm.JumpIndirect]
-	assert.Equal(t, expectedGasRemaining, gasRemaining)
+	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 
 	invokeResult := make([]byte, 112)
 	err = mem.Read(addr, invokeResult)
@@ -658,12 +496,6 @@ func TestExpunge(t *testing.T) {
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
-		CodeAndJumpTable: polkavm.CodeAndJumpTable{
-			Instructions: []polkavm.Instruction{
-				{Opcode: polkavm.Ecalli, Imm: []uint32{0}, Offset: 0, Length: 1},
-				{Opcode: polkavm.JumpIndirect, Imm: []uint32{0}, Reg: []polkavm.Reg{polkavm.RA}, Offset: 1, Length: 2},
-			},
-		},
 	}
 
 	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
@@ -682,37 +514,14 @@ func TestExpunge(t *testing.T) {
 
 	initialRegs[polkavm.A0] = n
 
-	hostCallFn := func(hc uint32, gasCounter polkavm.Gas, regs polkavm.Registers,
-		mm polkavm.Memory, x service.ServiceAccount,
-	) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-		gasOut, regsOut, memOut, ctxOut, err := host_call.Expunge(
-			gasCounter,
-			regs,
-			mm,
-			ctxPair,
-		)
-		require.NoError(t, err)
-		ctxPair = ctxOut
-		return gasOut, regsOut, memOut, x, err
-	}
-
-	gasRemaining, regsOut, _, _, err := interpreter.InvokeHostCall(
-		pp,
-		0,
-		100,
+	gasRemaining, regsOut, _, _, err := host_call.Expunge(
+		initialGas,
 		initialRegs,
 		mem,
-		hostCallFn,
-		service.ServiceAccount{},
+		ctxPair,
 	)
-	require.ErrorIs(t, err, polkavm.ErrHalt)
-
+	require.NoError(t, err)
 	assert.Equal(t, uint64(ic), regsOut[polkavm.A0])
 
-	expectedGasRemaining := polkavm.Gas(100) -
-		host_call.ExpungeCost -
-		polkavm.GasCosts[polkavm.Ecalli] -
-		polkavm.GasCosts[polkavm.JumpIndirect]
-
-	assert.Equal(t, expectedGasRemaining, gasRemaining)
+	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
