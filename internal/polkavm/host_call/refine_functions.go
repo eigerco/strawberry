@@ -42,31 +42,23 @@ func HistoricalLookup(
 		return gas, regs, mem, RefineContextPair{}, ErrAccountNotFound
 	}
 
-	ho := regs[A1]
-	bo := regs[A2]
-	bz := regs[A3]
+	// let [h, o] = ω8..+2
+	addressToRead, addressToWrite := regs[A1], regs[A2]
 
 	hashData := make([]byte, 32)
-	if err := mem.Read(uint32(ho), hashData); err != nil {
-		return gas, withCode(regs, OOB), mem, ctxPair, err
+	if err := mem.Read(uint32(addressToRead), hashData); err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
-	// Compute hash H(µho..ho+32)
-	h := crypto.HashData(hashData)
-
 	// Compute v = Λ(a, t, h) using the provided LookupPreimage function
-	v := a.LookupPreimage(t, h)
+	v := a.LookupPreimage(t, crypto.Hash(hashData))
 
 	if len(v) == 0 {
 		return gas, withCode(regs, NONE), mem, ctxPair, nil
 	}
 
-	if uint64(len(v)) > bz {
-		return gas, withCode(regs, OOB), mem, ctxPair, nil
-	}
-
-	if err := mem.Write(uint32(bo), v); err != nil {
-		return gas, withCode(regs, OOB), mem, ctxPair, err
+	if err := writeFromOffset(mem, addressToWrite, v, regs[A3], regs[A4]); err != nil {
+		return gas, regs, mem, ctxPair, err
 	}
 
 	// set ω7 to |v|
@@ -118,7 +110,7 @@ func Export(
 	data := make([]byte, z)
 	if err := mem.Read(uint32(p), data); err != nil {
 		// x = ∇
-		return gas, withCode(regs, OOB), mem, ctxPair, nil
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
 	// Apply zero-padding Pn to data to make it WG-sized
@@ -163,7 +155,7 @@ func Machine(
 	err := mem.Read(uint32(po), p)
 	if err != nil {
 		// p = ∇
-		return gas, withCode(regs, OOB), mem, ctxPair, nil
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
 	// let n = min(n ∈ N, n ∉ K(m))
@@ -212,7 +204,7 @@ func Peek(
 	// (ω′7, µ′) = (OK, µ′o...o+z = s)
 	err = mem.Write(uint32(o), s)
 	if err != nil {
-		return gas, withCode(regs, OOB), mem, ctxPair, nil
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
 	return gas, withCode(regs, OK), mem, ctxPair, nil
@@ -241,7 +233,7 @@ func Poke(
 	s := make([]byte, z)
 	err := mem.Read(uint32(sReg), s)
 	if err != nil {
-		return gas, withCode(regs, OOB), mem, ctxPair, nil
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
 	err = innerPVM.Ram.Write(uint32(o), s)
@@ -270,7 +262,7 @@ func Zero(
 
 	// p < 16 ∨ p + c ≥  2^32 / ZP
 	if p < 16 || p+c >= MaxPageIndex {
-		return gas, withCode(regs, OOB), mem, ctxPair, nil
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
 	// u = m[n]u if n ∈ K(m), otherwise ∇
@@ -282,14 +274,14 @@ func Zero(
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
 		// (u′A)p..+c = [W, W, ...]
 		if err := u.Ram.SetAccess(uint32(pageIndex), ReadWrite); err != nil {
-			return gas, withCode(regs, OOB), mem, ctxPair, nil
+			return gas, regs, mem, ctxPair, err
 		}
 
 		// (u′V)pZP..+cZP = [0, 0, ...]
 		start := uint32(pageIndex * uint64(PageSize))
 		zeroBuf := make([]byte, PageSize)
 		if err := u.Ram.Write(start, zeroBuf); err != nil {
-			return gas, withCode(regs, OOB), mem, ctxPair, nil
+			return gas, regs, mem, ctxPair, err
 		}
 	}
 
@@ -318,27 +310,27 @@ func Void(
 	}
 
 	if p+c >= math.MaxUint32 {
-		return gas, withCode(regs, OOB), mem, ctxPair, nil
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
 		if u.Ram.GetAccess(uint32(pageIndex)) == Inaccessible {
 			// ∃i ∈ N_{p..+c} : (uA)[i] = ∅
-			return gas, withCode(regs, OOB), mem, ctxPair, nil
+			return gas, withCode(regs, HUH), mem, ctxPair, nil
 		}
 
 		// (u′V)pZP..+cZP = [0, 0, ...]
 		start := uint32(pageIndex * uint64(PageSize))
 		zeroBuf := make([]byte, PageSize)
 		if err := u.Ram.Write(start, zeroBuf); err != nil {
-			return gas, withCode(regs, OOB), mem, ctxPair, nil
+			return gas, regs, mem, ctxPair, err
 		}
 	}
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
 		// (u′A)p..+c = [∅, ∅, ...]
 		if err := u.Ram.SetAccess(uint32(pageIndex), Inaccessible); err != nil {
-			return gas, withCode(regs, OOB), mem, ctxPair, nil
+			return gas, regs, mem, ctxPair, err
 		}
 	}
 
@@ -364,13 +356,13 @@ func Invoke(
 	// let (g, w) = (g, w) ∶ E8(g) ⌢ E#8(w) = μo⋅⋅⋅+112 if No⋅⋅⋅+112 ⊂ V∗μ
 	invokeGas, err := readNumber[Gas](mem, uint32(addr), 8)
 	if err != nil {
-		return gas, withCode(regs, OOB), mem, ctxPair, nil
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 	var invokeRegs Registers // w
 	for i := range 13 {
 		invokeReg, err := readNumber[uint64](mem, uint32(addr+(uint64(i+1)*8)), 8)
 		if err != nil {
-			return gas, withCode(regs, OOB), mem, ctxPair, nil
+			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
 		invokeRegs[i] = invokeReg
 	}
@@ -399,9 +391,9 @@ func Invoke(
 	hostCall, invokeErr := interpreter.Invoke(i)
 	resultInstr, resultGas, resultRegs, resultMem := i.Results()
 	if bb, err := jam.Marshal([14]uint64(append([]uint64{uint64(resultGas)}, resultRegs[:]...))); err != nil {
-		return gas, withCode(regs, OOB), mem, ctxPair, nil // (OOB, ω8, μ, m)
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, ω8, μ, m)
 	} else if err := mem.Write(uint32(addr), bb); err != nil {
-		return gas, withCode(regs, OOB), mem, ctxPair, nil // (OOB, ω8, μ, m)
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, ω8, μ, m)
 	}
 	if invokeErr != nil {
 		if errors.Is(invokeErr, ErrOutOfGas) {

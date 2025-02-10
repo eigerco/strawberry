@@ -59,17 +59,18 @@ func TestLookup(t *testing.T) {
 		bo := polkavm.RWAddressBase + 100
 		dataToHash := make([]byte, 32)
 		copy(dataToHash, "hash")
-		hash := crypto.HashData(dataToHash)
+
 		err = mem.Write(ho, dataToHash)
 		require.NoError(t, err)
 
 		initialRegs[polkavm.A0] = uint64(serviceId)
-		initialRegs[polkavm.A1] = uint64(ho)
-		initialRegs[polkavm.A2] = uint64(bo)
-		initialRegs[polkavm.A3] = 32
+		initialRegs[polkavm.A1] = uint64(ho)       // h
+		initialRegs[polkavm.A2] = uint64(bo)       // o
+		initialRegs[polkavm.A3] = 0                // f
+		initialRegs[polkavm.A4] = uint64(len(val)) // l
 		sa := service.ServiceAccount{
-			Storage: map[crypto.Hash][]byte{
-				hash: val,
+			PreimageLookup: map[crypto.Hash][]byte{
+				crypto.Hash(dataToHash): val,
 			},
 		}
 		serviceState := service.ServiceState{
@@ -106,7 +107,7 @@ func TestRead(t *testing.T) {
 	value := []byte("value_to_read")
 
 	// Compute the hash H(E4(s) || keyData)
-	serviceIdBytes, err := jam.Marshal(uint64(serviceId))
+	serviceIdBytes, err := jam.Marshal(serviceId)
 	require.NoError(t, err)
 
 	hashInput := make([]byte, 0, len(serviceIdBytes)+len(keyData))
@@ -126,12 +127,15 @@ func TestRead(t *testing.T) {
 	ko := polkavm.RWAddressBase
 	bo := polkavm.RWAddressBase + 100
 	kz := uint32(len(keyData))
-	bz := uint32(32)
+	vLen := uint64(len(value))
+
 	initialRegs[polkavm.A0] = uint64(serviceId)
 	initialRegs[polkavm.A1] = uint64(ko)
 	initialRegs[polkavm.A2] = uint64(kz)
 	initialRegs[polkavm.A3] = uint64(bo)
-	initialRegs[polkavm.A4] = uint64(bz)
+	initialRegs[polkavm.A4] = 0    // f = offset (starting at 0)
+	initialRegs[polkavm.A5] = vLen // l = length (32 bytes)
+
 	err = mem.Write(ko, keyData)
 	require.NoError(t, err)
 

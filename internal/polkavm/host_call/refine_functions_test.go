@@ -36,18 +36,16 @@ func TestHistoricalLookup(t *testing.T) {
 	timeslot := jamtime.Timeslot(9)
 
 	preimage := []byte("historical_data")
-	dataToHash := make([]byte, 32)
-	copy(dataToHash, preimage)
-
-	h := crypto.HashData(dataToHash)
+	hashKey := make([]byte, 32)
+	copy(hashKey, preimage)
 
 	sa := service.ServiceAccount{
 		PreimageLookup: map[crypto.Hash][]byte{
-			h: preimage,
+			crypto.Hash(hashKey): preimage,
 		},
 		PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 			{
-				Hash:   h,
+				Hash:   crypto.Hash(hashKey),
 				Length: service.PreimageLength(len(preimage)),
 			}: {0, 10},
 		},
@@ -57,19 +55,18 @@ func TestHistoricalLookup(t *testing.T) {
 		serviceId: sa,
 	}
 
-	hashData := make([]byte, 32)
-	copy(hashData, preimage)
-
 	ho := polkavm.RWAddressBase
 	bo := polkavm.RWAddressBase + 100
-	bz := uint32(64)
+	offset := uint64(0)
+	length := uint64(len(preimage))
 
 	initialRegs[polkavm.A0] = uint64(serviceId)
 	initialRegs[polkavm.A1] = uint64(ho)
 	initialRegs[polkavm.A2] = uint64(bo)
-	initialRegs[polkavm.A3] = uint64(bz)
+	initialRegs[polkavm.A3] = offset
+	initialRegs[polkavm.A4] = length
 
-	err = mem.Write(ho, hashData)
+	err = mem.Write(ho, hashKey[:])
 	require.NoError(t, err)
 
 	ctxPair := polkavm.RefineContextPair{
