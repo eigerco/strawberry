@@ -13,7 +13,9 @@ func (i *Instance) step() (uint32, error) {
 	// ζ_ı
 	opcode := polkavm.Opcode(i.code[i.instructionCounter])
 
-	i.deductGas(polkavm.GasCosts[opcode])
+	if err := i.deductGas(polkavm.GasCosts[opcode]); err != nil {
+		return 0, err
+	}
 
 	switch polkavm.InstructionForType[opcode] {
 	case polkavm.InstrNone:

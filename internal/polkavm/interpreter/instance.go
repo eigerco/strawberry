@@ -48,8 +48,13 @@ type Instance struct {
 func (i *Instance) skip() {
 	i.instructionCounter += 1 + polkavm.Skip(i.instructionCounter, i.bitmask)
 }
-func (i *Instance) deductGas(cost polkavm.Gas) {
+
+func (i *Instance) deductGas(cost polkavm.Gas) error {
+	if i.gasRemaining < cost {
+		return polkavm.ErrOutOfGas
+	}
 	i.gasRemaining -= cost
+	return nil
 }
 
 // load E−1_n(μ↺_{a...+n}) where a is address and n is length
@@ -83,6 +88,7 @@ func (i *Instance) setAndSkip32(dst polkavm.Reg, value uint32) {
 	i.regs[dst] = uint64(value)
 	i.skip()
 }
+
 func (i *Instance) setAndSkip64(dst polkavm.Reg, value uint64) {
 	i.regs[dst] = value
 	i.skip()
