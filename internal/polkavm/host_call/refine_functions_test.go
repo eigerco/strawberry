@@ -1,6 +1,7 @@
 package host_call_test
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -17,6 +18,18 @@ import (
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
+
+type MockPreimageFetcher struct {
+	fetchedPreimage map[crypto.Hash][]byte
+}
+
+func (m *MockPreimageFetcher) FetchPreimage(hash crypto.Hash) ([]byte, error) {
+	preimage, exists := m.fetchedPreimage[hash]
+	if !exists {
+		return nil, errors.New("preimage not found")
+	}
+	return preimage, nil
+}
 
 const initialGas = 100
 
@@ -147,6 +160,15 @@ func TestFetch(t *testing.T) {
 		Segments: []work.Segment{},
 	}
 
+	preimageData := "extrinsic_preimage_data"
+	preimageDataLength := uint64(len(preimageData))
+
+	mockFetcher := &MockPreimageFetcher{
+		fetchedPreimage: map[crypto.Hash][]byte{
+			workItemExtrinsic.Hash: []byte(preimageData),
+		},
+	}
+
 	expectedGasRemaining := polkavm.Gas(90)
 
 	t.Run("Fetch DataID 0 (Encoding Work Package)", func(t *testing.T) {
@@ -159,6 +181,7 @@ func TestFetch(t *testing.T) {
 			workPackage,
 			authorizerHashOutput,
 			importedSegments,
+			nil,
 		)
 		require.NoError(t, err)
 
@@ -190,6 +213,7 @@ func TestFetch(t *testing.T) {
 			workPackage,
 			authorizerHashOutput,
 			importedSegments,
+			nil,
 		)
 		require.NoError(t, err)
 
@@ -216,6 +240,7 @@ func TestFetch(t *testing.T) {
 			workPackage,
 			authorizerHashOutput,
 			importedSegments,
+			nil,
 		)
 		require.NoError(t, err)
 
@@ -226,6 +251,60 @@ func TestFetch(t *testing.T) {
 		require.Equal(t, workItemPayload, actualValue)
 		require.Equal(t, uint64(len(workItemPayload)), regsOut[polkavm.A0])
 
+		require.Equal(t, expectedGasRemaining, gasRemaining)
+	})
+
+	t.Run("Fetch DataID 3 (Extrinsic Preimage)", func(t *testing.T) {
+		initialRegs[polkavm.A3] = 3
+		initialRegs[polkavm.A4] = 0
+		initialRegs[polkavm.A5] = 0
+
+		gasRemaining, regsOut, memOut, _, err := host_call.Fetch(
+			initialGas,
+			initialRegs,
+			mem,
+			ctxPair,
+			itemIndex,
+			workPackage,
+			authorizerHashOutput,
+			importedSegments,
+			mockFetcher,
+		)
+		require.NoError(t, err)
+
+		actualValue := make([]byte, preimageDataLength)
+		err = memOut.Read(ho, actualValue)
+		require.NoError(t, err)
+
+		require.Equal(t, preimageData, string(actualValue))
+		require.Equal(t, preimageDataLength, regsOut[polkavm.A0])
+		require.Equal(t, expectedGasRemaining, gasRemaining)
+	})
+
+	t.Run("Fetch DataID 4 (Extrinsic Preimage)", func(t *testing.T) {
+		initialRegs[polkavm.A3] = 4
+		initialRegs[polkavm.A4] = 0
+		itemIndex = 0
+
+		gasRemaining, regsOut, memOut, _, err := host_call.Fetch(
+			initialGas,
+			initialRegs,
+			mem,
+			ctxPair,
+			itemIndex,
+			workPackage,
+			authorizerHashOutput,
+			importedSegments,
+			mockFetcher,
+		)
+		require.NoError(t, err)
+
+		actualValue := make([]byte, preimageDataLength)
+		err = memOut.Read(ho, actualValue)
+		require.NoError(t, err)
+
+		require.Equal(t, preimageData, string(actualValue))
+		require.Equal(t, preimageDataLength, regsOut[polkavm.A0])
 		require.Equal(t, expectedGasRemaining, gasRemaining)
 	})
 
@@ -243,6 +322,7 @@ func TestFetch(t *testing.T) {
 			workPackage,
 			authorizerHashOutput,
 			importedSegments,
+			nil,
 		)
 		require.NoError(t, err)
 
@@ -269,6 +349,7 @@ func TestFetch(t *testing.T) {
 			workPackage,
 			authorizerHashOutput,
 			importedSegments,
+			nil,
 		)
 		require.NoError(t, err)
 

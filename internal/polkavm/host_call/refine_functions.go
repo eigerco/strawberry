@@ -15,6 +15,10 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
+type PreimageFetcher interface {
+	FetchPreimage(hash crypto.Hash) ([]byte, error)
+}
+
 // HistoricalLookup ΩH(ϱ, ω, µ, (m, e), s, d, t)
 func HistoricalLookup(
 	gas Gas,
@@ -77,6 +81,7 @@ func Fetch(
 	workPackage work.Package,
 	authorizerHashOutput []byte,
 	importedSegments []work.Segment,
+	fetcher PreimageFetcher,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	if gas < FetchCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -110,28 +115,30 @@ func Fetch(
 			v = workPackage.WorkItems[index1].Payload
 		}
 	case 3:
-		// TODO: depends on fetching preimage from external source (#169)
-		// This needs to be handled in an earlier step of the pipeline so that the preimage is available when Fetch is called.
+		// TODO: implement fetch preimage (#169)
 
-		/*
-			// v = x if ω11 < ∣pw∣ ∧ ω12 < ∣pw[ω11]x∣
-			if int(index1) < len(workPackage.WorkItems) && int(index2) < len(workPackage.WorkItems[index1].Extrinsics) {
-				// pw[ω11]x[ω12]
-				extrinsicPair := workPackage.WorkItems[index1].Extrinsics[index2]
-				v = extrinsic data (x)
+		// v = x if ω11 < ∣pw∣ ∧ ω12 < ∣pw[ω11]x∣
+		if fetcher != nil && int(index1) < len(workPackage.WorkItems) && int(index2) < len(workPackage.WorkItems[index1].Extrinsics) {
+			extrinsicPair := workPackage.WorkItems[index1].Extrinsics[index2]
+			preimage, err := fetcher.FetchPreimage(extrinsicPair.Hash)
+			if err != nil {
+				return gas, regs, mem, ctxPair, err
 			}
-		*/
+
+			v = preimage
+		}
 	case 4:
-		// TODO: depends on fetching preimage from external source (#169)
+		// TODO:implement fetch preimage (#169)
 
-		/*
-			// v = x if ω11 < ∣pw[i]x∣
-			if int(index1) < len(workPackage.WorkItems[itemIndex].Extrinsics) {
-				//pw[i]x[ω11]
-				extrinsicPair := workPackage.WorkItems[itemIndex].Extrinsics[index1]
-				v = extrinsic data (x)
+		// v = x if ω11 < ∣pw[i]x∣
+		if fetcher != nil && int(index1) < len(workPackage.WorkItems[itemIndex].Extrinsics) {
+			extrinsicPair := workPackage.WorkItems[itemIndex].Extrinsics[index1]
+			preimage, err := fetcher.FetchPreimage(extrinsicPair.Hash)
+			if err != nil {
+				return gas, regs, mem, ctxPair, err
 			}
-		*/
+			v = preimage
+		}
 	case 5:
 		// v = i[ω11]ω12 if ω11 < ∣i∣ ∧ ω12 < ∣i[ω11]∣
 		if int(index1) < len(importedSegments) && int(index2) < len(importedSegments[index1]) {
