@@ -15,6 +15,10 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
+type PreimageFetcher interface {
+	FetchPreimage(hash crypto.Hash) ([]byte, error)
+}
+
 // HistoricalLookup ΩH(ϱ, ω, µ, (m, e), s, d, t)
 func HistoricalLookup(
 	gas Gas,
@@ -77,13 +81,87 @@ func Fetch(
 	workPackage work.Package,
 	authorizerHashOutput []byte,
 	importedSegments []work.Segment,
+	fetcher PreimageFetcher,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	if gas < FetchCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= FetchCost
 
-	//TODO implement
+	outputAddr := regs[A0] // o
+	offset := regs[A1]     // f
+	length := regs[A2]     // l
+	dataID := regs[A3]     // ω10
+	index1 := regs[A4]     // ω11
+	index2 := regs[A5]     // ω12
+
+	var v []byte
+
+	switch dataID {
+	case 0:
+		// v = E(p)
+		var err error
+		v, err = jam.Marshal(workPackage)
+		if err != nil {
+			return gas, regs, mem, ctxPair, err
+		}
+	case 1:
+		// v = o
+		v = authorizerHashOutput
+	case 2:
+		// ω11 < ∣pw∣
+		if int(index1) < len(workPackage.WorkItems) {
+			// v = pw[ω11]y
+			v = workPackage.WorkItems[index1].Payload
+		}
+	case 3:
+		// TODO: implement fetch preimage (#169)
+
+		// v = x if ω11 < ∣pw∣ ∧ ω12 < ∣pw[ω11]x∣
+		if fetcher != nil && int(index1) < len(workPackage.WorkItems) && int(index2) < len(workPackage.WorkItems[index1].Extrinsics) {
+			extrinsicPair := workPackage.WorkItems[index1].Extrinsics[index2]
+			preimage, err := fetcher.FetchPreimage(extrinsicPair.Hash)
+			if err != nil {
+				return gas, regs, mem, ctxPair, err
+			}
+
+			v = preimage
+		}
+	case 4:
+		// TODO:implement fetch preimage (#169)
+
+		// v = x if ω11 < ∣pw[i]x∣
+		if fetcher != nil && int(index1) < len(workPackage.WorkItems[itemIndex].Extrinsics) {
+			extrinsicPair := workPackage.WorkItems[itemIndex].Extrinsics[index1]
+			preimage, err := fetcher.FetchPreimage(extrinsicPair.Hash)
+			if err != nil {
+				return gas, regs, mem, ctxPair, err
+			}
+			v = preimage
+		}
+	case 5:
+		// v = i[ω11]ω12 if ω11 < ∣i∣ ∧ ω12 < ∣i[ω11]∣
+		if int(index1) < len(importedSegments) && int(index2) < len(importedSegments[index1]) {
+			v = []byte{importedSegments[index1][index2]}
+		}
+	case 6:
+		// v = i[i]ω11 if ω11 < ∣i[i]∣
+		if int(itemIndex) < len(importedSegments) && int(index1) < len(importedSegments[itemIndex]) {
+			//i[i]ω11
+			v = []byte{importedSegments[itemIndex][index1]}
+		}
+	}
+
+	if v == nil {
+		// v = ∅
+		return gas, withCode(regs, NONE), mem, ctxPair, nil
+	}
+
+	if err := writeFromOffset(mem, outputAddr, v, offset, length); err != nil {
+		return gas, regs, mem, ctxPair, err
+	}
+
+	regs[A0] = uint64(len(v))
 
 	return gas, regs, mem, ctxPair, nil
 }
