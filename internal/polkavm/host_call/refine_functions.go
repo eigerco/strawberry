@@ -83,7 +83,78 @@ func Fetch(
 	}
 	gas -= FetchCost
 
-	//TODO implement
+	outputAddr := regs[A0] // o
+	offset := regs[A1]     // f
+	length := regs[A2]     // l
+	dataID := regs[A3]     // ω10
+	index1 := regs[A4]     // ω11
+	index2 := regs[A5]     // ω12
+
+	var v []byte
+
+	switch dataID {
+	case 0:
+		// v = E(p)
+		var err error
+		v, err = jam.Marshal(workPackage)
+		if err != nil {
+			return gas, regs, mem, ctxPair, err
+		}
+	case 1:
+		// v = o
+		v = authorizerHashOutput
+	case 2:
+		// ω11 < ∣pw∣
+		if int(index1) < len(workPackage.WorkItems) {
+			// v = pw[ω11]y
+			v = workPackage.WorkItems[index1].Payload
+		}
+	case 3:
+		// TODO: depends on fetching preimage from external source (#169)
+		// This needs to be handled in an earlier step of the pipeline so that the preimage is available when Fetch is called.
+
+		/*
+			// v = x if ω11 < ∣pw∣ ∧ ω12 < ∣pw[ω11]x∣
+			if int(index1) < len(workPackage.WorkItems) && int(index2) < len(workPackage.WorkItems[index1].Extrinsics) {
+				// pw[ω11]x[ω12]
+				extrinsicPair := workPackage.WorkItems[index1].Extrinsics[index2]
+				v = extrinsic data (x)
+			}
+		*/
+	case 4:
+		// TODO: depends on fetching preimage from external source (#169)
+
+		/*
+			// v = x if ω11 < ∣pw[i]x∣
+			if int(index1) < len(workPackage.WorkItems[itemIndex].Extrinsics) {
+				//pw[i]x[ω11]
+				extrinsicPair := workPackage.WorkItems[itemIndex].Extrinsics[index1]
+				v = extrinsic data (x)
+			}
+		*/
+	case 5:
+		// v = i[ω11]ω12 if ω11 < ∣i∣ ∧ ω12 < ∣i[ω11]∣
+		if int(index1) < len(importedSegments) && int(index2) < len(importedSegments[index1]) {
+			v = []byte{importedSegments[index1][index2]}
+		}
+	case 6:
+		// v = i[i]ω11 if ω11 < ∣i[i]∣
+		if int(itemIndex) < len(importedSegments) && int(index1) < len(importedSegments[itemIndex]) {
+			//i[i]ω11
+			v = []byte{importedSegments[itemIndex][index1]}
+		}
+	}
+
+	if v == nil {
+		// v = ∅
+		return gas, withCode(regs, NONE), mem, ctxPair, nil
+	}
+
+	if err := writeFromOffset(mem, outputAddr, v, offset, length); err != nil {
+		return gas, regs, mem, ctxPair, err
+	}
+
+	regs[A0] = uint64(len(v))
 
 	return gas, regs, mem, ctxPair, nil
 }

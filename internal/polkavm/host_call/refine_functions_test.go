@@ -95,6 +95,195 @@ func TestHistoricalLookup(t *testing.T) {
 	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
 
+func TestFetch(t *testing.T) {
+	pp := &polkavm.Program{
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       256,
+			StackSize:        512,
+			InitialHeapPages: 10,
+		},
+	}
+
+	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	require.NoError(t, err)
+
+	parameterization := []byte("parameterization_data")
+	workItemPayload := []byte("work_item_payload")
+	workItemExtrinsic := work.Extrinsic{
+		Hash:   crypto.HashData([]byte("extrinsic_hash")),
+		Length: uint32(len([]byte("extrinsic_data"))),
+	}
+
+	workPackage := work.Package{
+		Parameterization: parameterization,
+		WorkItems: []work.Item{
+			{
+				Payload:    workItemPayload,
+				Extrinsics: []work.Extrinsic{workItemExtrinsic},
+			},
+		},
+	}
+
+	importedSegments := []work.Segment{
+		{1, 2, 3, 4, 5, 6, 7, 8},
+		{9, 10, 11, 12, 13, 14},
+	}
+
+	authorizerHashOutput := []byte("auth_hash_output")
+
+	ho := polkavm.RWAddressBase + 100
+	mode := uint64(0)
+	offset := uint64(0)
+	length := uint64(64)
+
+	initialRegs[polkavm.A0] = uint64(ho)
+	initialRegs[polkavm.A1] = offset
+	initialRegs[polkavm.A2] = length
+	initialRegs[polkavm.A3] = mode
+
+	itemIndex := uint32(0)
+
+	ctxPair := polkavm.RefineContextPair{
+		Segments: []work.Segment{},
+	}
+
+	expectedGasRemaining := polkavm.Gas(90)
+
+	t.Run("Fetch DataID 0 (Encoding Work Package)", func(t *testing.T) {
+		gasRemaining, regsOut, memOut, _, err := host_call.Fetch(
+			initialGas,
+			initialRegs,
+			mem,
+			ctxPair,
+			itemIndex,
+			workPackage,
+			authorizerHashOutput,
+			importedSegments,
+		)
+		require.NoError(t, err)
+
+		encodedWorkPackage, err := jam.Marshal(workPackage)
+		require.NoError(t, err)
+
+		expectedSize := min(len(encodedWorkPackage), int(length))
+		expectedData := encodedWorkPackage[:expectedSize]
+
+		actualValue := make([]byte, expectedSize)
+		err = memOut.Read(ho, actualValue)
+		require.NoError(t, err)
+
+		require.Equal(t, expectedData, actualValue)
+		require.Equal(t, uint64(len(encodedWorkPackage)), regsOut[polkavm.A0])
+
+		require.Equal(t, expectedGasRemaining, gasRemaining)
+	})
+
+	t.Run("Fetch DataID 1 (Authorizer Hash Output)", func(t *testing.T) {
+		initialRegs[polkavm.A3] = 1
+
+		gasRemaining, regsOut, memOut, _, err := host_call.Fetch(
+			initialGas,
+			initialRegs,
+			mem,
+			ctxPair,
+			itemIndex,
+			workPackage,
+			authorizerHashOutput,
+			importedSegments,
+		)
+		require.NoError(t, err)
+
+		actualValue := make([]byte, len(authorizerHashOutput))
+		err = memOut.Read(ho, actualValue)
+		require.NoError(t, err)
+
+		require.Equal(t, authorizerHashOutput, actualValue)
+		require.Equal(t, uint64(len(authorizerHashOutput)), regsOut[polkavm.A0])
+
+		require.Equal(t, expectedGasRemaining, gasRemaining)
+	})
+
+	t.Run("Fetch DataID 2 (Work Item Payload)", func(t *testing.T) {
+		initialRegs[polkavm.A3] = 2
+		initialRegs[polkavm.A4] = 0
+
+		gasRemaining, regsOut, memOut, _, err := host_call.Fetch(
+			initialGas,
+			initialRegs,
+			mem,
+			ctxPair,
+			itemIndex,
+			workPackage,
+			authorizerHashOutput,
+			importedSegments,
+		)
+		require.NoError(t, err)
+
+		actualValue := make([]byte, len(workItemPayload))
+		err = memOut.Read(ho, actualValue)
+		require.NoError(t, err)
+
+		require.Equal(t, workItemPayload, actualValue)
+		require.Equal(t, uint64(len(workItemPayload)), regsOut[polkavm.A0])
+
+		require.Equal(t, expectedGasRemaining, gasRemaining)
+	})
+
+	t.Run("Fetch DataID 5 (Imported Segments)", func(t *testing.T) {
+		initialRegs[polkavm.A3] = 5
+		initialRegs[polkavm.A4] = 0
+		initialRegs[polkavm.A5] = 2
+
+		gasRemaining, regsOut, memOut, _, err := host_call.Fetch(
+			initialGas,
+			initialRegs,
+			mem,
+			ctxPair,
+			itemIndex,
+			workPackage,
+			authorizerHashOutput,
+			importedSegments,
+		)
+		require.NoError(t, err)
+
+		actualValue := make([]byte, 1)
+		err = memOut.Read(ho, actualValue)
+		require.NoError(t, err)
+
+		require.Equal(t, []byte{importedSegments[regsOut[polkavm.A4]][regsOut[polkavm.A5]]}, actualValue)
+		require.Equal(t, uint64(1), regsOut[polkavm.A0])
+
+		require.Equal(t, expectedGasRemaining, gasRemaining)
+	})
+	t.Run("Fetch DataID 6 (Imported Segments)", func(t *testing.T) {
+		initialRegs[polkavm.A3] = 6
+		initialRegs[polkavm.A4] = 1
+		itemIndex = 1
+
+		gasRemaining, regsOut, memOut, _, err := host_call.Fetch(
+			initialGas,
+			initialRegs,
+			mem,
+			ctxPair,
+			itemIndex,
+			workPackage,
+			authorizerHashOutput,
+			importedSegments,
+		)
+		require.NoError(t, err)
+
+		actualValue := make([]byte, 1)
+		err = memOut.Read(ho, actualValue)
+		require.NoError(t, err)
+
+		require.Equal(t, []byte{importedSegments[itemIndex][regsOut[polkavm.A4]]}, actualValue)
+		require.Equal(t, uint64(1), regsOut[polkavm.A0])
+
+		require.Equal(t, expectedGasRemaining, gasRemaining)
+	})
+
+}
+
 func TestExport(t *testing.T) {
 	pp := &polkavm.Program{
 		ProgramMemorySizes: polkavm.ProgramMemorySizes{
