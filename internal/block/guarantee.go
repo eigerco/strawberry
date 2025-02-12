@@ -157,14 +157,22 @@ func NewErrorWorkResult(serviceId ServiceId, serviceHashCode, payloadHash crypto
 }
 
 func (w *WorkReport) Hash() (crypto.Hash, error) {
-	if w == nil {
-		return crypto.Hash{}, nil
-	}
-	jsonData, err := jam.Marshal(w)
+	jsonData, err := w.Encode()
 	if err != nil {
 		return crypto.Hash{}, err
 	}
 	return crypto.HashData(jsonData), nil
+}
+
+func (w *WorkReport) Encode() ([]byte, error) {
+	if w == nil {
+		return []byte{}, nil
+	}
+	jsonData, err := jam.Marshal(w)
+	if err != nil {
+		return []byte{}, err
+	}
+	return jsonData, nil
 }
 
 func (w *WorkReport) OutputSizeIsValid() bool {
