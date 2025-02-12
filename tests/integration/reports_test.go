@@ -263,7 +263,7 @@ func mapWorkResults(results []WorkResult) []block.WorkResult {
 func mapGuarantee(g Guarantee) block.Guarantee {
 	credentials := make([]block.CredentialSignature, len(g.Signatures))
 	for i, sig := range g.Signatures {
-		var signature [crypto.Ed25519SignatureSize]byte
+		var signature crypto.Ed25519Signature
 		copy(signature[:], stringToHex(sig.Signature))
 		credentials[i] = block.CredentialSignature{
 			ValidatorIndex: uint16(sig.ValidatorIndex),

@@ -125,7 +125,7 @@ func (gp *GuaranteeManager) GenerateGuarantee(
 		Credentials: []block.CredentialSignature{
 			{
 				ValidatorIndex: validatorIndex,
-				Signature:      ([crypto.Ed25519SignatureSize]byte)(signature[:crypto.Ed25519SignatureSize]),
+				Signature:      crypto.Ed25519Signature(signature[:]),
 			},
 		},
 	}

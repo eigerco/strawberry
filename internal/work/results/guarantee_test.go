@@ -162,7 +162,7 @@ func TestValidateGuarantee(t *testing.T) {
 		Credentials: []block.CredentialSignature{
 			{
 				ValidatorIndex: 1,
-				Signature:      ([crypto.Ed25519SignatureSize]byte)(signature[:]),
+				Signature:      crypto.Ed25519Signature(signature[:]),
 			},
 		},
 	}
