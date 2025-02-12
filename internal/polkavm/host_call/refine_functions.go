@@ -236,8 +236,8 @@ func Machine(
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
-	if _, _, _, err = ParseCodeAndJumpTable(p); err != nil {
-		// deblob(p) = ∇
+	if _, _, _, err = Deblob(p); err != nil {
+		// if deblob(p) = ∇
 		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 

@@ -8,7 +8,7 @@ import (
 var _ polkavm.Mutator = &Instance{}
 
 func Instantiate(program []byte, instructionOffset uint32, gasLimit polkavm.Gas, regs polkavm.Registers, memory polkavm.Memory) (*Instance, error) {
-	jumpTable, code, bitmask, err := polkavm.ParseCodeAndJumpTable(program)
+	code, bitmask, jumpTable, err := polkavm.Deblob(program)
 	if err != nil {
 		return nil, err
 	}

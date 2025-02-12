@@ -62,8 +62,8 @@ type CodeAndJumpTableLengths struct {
 	CodeLength          uint
 }
 
-// ParseCodeAndJumpTable (deblob) p = Ε(|j|) ⌢ E1(z) ⌢ E(|c|) ⌢ E_z(j) ⌢ E(c) ⌢ E(k), |k| = |c| (A.2 v6.0.2)
-func ParseCodeAndJumpTable(bytecode []byte) ([]uint32, []byte, jam.BitSequence, error) {
+// Deblob p = Ε(|j|) ⌢ E1(z) ⌢ E(|c|) ⌢ E_z(j) ⌢ E(c) ⌢ E(k), |k| = |c| (A.2 v6.0.2)
+func Deblob(bytecode []byte) ([]byte, jam.BitSequence, []uint32, error) {
 	sizes := &CodeAndJumpTableLengths{}
 
 	buff := bytes.NewBuffer(bytecode)
@@ -93,7 +93,8 @@ func ParseCodeAndJumpTable(bytecode []byte) ([]uint32, []byte, jam.BitSequence, 
 	}
 
 	bitmask = bitmask[:sizes.CodeLength] // |k| = |c|
-	return jumpTable, code, bitmask, nil
+
+	return code, bitmask, jumpTable, nil
 }
 
 // Skip skip(i N) → N (A.2)
