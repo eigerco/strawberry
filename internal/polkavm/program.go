@@ -3,6 +3,7 @@ package polkavm
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -61,7 +62,7 @@ type CodeAndJumpTableLengths struct {
 	CodeLength          uint
 }
 
-// ParseCodeAndJumpTable p = Ε(|j|) ⌢ E1(z) ⌢ E(|c|) ⌢ E_z(j) ⌢ E(c) ⌢ E(k), |k| = |c| (part of eq. A.1)
+// ParseCodeAndJumpTable (deblob) p = Ε(|j|) ⌢ E1(z) ⌢ E(|c|) ⌢ E_z(j) ⌢ E(c) ⌢ E(k), |k| = |c| (A.2 v6.0.2)
 func ParseCodeAndJumpTable(bytecode []byte) ([]uint32, []byte, jam.BitSequence, error) {
 	sizes := &CodeAndJumpTableLengths{}
 

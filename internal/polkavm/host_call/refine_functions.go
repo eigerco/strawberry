@@ -236,6 +236,11 @@ func Machine(
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
+	if _, _, _, err = ParseCodeAndJumpTable(p); err != nil {
+		// deblob(p) = ∇
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
+	}
+
 	// let n = min(n ∈ N, n ∉ K(m))
 	n := findSmallestMissingKey(ctxPair.IntegratedPVMMap)
 
@@ -387,7 +392,8 @@ func Void(
 		return gas, withCode(regs, WHO), mem, ctxPair, nil
 	}
 
-	if p+c >= math.MaxUint32 {
+	// p < 16 ∨ p + c ≥  2^32 / ZP
+	if p < 16 || p+c >= MaxPageIndex {
 		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
