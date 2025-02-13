@@ -44,7 +44,7 @@ func (i *Instance) step() (uint32, error) {
 		valueX = sext(valueX, lenX)
 		switch opcode {
 		case polkavm.Ecalli:
-			// ε =ħ × νX
+			// ε = ħ × νX
 			return valueX, polkavm.ErrHostCall
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
