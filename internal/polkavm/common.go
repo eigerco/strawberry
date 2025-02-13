@@ -32,10 +32,14 @@ type memorySegment struct {
 	access  MemoryAccess
 }
 
-// Read reads from the set of readable indices (Vμ)
+// Read reads from the set of readable indices (Vμ) (implements eq. A.8)
 func (m *Memory) Read(address uint32, data []byte) error {
+	// ☇ if min(x) mod 2^32 < 2^16
+	if address < 1<<16 {
+		return ErrPanicf("forbidden memory access")
+	}
 	var memoryData []byte
-	var access MemoryAccess
+	access := Inaccessible
 	if address >= m.stack.address && address+uint32(len(data)) <= m.stack.address+uint32(len(m.stack.data)) {
 		memoryData = m.stack.data[address-m.stack.address : address-m.stack.address+uint32(len(data))]
 		access = m.stack.access
@@ -48,20 +52,25 @@ func (m *Memory) Read(address uint32, data []byte) error {
 	} else if address >= m.args.address && address+uint32(len(data)) <= m.args.address+uint32(len(m.args.data)) {
 		memoryData = m.args.data[address-m.args.address : address-m.args.address+uint32(len(data))]
 		access = m.args.access
-	} else {
-		return &ErrPageFault{Reason: "inaccessible memory", Address: address}
 	}
+
+	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋
 	if access == Inaccessible {
-		return &ErrPageFault{Reason: "inaccessible memory", Address: address}
+		return &ErrPageFault{Reason: "inaccessible memory", Address: alignToPage(address)}
 	}
 	copy(data, memoryData)
 	return nil
 }
 
-// Write writes to the set of writeable indices (Vμ*)
+// Write writes to the set of writeable indices (Vμ*) (implements eq. A.8)
 func (m *Memory) Write(address uint32, data []byte) error {
+	// ☇ if min(x) mod 2^32 < 2^16
+	if address < 1<<16 {
+		return ErrPanicf("forbidden memory access")
+	}
+
 	var memoryData []byte
-	var access MemoryAccess
+	access := Inaccessible
 	if address >= m.stack.address && address+uint32(len(data)) <= m.stack.address+uint32(len(m.stack.data)) {
 		memoryData = m.stack.data[address-m.stack.address : address-m.stack.address+uint32(len(data))]
 		access = m.stack.access
@@ -74,11 +83,11 @@ func (m *Memory) Write(address uint32, data []byte) error {
 	} else if address >= m.args.address && address+uint32(len(data)) <= m.args.address+uint32(len(m.args.data)) {
 		memoryData = m.args.data[address-m.args.address : address-m.args.address+uint32(len(data))]
 		access = m.args.access
-	} else {
-		return &ErrPageFault{Reason: "inaccessible memory", Address: address}
 	}
+
+	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋
 	if access != ReadWrite {
-		return &ErrPageFault{Reason: "memory at address is not writeable", Address: address}
+		return &ErrPageFault{Reason: "memory at address is not writeable", Address: alignToPage(address)}
 	}
 	copy(memoryData, data)
 	return nil
