@@ -40,11 +40,11 @@ func TestGetAllEpochsNeighborValidators(t *testing.T) {
 func TestFindValidatorIndex(t *testing.T) {
 	key := ed25519.PublicKey("key")
 	validators := safrole.ValidatorsData{}
-	validators[42] = &crypto.ValidatorKey{Ed25519: key}
+	validators[0] = &crypto.ValidatorKey{Ed25519: key}
 	mapper := GridMapper{currentValidators: validators}
 	index, found := mapper.FindValidatorIndex(key)
 	assert.True(t, found)
-	assert.Equal(t, uint16(42), index)
+	assert.Equal(t, uint16(0), index)
 
 	_, found = mapper.FindValidatorIndex(ed25519.PublicKey("missing"))
 	assert.False(t, found)

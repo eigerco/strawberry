@@ -6,17 +6,24 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/eigerco/strawberry/internal/chain"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/quic-go/quic-go"
+	"golang.org/x/crypto/ed25519"
 )
 
 // BlockRequestHandler processes incoming block requests from other peers.
 // It implements the StreamHandler interface.
-type BlockRequestHandler struct{}
+type BlockRequestHandler struct {
+	blockService *chain.BlockService
+}
 
 // NewBlockRequestHandler creates a new handler for processing block requests.
-func NewBlockRequestHandler() *BlockRequestHandler {
-	return &BlockRequestHandler{}
+func NewBlockRequestHandler(blockService *chain.BlockService) *BlockRequestHandler {
+	return &BlockRequestHandler{
+		blockService: blockService,
+	}
 }
 
 // HandleStream processes an incoming block request stream.
@@ -29,9 +36,7 @@ func NewBlockRequestHandler() *BlockRequestHandler {
 //   - Reading the request fails
 //   - The message format is invalid
 //   - Writing the response fails
-func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stream) error {
-	fmt.Println("Received block request, reading request message...")
-
+func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
 	// Read the request message
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
@@ -48,17 +53,19 @@ func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stre
 		MaxBlocks: binary.LittleEndian.Uint32(msg.Content[33:37]),
 	}
 	copy(request.Hash[:], msg.Content[:32])
-
-	fmt.Printf("Got request for blocks: hash=%x, direction=%d, maxBlocks=%d\n",
-		request.Hash, request.Direction, request.MaxBlocks)
-
-	// Test data: Pretend to send some blocks
-	response := []byte("test block response")
+	ascending := request.Direction == 0
+	blocks, err := h.blockService.Store.GetBlockSequence(request.Hash, ascending, request.MaxBlocks)
+	if err != nil {
+		return fmt.Errorf("failed to get blocks: %w", err)
+	}
+	latest := blocks[0]
+	response, err := jam.Marshal(latest)
+	if err != nil {
+		return fmt.Errorf("failed to marshal block: %w", err)
+	}
 	if err := WriteMessageWithContext(ctx, stream, response); err != nil {
 		return fmt.Errorf("failed to write response message: %w", err)
 	}
-
-	fmt.Println("Sent block response")
 	return nil
 }
 
@@ -84,7 +91,7 @@ func (r *BlockRequester) RequestBlocks(ctx context.Context, stream io.ReadWriter
 	content := make([]byte, 37)
 	copy(content[:32], headerHash[:])
 	content[32] = direction
-	binary.LittleEndian.PutUint32(content[33:], 10)
+	binary.LittleEndian.PutUint32(content[33:], 1) // TODO instead of 1, use a variable
 
 	// Write with context
 	if err := WriteMessageWithContext(ctx, stream, content); err != nil {
@@ -96,8 +103,6 @@ func (r *BlockRequester) RequestBlocks(ctx context.Context, stream io.ReadWriter
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-
-	fmt.Printf("Received response: %s\n", response.Content)
 	return response.Content, nil
 }
 

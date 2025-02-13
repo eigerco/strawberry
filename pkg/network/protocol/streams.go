@@ -1,8 +1,12 @@
 package protocol
 
 import (
+	"context"
+	"crypto/ed25519"
 	"fmt"
-	"github.com/eigerco/strawberry/pkg/network/transport"
+	"sync"
+
+	"github.com/quic-go/quic-go"
 )
 
 const (
@@ -29,18 +33,24 @@ const (
 	StreamKindJudgmentPublish     StreamKind = 145
 )
 
+// StreamHandler processes individual QUIC streams within a connection
+type StreamHandler interface {
+	HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error
+}
+
 // StreamKind represents the type of stream (Unique Persistent or Common Ephemeral)
 type StreamKind byte
 
 // JAMNPRegistry manages stream handlers for different protocol stream kinds
 type JAMNPRegistry struct {
-	handlers map[StreamKind]transport.StreamHandler
+	mu       sync.RWMutex
+	handlers map[StreamKind]StreamHandler
 }
 
 // NewJAMNPRegistry creates a new registry for stream handlers
 func NewJAMNPRegistry() *JAMNPRegistry {
 	return &JAMNPRegistry{
-		handlers: make(map[StreamKind]transport.StreamHandler),
+		handlers: make(map[StreamKind]StreamHandler),
 	}
 }
 
@@ -56,15 +66,20 @@ func (r *JAMNPRegistry) ValidateKind(kindByte byte) error {
 
 // RegisterHandler associates a stream handler with a specific stream kind
 // The handler will be called when streams of the specified kind are opened
-func (r *JAMNPRegistry) RegisterHandler(kind StreamKind, handler transport.StreamHandler) {
+func (r *JAMNPRegistry) RegisterHandler(kind StreamKind, handler StreamHandler) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.handlers[kind] = handler
 }
 
 // GetHandler retrieves the handler associated with a given stream kind byte
 // Returns an error if no handler is registered for the kind
-func (r *JAMNPRegistry) GetHandler(kindByte byte) (transport.StreamHandler, error) {
-	// Convert raw byte to protocol's StreamKind here
+func (r *JAMNPRegistry) GetHandler(kindByte byte) (StreamHandler, error) {
+	// Convert raw byte to protocol's StreamKind
 	kind := StreamKind(kindByte)
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	handler, ok := r.handlers[kind]
 	if !ok {

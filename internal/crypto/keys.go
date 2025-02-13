@@ -2,7 +2,6 @@ package crypto
 
 import (
 	"crypto/ed25519"
-
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
