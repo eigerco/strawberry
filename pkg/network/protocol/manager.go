@@ -46,16 +46,10 @@ func NewManager(config Config) (*Manager, error) {
 
 // OnConnection is called when a new transport connection is established.
 // It sets up a protocol connection and starts a stream handling goroutine.
-// Implements the transport.ConnectionHandler interface.
-func (m *Manager) OnConnection(conn *transport.Conn) error {
-	// Protocol connection creation could fail due to invalid parameters
-	protoConn, err := m.setupProtocolConn(conn)
-	if err != nil {
-		return fmt.Errorf("protocol connection setup failed: %w", err)
-	}
+func (m *Manager) OnConnection(conn *transport.Conn) *ProtocolConn {
+	protoConn := NewProtocolConn(conn, m.Registry)
 	go m.handleStreams(protoConn)
-
-	return nil
+	return protoConn
 }
 
 // handleStreams manages the lifecycle of streams for a protocol connection.
@@ -68,7 +62,7 @@ func (m *Manager) handleStreams(protoConn *ProtocolConn) {
 		streamErr := protoConn.AcceptStream()
 		if streamErr != nil {
 			// Check if the connection's context has been canceled
-			if protoConn.tConn.Context().Err() != nil {
+			if protoConn.TConn.Context().Err() != nil {
 				fmt.Println("Connection closed: context done")
 				return
 			}
@@ -81,7 +75,7 @@ func (m *Manager) handleStreams(protoConn *ProtocolConn) {
 			}
 
 			// Log other errors and continue listening
-			fmt.Printf("Stream accept error: %v\n", streamErr)
+			//fmt.Printf("Stream accept error: %v\n", streamErr)
 			continue
 		}
 	}
@@ -91,18 +85,6 @@ func (m *Manager) handleStreams(protoConn *ProtocolConn) {
 // Returns true if the error message indicates no recent network activity.
 func isTimeoutError(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "timeout: no recent network activity")
-}
-
-// setupProtocolConn creates and initializes a new protocol connection.
-// Returns an error if the provided transport connection is nil.
-func (m *Manager) setupProtocolConn(conn *transport.Conn) (*ProtocolConn, error) {
-	if conn == nil {
-		return nil, fmt.Errorf("invalid connection")
-	}
-
-	protoConn := NewProtocolConn(conn, m.Registry)
-
-	return protoConn, nil
 }
 
 // GetProtocols returns the list of supported ALPN protocol strings.
@@ -138,10 +120,4 @@ func (m *Manager) ValidateConnection(tlsState tls.ConnectionState) error {
 	}
 
 	return nil
-}
-
-// WrapConnection wraps a transport connection with protocol-specific functionality.
-// Returns a new ProtocolConn that can handle protocol-specific stream operations.
-func (m *Manager) WrapConnection(conn *transport.Conn) *ProtocolConn {
-	return NewProtocolConn(conn, m.Registry)
 }
