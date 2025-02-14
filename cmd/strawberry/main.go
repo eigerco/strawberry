@@ -24,7 +24,7 @@ func main() {
 	// Generate node keys
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		log.Fatalf("Failed to generate keys: %v", err)
+		panic(err)
 	}
 	keys := peer.ValidatorKeys{
 		EdPrv: priv,
@@ -33,16 +33,16 @@ func main() {
 
 	address, err := net.ResolveUDPAddr("", *listenAddr)
 	if err != nil {
-		fmt.Printf("err: %v\n", err)
+		panic(err)
 	}
 	fmt.Printf("listening on: %v\n", address)
 	node, err := peer.NewNode(ctx, address, keys)
 	if err != nil {
-		log.Fatalf("Failed to create node: %v", err)
+		panic(err)
 	}
 	err = node.Start()
 	if err != nil {
-		fmt.Printf("err: %v\n", err)
+		panic(err)
 	}
 
 	select {}

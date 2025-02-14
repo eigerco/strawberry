@@ -182,9 +182,17 @@ func (n *Node) OnConnection(conn *transport.Conn) {
 	}
 
 	pConn := n.protocolManager.OnConnection(conn)
-
+	peer := NewPeer(pConn)
+	if peer == nil {
+		log.Printf("Failed to create peer: invalid remote address type")
+		// Clean up the connection since we can't use it
+		if err := pConn.Close(); err != nil {
+			log.Printf("Failed to close protocol connection: %v", err)
+		}
+		return
+	}
 	// Add to peer set
-	n.peersSet.AddPeer(NewPeer(pConn))
+	n.peersSet.AddPeer(peer)
 }
 
 // ConnectToPeer initiates a connection to a peer at the specified address.
