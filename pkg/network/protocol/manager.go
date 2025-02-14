@@ -75,7 +75,7 @@ func (m *Manager) handleStreams(protoConn *ProtocolConn) {
 			}
 
 			// Log other errors and continue listening
-			//fmt.Printf("Stream accept error: %v\n", streamErr)
+			fmt.Printf("Stream accept error: %v\n", streamErr)
 			continue
 		}
 	}
