@@ -9,50 +9,46 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"sort"
 )
 
 // GuaranteeManager handles the generation and validation of guarantees for work packages.
-// Section 15 of the graypaper 0.6.1
+// Section 15 of the graypaper 0.6.2.
 type GuaranteeManager struct {
 	computation *Computation
 }
 
-func NewGuaranteeManager(computation *Computation) *GuaranteeManager {
+func NewGuaranteeManager(computation *Computation) (*GuaranteeManager, error) {
 	if computation == nil {
-		panic("computation cannot be nil")
+		return nil, errors.New("computation cannot be nil")
 	}
 	return &GuaranteeManager{
 		computation: computation,
-	}
+	}, nil
 }
 
 // ProcessWorkPackageGuarantee generates and validates a guarantee for a work package.
-// This handles the local validator operations described in section 15 of the JAM graypaper.
-// TODO: Missing (should be done in higher layers):
-//   - Erasure Code chunks distribution across the validator set
-//   - Cross-validator Consensus.
-//   - Providing the work-package, extrinsic and exported data to other validators on request.
+// This handles the operations within the guarantor which generates guarantee based on received package and collaborating with other guarantors.
+// Section 15 of v0.6.2.
+// TODO: Missing:
+//   - CE 133 (Submission of a work-package from a builder to a guarantor)
+//   - CE 134 (Sharing Work-Packages with Other Guarantors)
+//   - CE 135 (Distributing Guarantees to Validators)
+//   - CE 136 (Responding to Work-Report Requests)
 func (gp *GuaranteeManager) ProcessWorkPackageGuarantee(
 	wp work.Package,
 	coreIndex uint16,
-	validatorIndex uint16,
-	validatorPrivateKey ed25519.PrivateKey,
-	validatorPublicKeys map[uint16]ed25519.PublicKey,
-	authPool state.CoreAuthorizersPool, // Authorization pool from recent chain state
+	guarantorIndex uint16,
+	guarantorPrivateKey ed25519.PrivateKey,
+	authPool state.CoreAuthorizersPool,
 ) (*block.Guarantee, error) {
-	if validatorPrivateKey == nil {
-		return nil, errors.New("validator key cannot be nil")
-	}
-	if validatorPublicKeys == nil {
-		return nil, errors.New("public keys cannot be nil")
-	}
-
 	// Validate work package authorization
 	if err := gp.validateWorkPackageAuthorization(wp, coreIndex, authPool); err != nil {
 		return nil, fmt.Errorf("authorization validation failed: %w", err)
 	}
 
-	// Generate and validate work report.
+	// Generate work report. (15.01 v0.6.2)
 	workReport, err := gp.computation.EvaluateWorkPackage(wp, coreIndex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate work-report: %w", err)
@@ -63,16 +59,26 @@ func (gp *GuaranteeManager) ProcessWorkPackageGuarantee(
 		return nil, errors.New("work report output size exceeds limit")
 	}
 
-	// Generate guarantee with validator signature
-	guarantee, err := gp.GenerateGuarantee(workReport, validatorIndex, validatorPrivateKey)
+	// Encode the work report and generate the payload hash (15.2 v0.6.2)
+	payloadHash, err := gp.hashCoreIndexWithWorkReport(workReport, coreIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	initialCredential := gp.generateCredentialSignature(guarantorPrivateKey, guarantorIndex, payloadHash)
+
+	// TODO: CE 134 - Sharing Work-Packages with Other Guarantors to verify work report and receive guarantor credential signatures.
+	var receivedCredentials []block.CredentialSignature // Here we would receive the credentials from other guarantors
+
+	credentials := mergeAndSortCredentials([]block.CredentialSignature{initialCredential}, receivedCredentials)
+
+	// Generate guarantee with guarantor signature
+	guarantee, err := gp.GenerateGuarantee(workReport, credentials)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate guarantee: %w", err)
 	}
 
-	// Validate the guarantee
-	if err := ValidateGuarantee(guarantee, validatorPublicKeys); err != nil {
-		return nil, fmt.Errorf("guarantee validation failed: %w", err)
-	}
+	// TODO: CE 135 - Distribute Work-Report to Validators
 
 	return guarantee, nil
 }
@@ -105,60 +111,79 @@ func (gp *GuaranteeManager) validateWorkPackageAuthorization(
 // GenerateGuarantee creates a signed guarantee for a Work Report
 func (gp *GuaranteeManager) GenerateGuarantee(
 	workReport *block.WorkReport,
-	validatorIndex uint16,
-	validatorPrivateKey ed25519.PrivateKey,
+	credentials []block.CredentialSignature,
 ) (*block.Guarantee, error) {
 	if workReport == nil {
 		return nil, errors.New("work report cannot be nil")
 	}
 
-	reportHash, err := workReport.Hash()
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute work-report hash: %w", err)
+	// Validate we have 2-3 guarantor signatures
+	if len(credentials) < 2 || len(credentials) > 3 {
+		return nil, errors.New("must have 2-3 valid signatures")
 	}
 
-	signature := ed25519.Sign(validatorPrivateKey, reportHash[:])
-
-	guarantee := &block.Guarantee{
-		WorkReport: *workReport,
-		Timeslot:   jamtime.CurrentTimeslot(),
-		Credentials: []block.CredentialSignature{
-			{
-				ValidatorIndex: validatorIndex,
-				Signature:      crypto.Ed25519Signature(signature[:]),
-			},
-		},
-	}
-
-	return guarantee, nil
+	// Construct the Guarantee struct (11.23 v0.6.2). EG ∈ [(w ∈ W, t ∈ NT, a ∈ [([NV, E])2,3)]C
+	return &block.Guarantee{
+		WorkReport:  *workReport,
+		Timeslot:    jamtime.CurrentTimeslot(),
+		Credentials: credentials,
+	}, nil
 }
 
-// ValidateGuarantee checks if a guarantee is properly signed.
-// Network-level validation (like duplicate checks) happens at a higher layer.
-func ValidateGuarantee(guarantee *block.Guarantee, validatorPublicKeys map[uint16]ed25519.PublicKey) error {
-	if guarantee == nil {
-		return errors.New("guarantee cannot be nil")
+// generateCredentialSignature creates a credential signature for a validator (implements part of 11.26 v0.6.2)
+func (gp *GuaranteeManager) generateCredentialSignature(guarantorPrivateKey ed25519.PrivateKey, guarantorIndex uint16, reportPayloadHash crypto.Hash) block.CredentialSignature {
+	message := append([]byte(state.SignatureContextGuarantee), reportPayloadHash[:]...)
+	signature := ed25519.Sign(guarantorPrivateKey, message)
+	credentials := block.CredentialSignature{
+		ValidatorIndex: guarantorIndex,
+		Signature:      crypto.Ed25519Signature(signature[:]),
 	}
 
-	if len(guarantee.Credentials) == 0 {
-		return errors.New("guarantee has no credentials")
-	}
+	return credentials
+}
 
-	reportHash, err := guarantee.WorkReport.Hash()
+func (gp *GuaranteeManager) hashCoreIndexWithWorkReport(workReport *block.WorkReport, coreIndex uint16) (crypto.Hash, error) {
+	// Encode each value
+	encodedCoreIndex, err := jam.Marshal(coreIndex)
 	if err != nil {
-		return fmt.Errorf("failed to compute report hash: %w", err)
+		return crypto.Hash{}, fmt.Errorf("failed to encode core index: %w", err)
 	}
 
-	for _, credential := range guarantee.Credentials {
-		publicKey, exists := validatorPublicKeys[credential.ValidatorIndex]
-		if !exists {
-			return fmt.Errorf("validator %d public key not found", credential.ValidatorIndex)
-		}
-
-		if !ed25519.Verify(publicKey, reportHash[:], credential.Signature[:]) {
-			return fmt.Errorf("invalid signature from validator %d", credential.ValidatorIndex)
-		}
+	encodedWorkReport, err := workReport.Encode()
+	if err != nil {
+		return crypto.Hash{}, fmt.Errorf("failed to encode work report hash: %w", err)
 	}
 
-	return nil
+	// Concatenate encoded values
+	payload := append(encodedCoreIndex, encodedWorkReport...)
+
+	payloadHash := crypto.HashData(payload)
+	return payloadHash, nil
+}
+
+// Merge and sort credentials (11.25 v0.6.2). EG ∈ [(w ∈ W, t ∈ NT, a ∈ [([NV, E])2,3)]C
+func mergeAndSortCredentials(existing, received []block.CredentialSignature) []block.CredentialSignature {
+	// Use a map for deduplication
+	credentialMap := make(map[uint16]block.CredentialSignature)
+
+	for _, cred := range existing {
+		credentialMap[cred.ValidatorIndex] = cred
+	}
+
+	for _, cred := range received {
+		credentialMap[cred.ValidatorIndex] = cred // Overwrites duplicate indexes
+	}
+
+	// Convert map back to a slice
+	mergedCredentials := make([]block.CredentialSignature, 0, len(credentialMap))
+	for _, cred := range credentialMap {
+		mergedCredentials = append(mergedCredentials, cred)
+	}
+
+	// Sort the credentials by ValidatorIndex
+	sort.Slice(mergedCredentials, func(i, j int) bool {
+		return mergedCredentials[i].ValidatorIndex < mergedCredentials[j].ValidatorIndex
+	})
+
+	return mergedCredentials
 }

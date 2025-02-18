@@ -455,7 +455,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 		reportBytes, err := jam.Marshal(workReport)
 		require.NoError(t, err)
 		reportHash := crypto.HashData(reportBytes)
-		message := append([]byte(signatureContextGuarantee), reportHash[:]...)
+		message := append([]byte(state.SignatureContextGuarantee), reportHash[:]...)
 
 		// Sign the message with both validators
 		signature1 := ed25519.Sign(prvKey1, message)
@@ -524,7 +524,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 		reportBytes, err := jam.Marshal(workReport)
 		require.NoError(t, err)
 		reportHash := crypto.HashData(reportBytes)
-		message := append([]byte(signatureContextGuarantee), reportHash[:]...)
+		message := append([]byte(state.SignatureContextGuarantee), reportHash[:]...)
 		signature1 := ed25519.Sign(prvKey1, message)
 		signature2 := ed25519.Sign(prvKey2, message)
 
@@ -590,7 +590,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 		reportBytes, err := jam.Marshal(workReport)
 		require.NoError(t, err)
 		reportHash := crypto.HashData(reportBytes)
-		message := append([]byte(signatureContextGuarantee), reportHash[:]...)
+		message := append([]byte(state.SignatureContextGuarantee), reportHash[:]...)
 		signature1 := ed25519.Sign(prvKey1, message)
 		signature2 := ed25519.Sign(prvKey2, message)
 
@@ -658,7 +658,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 		reportBytes, err := jam.Marshal(workReport)
 		require.NoError(t, err)
 		reportHash := crypto.HashData(reportBytes)
-		message := append([]byte(signatureContextGuarantee), reportHash[:]...)
+		message := append([]byte(state.SignatureContextGuarantee), reportHash[:]...)
 		wrongSignature := ed25519.Sign(wrongPrvKey, message)
 		signature2 := ed25519.Sign(prvKey2, message)
 
