@@ -28,13 +28,6 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-const (
-	signatureContextGuarantee = "jam_guarantee" // X_G ≡ $jam_guarantee (141 v0.4.5)
-	signatureContextAvailable = "jam_available" // X_A ≡ $jam_available (128 v0.4.5)
-	signatureContextValid     = "jam_valid"     // X_A ≡ $jam_valid (128 v0.4.5)
-	signatureContextInvalid   = "jam_invalid"   // X_A ≡ $jam_invalid (128 v0.4.5)
-)
-
 // UpdateState updates the state
 // TODO: all the calculations which are not dependent on intermediate / new state can be done in parallel
 //
@@ -1032,7 +1025,7 @@ func verifyAllSignatures(newTimeslot jamtime.Timeslot, disputes block.DisputeExt
 
 	// Verify culprit signatures
 	for _, culprit := range disputes.Culprits {
-		message := append([]byte(signatureContextGuarantee), culprit.ReportHash[:]...)
+		message := append([]byte(state.SignatureContextGuarantee), culprit.ReportHash[:]...)
 		if !ed25519.Verify(culprit.ValidatorEd25519PublicKey, message, culprit.Signature[:]) {
 			return errors.New("bad signature")
 		}
@@ -1040,9 +1033,9 @@ func verifyAllSignatures(newTimeslot jamtime.Timeslot, disputes block.DisputeExt
 
 	// Verify fault signatures
 	for _, fault := range disputes.Faults {
-		context := signatureContextValid
+		context := state.SignatureContextValid
 		if !fault.IsValid {
-			context = signatureContextInvalid
+			context = state.SignatureContextInvalid
 		}
 		message := append([]byte(context), fault.ReportHash[:]...)
 		if !ed25519.Verify(fault.ValidatorEd25519PublicKey, message, fault.Signature[:]) {
@@ -1069,9 +1062,9 @@ func verifyVerdictSignatures(newTimeslot jamtime.Timeslot, verdict block.Verdict
 			return errors.New("invalid validator index")
 		}
 
-		context := signatureContextValid
+		context := state.SignatureContextValid
 		if !judgment.IsValid {
-			context = signatureContextInvalid
+			context = state.SignatureContextInvalid
 		}
 
 		message := append([]byte(context), verdict.ReportHash[:]...)
@@ -1102,7 +1095,7 @@ func verifyCulprits(culprits []block.Culprit, badReports []crypto.Hash, offendin
 	}
 	for _, culprit := range culprits {
 		// Verify guarantee signature
-		message := append([]byte(signatureContextGuarantee), culprit.ReportHash[:]...)
+		message := append([]byte(state.SignatureContextGuarantee), culprit.ReportHash[:]...)
 		if !ed25519.Verify(culprit.ValidatorEd25519PublicKey, message, culprit.Signature[:]) {
 			return errors.New("bad signature")
 		}
@@ -1147,9 +1140,9 @@ func verifyFaults(faults []block.Fault, verdicts []block.Verdict, offendingValid
 		}
 
 		// Verify signature
-		context := signatureContextValid
+		context := state.SignatureContextValid
 		if !fault.IsValid {
-			context = signatureContextInvalid
+			context = state.SignatureContextInvalid
 		}
 		message := append([]byte(context), fault.ReportHash[:]...)
 		if !ed25519.Verify(fault.ValidatorEd25519PublicKey, message, fault.Signature[:]) {
@@ -1180,7 +1173,7 @@ func containsKey(slice []ed25519.PublicKey, key ed25519.PublicKey) bool {
 // CalculateNewCoreAssignments updates the core assignments based on new guarantees.
 // This implements equation 27: ρ′ ≺ (EG, ρ‡, κ, τ′)
 //
-// It also implements part of equation 139 regarding timeslot validation:
+// It also implements part of equation 11.26 v0.6.2 regarding timeslot validation:
 // R(⌊τ′/R⌋ - 1) ≤ t ≤ τ′
 func CalculateNewCoreAssignments(
 	guarantees block.GuaranteesExtrinsic,
@@ -1677,7 +1670,7 @@ func verifyGuaranteeCredentials(
 		return reporters, fmt.Errorf("failed to marshal work report: %w", err)
 	}
 	hashed := crypto.HashData(reportBytes)
-	message := append([]byte(signatureContextGuarantee), hashed[:]...)
+	message := append([]byte(state.SignatureContextGuarantee), hashed[:]...)
 
 	for _, credential := range guarantee.Credentials {
 
@@ -1738,7 +1731,7 @@ func RotateSequence(sequence []uint32, n uint32) []uint32 {
 }
 
 // PermuteAssignments generates the core assignments for validators.
-// Implements Equation (11.19 v0.5.0): P(e, t) ≡ R(F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e), ⌊t mod E/R⌋)
+// Implements Equation (11.20 v0.6.2): P(e, t) ≡ R(F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e), ⌊t mod E/R⌋)
 func PermuteAssignments(entropy crypto.Hash, timeslot jamtime.Timeslot) ([]uint32, error) {
 	// [⌊C ⋅ i/V⌋ ∣i ∈ NV]
 	coreIndices := make([]uint32, common.NumberOfValidators)
@@ -2163,7 +2156,7 @@ func validateAssurancesSignature(validators safrole.ValidatorsData, header block
 		}
 		message = append(message, b...)
 		messageHash := crypto.HashData(message)
-		if !ed25519.Verify(validators[assurance.ValidatorIndex].Ed25519, append([]byte(signatureContextAvailable), messageHash[:]...), assurance.Signature[:]) {
+		if !ed25519.Verify(validators[assurance.ValidatorIndex].Ed25519, append([]byte(state.SignatureContextAvailable), messageHash[:]...), assurance.Signature[:]) {
 			return ErrBadSignature
 		}
 	}
@@ -2329,7 +2322,7 @@ func CalculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslo
 		}
 
 		// π′₀[v]g ≡ a[v]g + (κ′v ∈ R)
-		// Where R is the set of reporter keys defined in eq 139
+		// Where R is the set of reporter keys defined in 11.26 0.6.2
 		for reporter := range reporters {
 			if currValidators[v] != nil && slices.Equal(currValidators[v].Ed25519, reporter[:]) {
 				newStats[1][v].NumOfGuaranteedReports++

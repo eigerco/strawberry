@@ -22,8 +22,8 @@ type Guarantee struct {
 
 // CredentialSignature represents a single signature within the credential
 type CredentialSignature struct {
-	ValidatorIndex uint16                            // Index of the validator providing this signature
-	Signature      [crypto.Ed25519SignatureSize]byte // The Ed25519 signature
+	ValidatorIndex uint16                  // Index of the validator providing this signature
+	Signature      crypto.Ed25519Signature // The Ed25519 signature
 }
 
 // WorkReport represents a work report in the JAM state (equation 11.2 v0.5.4)
@@ -157,14 +157,22 @@ func NewErrorWorkResult(serviceId ServiceId, serviceHashCode, payloadHash crypto
 }
 
 func (w *WorkReport) Hash() (crypto.Hash, error) {
-	if w == nil {
-		return crypto.Hash{}, nil
-	}
-	jsonData, err := jam.Marshal(w)
+	encodedData, err := w.Encode()
 	if err != nil {
 		return crypto.Hash{}, err
 	}
-	return crypto.HashData(jsonData), nil
+	return crypto.HashData(encodedData), nil
+}
+
+func (w *WorkReport) Encode() ([]byte, error) {
+	if w == nil {
+		return []byte{}, nil
+	}
+	encodedData, err := jam.Marshal(w)
+	if err != nil {
+		return []byte{}, err
+	}
+	return encodedData, nil
 }
 
 func (w *WorkReport) OutputSizeIsValid() bool {

@@ -109,8 +109,8 @@ func RandomBandersnatchRingCommitment(t *testing.T) crypto.RingCommitment {
 	return crypto.RingCommitment(hash)
 }
 
-func RandomEd25519Signature(t *testing.T) [crypto.Ed25519SignatureSize]byte {
-	var hash [crypto.Ed25519SignatureSize]byte
+func RandomEd25519Signature(t *testing.T) crypto.Ed25519Signature {
+	var hash crypto.Ed25519Signature
 	_, err := rand.Read(hash[:])
 	require.NoError(t, err)
 	return hash

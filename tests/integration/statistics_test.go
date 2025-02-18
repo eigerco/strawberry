@@ -111,7 +111,7 @@ func mapStatisticsInput(s StatisticsInput) block.Block {
 						Credentials: mapSlice(g.Signatures, func(sig Signature) block.CredentialSignature {
 							return block.CredentialSignature{
 								ValidatorIndex: sig.ValidatorIndex,
-								Signature:      [crypto.Ed25519SignatureSize]byte(stringToHex(sig.Signature)),
+								Signature:      crypto.Ed25519Signature(stringToHex(sig.Signature)),
 							}
 						}),
 					}
