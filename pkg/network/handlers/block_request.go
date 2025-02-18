@@ -4,79 +4,122 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"io"
 
+	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/chain"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/quic-go/quic-go"
 )
 
-// BlockRequestHandler processes incoming block requests from other peers.
-// It implements the StreamHandler interface.
-type BlockRequestHandler struct{}
-
-// NewBlockRequestHandler creates a new handler for processing block requests.
-func NewBlockRequestHandler() *BlockRequestHandler {
-	return &BlockRequestHandler{}
+// BlockRequestHandler processes CE 128 block request streams from peers.
+// It implements protocol specification section "CE 128: Block request".
+// Block requests allow peers to request sequences of blocks either:
+// - Ascending from a given block (exclusive of the block itself)
+// - Descending from a given block (inclusive of the block itself)
+type BlockRequestHandler struct {
+	blockService *chain.BlockService
 }
 
-// HandleStream processes an incoming block request stream.
-// The expected message format is:
-//   - 32 bytes: Header hash
-//   - 1 byte: Direction (0 for ascending, 1 for descending)
-//   - 4 bytes: Maximum number of blocks (little-endian uint32)
-//
-// Returns an error if:
-//   - Reading the request fails
-//   - The message format is invalid
-//   - Writing the response fails
-func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stream) error {
-	fmt.Println("Received block request, reading request message...")
+// NewBlockRequestHandler creates a new handler for processing block requests.
+// It requires a BlockService to fetch requested blocks from storage.
+func NewBlockRequestHandler(blockService *chain.BlockService) *BlockRequestHandler {
+	return &BlockRequestHandler{
+		blockService: blockService,
+	}
+}
 
+// blockRequestMessage represents the wire format for block requests.
+// As per protocol spec:
+// - Header Hash: Starting point for block sequence
+// - Direction: 0 for ascending (exclusive), 1 for descending (inclusive)
+// - MaxBlocks: Maximum number of blocks to return
+type blockRequestMessage struct {
+	Hash      crypto.Hash
+	Direction byte // 0 for ascending, 1 for descending
+	MaxBlocks uint32
+}
+
+// HandleStream processes an incoming block request stream according to CE 128 protocol.
+// Message format:
+//   - Header hash (32 bytes): Starting block hash
+//   - Direction (1 byte): 0 for ascending exclusive, 1 for descending inclusive
+//   - Maximum blocks (4 bytes): Little-endian uint32 maximum blocks to return
+//
+// Response format:
+//   - Length-prefixed sequence of encoded blocks
+//   - Stream is closed with FIN bit set after response
+//
+// The response sequence starts from the given block hash and follows the chain
+// either forward (for ascending) or backward (for descending), limited by MaxBlocks.
+// For ascending requests, the sequence starts with a child of the given block.
+// For descending requests, the sequence starts with the given block itself.
+func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stream) error {
 	// Read the request message
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return fmt.Errorf("failed to read request message: %w", err)
 	}
 
-	// Parse the message content into BlockRequestMessage
+	// Validate minimum message length:
+	// 32 bytes (hash) + 1 byte (direction) + 4 bytes (maxBlocks) = 37 bytes
 	if len(msg.Content) < 37 { // 32 (hash) + 1 (direction) + 4 (maxBlocks)
 		return fmt.Errorf("message too short")
 	}
 
-	request := BlockRequestMessage{
+	// Parse fixed-size wire format
+	request := blockRequestMessage{
 		Direction: msg.Content[32], // After hash
 		MaxBlocks: binary.LittleEndian.Uint32(msg.Content[33:37]),
 	}
 	copy(request.Hash[:], msg.Content[:32])
 
-	fmt.Printf("Got request for blocks: hash=%x, direction=%d, maxBlocks=%d\n",
-		request.Hash, request.Direction, request.MaxBlocks)
+	// Fetch block sequence based on direction
+	ascending := request.Direction == 0
+	blocks, err := h.blockService.Store.GetBlockSequence(request.Hash, ascending, request.MaxBlocks)
+	if err != nil {
+		return fmt.Errorf("failed to get blocks: %w", err)
+	}
 
-	// Test data: Pretend to send some blocks
-	response := []byte("test block response")
+	// Marshal all blocks into a single response
+	response, err := jam.Marshal(blocks)
+	if err != nil {
+		return fmt.Errorf("failed to marshal blocks: %w", err)
+	}
 	if err := WriteMessageWithContext(ctx, stream, response); err != nil {
 		return fmt.Errorf("failed to write response message: %w", err)
 	}
-
-	fmt.Println("Sent block response")
+	// Close the stream to signal we're done writing (this sets the FIN bit)
+	if err := stream.Close(); err != nil {
+		return fmt.Errorf("failed to close stream: %w", err)
+	}
 	return nil
 }
 
-// BlockRequester handles outgoing block requests to peers.
+// BlockRequester handles outgoing CE 128 block requests to peers.
+// It implements the client side of the block request protocol.
 type BlockRequester struct{}
 
-// TODO: Implement the RequestBlocks function. This is not a complete implementation.
-// RequestBlocks sends a request for blocks to a peer.
+// RequestBlocks sends a block request to a peer and receives the response.
 // Parameters:
 //   - ctx: Context for cancellation
-//   - stream: The stream to write requests and read responses
-//   - headerHash: Hash of the header to start from
-//   - ascending: If true, gets blocks after header, if false, gets blocks before
+//   - stream: QUIC stream for the request
+//   - headerHash: Hash of the starting block
+//   - ascending: If true, gets blocks after header (exclusive)
+//     If false, gets blocks before and including header
+//   - maxBlocks: Maximum number of blocks to request
+//
+// The request follows CE 128 protocol format:
+//
+//	--> Header Hash (32 bytes) ++ Direction (1 byte) ++ Maximum Blocks (4 bytes LE)
+//	--> FIN
+//	<-- [Block]
+//	<-- FIN
 //
 // Returns:
-//   - Block data if successful
-//   - Error if request fails or response cannot be read
-func (r *BlockRequester) RequestBlocks(ctx context.Context, stream io.ReadWriter, headerHash [32]byte, ascending bool) ([]byte, error) {
+//   - Sequence of blocks if successful
+//   - Error if request fails, response invalid, or context cancelled
+func (r *BlockRequester) RequestBlocks(ctx context.Context, stream quic.Stream, headerHash [32]byte, ascending bool, maxBlocks uint32) ([]block.Block, error) {
 	direction := byte(0)
 	if !ascending {
 		direction = 1
@@ -84,27 +127,28 @@ func (r *BlockRequester) RequestBlocks(ctx context.Context, stream io.ReadWriter
 	content := make([]byte, 37)
 	copy(content[:32], headerHash[:])
 	content[32] = direction
-	binary.LittleEndian.PutUint32(content[33:], 10)
+	binary.LittleEndian.PutUint32(content[33:], maxBlocks)
 
 	// Write with context
 	if err := WriteMessageWithContext(ctx, stream, content); err != nil {
 		return nil, fmt.Errorf("failed to write request: %w", err)
 	}
-
+	// Closes only the write direction (sets FIN on our side)
+	if err := stream.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close write: %w", err)
+	}
 	// Read with context
 	response, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	fmt.Printf("Received response: %s\n", response.Content)
-	return response.Content, nil
-}
+	// Unmarshal block sequence
+	var blocks []block.Block
+	err = jam.Unmarshal(response.Content, &blocks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
 
-// BlockRequestMessage represents a block request message.
-// The message format matches the wire protocol specification.
-type BlockRequestMessage struct {
-	Hash      crypto.Hash
-	Direction byte // 0 for ascending, 1 for descending
-	MaxBlocks uint32
+	return blocks, nil
 }
