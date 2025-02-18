@@ -626,7 +626,7 @@ func (i *Instance) DivSigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.skip()
 }
 
-// RemUnsigned32 rem_u_32 ω′D = X4(ωA) if ωB mod 232 = 0 otherwise X4((ωA mod 232) mod (ωB mod 232))
+// RemUnsigned32 rem_u_32 ω′D = X4(ωA mod 2^32) if ωB mod 2^32 = 0 otherwise X4((ωA mod 2^32) mod (ωB mod 2^32))
 func (i *Instance) RemUnsigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs, rhs := uint32(i.regs[regA]), uint32(i.regs[regB])
 	if rhs == 0 {
@@ -640,7 +640,7 @@ func (i *Instance) RemUnsigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 // RemSigned32 rem_s_32 ω′D =
 // ⎧ Z−1_8(a) 			if b = 0
 // ⎨ 0			 		if a = −2^31 ∧ b = −1
-// ⎩ Z−1_8 (a mod b) 	otherwise
+// ⎩ Z−1_8 (smod(a, b)) otherwise
 // where a = Z4(ωA mod 2^32) , b = Z4(ωB mod 2^32)
 func (i *Instance) RemSigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs := int32(uint32(i.regs[regA]))
@@ -650,7 +650,7 @@ func (i *Instance) RemSigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	} else if lhs == math.MinInt32 && rhs == -1 {
 		i.regs[dst] = uint64(0)
 	} else {
-		i.regs[dst] = uint64(uint32(lhs % rhs))
+		i.regs[dst] = uint64(smod32(lhs, rhs))
 	}
 	i.skip()
 }
@@ -703,7 +703,7 @@ func (i *Instance) DivUnsigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 // DivSigned64 div_s_64 ω′D =
 // ⎧ 2^64 − 1 						if ωB = 0
 // ⎨ ωA								if Z8(ωA) = −2^63 ∧ Z8(ωB) = −1
-// ⎩ Z−1_8(⌊ Z8(ωA) ÷ Z8(ωB ) ⌋) 	otherwise
+// ⎩ Z−1_8(⌊ Z8(ωA) ÷ Z8(ωB) ⌋) 	otherwise
 func (i *Instance) DivSigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	rhs := int64(i.regs[regA])
 	lhs := int64(i.regs[regB])
@@ -729,9 +729,9 @@ func (i *Instance) RemUnsigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 }
 
 // RemSigned64 rem_s_64 ω′D =
-// ⎧ ωA						 	if ωB = 0
-// ⎨ 0 							if Z8(ωA) = −263 ∧ Z8(ωB ) = −1
-// ⎩ Z−1_8(Z8(ωA) mod Z8(ωB )) 	otherwise
+// ⎧ ωA						 	 if ωB = 0
+// ⎨ 0 							 if Z8(ωA) = −2^63 ∧ Z8(ωB) = −1
+// ⎩ Z−1_8(smod(Z8(ωA), Z8(ωB))) otherwise
 func (i *Instance) RemSigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	rhs, lhs := int64(i.regs[regA]), int64(i.regs[regB])
 	if rhs == 0 {
@@ -739,7 +739,7 @@ func (i *Instance) RemSigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	} else if lhs == math.MinInt32 && rhs == -1 {
 		i.regs[dst] = 0
 	} else {
-		i.regs[dst] = uint64(lhs % rhs)
+		i.regs[dst] = uint64(smod64(lhs, rhs))
 	}
 	i.skip()
 }
@@ -879,4 +879,36 @@ func bool2uint32(v bool) uint32 {
 		return 1
 	}
 	return 0
+}
+
+// smod (a Z, b Z) → Z a if b = 0 otherwise sgn(a)(|a| mod |b|) (eq. A.32)
+func smod64(a int64, b int64) int64 {
+	if b == 0 {
+		return a
+	}
+	if a < 0 {
+		return -(abs64(a) % abs64(b))
+	}
+	return abs64(a) % abs64(b)
+}
+
+func abs64(v int64) int64 {
+	mask := v >> 63
+	return (v ^ mask) - mask
+}
+
+// smod (a Z, b Z) → Z a if b = 0 otherwise sgn(a)(|a| mod |b|) (eq. A.32)
+func smod32(a int32, b int32) int32 {
+	if b == 0 {
+		return a
+	}
+	if a < 0 {
+		return -(abs32(a) % abs32(b))
+	}
+	return abs32(a) % abs32(b)
+}
+
+func abs32(v int32) int32 {
+	mask := v >> 31
+	return (v ^ mask) - mask
 }

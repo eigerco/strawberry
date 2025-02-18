@@ -424,12 +424,12 @@ func TestMachine(t *testing.T) {
 	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
-	dataToMachine := []byte("machine_code")
+	p := []byte{0, 0, 3, 8, 135, 9, 1}
 	po := polkavm.RWAddressBase
-	pz := len(dataToMachine)
+	pz := len(p)
 	i := uint64(42)
 
-	err = mem.Write(po, dataToMachine)
+	err = mem.Write(po, p)
 	require.NoError(t, err)
 
 	initialRegs[polkavm.A0] = uint64(po)
@@ -455,7 +455,7 @@ func TestMachine(t *testing.T) {
 	vm, exists := ctxPair.IntegratedPVMMap[0]
 	require.True(t, exists)
 
-	assert.Equal(t, dataToMachine, vm.Code)
+	assert.Equal(t, p, vm.Code)
 	assert.Equal(t, uint32(i), vm.InstructionCounter)
 
 	assert.Equal(t, polkavm.Gas(90), gasRemaining)
