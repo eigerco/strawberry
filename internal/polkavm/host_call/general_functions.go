@@ -58,7 +58,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 	h, o := regs[polkavm.A1], regs[polkavm.A2]
 
 	key := make([]byte, 32)
-	if err := mem.Read(uint32(h), key); err != nil {
+	if err := mem.Read(h, key); err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
@@ -105,7 +105,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 
 	// read key data from memory at ko..ko+kz
 	keyData := make([]byte, kz)
-	err := mem.Read(uint32(ko), keyData)
+	err := mem.Read(ko, keyData)
 	if err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
@@ -150,7 +150,7 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 	vz := regs[polkavm.A3]
 
 	keyData := make([]byte, kz)
-	err := mem.Read(uint32(ko), keyData)
+	err := mem.Read(ko, keyData)
 	if err != nil {
 		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 	}
@@ -167,7 +167,7 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 		delete(a.Storage, k)
 	} else {
 		valueData := make([]byte, vz)
-		err = mem.Read(uint32(vo), valueData)
+		err = mem.Read(vo, valueData)
 		if err != nil {
 			return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 		}
@@ -223,7 +223,7 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 		return gas, regs, mem, err
 	}
 
-	if err = mem.Write(uint32(omega8), m); err != nil {
+	if err = mem.Write(omega8, m); err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 

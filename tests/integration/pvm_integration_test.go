@@ -23,26 +23,26 @@ var testvectors embed.FS
 type TestCase struct {
 	Name           string            `json:"name"`
 	InitialRegs    polkavm.Registers `json:"initial-regs"`
-	InitialPc      uint32            `json:"initial-pc"`
+	InitialPc      uint64            `json:"initial-pc"`
 	InitialPageMap []Page            `json:"initial-page-map"`
 	InitialMemory  []MemoryChunk     `json:"initial-memory"`
 	InitialGas     polkavm.Gas       `json:"initial-gas"`
 	Program        []byte            `json:"program"`
 	ExpectedStatus string            `json:"expected-status"`
 	ExpectedRegs   polkavm.Registers `json:"expected-regs"`
-	ExpectedPc     uint32            `json:"expected-pc"`
+	ExpectedPc     uint64            `json:"expected-pc"`
 	ExpectedMemory []MemoryChunk     `json:"expected-memory"`
 	ExpectedGas    polkavm.Gas       `json:"expected-gas"`
 }
 
 type Page struct {
-	Address    uint32 `json:"address"`
-	Length     uint32 `json:"length"`
+	Address    uint64 `json:"address"`
+	Length     uint64 `json:"length"`
 	IsWritable bool   `json:"is-writable"`
 }
 
 type MemoryChunk struct {
-	Address  uint32 `json:"address"`
+	Address  uint64 `json:"address"`
 	Contents []byte `json:"contents"`
 }
 
@@ -97,7 +97,7 @@ func Test_Vectors(t *testing.T) {
 }
 
 func getMemoryMap(pageMap []Page) polkavm.Memory {
-	var roAddr, rwAddr, stackAddr, roSize, rwSize, stackSize uint32
+	var roAddr, rwAddr, stackAddr, roSize, rwSize, stackSize uint64
 	for _, page := range pageMap {
 		if !page.IsWritable {
 			roAddr = page.Address

@@ -456,7 +456,7 @@ func TestMachine(t *testing.T) {
 	require.True(t, exists)
 
 	assert.Equal(t, p, vm.Code)
-	assert.Equal(t, uint32(i), vm.InstructionCounter)
+	assert.Equal(t, uint64(i), vm.InstructionCounter)
 
 	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
@@ -480,7 +480,7 @@ func TestPeek(t *testing.T) {
 	uData := []byte("data_for_peek")
 
 	uDataBase := polkavm.RWAddressBase
-	require.True(t, uDataBase+uint32(len(uData)) < math.MaxUint32)
+	require.True(t, uDataBase+uint64(len(uData)) < math.MaxUint32)
 
 	err = mem.Write(uDataBase, uData)
 	require.NoError(t, err)
@@ -546,7 +546,7 @@ func TestPoke(t *testing.T) {
 
 	sourceData := []byte("data_for_poke")
 
-	err = mem.Write(uint32(s), sourceData)
+	err = mem.Write(s, sourceData)
 	require.NoError(t, err)
 
 	u := polkavm.IntegratedPVM{
@@ -579,7 +579,7 @@ func TestPoke(t *testing.T) {
 
 	actual := make([]byte, z)
 	vm := ctxPair.IntegratedPVMMap[n]
-	err = (&vm.Ram).Read(uint32(o), actual)
+	err = (&vm.Ram).Read(o, actual)
 	require.NoError(t, err)
 	expected := sourceData[:z]
 	assert.Equal(t, expected, actual)
@@ -609,7 +609,7 @@ func TestZero(t *testing.T) {
 	endAddr := (p + c) * uint64(polkavm.PageSize)
 
 	for addr := startAddr; addr < endAddr; addr++ {
-		err := mem.Write(uint32(addr), []byte{0xFF})
+		err := mem.Write(addr, []byte{0xFF})
 		require.NoError(t, err)
 	}
 
@@ -633,7 +633,7 @@ func TestZero(t *testing.T) {
 	for addr := startAddr; addr < endAddr; addr++ {
 		b := make([]byte, 1)
 		innerPVMRam := ctxPair.IntegratedPVMMap[n].Ram
-		err = innerPVMRam.Read(uint32(addr), b)
+		err = innerPVMRam.Read(addr, b)
 		require.NoError(t, err)
 		assert.Equal(t, byte(0), b[0])
 	}
@@ -659,7 +659,7 @@ func TestVoid(t *testing.T) {
 	c := uint64(2)
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
-		access := mem.GetAccess(uint32(pageIndex))
+		access := mem.GetAccess(pageIndex)
 		assert.Equal(t, polkavm.ReadWrite, access)
 	}
 
@@ -683,7 +683,7 @@ func TestVoid(t *testing.T) {
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
 		innerPVMRam := ctxPair.IntegratedPVMMap[n].Ram
-		access := innerPVMRam.GetAccess(uint32(pageIndex))
+		access := innerPVMRam.GetAccess(pageIndex)
 		assert.Equal(t, polkavm.Inaccessible, access)
 	}
 
@@ -752,7 +752,7 @@ func TestInvoke(t *testing.T) {
 	err = jam.Unmarshal(invokeResult, &invokeGasAndRegs)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint32(3), ctxPair.IntegratedPVMMap[pvmKey].InstructionCounter)
+	assert.Equal(t, uint64(3), ctxPair.IntegratedPVMMap[pvmKey].InstructionCounter)
 	assert.Equal(t, uint64(9998), invokeGasAndRegs[0])
 	assert.Equal(t, []uint64{0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0}, invokeGasAndRegs[1:])
 }
@@ -771,7 +771,7 @@ func TestExpunge(t *testing.T) {
 	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
-	n, ic := uint64(7), uint32(42)
+	n, ic := uint64(7), uint64(42)
 
 	ctxPair := polkavm.RefineContextPair{
 		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),

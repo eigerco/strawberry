@@ -22,13 +22,12 @@
   "program": [
     0,
     0,
-    6,
-    72,
+    5,
+    80,
     137,
-    117,
+    1,
     0,
-    0,
-    128,
+    255,
     1
   ],
   "expected-status": "trap",
@@ -42,12 +41,12 @@
     0,
     0,
     3,
-    268435470,
+    536862720,
     0,
     0,
     0
   ],
-  "expected-pc": 6,
+  "expected-pc": 5,
   "expected-memory": [],
   "expected-gas": 9998
 }

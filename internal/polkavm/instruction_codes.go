@@ -113,9 +113,9 @@ const (
 	NegateAndAddImm32            Opcode = 141 // neg_add_imm_32
 	SetGreaterThanUnsignedImm    Opcode = 142 // set_gt_u_imm
 	SetGreaterThanSignedImm      Opcode = 143 // set_gt_s_imm
-	ShiftLogicalRightImmAlt32    Opcode = 144 // shlo_r_imm_alt_32
-	ShiftArithmeticRightImmAlt32 Opcode = 145 // shar_r_imm_alt_32
-	ShiftLogicalLeftImmAlt32     Opcode = 146 // shlo_l_imm_alt_32
+	ShiftLogicalLeftImmAlt32     Opcode = 144 // shlo_l_imm_alt_32
+	ShiftArithmeticRightImmAlt32 Opcode = 145 // shlo_r_imm_alt_32
+	ShiftLogicalRightImmAlt32    Opcode = 146 // shar_r_imm_alt_32
 	CmovIfZeroImm                Opcode = 147 // cmov_iz_imm
 	CmovIfNotZeroImm             Opcode = 148 // cmov_nz_imm
 	AddImm64                     Opcode = 149 // add_imm_64

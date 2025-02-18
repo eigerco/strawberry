@@ -117,7 +117,7 @@ func (r Code) String() string {
 	return "unknown"
 }
 
-func readNumber[U interface{ ~uint32 | ~uint64 | ~int64 }](mem Memory, addr uint32, length int) (u U, err error) {
+func readNumber[U interface{ ~uint32 | ~uint64 | ~int64 }](mem Memory, addr uint64, length int) (u U, err error) {
 	b := make([]byte, length)
 	if err = mem.Read(addr, b); err != nil {
 		return
@@ -146,7 +146,7 @@ func writeFromOffset(
 
 	if l > 0 {
 		sliceToWrite := data[f : f+l]
-		if err := mem.Write(uint32(addressToWrite), sliceToWrite); err != nil {
+		if err := mem.Write(addressToWrite, sliceToWrite); err != nil {
 			return ErrPanicf("out-of-bounds write at address %d", addressToWrite)
 		}
 	}
