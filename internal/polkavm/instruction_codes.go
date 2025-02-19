@@ -1,5 +1,3 @@
-//go:build !integration
-
 package polkavm
 
 // A.5.1. Instructions without Arguments
