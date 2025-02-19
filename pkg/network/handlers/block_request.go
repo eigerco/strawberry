@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -58,7 +57,7 @@ func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stre
 	// Read the request message
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
-		return fmt.Errorf("failed to read request message: %w", err)
+		return fmt.Errorf("read request message: %w", err)
 	}
 
 	// Validate minimum message length:
@@ -66,11 +65,15 @@ func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stre
 	if len(msg.Content) < 37 { // 32 (hash) + 1 (direction) + 4 (maxBlocks)
 		return fmt.Errorf("message too short")
 	}
+	var maxBlocks uint32
+	if err = jam.Unmarshal(msg.Content[33:37], &maxBlocks); err != nil {
+		return fmt.Errorf("unmarshal maxBlocks: %w", err)
+	}
 
 	// Parse fixed-size wire format
 	request := blockRequestMessage{
 		Direction: msg.Content[32], // After hash
-		MaxBlocks: binary.LittleEndian.Uint32(msg.Content[33:37]),
+		MaxBlocks: maxBlocks,
 	}
 	copy(request.Hash[:], msg.Content[:32])
 
@@ -78,20 +81,20 @@ func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stre
 	ascending := request.Direction == 0
 	blocks, err := h.blockService.Store.GetBlockSequence(request.Hash, ascending, request.MaxBlocks)
 	if err != nil {
-		return fmt.Errorf("failed to get blocks: %w", err)
+		return fmt.Errorf("get blocks: %w", err)
 	}
 
 	// Marshal all blocks into a single response
 	response, err := jam.Marshal(blocks)
 	if err != nil {
-		return fmt.Errorf("failed to marshal blocks: %w", err)
+		return fmt.Errorf("marshal blocks: %w", err)
 	}
 	if err := WriteMessageWithContext(ctx, stream, response); err != nil {
-		return fmt.Errorf("failed to write response message: %w", err)
+		return fmt.Errorf("write response message: %w", err)
 	}
 	// Close the stream to signal we're done writing (this sets the FIN bit)
 	if err := stream.Close(); err != nil {
-		return fmt.Errorf("failed to close stream: %w", err)
+		return fmt.Errorf("close stream: %w", err)
 	}
 	return nil
 }
@@ -127,27 +130,31 @@ func (r *BlockRequester) RequestBlocks(ctx context.Context, stream quic.Stream, 
 	content := make([]byte, 37)
 	copy(content[:32], headerHash[:])
 	content[32] = direction
-	binary.LittleEndian.PutUint32(content[33:], maxBlocks)
+	maxBlocksBytes, err := jam.Marshal(maxBlocks)
+	if err != nil {
+		return nil, fmt.Errorf("marshal max blocks: %w", err)
+	}
+	copy(content[33:], maxBlocksBytes)
 
 	// Write with context
 	if err := WriteMessageWithContext(ctx, stream, content); err != nil {
-		return nil, fmt.Errorf("failed to write request: %w", err)
+		return nil, fmt.Errorf("write request: %w", err)
 	}
 	// Closes only the write direction (sets FIN on our side)
 	if err := stream.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close write: %w", err)
+		return nil, fmt.Errorf("close write: %w", err)
 	}
 	// Read with context
 	response, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("read response: %w", err)
 	}
 
 	// Unmarshal block sequence
 	var blocks []block.Block
 	err = jam.Unmarshal(response.Content, &blocks)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
 
 	return blocks, nil

@@ -93,11 +93,11 @@ func (bs *BlockService) initializeState() error {
 		return fmt.Errorf("failed to store genesis block: %w", err)
 	}
 	bs.Mu.Lock()
+	defer bs.Mu.Unlock()
 	bs.LatestFinalized = LatestFinalized{
 		Hash:          hash,
 		TimeSlotIndex: genesisHeader.TimeSlotIndex,
 	}
-	bs.Mu.Unlock()
 	return nil
 }
 
@@ -111,11 +111,11 @@ func (bs *BlockService) initializeState() error {
 // Note: May return nil even if finalization isn't possible (e.g., missing ancestors).
 // This is due to genesis block handling and is not considered an error.
 func (bs *BlockService) checkFinalization(hash crypto.Hash) error {
-	// Start from current header and walk back 5 generations
+	// Start from current header and walk back 6 generations
 	currentHash := hash
 	var ancestorChain []block.Header
 
-	// Walk back 5 generations
+	// Walk back 6`` generations
 	for i := 0; i < 6; i++ {
 		header, err := bs.Store.GetHeader(currentHash)
 		if err != nil {
