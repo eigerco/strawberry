@@ -27,43 +27,50 @@ type Memory struct {
 }
 
 type memorySegment struct {
-	address uint32
+	address uint64
 	data    []byte
 	access  MemoryAccess
 }
 
 // Read reads from the set of readable indices (Vμ) (implements eq. A.8)
-func (m *Memory) Read(address uint32, data []byte) error {
+func (m *Memory) Read(address uint64, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
 		return ErrPanicf("forbidden memory access")
 	}
 	var memoryData []byte
 	access := Inaccessible
-	if address >= m.stack.address && address+uint32(len(data)) <= m.stack.address+uint32(len(m.stack.data)) {
-		memoryData = m.stack.data[address-m.stack.address : address-m.stack.address+uint32(len(data))]
+	if address >= m.stack.address && address+uint64(len(data)) <= m.stack.address+uint64(len(m.stack.data)) {
+		memoryData = m.stack.data[address-m.stack.address : address-m.stack.address+uint64(len(data))]
 		access = m.stack.access
-	} else if address >= m.rw.address && address+uint32(len(data)) <= m.rw.address+uint32(len(m.rw.data)) {
-		memoryData = m.rw.data[address-m.rw.address : address-m.rw.address+uint32(len(data))]
+	} else if address >= m.rw.address && address+uint64(len(data)) <= m.rw.address+uint64(len(m.rw.data)) {
+		memoryData = m.rw.data[address-m.rw.address : address-m.rw.address+uint64(len(data))]
 		access = m.rw.access
-	} else if address >= m.ro.address && address+uint32(len(data)) <= m.ro.address+uint32(len(m.ro.data)) {
-		memoryData = m.ro.data[address-m.ro.address : address-m.ro.address+uint32(len(data))]
+	} else if address >= m.ro.address && address+uint64(len(data)) <= m.ro.address+uint64(len(m.ro.data)) {
+		memoryData = m.ro.data[address-m.ro.address : address-m.ro.address+uint64(len(data))]
 		access = m.ro.access
-	} else if address >= m.args.address && address+uint32(len(data)) <= m.args.address+uint32(len(m.args.data)) {
-		memoryData = m.args.data[address-m.args.address : address-m.args.address+uint32(len(data))]
+	} else if address >= m.args.address && address+uint64(len(data)) <= m.args.address+uint64(len(m.args.data)) {
+		memoryData = m.args.data[address-m.args.address : address-m.args.address+uint64(len(data))]
 		access = m.args.access
 	}
 
 	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋
 	if access == Inaccessible {
-		return &ErrPageFault{Reason: "inaccessible memory", Address: alignToPage(address)}
+		// find the minimum page that is not readable
+		for i := address / PageSize; i <= (address+uint64(len(data)))/PageSize; i++ {
+			access := m.GetAccess(i)
+			if access == Inaccessible {
+				return &ErrPageFault{Reason: "inaccessible memory", Address: i * PageSize}
+			}
+		}
+		return ErrPanicf("inaccessible memory; unable to find the bad memory page")
 	}
 	copy(data, memoryData)
 	return nil
 }
 
 // Write writes to the set of writeable indices (Vμ*) (implements eq. A.8)
-func (m *Memory) Write(address uint32, data []byte) error {
+func (m *Memory) Write(address uint64, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
 		return ErrPanicf("forbidden memory access")
@@ -71,30 +78,37 @@ func (m *Memory) Write(address uint32, data []byte) error {
 
 	var memoryData []byte
 	access := Inaccessible
-	if address >= m.stack.address && address+uint32(len(data)) <= m.stack.address+uint32(len(m.stack.data)) {
-		memoryData = m.stack.data[address-m.stack.address : address-m.stack.address+uint32(len(data))]
+	if address >= m.stack.address && address+uint64(len(data)) <= m.stack.address+uint64(len(m.stack.data)) {
+		memoryData = m.stack.data[address-m.stack.address : address-m.stack.address+uint64(len(data))]
 		access = m.stack.access
-	} else if address >= m.rw.address && address+uint32(len(data)) <= m.rw.address+uint32(len(m.rw.data)) {
-		memoryData = m.rw.data[address-m.rw.address : address-m.rw.address+uint32(len(data))]
+	} else if address >= m.rw.address && address+uint64(len(data)) <= m.rw.address+uint64(len(m.rw.data)) {
+		memoryData = m.rw.data[address-m.rw.address : address-m.rw.address+uint64(len(data))]
 		access = m.rw.access
-	} else if address >= m.ro.address && address+uint32(len(data)) <= m.ro.address+uint32(len(m.ro.data)) {
-		memoryData = m.ro.data[address-m.ro.address : address-m.ro.address+uint32(len(data))]
+	} else if address >= m.ro.address && address+uint64(len(data)) <= m.ro.address+uint64(len(m.ro.data)) {
+		memoryData = m.ro.data[address-m.ro.address : address-m.ro.address+uint64(len(data))]
 		access = m.ro.access
-	} else if address >= m.args.address && address+uint32(len(data)) <= m.args.address+uint32(len(m.args.data)) {
-		memoryData = m.args.data[address-m.args.address : address-m.args.address+uint32(len(data))]
+	} else if address >= m.args.address && address+uint64(len(data)) <= m.args.address+uint64(len(m.args.data)) {
+		memoryData = m.args.data[address-m.args.address : address-m.args.address+uint64(len(data))]
 		access = m.args.access
 	}
 
 	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋
 	if access != ReadWrite {
-		return &ErrPageFault{Reason: "memory at address is not writeable", Address: alignToPage(address)}
+		// find the minimum page that is not writeable
+		for i := address / PageSize; i <= (address+uint64(len(data)))/PageSize; i++ {
+			access := m.GetAccess(i)
+			if access != ReadWrite { // return min(page) where the issue was found
+				return &ErrPageFault{Reason: "memory at address is not writeable", Address: i * PageSize}
+			}
+		}
+		return ErrPanicf("inaccessible memory; unable to find the bad memory page")
 	}
 	copy(memoryData, data)
 	return nil
 }
 
-func (m *Memory) Sbrk(size uint32) (uint32, error) {
-	currentHeapPointer := m.rw.address + uint32(len(m.rw.data)) // h
+func (m *Memory) Sbrk(size uint64) (uint64, error) {
+	currentHeapPointer := m.rw.address + uint64(len(m.rw.data)) // h
 	if size == 0 {
 		return currentHeapPointer, nil
 	}
@@ -108,23 +122,23 @@ func (m *Memory) Sbrk(size uint32) (uint32, error) {
 		m.rw.data = make([]byte, alignToPage(newHeapPointer))
 	}
 
-	return m.rw.address + uint32(len(m.rw.data)), nil
+	return m.rw.address + uint64(len(m.rw.data)), nil
 }
 
 // SetAccess updates the access mode
-func (m *Memory) SetAccess(pageIndex uint32, access MemoryAccess) error {
+func (m *Memory) SetAccess(pageIndex uint64, access MemoryAccess) error {
 	address := pageIndex * PageSize
 
-	if address >= m.stack.address && address <= m.stack.address+uint32(len(m.stack.data)) {
+	if address >= m.stack.address && address < m.stack.address+uint64(len(m.stack.data)) {
 		m.stack.access = access
 		return nil
-	} else if address >= m.rw.address && address <= m.rw.address+uint32(len(m.rw.data)) {
+	} else if address >= m.rw.address && address < m.rw.address+uint64(len(m.rw.data)) {
 		m.rw.access = access
 		return nil
-	} else if address >= m.ro.address && address <= m.ro.address+uint32(len(m.ro.data)) {
+	} else if address >= m.ro.address && address < m.ro.address+uint64(len(m.ro.data)) {
 		m.ro.access = access
 		return nil
-	} else if address >= m.args.address && address <= m.args.address+uint32(len(m.args.data)) {
+	} else if address >= m.args.address && address < m.args.address+uint64(len(m.args.data)) {
 		m.args.access = access
 		return nil
 	}
@@ -132,16 +146,16 @@ func (m *Memory) SetAccess(pageIndex uint32, access MemoryAccess) error {
 	return &ErrPageFault{Reason: "page out of valid range", Address: address}
 }
 
-func (m *Memory) GetAccess(pageIndex uint32) MemoryAccess {
+func (m *Memory) GetAccess(pageIndex uint64) MemoryAccess {
 	address := pageIndex * PageSize
 
-	if address >= m.stack.address && address <= m.stack.address+uint32(len(m.stack.data)) {
+	if address >= m.stack.address && address < m.stack.address+uint64(len(m.stack.data)) {
 		return m.stack.access
-	} else if address >= m.rw.address && address <= m.rw.address+uint32(len(m.rw.data)) {
+	} else if address >= m.rw.address && address < m.rw.address+uint64(len(m.rw.data)) {
 		return m.rw.access
-	} else if address >= m.ro.address && address <= m.ro.address+uint32(len(m.ro.data)) {
+	} else if address >= m.ro.address && address < m.ro.address+uint64(len(m.ro.data)) {
 		return m.ro.access
-	} else if address >= m.args.address && address <= m.args.address+uint32(len(m.args.data)) {
+	} else if address >= m.args.address && address < m.args.address+uint64(len(m.args.data)) {
 		return m.args.access
 	}
 
@@ -153,7 +167,7 @@ type Registers [13]uint64
 type Gas int64
 
 // HostCall the generic Ω function definition Ωx(n, ϱ, ω, μ, x) defined in section A.6
-type HostCall[X any] func(hostCall uint32, gasCounter Gas, regs Registers, mem Memory, x X) (Gas, Registers, Memory, X, error)
+type HostCall[X any] func(hostCall uint64, gasCounter Gas, regs Registers, mem Memory, x X) (Gas, Registers, Memory, X, error)
 
 type Mutator interface {
 	Trap() error
@@ -161,43 +175,43 @@ type Mutator interface {
 
 	LoadImm64(Reg, uint64)
 
-	StoreImmU8(uint32, uint32) error
-	StoreImmU16(uint32, uint32) error
-	StoreImmU32(uint32, uint32) error
-	StoreImmU64(uint32, uint32) error
+	StoreImmU8(uint64, uint64) error
+	StoreImmU16(uint64, uint64) error
+	StoreImmU32(uint64, uint64) error
+	StoreImmU64(uint64, uint64) error
 
-	Jump(uint32) error
+	Jump(uint64) error
 
-	JumpIndirect(Reg, uint32) error
-	LoadImm(Reg, uint32)
-	LoadU8(Reg, uint32) error
-	LoadI8(Reg, uint32) error
-	LoadU16(Reg, uint32) error
-	LoadI16(Reg, uint32) error
-	LoadU32(Reg, uint32) error
-	LoadI32(Reg, uint32) error
-	LoadU64(Reg, uint32) error
-	StoreU8(Reg, uint32) error
-	StoreU16(Reg, uint32) error
-	StoreU32(Reg, uint32) error
-	StoreU64(Reg, uint32) error
+	JumpIndirect(Reg, uint64) error
+	LoadImm(Reg, uint64)
+	LoadU8(Reg, uint64) error
+	LoadI8(Reg, uint64) error
+	LoadU16(Reg, uint64) error
+	LoadI16(Reg, uint64) error
+	LoadU32(Reg, uint64) error
+	LoadI32(Reg, uint64) error
+	LoadU64(Reg, uint64) error
+	StoreU8(Reg, uint64) error
+	StoreU16(Reg, uint64) error
+	StoreU32(Reg, uint64) error
+	StoreU64(Reg, uint64) error
 
-	StoreImmIndirectU8(Reg, uint32, uint32) error
-	StoreImmIndirectU16(Reg, uint32, uint32) error
-	StoreImmIndirectU32(Reg, uint32, uint32) error
-	StoreImmIndirectU64(Reg, uint32, uint32) error
+	StoreImmIndirectU8(Reg, uint64, uint64) error
+	StoreImmIndirectU16(Reg, uint64, uint64) error
+	StoreImmIndirectU32(Reg, uint64, uint64) error
+	StoreImmIndirectU64(Reg, uint64, uint64) error
 
-	LoadImmAndJump(Reg, uint32, uint32) error
-	BranchEqImm(Reg, uint32, uint32) error
-	BranchNotEqImm(Reg, uint32, uint32) error
-	BranchLessUnsignedImm(Reg, uint32, uint32) error
-	BranchLessOrEqualUnsignedImm(Reg, uint32, uint32) error
-	BranchGreaterOrEqualUnsignedImm(Reg, uint32, uint32) error
-	BranchGreaterUnsignedImm(Reg, uint32, uint32) error
-	BranchLessSignedImm(Reg, uint32, uint32) error
-	BranchLessOrEqualSignedImm(Reg, uint32, uint32) error
-	BranchGreaterOrEqualSignedImm(Reg, uint32, uint32) error
-	BranchGreaterSignedImm(Reg, uint32, uint32) error
+	LoadImmAndJump(Reg, uint64, uint64) error
+	BranchEqImm(Reg, uint64, uint64) error
+	BranchNotEqImm(Reg, uint64, uint64) error
+	BranchLessUnsignedImm(Reg, uint64, uint64) error
+	BranchLessOrEqualUnsignedImm(Reg, uint64, uint64) error
+	BranchGreaterOrEqualUnsignedImm(Reg, uint64, uint64) error
+	BranchGreaterUnsignedImm(Reg, uint64, uint64) error
+	BranchLessSignedImm(Reg, uint64, uint64) error
+	BranchLessOrEqualSignedImm(Reg, uint64, uint64) error
+	BranchGreaterOrEqualSignedImm(Reg, uint64, uint64) error
+	BranchGreaterSignedImm(Reg, uint64, uint64) error
 
 	MoveReg(Reg, Reg)
 	Sbrk(Reg, Reg) error
@@ -212,57 +226,57 @@ type Mutator interface {
 	ZeroExtend16(Reg, Reg)
 	ReverseBytes(Reg, Reg)
 
-	StoreIndirectU8(Reg, Reg, uint32) error
-	StoreIndirectU16(Reg, Reg, uint32) error
-	StoreIndirectU32(Reg, Reg, uint32) error
-	StoreIndirectU64(Reg, Reg, uint32) error
-	LoadIndirectU8(Reg, Reg, uint32) error
-	LoadIndirectI8(Reg, Reg, uint32) error
-	LoadIndirectU16(Reg, Reg, uint32) error
-	LoadIndirectI16(Reg, Reg, uint32) error
-	LoadIndirectU32(Reg, Reg, uint32) error
-	LoadIndirectI32(Reg, Reg, uint32) error
-	LoadIndirectU64(Reg, Reg, uint32) error
-	AddImm32(Reg, Reg, uint32)
-	AndImm(Reg, Reg, uint32)
-	XorImm(Reg, Reg, uint32)
-	OrImm(Reg, Reg, uint32)
-	MulImm32(Reg, Reg, uint32)
-	SetLessThanUnsignedImm(Reg, Reg, uint32)
-	SetLessThanSignedImm(Reg, Reg, uint32)
-	ShiftLogicalLeftImm32(Reg, Reg, uint32)
-	ShiftLogicalRightImm32(Reg, Reg, uint32)
-	ShiftArithmeticRightImm32(Reg, Reg, uint32)
-	NegateAndAddImm32(Reg, Reg, uint32)
-	SetGreaterThanUnsignedImm(Reg, Reg, uint32)
-	SetGreaterThanSignedImm(Reg, Reg, uint32)
-	ShiftLogicalLeftImmAlt32(Reg, Reg, uint32)
-	ShiftLogicalRightImmAlt32(Reg, Reg, uint32)
-	ShiftArithmeticRightImmAlt32(Reg, Reg, uint32)
-	CmovIfZeroImm(Reg, Reg, uint32)
-	CmovIfNotZeroImm(Reg, Reg, uint32)
-	AddImm64(Reg, Reg, uint32)
-	MulImm64(Reg, Reg, uint32)
-	ShiftLogicalLeftImm64(Reg, Reg, uint32)
-	ShiftLogicalRightImm64(Reg, Reg, uint32)
-	ShiftArithmeticRightImm64(Reg, Reg, uint32)
-	NegateAndAddImm64(Reg, Reg, uint32)
-	ShiftLogicalLeftImmAlt64(Reg, Reg, uint32)
-	ShiftLogicalRightImmAlt64(Reg, Reg, uint32)
-	ShiftArithmeticRightImmAlt64(Reg, Reg, uint32)
-	RotateRight64Imm(Reg, Reg, uint32)
-	RotateRight64ImmAlt(Reg, Reg, uint32)
-	RotateRight32Imm(Reg, Reg, uint32)
-	RotateRight32ImmAlt(Reg, Reg, uint32)
+	StoreIndirectU8(Reg, Reg, uint64) error
+	StoreIndirectU16(Reg, Reg, uint64) error
+	StoreIndirectU32(Reg, Reg, uint64) error
+	StoreIndirectU64(Reg, Reg, uint64) error
+	LoadIndirectU8(Reg, Reg, uint64) error
+	LoadIndirectI8(Reg, Reg, uint64) error
+	LoadIndirectU16(Reg, Reg, uint64) error
+	LoadIndirectI16(Reg, Reg, uint64) error
+	LoadIndirectU32(Reg, Reg, uint64) error
+	LoadIndirectI32(Reg, Reg, uint64) error
+	LoadIndirectU64(Reg, Reg, uint64) error
+	AddImm32(Reg, Reg, uint64)
+	AndImm(Reg, Reg, uint64)
+	XorImm(Reg, Reg, uint64)
+	OrImm(Reg, Reg, uint64)
+	MulImm32(Reg, Reg, uint64)
+	SetLessThanUnsignedImm(Reg, Reg, uint64)
+	SetLessThanSignedImm(Reg, Reg, uint64)
+	ShiftLogicalLeftImm32(Reg, Reg, uint64)
+	ShiftLogicalRightImm32(Reg, Reg, uint64)
+	ShiftArithmeticRightImm32(Reg, Reg, uint64)
+	NegateAndAddImm32(Reg, Reg, uint64)
+	SetGreaterThanUnsignedImm(Reg, Reg, uint64)
+	SetGreaterThanSignedImm(Reg, Reg, uint64)
+	ShiftLogicalLeftImmAlt32(Reg, Reg, uint64)
+	ShiftLogicalRightImmAlt32(Reg, Reg, uint64)
+	ShiftArithmeticRightImmAlt32(Reg, Reg, uint64)
+	CmovIfZeroImm(Reg, Reg, uint64)
+	CmovIfNotZeroImm(Reg, Reg, uint64)
+	AddImm64(Reg, Reg, uint64)
+	MulImm64(Reg, Reg, uint64)
+	ShiftLogicalLeftImm64(Reg, Reg, uint64)
+	ShiftLogicalRightImm64(Reg, Reg, uint64)
+	ShiftArithmeticRightImm64(Reg, Reg, uint64)
+	NegateAndAddImm64(Reg, Reg, uint64)
+	ShiftLogicalLeftImmAlt64(Reg, Reg, uint64)
+	ShiftLogicalRightImmAlt64(Reg, Reg, uint64)
+	ShiftArithmeticRightImmAlt64(Reg, Reg, uint64)
+	RotateRight64Imm(Reg, Reg, uint64)
+	RotateRight64ImmAlt(Reg, Reg, uint64)
+	RotateRight32Imm(Reg, Reg, uint64)
+	RotateRight32ImmAlt(Reg, Reg, uint64)
 
-	BranchEq(Reg, Reg, uint32) error
-	BranchNotEq(Reg, Reg, uint32) error
-	BranchLessUnsigned(Reg, Reg, uint32) error
-	BranchLessSigned(Reg, Reg, uint32) error
-	BranchGreaterOrEqualUnsigned(Reg, Reg, uint32) error
-	BranchGreaterOrEqualSigned(Reg, Reg, uint32) error
+	BranchEq(Reg, Reg, uint64) error
+	BranchNotEq(Reg, Reg, uint64) error
+	BranchLessUnsigned(Reg, Reg, uint64) error
+	BranchLessSigned(Reg, Reg, uint64) error
+	BranchGreaterOrEqualUnsigned(Reg, Reg, uint64) error
+	BranchGreaterOrEqualSigned(Reg, Reg, uint64) error
 
-	LoadImmAndJumpIndirect(Reg, Reg, uint32, uint32) error
+	LoadImmAndJumpIndirect(Reg, Reg, uint64, uint64) error
 
 	Add32(Reg, Reg, Reg)
 	Sub32(Reg, Reg, Reg)
@@ -329,7 +343,7 @@ type AccumulateContextPair struct {
 type IntegratedPVM struct {
 	Code               []byte //p program code
 	Ram                Memory //u RAM
-	InstructionCounter uint32 //i  instruction counter
+	InstructionCounter uint64 //i  instruction counter
 }
 
 type RefineContextPair struct {

@@ -63,7 +63,7 @@ type CodeAndJumpTableLengths struct {
 }
 
 // Deblob p = Ε(|j|) ⌢ E1(z) ⌢ E(|c|) ⌢ E_z(j) ⌢ E(c) ⌢ E(k), |k| = |c| (A.2 v6.0.2)
-func Deblob(bytecode []byte) ([]byte, jam.BitSequence, []uint32, error) {
+func Deblob(bytecode []byte) ([]byte, jam.BitSequence, []uint64, error) {
 	sizes := &CodeAndJumpTableLengths{}
 
 	buff := bytes.NewBuffer(bytecode)
@@ -74,8 +74,8 @@ func Deblob(bytecode []byte) ([]byte, jam.BitSequence, []uint32, error) {
 	}
 
 	// E_z(j)
-	jumpTable := make([]uint32, sizes.JumpTableEntryCount)
-	for i := range sizes.JumpTableEntrySize {
+	jumpTable := make([]uint64, sizes.JumpTableEntryCount)
+	for i := range jumpTable {
 		if err := dec.DecodeFixedLength(&jumpTable[i], uint(sizes.JumpTableEntrySize)); err != nil {
 			return nil, nil, nil, err
 		}
@@ -98,13 +98,13 @@ func Deblob(bytecode []byte) ([]byte, jam.BitSequence, []uint32, error) {
 }
 
 // Skip skip(i N) → N (A.2)
-func Skip(instructionOffset uint32, bitmask []bool) uint32 {
+func Skip(instructionOffset uint64, bitmask []bool) uint64 {
 	for i, b := range bitmask[instructionOffset+1:] {
 		if i > BitmaskMax {
 			return BitmaskMax
 		}
 		if b {
-			return uint32(i)
+			return uint64(i)
 		}
 	}
 	return 0
