@@ -3,11 +3,13 @@ package interpreter
 import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+
+	"github.com/rs/zerolog"
 )
 
 var _ polkavm.Mutator = &Instance{}
 
-func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.Gas, regs polkavm.Registers, memory polkavm.Memory) (*Instance, error) {
+func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.Gas, regs polkavm.Registers, memory polkavm.Memory, opts ...Option) (*Instance, error) {
 	code, bitmask, jumpTable, err := polkavm.Deblob(program)
 	if err != nil {
 		return nil, err
@@ -22,7 +24,7 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.Gas,
 		}
 	}
 
-	return &Instance{
+	i := &Instance{
 		memory:                 memory,
 		regs:                   regs,
 		instructionCounter:     instructionOffset,
@@ -31,7 +33,11 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.Gas,
 		jumpTable:              jumpTable,
 		bitmask:                append(bitmask, true), // k ⌢ [1, 1, ... ]
 		basicBlockInstructions: basicBlockInstructions,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(i)
+	}
+	return i, nil
 }
 
 type Instance struct {
@@ -43,6 +49,8 @@ type Instance struct {
 	jumpTable              []uint64            // j
 	bitmask                jam.BitSequence     // k
 	basicBlockInstructions map[uint64]struct{} // ϖ
+
+	log *zerolog.Logger
 }
 
 func (i *Instance) skip() {
@@ -127,4 +135,12 @@ func (i *Instance) djump(address0 uint64) error {
 	// (▸, j_(a/ZA)−1) otherwise
 	i.instructionCounter = instructionOffset
 	return nil
+}
+
+type Option func(*Instance)
+
+func WithLogger(log zerolog.Logger) Option {
+	return func(i *Instance) {
+		i.log = &log
+	}
 }
