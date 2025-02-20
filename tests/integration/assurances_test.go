@@ -48,9 +48,9 @@ func mapBlock(i AssurancesInput) block.Block {
 			EA: mapSlice(i.Assurances, func(a Assurance) block.Assurance {
 				return block.Assurance{
 					Anchor:         mapHash(a.Anchor),
-					Bitfield:       [block.AvailBitfieldBytes]byte(stringToHex(a.Bitfield)),
+					Bitfield:       [block.AvailBitfieldBytes]byte(crypto.StringToHex(a.Bitfield)),
 					ValidatorIndex: a.ValidatorIndex,
-					Signature:      crypto.Ed25519Signature(stringToHex(a.Signature)),
+					Signature:      crypto.Ed25519Signature(crypto.StringToHex(a.Signature)),
 				}
 			}),
 		},
@@ -142,7 +142,7 @@ func mapReport(r *Report) *block.WorkReport {
 		},
 		CoreIndex:         r.CoreIndex,
 		AuthorizerHash:    mapHash(r.AuthorizerHash),
-		Output:            stringToHex(r.AuthOutput),
+		Output:            crypto.StringToHex(r.AuthOutput),
 		SegmentRootLookup: segmentRootLookup,
 		WorkResults: mapSlice(r.Results, func(rr ReportResult) block.WorkResult {
 			return block.WorkResult{
@@ -159,7 +159,7 @@ func mapReport(r *Report) *block.WorkReport {
 }
 
 func mapHash(s string) crypto.Hash {
-	return crypto.Hash(stringToHex(s))
+	return crypto.Hash(crypto.StringToHex(s))
 }
 
 func TestAssurancesTiny(t *testing.T) {

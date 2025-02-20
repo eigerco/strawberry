@@ -1,13 +1,13 @@
-package integration_test
+//go:build integration
+
+package integration
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"io"
-	"log"
 	"os"
 	"strings"
 	"testing"
@@ -77,7 +77,7 @@ func mapAuthState(s AuthState) state.State {
 		}
 		authPools[i] = make([]crypto.Hash, len(pool))
 		for j, hash := range pool {
-			authPools[i][j] = crypto.Hash(stringToHex(hash))
+			authPools[i][j] = crypto.Hash(crypto.StringToHex(hash))
 		}
 	}
 
@@ -90,7 +90,7 @@ func mapAuthState(s AuthState) state.State {
 		}
 		// Iterate over all hashes in the JSON slice and assign them to the queue
 		for i, hashStr := range auths {
-			authQueues[uint16(coreIndex)][i] = crypto.Hash(stringToHex(hashStr))
+			authQueues[uint16(coreIndex)][i] = crypto.Hash(crypto.StringToHex(hashStr))
 		}
 	}
 
@@ -98,19 +98,6 @@ func mapAuthState(s AuthState) state.State {
 		CoreAuthorizersPool:      authPools,
 		PendingAuthorizersQueues: authQueues,
 	}
-}
-
-func stringToHex(s string) []byte {
-	// Remove 0x prefix if present
-	s = strings.TrimPrefix(s, "0x")
-
-	// Decode hex string
-	bytes, err := hex.DecodeString(s)
-	if err != nil {
-		log.Printf("Error decoding hex string '%s': %v", s, err)
-		panic(err)
-	}
-	return bytes
 }
 
 func TestAuthorizations(t *testing.T) {
@@ -186,7 +173,7 @@ func mapGuarantees(data *AuthData) block.GuaranteesExtrinsic {
 		guarantee := block.Guarantee{
 			WorkReport: block.WorkReport{
 				CoreIndex:      uint16(auth.Core),
-				AuthorizerHash: crypto.Hash(stringToHex(auth.AuthHash)),
+				AuthorizerHash: crypto.Hash(crypto.StringToHex(auth.AuthHash)),
 				// Other fields left at zero values since not used in test vectors
 			},
 			Timeslot: jamtime.Timeslot(data.Input.Slot),

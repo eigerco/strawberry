@@ -93,14 +93,14 @@ func mapStatisticsInput(s StatisticsInput) block.Block {
 				TicketProofs: mapSlice(s.Extrinsic.Tickets, func(t Ticket) block.TicketProof {
 					return block.TicketProof{
 						EntryIndex: t.Attempt,
-						Proof:      [784]byte(stringToHex(t.Signature)),
+						Proof:      [784]byte(crypto.StringToHex(t.Signature)),
 					}
 				}),
 			},
 			EP: mapSlice(s.Extrinsic.Preimages, func(p Preimage) block.Preimage {
 				return block.Preimage{
 					ServiceIndex: p.Requester,
-					Data:         stringToHex(p.Blob),
+					Data:         crypto.StringToHex(p.Blob),
 				}
 			}),
 			EG: block.GuaranteesExtrinsic{
@@ -111,7 +111,7 @@ func mapStatisticsInput(s StatisticsInput) block.Block {
 						Credentials: mapSlice(g.Signatures, func(sig Signature) block.CredentialSignature {
 							return block.CredentialSignature{
 								ValidatorIndex: sig.ValidatorIndex,
-								Signature:      crypto.Ed25519Signature(stringToHex(sig.Signature)),
+								Signature:      crypto.Ed25519Signature(crypto.StringToHex(sig.Signature)),
 							}
 						}),
 					}
@@ -120,9 +120,9 @@ func mapStatisticsInput(s StatisticsInput) block.Block {
 			EA: mapSlice(s.Extrinsic.Assurances, func(a Assurance) block.Assurance {
 				return block.Assurance{
 					Anchor:         mapHash(a.Anchor),
-					Bitfield:       [block.AvailBitfieldBytes]byte(stringToHex(a.Bitfield)),
+					Bitfield:       [block.AvailBitfieldBytes]byte(crypto.StringToHex(a.Bitfield)),
 					ValidatorIndex: a.ValidatorIndex,
-					Signature:      crypto.Ed25519Signature(stringToHex(a.Signature)),
+					Signature:      crypto.Ed25519Signature(crypto.StringToHex(a.Signature)),
 				}
 			}),
 			ED: mapDisputes(s.Extrinsic.Disputes),
@@ -187,7 +187,7 @@ func TestStatistics(t *testing.T) {
 			preState := mapStatisticsState(tc.PreState)
 			reporters := make(crypto.ED25519PublicKeySet)
 			for _, reporter := range tc.Input.Reporters {
-				reporters.Add(stringToHex(reporter))
+				reporters.Add(crypto.StringToHex(reporter))
 			}
 
 			preState.ValidatorStatistics = statetransition.CalculateNewValidatorStatistics(newBlock, preState.TimeslotIndex, preState.ValidatorStatistics, reporters, preState.ValidatorState.CurrentValidators)
