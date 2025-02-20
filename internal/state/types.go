@@ -25,7 +25,8 @@ type Judgements struct {
 
 type CoreAssignments [common.TotalNumberOfCores]*Assignment
 
-type PendingAuthorizersQueues [common.TotalNumberOfCores][PendingAuthorizersQueueSize]crypto.Hash
+type PendingAuthorizersQueue [PendingAuthorizersQueueSize]crypto.Hash
+type PendingAuthorizersQueues [common.TotalNumberOfCores]PendingAuthorizersQueue
 
 type EntropyPool [EntropyPoolSize]crypto.Hash
 type CoreAuthorizersPool [common.TotalNumberOfCores][]crypto.Hash // TODO: Maximum length per core: MaxAuthorizersPerCore
@@ -41,10 +42,10 @@ type AccumulationHistory [jamtime.TimeslotsPerEpoch]map[crypto.Hash]struct{} // 
 
 // AccumulationState characterization of state components (equation 174 v0.4.5)
 type AccumulationState struct {
-	ServiceState             service.ServiceState                                                // Service accounts δ (d ∈ D⟨NS → A⟩)
-	ValidatorKeys            safrole.ValidatorsData                                              // Validator keys ι (i ∈ ⟦K⟧V)
-	PendingAuthorizersQueues [common.TotalNumberOfCores][PendingAuthorizersQueueSize]crypto.Hash // Queue of authorizers (q ∈ C⟦H⟧QHC)
-	PrivilegedServices       service.PrivilegedServices                                          // Privileges state (x ∈ (NS, NS, NS, D⟨NS → NG⟩))
+	ServiceState             service.ServiceState                               // Service accounts δ (d ∈ D⟨NS → A⟩)
+	ValidatorKeys            safrole.ValidatorsData                             // Validator keys ι (i ∈ ⟦K⟧V)
+	PendingAuthorizersQueues [common.TotalNumberOfCores]PendingAuthorizersQueue // Queue of authorizers (q ∈ C⟦H⟧QHC)
+	PrivilegedServices       service.PrivilegedServices                         // Privileges state (x ∈ (NS, NS, NS, D⟨NS → NG⟩))
 }
 
 // AccumulationOperand represents a single operand for accumulation (equation 179 v0.4.5)
