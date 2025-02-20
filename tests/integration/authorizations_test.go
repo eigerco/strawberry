@@ -161,6 +161,14 @@ func TestAuthorizations(t *testing.T) {
 					"Mismatch in CoreAuthorizersPool[%d]", i)
 			}
 
+			for i := range expectedPostState.PendingAuthorizersQueues {
+				expected := preState.PendingAuthorizersQueues[i]
+				actual := expectedPostState.PendingAuthorizersQueues[i]
+
+				require.ElementsMatch(t, expected, actual,
+					"Mismatch in CoreAuthorizersPool[%d]", i)
+			}
+
 			// If error expected, verify it
 			if data.Output.Err != "" {
 				require.Error(t, err)
