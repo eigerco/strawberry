@@ -17,6 +17,7 @@ var GasCosts = map[Opcode]Gas{
 	LoadI8:                          1,
 	LoadU16:                         1,
 	LoadI16:                         1,
+	LoadImm64:                       1,
 	LoadU32:                         1,
 	LoadI32:                         1,
 	LoadU64:                         1,

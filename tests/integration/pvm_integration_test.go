@@ -7,9 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 
@@ -21,32 +22,33 @@ import (
 var testvectors embed.FS
 
 type TestCase struct {
-	Name           string            `json:"name"`
-	InitialRegs    polkavm.Registers `json:"initial-regs"`
-	InitialPc      uint32            `json:"initial-pc"`
-	InitialPageMap []Page            `json:"initial-page-map"`
-	InitialMemory  []MemoryChunk     `json:"initial-memory"`
-	InitialGas     polkavm.Gas       `json:"initial-gas"`
-	Program        []byte            `json:"program"`
-	ExpectedStatus string            `json:"expected-status"`
-	ExpectedRegs   polkavm.Registers `json:"expected-regs"`
-	ExpectedPc     uint32            `json:"expected-pc"`
-	ExpectedMemory []MemoryChunk     `json:"expected-memory"`
-	ExpectedGas    polkavm.Gas       `json:"expected-gas"`
+	Name                     string            `json:"name"`
+	InitialRegs              polkavm.Registers `json:"initial-regs"`
+	InitialPc                uint64            `json:"initial-pc"`
+	InitialPageMap           []Page            `json:"initial-page-map"`
+	InitialMemory            []MemoryChunk     `json:"initial-memory"`
+	InitialGas               polkavm.Gas       `json:"initial-gas"`
+	Program                  []byte            `json:"program"`
+	ExpectedStatus           string            `json:"expected-status"`
+	ExpectedRegs             polkavm.Registers `json:"expected-regs"`
+	ExpectedPc               uint64            `json:"expected-pc"`
+	ExpectedMemory           []MemoryChunk     `json:"expected-memory"`
+	ExpectedGas              polkavm.Gas       `json:"expected-gas"`
+	ExpectedPageFaultAddress uint64            `json:"expected-page-fault-address"`
 }
 
 type Page struct {
-	Address    uint32 `json:"address"`
-	Length     uint32 `json:"length"`
+	Address    uint64 `json:"address"`
+	Length     uint64 `json:"length"`
 	IsWritable bool   `json:"is-writable"`
 }
 
 type MemoryChunk struct {
-	Address  uint32 `json:"address"`
+	Address  uint64 `json:"address"`
 	Contents []byte `json:"contents"`
 }
 
-func Test_Vectors(t *testing.T) {
+func Test_PVM_Vectors(t *testing.T) {
 	rootPath := "vectors/pvm"
 	ff, err := testvectors.ReadDir(rootPath)
 	if err != nil {
@@ -67,22 +69,35 @@ func Test_Vectors(t *testing.T) {
 			mem := getMemoryMap(tc.InitialPageMap)
 
 			for _, initialMem := range tc.InitialMemory {
+				pageIndex := initialMem.Address / polkavm.PageSize
+				access := mem.GetAccess(pageIndex)
+				err = mem.SetAccess(pageIndex, polkavm.ReadWrite)
+				assert.NoError(t, err)
 				err := mem.Write(initialMem.Address, initialMem.Contents)
 				if err != nil {
 					t.Fatal(err)
 				}
+				err = mem.SetAccess(pageIndex, access)
+				assert.NoError(t, err)
 			}
 			i, err := interpreter.Instantiate(tc.Program, tc.InitialPc, tc.InitialGas, tc.InitialRegs, mem)
 			require.NoError(t, err)
 
 			_, err = interpreter.Invoke(i)
+
 			assert.Equal(t, tc.ExpectedStatus, error2status(err))
 			instructionCounter, gas, regs, mem := i.Results()
 
-			assert.Equal(t, int(tc.ExpectedPc), int(instructionCounter))
-			for i := range regs {
-				assert.Equalf(t, uint32(tc.ExpectedRegs[i]), uint32(regs[i]), "reg: %v", polkavm.Reg(i))
+			var errPageFault *polkavm.ErrPageFault
+			if errors.As(err, &errPageFault) {
+				assert.Equal(t, tc.ExpectedPageFaultAddress, uint64(errPageFault.Address))
+			} else {
+				// We only check gas when there is no page fault because the expected value is wrong in tests (it charges an extra gas unit).
+				assert.Equal(t, tc.ExpectedGas, gas)
 			}
+
+			assert.Equal(t, int(tc.ExpectedPc), int(instructionCounter))
+			assert.Equal(t, tc.ExpectedRegs, regs)
 			for _, expectedMem := range tc.ExpectedMemory {
 				data := make([]byte, len(expectedMem.Contents))
 				err := mem.Read(expectedMem.Address, data)
@@ -91,13 +106,12 @@ func Test_Vectors(t *testing.T) {
 				}
 				assert.Equal(t, expectedMem.Contents, data)
 			}
-			assert.Equal(t, tc.ExpectedGas, gas)
 		})
 	}
 }
 
 func getMemoryMap(pageMap []Page) polkavm.Memory {
-	var roAddr, rwAddr, stackAddr, roSize, rwSize, stackSize uint32
+	var roAddr, rwAddr, stackAddr, roSize, rwSize, stackSize uint64
 	for _, page := range pageMap {
 		if !page.IsWritable {
 			roAddr = page.Address
@@ -123,9 +137,13 @@ func error2status(err error) string {
 	if errors.Is(err, polkavm.ErrHostCall) {
 		return "host_call"
 	}
-	switch err.(type) {
-	case *polkavm.ErrPanic:
-		return "trap"
+	var errPanic *polkavm.ErrPanic
+	var errPageFault *polkavm.ErrPageFault
+	switch {
+	case errors.As(err, &errPanic):
+		return "panic"
+	case errors.As(err, &errPageFault):
+		return "page-fault"
 	default:
 		return fmt.Sprintf("unknown: %s", err)
 	}

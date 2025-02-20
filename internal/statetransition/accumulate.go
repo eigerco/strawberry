@@ -75,7 +75,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	}
 
 	// F (equation B.10)
-	hostCallFunc := func(hostCall uint32, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctx polkavm.AccumulateContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.AccumulateContextPair, error) {
+	hostCallFunc := func(hostCall uint64, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctx polkavm.AccumulateContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.AccumulateContextPair, error) {
 		// s
 		currentService := accState.ServiceState[serviceIndex]
 		var err error

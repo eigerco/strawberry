@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/chain"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/pkg/network/cert"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
@@ -22,6 +24,7 @@ import (
 type Node struct {
 	Context         context.Context
 	Cancel          context.CancelFunc
+	blockService    *chain.BlockService
 	transport       *transport.Transport
 	protocolManager *protocol.Manager
 	peersLock       sync.RWMutex
@@ -127,13 +130,21 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys ValidatorKey
 		IsBuilder:       true,
 		MaxBuilderSlots: 20,
 	}
+
+	// Create block service
+	bs, err := chain.NewBlockService()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create block service: %w", err)
+	}
+	node.blockService = bs
 	protoManager, err := protocol.NewManager(protoConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create protocol manager: %w", err)
 	}
 
 	// Register what type of streams the Node will support.
-	protoManager.Registry.RegisterHandler(protocol.StreamKindBlockRequest, handlers.NewBlockRequestHandler())
+	protoManager.Registry.RegisterHandler(protocol.StreamKindBlockRequest, handlers.NewBlockRequestHandler(bs))
+	node.blockRequester = &handlers.BlockRequester{}
 
 	// Create transport
 	transportConfig := transport.Config{
@@ -214,24 +225,23 @@ func (n *Node) ConnectToPeer(addr *net.UDPAddr) error {
 	return nil
 }
 
-// TODO somehwat of Mock atm. Will add full implementaion in the coming PR's.
-func (n *Node) RequestBlock(ctx context.Context, hash crypto.Hash, ascending bool, peerKey ed25519.PublicKey) ([]byte, error) {
+// RequestBlocks requests a block with the given hash from peers
+func (n *Node) RequestBlocks(ctx context.Context, hash crypto.Hash, ascending bool, maxBlocks uint32, peerKey ed25519.PublicKey) ([]block.Block, error) {
 	n.peersLock.RLock()
-	existingPeer := n.peersSet.GetByEd25519Key(peerKey)
-	n.peersLock.RUnlock()
+	defer n.peersLock.RUnlock()
 
-	if existingPeer != nil {
+	if existingPeer := n.peersSet.GetByEd25519Key(peerKey); existingPeer != nil {
 		stream, err := existingPeer.ProtoConn.OpenStream(ctx, protocol.StreamKindBlockRequest)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open stream: %w", err)
 		}
 
 		defer stream.Close()
-		blockData, err := n.blockRequester.RequestBlocks(ctx, stream, hash, ascending)
+		blocks, err := n.blockRequester.RequestBlocks(ctx, stream, hash, ascending, maxBlocks)
 		if err != nil {
 			return nil, fmt.Errorf("failed to request block from peer: %w", err)
 		}
-		return blockData, nil
+		return blocks, nil
 	}
 	return nil, fmt.Errorf("no peers available to request block from")
 }

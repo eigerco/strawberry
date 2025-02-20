@@ -50,7 +50,7 @@ func HistoricalLookup(
 	addressToRead, addressToWrite := regs[A1], regs[A2]
 
 	hashData := make([]byte, 32)
-	if err := mem.Read(uint32(addressToRead), hashData); err != nil {
+	if err := mem.Read(addressToRead, hashData); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
@@ -186,7 +186,7 @@ func Export(
 	z := min(requestedLength, common.SizeOfSegment)
 
 	data := make([]byte, z)
-	if err := mem.Read(uint32(p), data); err != nil {
+	if err := mem.Read(p, data); err != nil {
 		// x = ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -230,7 +230,7 @@ func Machine(
 
 	// p = µ[po ... po+pz]
 	p := make([]byte, pz)
-	err := mem.Read(uint32(po), p)
+	err := mem.Read(po, p)
 	if err != nil {
 		// p = ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
@@ -247,7 +247,7 @@ func Machine(
 	pvm := IntegratedPVM{
 		Code:               p,
 		Ram:                Memory{}, // u = {V▸[0,0,...], A▸[∅, ∅, ...]}
-		InstructionCounter: uint32(i),
+		InstructionCounter: i,
 	}
 
 	// (ω′7,m′) = (n, m ∪ {n ↦ {p,u,i}})
@@ -279,13 +279,13 @@ func Peek(
 
 	// (m[n]u)[s...s+z]
 	s := make([]byte, z)
-	err := u.Ram.Read(uint32(sReg), s)
+	err := u.Ram.Read(sReg, s)
 	if err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
 	// (ω′7, µ′) = (OK, µ′o...o+z = s)
-	err = mem.Write(uint32(o), s)
+	err = mem.Write(o, s)
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -314,12 +314,12 @@ func Poke(
 	}
 
 	s := make([]byte, z)
-	err := mem.Read(uint32(sReg), s)
+	err := mem.Read(sReg, s)
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
-	err = innerPVM.Ram.Write(uint32(o), s)
+	err = innerPVM.Ram.Write(o, s)
 	if err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
@@ -356,12 +356,12 @@ func Zero(
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
 		// (u′A)p..+c = [W, W, ...]
-		if err := u.Ram.SetAccess(uint32(pageIndex), ReadWrite); err != nil {
+		if err := u.Ram.SetAccess(pageIndex, ReadWrite); err != nil {
 			return gas, regs, mem, ctxPair, err
 		}
 
 		// (u′V)pZP..+cZP = [0, 0, ...]
-		start := uint32(pageIndex * uint64(PageSize))
+		start := pageIndex * uint64(PageSize)
 		zeroBuf := make([]byte, PageSize)
 		if err := u.Ram.Write(start, zeroBuf); err != nil {
 			return gas, regs, mem, ctxPair, err
@@ -398,13 +398,13 @@ func Void(
 	}
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
-		if u.Ram.GetAccess(uint32(pageIndex)) == Inaccessible {
+		if u.Ram.GetAccess(pageIndex) == Inaccessible {
 			// ∃i ∈ N_{p..+c} : (uA)[i] = ∅
 			return gas, withCode(regs, HUH), mem, ctxPair, nil
 		}
 
 		// (u′V)pZP..+cZP = [0, 0, ...]
-		start := uint32(pageIndex * uint64(PageSize))
+		start := pageIndex * uint64(PageSize)
 		zeroBuf := make([]byte, PageSize)
 		if err := u.Ram.Write(start, zeroBuf); err != nil {
 			return gas, regs, mem, ctxPair, err
@@ -413,7 +413,7 @@ func Void(
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
 		// (u′A)p..+c = [∅, ∅, ...]
-		if err := u.Ram.SetAccess(uint32(pageIndex), Inaccessible); err != nil {
+		if err := u.Ram.SetAccess(pageIndex, Inaccessible); err != nil {
 			return gas, regs, mem, ctxPair, err
 		}
 	}
@@ -438,13 +438,13 @@ func Invoke(
 	pvmKey, addr := regs[A0], regs[A1]
 
 	// let (g, w) = (g, w) ∶ E8(g) ⌢ E#8(w) = μo⋅⋅⋅+112 if No⋅⋅⋅+112 ⊂ V∗μ
-	invokeGas, err := readNumber[Gas](mem, uint32(addr), 8)
+	invokeGas, err := readNumber[Gas](mem, addr, 8)
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 	var invokeRegs Registers // w
 	for i := range 13 {
-		invokeReg, err := readNumber[uint64](mem, uint32(addr+(uint64(i+1)*8)), 8)
+		invokeReg, err := readNumber[uint64](mem, addr+(uint64(i+1)*8), 8)
 		if err != nil {
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
@@ -456,7 +456,7 @@ func Invoke(
 	if !ok { // if n ∉ m
 		return gas, withCode(regs, WHO), mem, ctxPair, nil // (WHO, ω8, μ, m)
 	}
-	updateIntegratedPVM := func(isHostCall bool, resultInstr uint32, resultMem Memory) {
+	updateIntegratedPVM := func(isHostCall bool, resultInstr uint64, resultMem Memory) {
 		pvm.Ram = resultMem
 		if isHostCall {
 			// m*[n]i = i′ + 1 if c ∈ {̵h} × NR
@@ -476,7 +476,7 @@ func Invoke(
 	resultInstr, resultGas, resultRegs, resultMem := i.Results()
 	if bb, err := jam.Marshal([14]uint64(append([]uint64{uint64(resultGas)}, resultRegs[:]...))); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, ω8, μ, m)
-	} else if err := mem.Write(uint32(addr), bb); err != nil {
+	} else if err := mem.Write(addr, bb); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, ω8, μ, m)
 	}
 	if invokeErr != nil {

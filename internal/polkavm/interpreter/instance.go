@@ -7,18 +7,18 @@ import (
 
 var _ polkavm.Mutator = &Instance{}
 
-func Instantiate(program []byte, instructionOffset uint32, gasLimit polkavm.Gas, regs polkavm.Registers, memory polkavm.Memory) (*Instance, error) {
+func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.Gas, regs polkavm.Registers, memory polkavm.Memory) (*Instance, error) {
 	code, bitmask, jumpTable, err := polkavm.Deblob(program)
 	if err != nil {
 		return nil, err
 	}
 
 	// ϖ ≡ [0] ⌢ [n + 1 + skip(n) | n <− N_|c| ∧ kn = 1 ∧ cn ∈ T ]
-	basicBlockInstructions := map[uint32]struct{}{0: {}}
+	basicBlockInstructions := map[uint64]struct{}{0: {}}
 
 	for i, b := range bitmask {
 		if b && polkavm.Opcode(code[i]).IsBasicBlockTermination() {
-			basicBlockInstructions[uint32(i)+1] = struct{}{}
+			basicBlockInstructions[uint64(i)+1+polkavm.Skip(uint64(i), bitmask)] = struct{}{}
 		}
 	}
 
@@ -37,12 +37,12 @@ func Instantiate(program []byte, instructionOffset uint32, gasLimit polkavm.Gas,
 type Instance struct {
 	memory                 polkavm.Memory      // The memory sequence; a member of the set M (μ)
 	regs                   polkavm.Registers   // The registers (ω)
-	instructionCounter     uint32              // The instruction counter (ı)
+	instructionCounter     uint64              // The instruction counter (ı)
 	gasRemaining           polkavm.Gas         // The gas counter (ϱ)
 	code                   []byte              // ζ
-	jumpTable              []uint32            // j
+	jumpTable              []uint64            // j
 	bitmask                jam.BitSequence     // k
-	basicBlockInstructions map[uint32]struct{} // ϖ
+	basicBlockInstructions map[uint64]struct{} // ϖ
 }
 
 func (i *Instance) skip() {
@@ -58,7 +58,7 @@ func (i *Instance) deductGas(cost polkavm.Gas) error {
 }
 
 // load E−1_n(μ↺_{a...+n}) where a is address and n is length
-func (i *Instance) load(address uint32, length int, v any) error {
+func (i *Instance) load(address uint64, length int, v any) error {
 	slice := make([]byte, length)
 	if err := i.memory.Read(address, slice); err != nil {
 		return err
@@ -71,7 +71,7 @@ func (i *Instance) load(address uint32, length int, v any) error {
 }
 
 // store μ′↺_{a...+|v|} = E_|v|(v) where a is address and |v| is the length in bytes required to store v
-func (i *Instance) store(address uint32, v any) error {
+func (i *Instance) store(address uint64, v any) error {
 	data, err := jam.Marshal(v)
 	if err != nil {
 		return err
@@ -84,22 +84,17 @@ func (i *Instance) store(address uint32, v any) error {
 	return nil
 }
 
-func (i *Instance) setAndSkip32(dst polkavm.Reg, value uint32) {
-	i.regs[dst] = uint64(value)
-	i.skip()
-}
-
-func (i *Instance) setAndSkip64(dst polkavm.Reg, value uint64) {
+func (i *Instance) setAndSkip(dst polkavm.Reg, value uint64) {
 	i.regs[dst] = value
 	i.skip()
 }
 
 // branch (b, C) =⇒ (ε, ı′) (eq. A.16)
-func (i *Instance) branch(condition bool, target uint32) error {
+func (i *Instance) branch(condition bool, target uint64) error {
 	if condition {
 		// (☇, ı) if b ∉ ϖ
 		if _, ok := i.basicBlockInstructions[target]; !ok {
-			return polkavm.ErrPanicf("indirect jump to non-block-termination instruction")
+			return polkavm.ErrPanicf("indirect jump to non-block-termination instruction target=%d opcode=%d", target, i.code[target])
 		}
 		// (▸, b) otherwise
 		i.instructionCounter = target
@@ -111,8 +106,9 @@ func (i *Instance) branch(condition bool, target uint32) error {
 }
 
 // djump (a) =⇒ (ε, ı′) (eq. A.17)
-func (i *Instance) djump(address uint32) error {
-	// (∎, ı) if a = 232 − 216
+func (i *Instance) djump(address0 uint64) error {
+	address := uint32(address0)
+	// (∎, ı) if a = 2^32 − 2^16
 	if address == polkavm.AddressReturnToHost {
 		return polkavm.ErrHalt
 	}

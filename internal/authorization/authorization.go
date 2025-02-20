@@ -39,7 +39,7 @@ func (a *Authorization) InvokePVM(
 
 	// F ∈ Ω⟨{}⟩∶ (n, ϱ, ω, µ)
 	hostCall := func(
-		hostCall uint32,
+		hostCall uint64,
 		gasCounter polkavm.Gas,
 		regs polkavm.Registers,
 		mem polkavm.Memory,

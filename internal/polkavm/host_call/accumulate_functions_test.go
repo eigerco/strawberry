@@ -896,8 +896,8 @@ func TestAccumulate(t *testing.T) {
 				err = mem.Write(rwAddress, v)
 				require.NoError(t, err)
 
-				initialRegs[addrReg] = uint64(rwAddress)
-				rwAddress = rwAddress + uint32(len(v))
+				initialRegs[addrReg] = rwAddress
+				rwAddress = rwAddress + uint64(len(v))
 			}
 			for i, v := range tc.initialRegs {
 				initialRegs[i] = v
