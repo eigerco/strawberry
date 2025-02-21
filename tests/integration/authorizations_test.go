@@ -77,7 +77,7 @@ func mapAuthState(s AuthState) state.State {
 		}
 		authPools[i] = make([]crypto.Hash, len(pool))
 		for j, hash := range pool {
-			authPools[i][j] = crypto.Hash(crypto.StringToHex(hash))
+			authPools[i][j] = crypto.Hash(mustStringToHex(hash))
 		}
 	}
 
@@ -90,7 +90,7 @@ func mapAuthState(s AuthState) state.State {
 		}
 		// Iterate over all hashes in the JSON slice and assign them to the queue
 		for i, hashStr := range auths {
-			authQueues[uint16(coreIndex)][i] = crypto.Hash(crypto.StringToHex(hashStr))
+			authQueues[uint16(coreIndex)][i] = crypto.Hash(mustStringToHex(hashStr))
 		}
 	}
 
@@ -173,7 +173,7 @@ func mapGuarantees(data *AuthData) block.GuaranteesExtrinsic {
 		guarantee := block.Guarantee{
 			WorkReport: block.WorkReport{
 				CoreIndex:      uint16(auth.Core),
-				AuthorizerHash: crypto.Hash(crypto.StringToHex(auth.AuthHash)),
+				AuthorizerHash: crypto.Hash(mustStringToHex(auth.AuthHash)),
 				// Other fields left at zero values since not used in test vectors
 			},
 			Timeslot: jamtime.Timeslot(data.Input.Slot),

@@ -27,7 +27,7 @@ func KeccakData(data []byte) Hash {
 }
 
 // StringToHex converts a hex string to a byte slice
-func StringToHex(s string) []byte {
+func StringToHex(s string) ([]byte, error) {
 	// Remove 0x prefix if present
 	s = strings.TrimPrefix(s, "0x")
 
@@ -35,7 +35,7 @@ func StringToHex(s string) []byte {
 	bytes, err := hex.DecodeString(s)
 	if err != nil {
 		log.Printf("Error decoding hex string '%s': %v", s, err)
-		panic(err)
+		return nil, err
 	}
-	return bytes
+	return bytes, nil
 }

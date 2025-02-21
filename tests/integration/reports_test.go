@@ -181,44 +181,52 @@ type MMRPeaks struct {
 
 func mapKey(v ValidatorKey) *crypto.ValidatorKey {
 	return &crypto.ValidatorKey{
-		Bandersnatch: crypto.BandersnatchPublicKey(crypto.StringToHex(v.Bandersnatch)),
-		Ed25519:      ed25519.PublicKey(crypto.StringToHex(v.Ed25519)),
-		Bls:          crypto.BlsKey(crypto.StringToHex(v.BLS)),
-		Metadata:     crypto.MetadataKey(crypto.StringToHex(v.Metadata)),
+		Bandersnatch: crypto.BandersnatchPublicKey(mustStringToHex(v.Bandersnatch)),
+		Ed25519:      ed25519.PublicKey(mustStringToHex(v.Ed25519)),
+		Bls:          crypto.BlsKey(mustStringToHex(v.BLS)),
+		Metadata:     crypto.MetadataKey(mustStringToHex(v.Metadata)),
 	}
+}
+
+func mustStringToHex(s string) []byte {
+	bytes, err := crypto.StringToHex(s)
+	if err != nil {
+		panic(err)
+	}
+	return bytes
 }
 
 func mapWorkReport(r Report) block.WorkReport {
 	segmentRootLookup := make(map[crypto.Hash]crypto.Hash)
 	for _, entry := range r.SegmentRootLookup {
-		wpHash := crypto.Hash(crypto.StringToHex(entry.WorkPackageHash))
-		segRoot := crypto.Hash(crypto.StringToHex(entry.SegmentTreeRoot))
+		wpHash := crypto.Hash(mustStringToHex(entry.WorkPackageHash))
+		segRoot := crypto.Hash(mustStringToHex(entry.SegmentTreeRoot))
 		segmentRootLookup[wpHash] = segRoot
 	}
 
 	return block.WorkReport{
 		WorkPackageSpecification: block.WorkPackageSpecification{
-			WorkPackageHash:           crypto.Hash(crypto.StringToHex(r.PackageSpec.Hash)),
+			WorkPackageHash:           crypto.Hash(mustStringToHex(r.PackageSpec.Hash)),
 			AuditableWorkBundleLength: uint32(r.PackageSpec.Length),
-			ErasureRoot:               crypto.Hash(crypto.StringToHex(r.PackageSpec.ErasureRoot)),
-			SegmentRoot:               crypto.Hash(crypto.StringToHex(r.PackageSpec.ExportsRoot)),
+			ErasureRoot:               crypto.Hash(mustStringToHex(r.PackageSpec.ErasureRoot)),
+			SegmentRoot:               crypto.Hash(mustStringToHex(r.PackageSpec.ExportsRoot)),
 			SegmentCount:              uint16(r.PackageSpec.ExportsCount),
 		},
 		RefinementContext: block.RefinementContext{
 			Anchor: block.RefinementContextAnchor{
-				HeaderHash:         crypto.Hash(crypto.StringToHex(r.Context.Anchor)),
-				PosteriorStateRoot: crypto.Hash(crypto.StringToHex(r.Context.StateRoot)),
-				PosteriorBeefyRoot: crypto.Hash(crypto.StringToHex(r.Context.BeefyRoot)),
+				HeaderHash:         crypto.Hash(mustStringToHex(r.Context.Anchor)),
+				PosteriorStateRoot: crypto.Hash(mustStringToHex(r.Context.StateRoot)),
+				PosteriorBeefyRoot: crypto.Hash(mustStringToHex(r.Context.BeefyRoot)),
 			},
 			LookupAnchor: block.RefinementContextLookupAnchor{
-				HeaderHash: crypto.Hash(crypto.StringToHex(r.Context.LookupAnchor)),
+				HeaderHash: crypto.Hash(mustStringToHex(r.Context.LookupAnchor)),
 				Timeslot:   jamtime.Timeslot(r.Context.LookupAnchorSlot),
 			},
 			PrerequisiteWorkPackage: mapStringSliceToHashes(r.Context.Prerequisites),
 		},
 		CoreIndex:         uint16(r.CoreIndex),
-		AuthorizerHash:    crypto.Hash(crypto.StringToHex(r.AuthorizerHash)),
-		Output:            crypto.StringToHex(r.AuthOutput),
+		AuthorizerHash:    crypto.Hash(mustStringToHex(r.AuthorizerHash)),
+		Output:            mustStringToHex(r.AuthOutput),
 		SegmentRootLookup: segmentRootLookup,
 		WorkResults:       mapWorkResults(r.Results),
 	}
@@ -229,15 +237,15 @@ func mapWorkResults(results []WorkResult) []block.WorkResult {
 	for i, r := range results {
 		var output block.WorkResultOutputOrError
 		if val, ok := r.Result["ok"]; ok {
-			output.Inner = crypto.StringToHex(val)
+			output.Inner = mustStringToHex(val)
 		} else if _, ok := r.Result["err"]; ok {
 			output.Inner = block.NoError // Or appropriate error mapping
 		}
 
 		workResults[i] = block.WorkResult{
 			ServiceId:              block.ServiceId(r.ServiceID),
-			ServiceHashCode:        crypto.Hash(crypto.StringToHex(r.CodeHash)),
-			PayloadHash:            crypto.Hash(crypto.StringToHex(r.PayloadHash)),
+			ServiceHashCode:        crypto.Hash(mustStringToHex(r.CodeHash)),
+			PayloadHash:            crypto.Hash(mustStringToHex(r.PayloadHash)),
 			GasPrioritizationRatio: uint64(r.Gas),
 			Output:                 output,
 		}
@@ -249,7 +257,7 @@ func mapGuarantee(g Guarantee) block.Guarantee {
 	credentials := make([]block.CredentialSignature, len(g.Signatures))
 	for i, sig := range g.Signatures {
 		var signature crypto.Ed25519Signature
-		copy(signature[:], crypto.StringToHex(sig.Signature))
+		copy(signature[:], mustStringToHex(sig.Signature))
 		credentials[i] = block.CredentialSignature{
 			ValidatorIndex: uint16(sig.ValidatorIndex),
 			Signature:      signature,
@@ -337,7 +345,7 @@ func TestReports(t *testing.T) {
 			if len(data.Output.Ok.Reporters) > 0 {
 				// Verify each expected reporter exists in the reporters set
 				for _, reporter := range data.Output.Ok.Reporters {
-					reporterKey := ed25519.PublicKey(crypto.StringToHex(reporter))
+					reporterKey := ed25519.PublicKey(mustStringToHex(reporter))
 					require.True(t, reporters.Has(reporterKey), "Missing expected reporter")
 				}
 				// Verify no extra reporters
@@ -347,8 +355,8 @@ func TestReports(t *testing.T) {
 			// Verify output.Ok.Reported
 			if len(data.Output.Ok.Reported) > 0 {
 				for _, r := range data.Output.Ok.Reported {
-					wpHash := crypto.Hash(crypto.StringToHex(r.WorkPackageHash))
-					segRoot := crypto.Hash(crypto.StringToHex(r.SegmentTreeRoot))
+					wpHash := crypto.Hash(mustStringToHex(r.WorkPackageHash))
+					segRoot := crypto.Hash(mustStringToHex(r.SegmentTreeRoot))
 					found := false
 					for _, newCoreAssignment := range newCoreAssignments {
 						if newCoreAssignment.WorkReport.WorkPackageSpecification.WorkPackageHash == wpHash &&
@@ -403,7 +411,7 @@ func mapServices(services []ServiceInfo) service.ServiceState {
 			Storage:                make(map[crypto.Hash][]byte),
 			PreimageLookup:         make(map[crypto.Hash][]byte),
 			PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
-			CodeHash:               crypto.Hash(crypto.StringToHex(s.Info.CodeHash)),
+			CodeHash:               crypto.Hash(mustStringToHex(s.Info.CodeHash)),
 			Balance:                uint64(s.Info.Balance),
 			GasLimitForAccumulator: uint64(s.Info.MinItemGas),
 			GasLimitOnTransfer:     uint64(s.Info.MinMemoGas),
@@ -430,8 +438,8 @@ func mapRecentBlocks(blocks []BlockState) []state.BlockState {
 		// Map work report hashes
 		workReportHashes := make(map[crypto.Hash]crypto.Hash)
 		for _, r := range b.Reported {
-			wpHash := crypto.Hash(crypto.StringToHex(r.WorkPackageHash))
-			segHash := crypto.Hash(crypto.StringToHex(r.SegmentTreeRoot))
+			wpHash := crypto.Hash(mustStringToHex(r.WorkPackageHash))
+			segHash := crypto.Hash(mustStringToHex(r.SegmentTreeRoot))
 			workReportHashes[wpHash] = segHash
 		}
 
@@ -442,12 +450,12 @@ func mapRecentBlocks(blocks []BlockState) []state.BlockState {
 				mmr[j] = nil
 				continue
 			}
-			hash := crypto.Hash(crypto.StringToHex(peak))
+			hash := crypto.Hash(mustStringToHex(peak))
 			mmr[j] = &hash
 		}
 
-		headerHash := crypto.Hash(crypto.StringToHex(b.HeaderHash))
-		stateRoot := crypto.Hash(crypto.StringToHex(b.StateRoot))
+		headerHash := crypto.Hash(mustStringToHex(b.HeaderHash))
+		stateRoot := crypto.Hash(mustStringToHex(b.StateRoot))
 
 		result[i] = state.BlockState{
 			HeaderHash:            headerHash,
@@ -469,7 +477,7 @@ func mapAuthPools(pools [][]string) state.CoreAuthorizersPool {
 
 		result[i] = make([]crypto.Hash, len(pool))
 		for j, hash := range pool {
-			result[i][j] = crypto.Hash(crypto.StringToHex(hash))
+			result[i][j] = crypto.Hash(mustStringToHex(hash))
 		}
 	}
 	return result
@@ -505,7 +513,7 @@ func mapAvailAssignments(assignments []*AvailAssignments) state.CoreAssignments 
 func mapStringSliceToHashes(strings []string) []crypto.Hash {
 	hashes := make([]crypto.Hash, len(strings))
 	for i, s := range strings {
-		hashes[i] = crypto.Hash(crypto.StringToHex(s))
+		hashes[i] = crypto.Hash(mustStringToHex(s))
 	}
 	return hashes
 }
@@ -513,7 +521,7 @@ func mapStringSliceToHashes(strings []string) []crypto.Hash {
 func mapEntropyPool(entropyStrings []string) state.EntropyPool {
 	var entropyPool state.EntropyPool
 	for i, entropyHex := range entropyStrings {
-		copy(entropyPool[i][:], crypto.StringToHex(entropyHex))
+		copy(entropyPool[i][:], mustStringToHex(entropyHex))
 	}
 	return entropyPool
 }
