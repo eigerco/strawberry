@@ -698,12 +698,21 @@ func CalculateNewCoreAuthorizations(header block.Header, guarantees block.Guaran
 		newAuths := make([]crypto.Hash, len(currentAuthorizations[c]))
 		copy(newAuths, currentAuthorizations[c])
 
-		// F(c) - Remove authorizer if it was used in a guarantee for this core. 8.3 Graypaper 0.5.4
+		// Track whether a guarantee's authorizer removal has occurred
+		guaranteeAuthorizerRemoved := false
+
+		// F(c) - Remove authorizer if it was used in a guarantee for this core. 8.3 Graypaper 0.6.2
 		for _, guarantee := range guarantees.Guarantees {
 			if guarantee.WorkReport.CoreIndex == c {
 				// Remove the used authorizer from the list
 				newAuths = removeAuthorizer(newAuths, guarantee.WorkReport.AuthorizerHash)
+				guaranteeAuthorizerRemoved = true
 			}
+		}
+
+		// If no guarantee was found for this core, then left-shift the authorizers (remove the first element)
+		if !guaranteeAuthorizerRemoved && len(newAuths) > 0 {
+			newAuths = newAuths[1:]
 		}
 
 		// Get new authorizer from the queue based on current timeslot

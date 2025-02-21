@@ -1,8 +1,11 @@
 package crypto
 
 import (
+	"encoding/hex"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/sha3"
+	"log"
+	"strings"
 )
 
 type Hash [HashSize]byte
@@ -21,4 +24,18 @@ func KeccakData(data []byte) Hash {
 	var result Hash
 	copy(result[:], hashed)
 	return result
+}
+
+// StringToHex converts a hex string to a byte slice
+func StringToHex(s string) ([]byte, error) {
+	// Remove 0x prefix if present
+	s = strings.TrimPrefix(s, "0x")
+
+	// Decode hex string
+	bytes, err := hex.DecodeString(s)
+	if err != nil {
+		log.Printf("Error decoding hex string '%s': %v", s, err)
+		return nil, err
+	}
+	return bytes, nil
 }
