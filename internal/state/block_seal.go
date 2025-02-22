@@ -63,16 +63,16 @@ func SealBlock(
 
 	var (
 		sealSignature crypto.BandersnatchSignature
-		vrfsSignature crypto.BandersnatchSignature
+		vrfSignature  crypto.BandersnatchSignature
 	)
 
-	sealSignature, vrfsSignature, err = SignBlock(*header, winningTicketOrKey, privateKey, entropy)
+	sealSignature, vrfSignature, err = SignBlock(*header, winningTicketOrKey, privateKey, entropy)
 	if err != nil {
 		return err
 	}
 
 	header.BlockSealSignature = sealSignature
-	header.VRFSignature = vrfsSignature
+	header.VRFSignature = vrfSignature
 
 	return nil
 }
@@ -89,7 +89,7 @@ func SignBlock(
 	entropy crypto.Hash, // η′3
 ) (
 	sealSignature crypto.BandersnatchSignature,
-	vrfsSignature crypto.BandersnatchSignature,
+	vrfSignature crypto.BandersnatchSignature,
 	err error,
 ) {
 	switch tok := ticketOrKey.(type) {
@@ -113,23 +113,25 @@ func SignBlockWithTicket(
 	entropy crypto.Hash, // η′3
 ) (
 	sealSignature crypto.BandersnatchSignature,
-	vrfsSignature crypto.BandersnatchSignature,
+	vrfSignature crypto.BandersnatchSignature,
 	err error,
 ) {
-	unsealedHeader, err := encodeUnsealedHeader(header)
-	if err != nil {
-		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
-	}
 
 	// Build the context: XT ⌢ η′3 ++ ir
 	sealContext := buildTicketSealContext(entropy, ticket.EntryIndex)
 
-	sealSignature, err = bandersnatch.Sign(privateKey, sealContext, unsealedHeader)
+	// We need to add the VRF signature to the header before we seal. This seems
+	// like a circle dependency, but it's actually not. To get around this we
+	// can sign without the aux data (unsealed header), since the seal output
+	// hash, Y(Hs) will be the same regardless of aux. We then use this to
+	// produce the VRF signature and add it to the header before we do the final
+	// seal.
+	sealVRFSignature, err := bandersnatch.Sign(privateKey, sealContext, []byte{})
 	if err != nil {
 		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
 	}
 
-	sealOutputHash, err := bandersnatch.OutputHash(sealSignature)
+	sealOutputHash, err := bandersnatch.OutputHash(sealVRFSignature)
 	if err != nil {
 		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
 	}
@@ -142,12 +144,24 @@ func SignBlockWithTicket(
 		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, ErrBlockSealInvalidAuthor
 	}
 
-	vrfsSignature, err = signBlockVRFS(sealOutputHash, privateKey)
+	vrfSignature, err = signBlockVRFS(sealOutputHash, privateKey)
 	if err != nil {
 		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
 	}
 
-	return sealSignature, vrfsSignature, nil
+	// Final seal including the VRF signature added to the header.
+	header.VRFSignature = vrfSignature
+	unsealedHeader, err := encodeUnsealedHeader(header)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	sealSignature, err = bandersnatch.Sign(privateKey, sealContext, unsealedHeader)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	return sealSignature, vrfSignature, nil
 }
 
 // Helper to build the ticket sealing context.
@@ -169,7 +183,7 @@ func SignBlockWithFallback(
 	entropy crypto.Hash, // // η′3
 ) (
 	sealSignature crypto.BandersnatchSignature,
-	vrfsSignature crypto.BandersnatchSignature,
+	vrfSignature crypto.BandersnatchSignature,
 	err error,
 ) {
 	// Extra safety check. Ha's public key should match the winning public key.
@@ -181,31 +195,39 @@ func SignBlockWithFallback(
 		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, ErrBlockSealInvalidAuthor
 	}
 
-	unsealedHeader, err := encodeUnsealedHeader(header)
+	// Build the context: XF ⌢ η′3
+	sealContext := buildTicketFallbackContext(entropy)
+
+	// Get Y(Hs) so we can produce and add the VRF signature to the header
+	// before we do the final seal.
+	sealVRFSignature, err := bandersnatch.Sign(privateKey, sealContext, []byte{})
 	if err != nil {
 		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
 	}
 
-	// Build the context: XF ⌢ η′3
-	sealContext := buildTicketFallbackContext(entropy)
+	sealOutputHash, err := bandersnatch.OutputHash(sealVRFSignature)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	vrfSignature, err = signBlockVRFS(sealOutputHash, privateKey)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
+
+	// Final sealing using the included VRF signature.
+	header.VRFSignature = vrfSignature
+	unsealedHeader, err := encodeUnsealedHeader(header)
+	if err != nil {
+		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
+	}
 
 	sealSignature, err = bandersnatch.Sign(privateKey, sealContext, unsealedHeader)
 	if err != nil {
 		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
 	}
 
-	sealOutputHash, err := bandersnatch.OutputHash(sealSignature)
-	if err != nil {
-		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
-	}
-
-	vrfsSignature, err = signBlockVRFS(sealOutputHash, privateKey)
-	if err != nil {
-		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
-	}
-
-	return sealSignature, vrfsSignature, nil
-
+	return sealSignature, vrfSignature, nil
 }
 
 // Helper to build the fallback sealing context.
@@ -221,7 +243,7 @@ func signBlockVRFS(
 	privateKey crypto.BandersnatchPrivateKey,
 ) (crypto.BandersnatchSignature, error) {
 	// Construct the message: XE ⌢ Y(Hs)
-	vrfContext := buildVRFSContext(sealOutputHash)
+	vrfContext := buildVRFContext(sealOutputHash)
 
 	// Sign the constructed message to get Hv.
 	vrfSignature, err := bandersnatch.Sign(privateKey, vrfContext, []byte{})
@@ -233,7 +255,7 @@ func signBlockVRFS(
 }
 
 // Helper to build the fallback sealing context.
-func buildVRFSContext(sealOutputHash crypto.BandersnatchOutputHash) []byte {
+func buildVRFContext(sealOutputHash crypto.BandersnatchOutputHash) []byte {
 	// Construct the message: XE ⌢ Y(Hs)
 	return append([]byte(EntropyContext), sealOutputHash[:]...)
 }
@@ -250,4 +272,109 @@ func encodeUnsealedHeader(header block.Header) ([]byte, error) {
 	// header bytes.
 	// See equation C.19 in the graypaper. (v0.5.4)
 	return bytes[:len(bytes)-96], nil
+}
+
+func VerifyBlockSeal(
+	header *block.Header,
+	state *State,
+) (bool, error) {
+	winningTicketOrKey, err := getWinningTicketOrKey(header, state)
+	if err != nil {
+		return false, err
+	}
+
+	entropy := state.EntropyPool[3] // η_3
+
+	return VerifyBlockSignatures(*header, winningTicketOrKey, state.ValidatorState.CurrentValidators, entropy)
+}
+
+func VerifyBlockSignatures(
+	header block.Header,
+	ticketOrKey TicketOrKey,
+	currentValidators safrole.ValidatorsData,
+	entropy crypto.Hash,
+) (bool, error) {
+	unsealedHeader, err := encodeUnsealedHeader(header)
+	if err != nil {
+		return false, err
+	}
+
+	sealOutputHash, err := bandersnatch.OutputHash(header.BlockSealSignature)
+	if err != nil {
+		return false, err
+	}
+
+	switch tok := ticketOrKey.(type) {
+	// The ticket case is more challenging because we don't immediately know the
+	// public key of the validator who signed.
+	case block.Ticket:
+		// Sanity check.
+		if sealOutputHash != tok.Identifier {
+			return false, nil
+		}
+
+		sealContext := buildTicketSealContext(entropy, tok.EntryIndex)
+		publicKey := crypto.BandersnatchPublicKey{}
+
+		// Since the original ticket submission was anonymous we need to figure
+		// out which validator signed. We do this by looping through all
+		// currentValidators and seeing which validator's bandersnatch public
+		// key is able to verify the seal signature.
+		for _, keys := range currentValidators {
+			if keys == nil {
+				continue
+			}
+
+			ok, _ := bandersnatch.Verify(
+				keys.Bandersnatch,
+				sealContext,
+				unsealedHeader,
+				header.BlockSealSignature,
+			)
+			if ok {
+				publicKey = keys.Bandersnatch
+			}
+		}
+
+		if publicKey == (crypto.BandersnatchPublicKey{}) {
+			return false, nil
+		}
+
+		// Use the found public key to also check the VRF signature.
+		ok, _ := bandersnatch.Verify(
+			publicKey,
+			buildVRFContext(sealOutputHash),
+			[]byte{},
+			header.VRFSignature,
+		)
+		if !ok {
+			return false, nil
+		}
+		return true, nil
+
+	// This case is much easier since we actually know the public key from the
+	// start.
+	case crypto.BandersnatchPublicKey:
+		ok, _ := bandersnatch.Verify(
+			tok,
+			buildTicketFallbackContext(entropy),
+			unsealedHeader,
+			header.BlockSealSignature,
+		)
+		if !ok {
+			return false, nil
+		}
+		ok, _ = bandersnatch.Verify(
+			tok,
+			buildVRFContext(sealOutputHash),
+			[]byte{},
+			header.VRFSignature,
+		)
+		if !ok {
+			return false, nil
+		}
+		return true, nil
+	default:
+		return false, fmt.Errorf("unexpected type for ticketOrKey: %T", tok)
+	}
 }
