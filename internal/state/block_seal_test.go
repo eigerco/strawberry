@@ -22,11 +22,8 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
 	t.Logf("random timeslot: %d", randomTimeslot)
 
-	// Replace one of the keys in the accumulator with our public key. This
-	// should later be selected as the winning key.
+	// Create a winning ticket for our private key.
 	privateKey := testutils.RandomBandersnatchPrivateKey(t)
-	publicKey, err := bandersnatch.Public(privateKey)
-	require.NoError(t, err)
 	ticket := createTicket(t, privateKey, entropy, 0)
 	ticketBodies[randomTimeslot] = ticket
 
@@ -41,9 +38,19 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 	}
 
 	currentValidators := safrole.ValidatorsData{}
+	for i := range currentValidators {
+		currentValidators[i] = &crypto.ValidatorKey{
+			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
+		}
+	}
+
+	// Add our public key to the current validators set.
+	publicKey, err := bandersnatch.Public(privateKey)
+	require.NoError(t, err)
 	currentValidators[1] = &crypto.ValidatorKey{
 		Bandersnatch: publicKey,
 	}
+
 	state := &State{
 		EntropyPool: [4]crypto.Hash{
 			testutils.RandomHash(t),
@@ -64,7 +71,24 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 	assert.NotEmpty(t, header.BlockSealSignature)
 	assert.NotEmpty(t, header.VRFSignature)
 
+	// Tampering with the block seal signature should fail verification.
+	sealSignature := header.BlockSealSignature
+	header.BlockSealSignature = testutils.RandomBandersnatchSignature(t)
 	ok, err := VerifyBlockSeal(header, state)
+	require.NoError(t, err)
+	require.False(t, ok)
+	header.BlockSealSignature = sealSignature
+
+	// Tampering with the VRF signature should fail verification.
+	vrfSignature := header.VRFSignature
+	header.VRFSignature = testutils.RandomBandersnatchSignature(t)
+	ok, err = VerifyBlockSeal(header, state)
+	require.NoError(t, err)
+	require.False(t, ok)
+	header.VRFSignature = vrfSignature
+
+	// Valid signatures verify.
+	ok, err = VerifyBlockSeal(header, state)
 	require.NoError(t, err)
 	require.True(t, ok)
 }
@@ -113,7 +137,24 @@ func TestSealVerifyBlockFallback(t *testing.T) {
 	assert.NotEmpty(t, header.BlockSealSignature)
 	assert.NotEmpty(t, header.VRFSignature)
 
+	// Tampering with the block seal signature should fail verification.
+	sealSignature := header.BlockSealSignature
+	header.BlockSealSignature = testutils.RandomBandersnatchSignature(t)
 	ok, err := VerifyBlockSeal(header, state)
+	require.NoError(t, err)
+	require.False(t, ok)
+	header.BlockSealSignature = sealSignature
+
+	// Tampering with the VRF signature should fail verification.
+	vrfSignature := header.VRFSignature
+	header.VRFSignature = testutils.RandomBandersnatchSignature(t)
+	ok, err = VerifyBlockSeal(header, state)
+	require.NoError(t, err)
+	require.False(t, ok)
+	header.VRFSignature = vrfSignature
+
+	// Valid signatures verify.
+	ok, err = VerifyBlockSeal(header, state)
 	require.NoError(t, err)
 	require.True(t, ok)
 }
