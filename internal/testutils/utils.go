@@ -57,10 +57,10 @@ func RandomED25519PublicKey(t *testing.T) ed25519.PublicKey {
 }
 
 func RandomBandersnatchPublicKey(t *testing.T) crypto.BandersnatchPublicKey {
-	hash := make([]byte, crypto.BandersnatchSerializedSize)
-	_, err := rand.Read(hash)
+	privateKey := RandomBandersnatchPrivateKey(t)
+	publicKey, err := bandersnatch.Public(privateKey)
 	require.NoError(t, err)
-	return crypto.BandersnatchPublicKey(hash)
+	return publicKey
 }
 
 func RandomBandersnatchPrivateKey(t *testing.T) crypto.BandersnatchPrivateKey {
@@ -96,10 +96,13 @@ func RandomValidatorKey(t *testing.T) *crypto.ValidatorKey {
 }
 
 func RandomBandersnatchSignature(t *testing.T) crypto.BandersnatchSignature {
+	privateKey := RandomBandersnatchPrivateKey(t)
 	hash := make([]byte, 96)
 	_, err := rand.Read(hash)
 	require.NoError(t, err)
-	return crypto.BandersnatchSignature(hash)
+	signature, err := bandersnatch.Sign(privateKey, hash, hash)
+	require.NoError(t, err)
+	return signature
 }
 
 func RandomBandersnatchRingCommitment(t *testing.T) crypto.RingCommitment {
