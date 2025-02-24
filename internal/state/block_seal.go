@@ -333,6 +333,7 @@ func VerifyBlockSignatures(
 			)
 			if ok {
 				publicKey = keys.Bandersnatch
+				break
 			}
 		}
 
