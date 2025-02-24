@@ -192,6 +192,73 @@ func TestSealBlockInvalidAuthor(t *testing.T) {
 	require.ErrorIs(t, err, ErrBlockSealInvalidAuthor)
 }
 
+func TestVerfyBlockInvalidVRFSignature(t *testing.T) {
+	entropy := testutils.RandomHash(t)
+	ticketBodies := randomTicketBodies(t, entropy)
+
+	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
+	t.Logf("random timeslot: %d", randomTimeslot)
+
+	// Create a winning ticket for our private key.
+	privateKey := testutils.RandomBandersnatchPrivateKey(t)
+	ticket := createTicket(t, privateKey, entropy, 0)
+	ticketBodies[randomTimeslot] = ticket
+
+	ticketAccumulator := safrole.TicketAccumulator{}
+	ticketAccumulator.Set(ticketBodies)
+
+	header := &block.Header{
+		ParentHash:     testutils.RandomHash(t),
+		PriorStateRoot: testutils.RandomHash(t),
+		ExtrinsicHash:  testutils.RandomHash(t),
+		TimeSlotIndex:  jamtime.Timeslot(randomTimeslot),
+	}
+
+	currentValidators := safrole.ValidatorsData{}
+	for i := range currentValidators {
+		currentValidators[i] = &crypto.ValidatorKey{
+			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
+		}
+	}
+
+	// Add our public key to the current validators set.
+	publicKey, err := bandersnatch.Public(privateKey)
+	require.NoError(t, err)
+	currentValidators[1] = &crypto.ValidatorKey{
+		Bandersnatch: publicKey,
+	}
+
+	state := &State{
+		EntropyPool: [4]crypto.Hash{
+			testutils.RandomHash(t),
+			testutils.RandomHash(t),
+			testutils.RandomHash(t),
+			entropy,
+		},
+		ValidatorState: validator.ValidatorState{
+			SafroleState: safrole.State{
+				SealingKeySeries: ticketAccumulator,
+			},
+			CurrentValidators: currentValidators,
+		},
+	}
+
+	vrfSignature := testutils.RandomBandersnatchSignature(t)
+	sealContext := buildTicketSealContext(entropy, ticket.EntryIndex)
+
+	header.VRFSignature = vrfSignature
+	unsealedHeader, err := encodeUnsealedHeader(*header)
+	require.NoError(t, err)
+
+	sealSignature, err := bandersnatch.Sign(privateKey, sealContext, unsealedHeader)
+	require.NoError(t, err)
+	header.BlockSealSignature = sealSignature
+
+	ok, err := VerifyBlockSeal(header, state)
+	require.NoError(t, err)
+	require.False(t, ok)
+}
+
 func createTicket(t *testing.T, privateKey crypto.BandersnatchPrivateKey, entropy crypto.Hash, attempt uint8) block.Ticket {
 	vrfInput := buildTicketSealContext(entropy, attempt)
 	signature, err := bandersnatch.Sign(privateKey, vrfInput, []byte{})
