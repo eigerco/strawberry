@@ -51,6 +51,10 @@ func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream 
 		return fmt.Errorf("failed to read message 1: %w", err)
 	}
 
+	if len(msg1.Content) < 2 {
+		return fmt.Errorf("message is too short")
+	}
+
 	var coreIndex uint16
 	if err = jam.Unmarshal(msg1.Content[:2], &coreIndex); err != nil {
 		return fmt.Errorf("failed to unmarshal core index: %w", err)
