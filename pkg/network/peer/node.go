@@ -13,6 +13,7 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/network/cert"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
@@ -22,14 +23,15 @@ import (
 // Node manages peer connections, handles protocol messages, and coordinates network operations.
 // Each Node can act as both a client and server, maintaining connections with multiple peers simultaneously.
 type Node struct {
-	Context         context.Context
-	Cancel          context.CancelFunc
-	blockService    *chain.BlockService
-	transport       *transport.Transport
-	protocolManager *protocol.Manager
-	peersLock       sync.RWMutex
-	peersSet        *PeerSet
-	blockRequester  *handlers.BlockRequester
+	Context              context.Context
+	Cancel               context.CancelFunc
+	blockService         *chain.BlockService
+	transport            *transport.Transport
+	protocolManager      *protocol.Manager
+	peersLock            sync.RWMutex
+	peersSet             *PeerSet
+	blockRequester       *handlers.BlockRequester
+	workPackageSubmitter *handlers.WorkPackageSubmitter
 }
 
 // ValidatorKeys holds the cryptographic keys required for a validator node.
@@ -146,6 +148,10 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys ValidatorKey
 	protoManager.Registry.RegisterHandler(protocol.StreamKindBlockRequest, handlers.NewBlockRequestHandler(bs))
 	node.blockRequester = &handlers.BlockRequester{}
 
+	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}))
+	submitter := &handlers.WorkPackageSubmitter{}
+	node.workPackageSubmitter = submitter
+
 	// Create transport
 	transportConfig := transport.Config{
 		PublicKey:     keys.EdPub,
@@ -244,6 +250,27 @@ func (n *Node) RequestBlocks(ctx context.Context, hash crypto.Hash, ascending bo
 		return blocks, nil
 	}
 	return nil, fmt.Errorf("no peers available to request block from")
+}
+
+// SubmitWorkPackage sends a work-package submission to a peer
+func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work.Package, extrinsics []byte, peerKey ed25519.PublicKey) error {
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
+
+	peer := n.peersSet.GetByEd25519Key(peerKey)
+	if peer == nil {
+		return fmt.Errorf("no peer available for submission with the given key")
+	}
+
+	stream, err := peer.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageSubmit)
+	if err != nil {
+		return fmt.Errorf("failed to open submission stream: %w", err)
+	}
+
+	if err = n.workPackageSubmitter.SubmitWorkPackage(ctx, stream, coreIndex, pkg, extrinsics); err != nil {
+		return fmt.Errorf("failed to submit work package: %w", err)
+	}
+	return nil
 }
 
 // Start begins the node's network operations, including listening for incoming connections.
