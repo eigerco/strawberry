@@ -1782,14 +1782,13 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	for _, workReport := range workReports {
 		if len(workReport.RefinementContext.PrerequisiteWorkPackage) == 0 && len(workReport.SegmentRootLookup) == 0 {
 			immediatelyAccWorkReports = append(immediatelyAccWorkReports, workReport)
-			continue
 		} else if len(workReport.RefinementContext.PrerequisiteWorkPackage) > 0 || len(workReport.SegmentRootLookup) != 0 {
 			// |(w_x)p| > 0 ∨ wl ≠ {} (part of eq. 12.5)
 			workReportWithDeps = append(workReportWithDeps, getWorkReportDependencies(workReport))
 		}
 	}
 
-	// WQ ≡ E([D(w) S w <− W, |(w_x)p| > 0 ∨ wl ≠ {}], {ξ) (eq. 12.5)
+	// WQ ≡ E([D(w) | w <− W, |(w_x)p| > 0 ∨ wl ≠ {}], {ξ) (eq. 12.5)
 	var queuedWorkReports = updateQueue(workReportWithDeps, flattenAccumulationHistory(currentState.AccumulationHistory))
 
 	// let m = Ht mod E
@@ -1814,7 +1813,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	// let g = max(GT, GA ⋅ C + [∑ x∈V(χ_g)](x)) (eq. 12.20)
 	gasLimit := max(service.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
 
-	// let (n, o, t, C) = ∆+(g, W∗, (χ, δ, ι, φ), χg ) (eq. 12.21)
+	// let (n, o, t, C) = ∆+(g, W∗, (χ, δ, ι, φ), χg) (eq. 12.21)
 	maxReports, newAccumulationState, transfers, hashPairs := NewAccumulator(currentState, header, newTimeslot).
 		SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
 			PrivilegedServices:       currentState.PrivilegedServices,
@@ -1852,41 +1851,36 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 
 	// ∀i ∈ N_E (eq. 12.27)
 	for i := range jamtime.TimeslotsPerEpoch {
-		indexPerEpoch := (timeslotPerEpoch - jamtime.Timeslot(i)) % jamtime.TimeslotsPerEpoch
-
+		indexPerEpoch := mod(int(timeslotPerEpoch)-i, jamtime.TimeslotsPerEpoch)
 		if i == 0 { // if i = 0
 			// ϑ′↺m−i ≡ E(WQ, ξ′E−1)
 			newAccumulationQueue[indexPerEpoch] = updateQueue(queuedWorkReports, lastAccumulation)
-		} else if 1 <= i && jamtime.Timeslot(i) < newTimeslot-currentState.TimeslotIndex { // if 1 ≤ i < τ ′ − τ
+		} else if 1 <= i && jamtime.Timeslot(i) < newTimeslot-currentState.TimeslotIndex { // if 1 ≤ i < τ′ − τ
 			// ϑ′↺m−i ≡ []
-			newAccumulationQueue[indexPerEpoch] = []state.WorkReportWithUnAccumulatedDependencies{}
-		} else if jamtime.Timeslot(i) >= newTimeslot-currentState.TimeslotIndex { // if i ≥ τ ′ − τ
+			newAccumulationQueue[indexPerEpoch] = nil
+		} else if jamtime.Timeslot(i) >= newTimeslot-currentState.TimeslotIndex { // if i ≥ τ′ − τ
 			// ϑ′↺m−i ≡ E(ϑ↺m−i, ξ′E−1)
 			newAccumulationQueue[indexPerEpoch] = updateQueue(currentState.AccumulationQueue[indexPerEpoch], lastAccumulation)
 		}
 	}
 
-	return newAccumulationQueue,
-		newAccumulationHistory,
-		postAccumulationServiceState,
-		newPrivilegedServices,
-		newValidatorKeys,
-		newPendingAuthorizersQueues,
-		hashPairs
+	return
 }
 
 // accumulationPriority Q(r ⟦(W, {H})⟧) → ⟦W⟧ (eq. 12.8)
 func accumulationPriority(workReportAndDeps []state.WorkReportWithUnAccumulatedDependencies) []block.WorkReport {
 	var workReports []block.WorkReport
 	for _, wd := range workReportAndDeps {
-		workReports = append(workReports, wd.WorkReport)
+		if len(wd.Dependencies) == 0 {
+			workReports = append(workReports, wd.WorkReport)
+		}
 	}
 
 	if len(workReports) == 0 {
 		return []block.WorkReport{}
 	}
 
-	return accumulationPriority(updateQueue(workReportAndDeps, getWorkPackageHashes(workReports)))
+	return append(workReports, accumulationPriority(updateQueue(workReportAndDeps, getWorkPackageHashes(workReports)))...)
 }
 
 // getWorkReportDependencies D(w) ≡ (w, {(wx)p} ∪ K(wl)) (eq. 12.6)
@@ -2626,4 +2620,15 @@ func (a *Accumulator) Delta1(
 
 	// InvokePVM VM for accumulation (ΨA)
 	return a.InvokePVM(accumulationState, a.newTimeslot, serviceIndex, gasLimit, operands)
+}
+
+func mod(a, b int) int {
+	m := a % b
+	if a < 0 && b < 0 {
+		m -= b
+	}
+	if a < 0 && b > 0 {
+		m += b
+	}
+	return m
 }
