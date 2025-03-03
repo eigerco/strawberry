@@ -716,7 +716,6 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 	})
 
 	t.Run("remove used authorizer and add new one", func(t *testing.T) {
-		t.Skip("[Issue 223] Due to reports test vector not expecting this logic")
 		header := block.Header{
 			TimeSlotIndex: 1,
 		}
@@ -749,6 +748,31 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		assert.NotContains(t, newAuths[0], usedAuth)
 	})
 
+	t.Run("left-shift authorizers when no guarantee used", func(t *testing.T) {
+		header := block.Header{
+			TimeSlotIndex: 1,
+		}
+
+		// Set up current authorizations with multiple authorizers
+		currentAuths := state.CoreAuthorizersPool{}
+		auth1 := testutils.RandomHash(t)
+		auth2 := testutils.RandomHash(t)
+		currentAuths[0] = []crypto.Hash{auth1, auth2}
+
+		// Set up pending authorizations with new authorizer
+		pendingAuths := state.PendingAuthorizersQueues{}
+		newAuth := testutils.RandomHash(t)
+		pendingAuths[0][1] = newAuth
+
+		newAuths := CalculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
+
+		// Check that auth1 was removed (left-shift) and newAuth was added
+		require.Len(t, newAuths[0], 2)
+		assert.Equal(t, auth2, newAuths[0][0], "First authorizer should be auth2 after left-shift")
+		assert.Equal(t, newAuth, newAuths[0][1], "Second authorizer should be the new one")
+		assert.NotContains(t, newAuths[0], auth1, "auth1 should be removed by left-shift")
+	})
+
 	t.Run("maintain max size limit", func(t *testing.T) {
 		header := block.Header{
 			TimeSlotIndex: 1,
@@ -767,10 +791,11 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 
 		newAuths := CalculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
 
-		// Check that size limit is maintained and oldest auth was removed
+		// Check that size limit is maintained and both oldest auth and left-shifted auth were removed
 		require.Len(t, newAuths[0], state.MaxAuthorizersPerCore)
 		assert.Equal(t, newAuth, newAuths[0][state.MaxAuthorizersPerCore-1])
-		assert.NotEqual(t, currentAuths[0][0], newAuths[0][0])
+		assert.NotEqual(t, currentAuths[0][0], newAuths[0][0], "First auth should be removed")
+		assert.Equal(t, currentAuths[0][1], newAuths[0][0], "Second auth should be first now due to left-shift")
 	})
 
 	t.Run("handle empty pending authorization", func(t *testing.T) {
@@ -779,17 +804,55 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		}
 
 		currentAuths := state.CoreAuthorizersPool{}
-		existingAuth := testutils.RandomHash(t)
-		currentAuths[0] = []crypto.Hash{existingAuth}
+		auth1 := testutils.RandomHash(t)
+		auth2 := testutils.RandomHash(t)
+		currentAuths[0] = []crypto.Hash{auth1, auth2}
 
 		// Empty pending authorizations
 		pendingAuths := state.PendingAuthorizersQueues{}
 
 		newAuths := CalculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
 
-		// Should keep existing authorizations unchanged
+		// Should left-shift existing authorizations when no new auth is available
 		require.Len(t, newAuths[0], 1)
-		assert.Equal(t, existingAuth, newAuths[0][0])
+		assert.Equal(t, auth2, newAuths[0][0], "Only second auth should remain after left-shift")
+		assert.NotContains(t, newAuths[0], auth1, "First auth should be removed by left-shift")
+	})
+
+	t.Run("no left-shift when guarantee removes authorizer", func(t *testing.T) {
+		header := block.Header{
+			TimeSlotIndex: 1,
+		}
+
+		// Set up current authorizations
+		currentAuths := state.CoreAuthorizersPool{}
+		auth1 := testutils.RandomHash(t)
+		auth2 := testutils.RandomHash(t)
+		currentAuths[0] = []crypto.Hash{auth1, auth2}
+
+		// Create a guarantee that uses the first authorizer
+		workReport := block.WorkReport{
+			CoreIndex:      0,
+			AuthorizerHash: auth1,
+		}
+		guarantees := block.GuaranteesExtrinsic{
+			Guarantees: []block.Guarantee{
+				{WorkReport: workReport},
+			},
+		}
+
+		// Set up new pending authorizer
+		pendingAuths := state.PendingAuthorizersQueues{}
+		newAuth := testutils.RandomHash(t)
+		pendingAuths[0][1] = newAuth
+
+		newAuths := CalculateNewCoreAuthorizations(header, guarantees, pendingAuths, currentAuths)
+
+		// Check that only the used authorizer was removed (no left-shift) and new auth was added
+		require.Len(t, newAuths[0], 2)
+		assert.Equal(t, auth2, newAuths[0][0], "Second auth should remain in first position")
+		assert.Equal(t, newAuth, newAuths[0][1], "New auth should be added at the end")
+		assert.NotContains(t, newAuths[0], auth1, "Used auth should be removed")
 	})
 
 	t.Run("handle multiple cores", func(t *testing.T) {
@@ -799,10 +862,23 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 
 		// Set up authorizations for two cores
 		currentAuths := state.CoreAuthorizersPool{}
-		existingAuth0 := testutils.RandomHash(t)
-		existingAuth1 := testutils.RandomHash(t)
-		currentAuths[0] = []crypto.Hash{existingAuth0}
-		currentAuths[1] = []crypto.Hash{existingAuth1}
+		auth0_1 := testutils.RandomHash(t)
+		auth0_2 := testutils.RandomHash(t)
+		auth1_1 := testutils.RandomHash(t)
+		auth1_2 := testutils.RandomHash(t)
+		currentAuths[0] = []crypto.Hash{auth0_1, auth0_2}
+		currentAuths[1] = []crypto.Hash{auth1_1, auth1_2}
+
+		// Create a guarantee that uses an authorizer for core 1 only
+		workReport := block.WorkReport{
+			CoreIndex:      1,
+			AuthorizerHash: auth1_1,
+		}
+		guarantees := block.GuaranteesExtrinsic{
+			Guarantees: []block.Guarantee{
+				{WorkReport: workReport},
+			},
+		}
 
 		// Set up new pending authorizations
 		pendingAuths := state.PendingAuthorizersQueues{}
@@ -811,14 +887,19 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		pendingAuths[0][1] = newAuth0
 		pendingAuths[1][1] = newAuth1
 
-		newAuths := CalculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
+		newAuths := CalculateNewCoreAuthorizations(header, guarantees, pendingAuths, currentAuths)
 
+		// Core 0: Should left-shift (no guarantee)
 		require.Len(t, newAuths[0], 2)
+		assert.Equal(t, auth0_2, newAuths[0][0], "Core 0: First auth should be removed by left-shift")
+		assert.Equal(t, newAuth0, newAuths[0][1], "Core 0: New auth should be added")
+		assert.NotContains(t, newAuths[0], auth0_1, "Core 0: Original first auth should be removed")
+
+		// Core 1: Should remove used auth (no left-shift)
 		require.Len(t, newAuths[1], 2)
-		assert.Contains(t, newAuths[0], existingAuth0)
-		assert.Contains(t, newAuths[0], newAuth0)
-		assert.Contains(t, newAuths[1], existingAuth1)
-		assert.Contains(t, newAuths[1], newAuth1)
+		assert.Equal(t, auth1_2, newAuths[1][0], "Core 1: Second auth should remain")
+		assert.Equal(t, newAuth1, newAuths[1][1], "Core 1: New auth should be added")
+		assert.NotContains(t, newAuths[1], auth1_1, "Core 1: Used auth should be removed")
 	})
 }
 

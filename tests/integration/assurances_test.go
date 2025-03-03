@@ -38,6 +38,14 @@ type AssurancesInput struct {
 	Parent     string           `json:"parent"`
 }
 
+func mustStringToHex(s string) []byte {
+	bytes, err := crypto.StringToHex(s)
+	if err != nil {
+		panic(err)
+	}
+	return bytes
+}
+
 func mapBlock(i AssurancesInput) block.Block {
 	return block.Block{
 		Header: block.Header{
@@ -48,9 +56,9 @@ func mapBlock(i AssurancesInput) block.Block {
 			EA: mapSlice(i.Assurances, func(a Assurance) block.Assurance {
 				return block.Assurance{
 					Anchor:         mapHash(a.Anchor),
-					Bitfield:       [block.AvailBitfieldBytes]byte(stringToHex(a.Bitfield)),
+					Bitfield:       [block.AvailBitfieldBytes]byte(mustStringToHex(a.Bitfield)),
 					ValidatorIndex: a.ValidatorIndex,
-					Signature:      crypto.Ed25519Signature(stringToHex(a.Signature)),
+					Signature:      crypto.Ed25519Signature(mustStringToHex(a.Signature)),
 				}
 			}),
 		},
@@ -142,7 +150,7 @@ func mapReport(r *Report) *block.WorkReport {
 		},
 		CoreIndex:         r.CoreIndex,
 		AuthorizerHash:    mapHash(r.AuthorizerHash),
-		Output:            stringToHex(r.AuthOutput),
+		Output:            mustStringToHex(r.AuthOutput),
 		SegmentRootLookup: segmentRootLookup,
 		WorkResults: mapSlice(r.Results, func(rr ReportResult) block.WorkResult {
 			return block.WorkResult{
@@ -159,7 +167,7 @@ func mapReport(r *Report) *block.WorkReport {
 }
 
 func mapHash(s string) crypto.Hash {
-	return crypto.Hash(stringToHex(s))
+	return crypto.Hash(mustStringToHex(s))
 }
 
 func TestAssurancesTiny(t *testing.T) {
