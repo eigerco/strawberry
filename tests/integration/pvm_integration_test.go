@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/log"
 	"path/filepath"
 	"testing"
 
@@ -80,7 +81,7 @@ func Test_PVM_Vectors(t *testing.T) {
 				err = mem.SetAccess(pageIndex, access)
 				assert.NoError(t, err)
 			}
-			i, err := interpreter.Instantiate(tc.Program, tc.InitialPc, tc.InitialGas, tc.InitialRegs, mem)
+			i, err := interpreter.Instantiate(tc.Program, tc.InitialPc, tc.InitialGas, tc.InitialRegs, mem, interpreter.WithLogger(log.New()))
 			require.NoError(t, err)
 
 			_, err = interpreter.Invoke(i)
