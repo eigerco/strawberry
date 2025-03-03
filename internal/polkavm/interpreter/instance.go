@@ -2,9 +2,8 @@ package interpreter
 
 import (
 	"github.com/eigerco/strawberry/internal/polkavm"
+	"github.com/eigerco/strawberry/pkg/log"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-
-	"github.com/rs/zerolog"
 )
 
 var _ polkavm.Mutator = &Instance{}
@@ -50,7 +49,7 @@ type Instance struct {
 	bitmask                jam.BitSequence     // k
 	basicBlockInstructions map[uint64]struct{} // ϖ
 
-	log *zerolog.Logger
+	log log.Logger
 }
 
 func (i *Instance) skip() {
@@ -139,8 +138,8 @@ func (i *Instance) djump(address0 uint64) error {
 
 type Option func(*Instance)
 
-func WithLogger(log zerolog.Logger) Option {
+func WithLogger(log log.Logger) Option {
 	return func(i *Instance) {
-		i.log = &log
+		i.log = log
 	}
 }

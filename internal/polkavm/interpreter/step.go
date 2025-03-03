@@ -18,19 +18,13 @@ func (i *Instance) step() (uint64, error) {
 		return 0, err
 	}
 
-	// wrap mutator with logging
-	var m polkavm.Mutator = i
-	if i.log != nil {
-		m = NewLogger(i, i.log)
-	}
-
 	switch polkavm.InstructionForType[opcode] {
 	case polkavm.InstrNone:
 		switch opcode {
 		case polkavm.Trap:
-			return 0, m.Trap()
+			return 0, i.Trap()
 		case polkavm.Fallthrough:
-			m.Fallthrough()
+			i.Fallthrough()
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
@@ -68,7 +62,7 @@ func (i *Instance) step() (uint64, error) {
 		}
 		switch opcode {
 		case polkavm.LoadImm64:
-			m.LoadImm64(polkavm.Reg(regA), valueX)
+			i.LoadImm64(polkavm.Reg(regA), valueX)
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
@@ -101,13 +95,13 @@ func (i *Instance) step() (uint64, error) {
 		valueY = sext(valueY, lenY)
 		switch opcode {
 		case polkavm.StoreImmU8:
-			return 0, m.StoreImmU8(valueX, valueY)
+			return 0, i.StoreImmU8(valueX, valueY)
 		case polkavm.StoreImmU16:
-			return 0, m.StoreImmU16(valueX, valueY)
+			return 0, i.StoreImmU16(valueX, valueY)
 		case polkavm.StoreImmU32:
-			return 0, m.StoreImmU32(valueX, valueY)
+			return 0, i.StoreImmU32(valueX, valueY)
 		case polkavm.StoreImmU64:
-			return 0, m.StoreImmU64(valueX, valueY)
+			return 0, i.StoreImmU64(valueX, valueY)
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
@@ -127,7 +121,7 @@ func (i *Instance) step() (uint64, error) {
 
 		switch opcode {
 		case polkavm.Jump:
-			return 0, m.Jump(valueX)
+			return 0, i.Jump(valueX)
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
@@ -149,31 +143,31 @@ func (i *Instance) step() (uint64, error) {
 
 		switch opcode {
 		case polkavm.JumpIndirect:
-			return 0, m.JumpIndirect(regA, valueX)
+			return 0, i.JumpIndirect(regA, valueX)
 		case polkavm.LoadImm:
-			m.LoadImm(regA, valueX)
+			i.LoadImm(regA, valueX)
 		case polkavm.LoadU8:
-			return 0, m.LoadU8(regA, valueX)
+			return 0, i.LoadU8(regA, valueX)
 		case polkavm.LoadI8:
-			return 0, m.LoadI8(regA, valueX)
+			return 0, i.LoadI8(regA, valueX)
 		case polkavm.LoadU16:
-			return 0, m.LoadU16(regA, valueX)
+			return 0, i.LoadU16(regA, valueX)
 		case polkavm.LoadI16:
-			return 0, m.LoadI16(regA, valueX)
+			return 0, i.LoadI16(regA, valueX)
 		case polkavm.LoadU32:
-			return 0, m.LoadU32(regA, valueX)
+			return 0, i.LoadU32(regA, valueX)
 		case polkavm.LoadI32:
-			return 0, m.LoadI32(regA, valueX)
+			return 0, i.LoadI32(regA, valueX)
 		case polkavm.LoadU64:
-			return 0, m.LoadU64(regA, valueX)
+			return 0, i.LoadU64(regA, valueX)
 		case polkavm.StoreU8:
-			return 0, m.StoreU8(regA, valueX)
+			return 0, i.StoreU8(regA, valueX)
 		case polkavm.StoreU16:
-			return 0, m.StoreU16(regA, valueX)
+			return 0, i.StoreU16(regA, valueX)
 		case polkavm.StoreU32:
-			return 0, m.StoreU32(regA, valueX)
+			return 0, i.StoreU32(regA, valueX)
 		case polkavm.StoreU64:
-			return 0, m.StoreU64(regA, valueX)
+			return 0, i.StoreU64(regA, valueX)
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
@@ -210,13 +204,13 @@ func (i *Instance) step() (uint64, error) {
 
 		switch opcode {
 		case polkavm.StoreImmIndirectU8:
-			return 0, m.StoreImmIndirectU8(regA, valueX, valueY)
+			return 0, i.StoreImmIndirectU8(regA, valueX, valueY)
 		case polkavm.StoreImmIndirectU16:
-			return 0, m.StoreImmIndirectU16(regA, valueX, valueY)
+			return 0, i.StoreImmIndirectU16(regA, valueX, valueY)
 		case polkavm.StoreImmIndirectU32:
-			return 0, m.StoreImmIndirectU32(regA, valueX, valueY)
+			return 0, i.StoreImmIndirectU32(regA, valueX, valueY)
 		case polkavm.StoreImmIndirectU64:
-			return 0, m.StoreImmIndirectU64(regA, valueX, valueY)
+			return 0, i.StoreImmIndirectU64(regA, valueX, valueY)
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
@@ -250,27 +244,27 @@ func (i *Instance) step() (uint64, error) {
 
 		switch opcode {
 		case polkavm.LoadImmAndJump:
-			return 0, m.LoadImmAndJump(regA, valueX, valueY)
+			return 0, i.LoadImmAndJump(regA, valueX, valueY)
 		case polkavm.BranchEqImm:
-			return 0, m.BranchEqImm(regA, valueX, valueY)
+			return 0, i.BranchEqImm(regA, valueX, valueY)
 		case polkavm.BranchNotEqImm:
-			return 0, m.BranchNotEqImm(regA, valueX, valueY)
+			return 0, i.BranchNotEqImm(regA, valueX, valueY)
 		case polkavm.BranchLessUnsignedImm:
-			return 0, m.BranchLessUnsignedImm(regA, valueX, valueY)
+			return 0, i.BranchLessUnsignedImm(regA, valueX, valueY)
 		case polkavm.BranchLessOrEqualUnsignedImm:
-			return 0, m.BranchLessOrEqualUnsignedImm(regA, valueX, valueY)
+			return 0, i.BranchLessOrEqualUnsignedImm(regA, valueX, valueY)
 		case polkavm.BranchGreaterOrEqualUnsignedImm:
-			return 0, m.BranchGreaterOrEqualUnsignedImm(regA, valueX, valueY)
+			return 0, i.BranchGreaterOrEqualUnsignedImm(regA, valueX, valueY)
 		case polkavm.BranchGreaterUnsignedImm:
-			return 0, m.BranchGreaterUnsignedImm(regA, valueX, valueY)
+			return 0, i.BranchGreaterUnsignedImm(regA, valueX, valueY)
 		case polkavm.BranchLessSignedImm:
-			return 0, m.BranchLessSignedImm(regA, valueX, valueY)
+			return 0, i.BranchLessSignedImm(regA, valueX, valueY)
 		case polkavm.BranchLessOrEqualSignedImm:
-			return 0, m.BranchLessOrEqualSignedImm(regA, valueX, valueY)
+			return 0, i.BranchLessOrEqualSignedImm(regA, valueX, valueY)
 		case polkavm.BranchGreaterOrEqualSignedImm:
-			return 0, m.BranchGreaterOrEqualSignedImm(regA, valueX, valueY)
+			return 0, i.BranchGreaterOrEqualSignedImm(regA, valueX, valueY)
 		case polkavm.BranchGreaterSignedImm:
-			return 0, m.BranchGreaterSignedImm(regA, valueX, valueY)
+			return 0, i.BranchGreaterSignedImm(regA, valueX, valueY)
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
@@ -287,29 +281,29 @@ func (i *Instance) step() (uint64, error) {
 
 		switch opcode {
 		case polkavm.MoveReg:
-			m.MoveReg(regDst, regA)
+			i.MoveReg(regDst, regA)
 		case polkavm.Sbrk:
-			return 0, m.Sbrk(regDst, regA)
+			return 0, i.Sbrk(regDst, regA)
 		case polkavm.CountSetBits64:
-			m.CountSetBits64(regDst, regA)
+			i.CountSetBits64(regDst, regA)
 		case polkavm.CountSetBits32:
-			m.CountSetBits32(regDst, regA)
+			i.CountSetBits32(regDst, regA)
 		case polkavm.LeadingZeroBits64:
-			m.LeadingZeroBits64(regDst, regA)
+			i.LeadingZeroBits64(regDst, regA)
 		case polkavm.LeadingZeroBits32:
-			m.LeadingZeroBits32(regDst, regA)
+			i.LeadingZeroBits32(regDst, regA)
 		case polkavm.TrailingZeroBits64:
-			m.TrailingZeroBits64(regDst, regA)
+			i.TrailingZeroBits64(regDst, regA)
 		case polkavm.TrailingZeroBits32:
-			m.TrailingZeroBits32(regDst, regA)
+			i.TrailingZeroBits32(regDst, regA)
 		case polkavm.SignExtend8:
-			m.SignExtend8(regDst, regA)
+			i.SignExtend8(regDst, regA)
 		case polkavm.SignExtend16:
-			m.SignExtend16(regDst, regA)
+			i.SignExtend16(regDst, regA)
 		case polkavm.ZeroExtend16:
-			m.ZeroExtend16(regDst, regA)
+			i.ZeroExtend16(regDst, regA)
 		case polkavm.ReverseBytes:
-			m.ReverseBytes(regDst, regA)
+			i.ReverseBytes(regDst, regA)
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
@@ -333,89 +327,89 @@ func (i *Instance) step() (uint64, error) {
 
 		switch opcode {
 		case polkavm.StoreIndirectU8:
-			return 0, m.StoreIndirectU8(regA, regB, valueX)
+			return 0, i.StoreIndirectU8(regA, regB, valueX)
 		case polkavm.StoreIndirectU16:
-			return 0, m.StoreIndirectU16(regA, regB, valueX)
+			return 0, i.StoreIndirectU16(regA, regB, valueX)
 		case polkavm.StoreIndirectU32:
-			return 0, m.StoreIndirectU32(regA, regB, valueX)
+			return 0, i.StoreIndirectU32(regA, regB, valueX)
 		case polkavm.StoreIndirectU64:
-			return 0, m.StoreIndirectU64(regA, regB, valueX)
+			return 0, i.StoreIndirectU64(regA, regB, valueX)
 		case polkavm.LoadIndirectU8:
-			return 0, m.LoadIndirectU8(regA, regB, valueX)
+			return 0, i.LoadIndirectU8(regA, regB, valueX)
 		case polkavm.LoadIndirectI8:
-			return 0, m.LoadIndirectI8(regA, regB, valueX)
+			return 0, i.LoadIndirectI8(regA, regB, valueX)
 		case polkavm.LoadIndirectU16:
-			return 0, m.LoadIndirectU16(regA, regB, valueX)
+			return 0, i.LoadIndirectU16(regA, regB, valueX)
 		case polkavm.LoadIndirectI16:
-			return 0, m.LoadIndirectI16(regA, regB, valueX)
+			return 0, i.LoadIndirectI16(regA, regB, valueX)
 		case polkavm.LoadIndirectU32:
-			return 0, m.LoadIndirectU32(regA, regB, valueX)
+			return 0, i.LoadIndirectU32(regA, regB, valueX)
 		case polkavm.LoadIndirectI32:
-			return 0, m.LoadIndirectI32(regA, regB, valueX)
+			return 0, i.LoadIndirectI32(regA, regB, valueX)
 		case polkavm.LoadIndirectU64:
-			return 0, m.LoadIndirectU64(regA, regB, valueX)
+			return 0, i.LoadIndirectU64(regA, regB, valueX)
 		case polkavm.AddImm32:
-			m.AddImm32(regA, regB, valueX)
+			i.AddImm32(regA, regB, valueX)
 		case polkavm.AndImm:
-			m.AndImm(regA, regB, valueX)
+			i.AndImm(regA, regB, valueX)
 		case polkavm.XorImm:
-			m.XorImm(regA, regB, valueX)
+			i.XorImm(regA, regB, valueX)
 		case polkavm.OrImm:
-			m.OrImm(regA, regB, valueX)
+			i.OrImm(regA, regB, valueX)
 		case polkavm.MulImm32:
-			m.MulImm32(regA, regB, valueX)
+			i.MulImm32(regA, regB, valueX)
 		case polkavm.SetLessThanUnsignedImm:
-			m.SetLessThanUnsignedImm(regA, regB, valueX)
+			i.SetLessThanUnsignedImm(regA, regB, valueX)
 		case polkavm.SetLessThanSignedImm:
-			m.SetLessThanSignedImm(regA, regB, valueX)
+			i.SetLessThanSignedImm(regA, regB, valueX)
 		case polkavm.ShiftLogicalLeftImm32:
-			m.ShiftLogicalLeftImm32(regA, regB, valueX)
+			i.ShiftLogicalLeftImm32(regA, regB, valueX)
 		case polkavm.ShiftLogicalRightImm32:
-			m.ShiftLogicalRightImm32(regA, regB, valueX)
+			i.ShiftLogicalRightImm32(regA, regB, valueX)
 		case polkavm.ShiftArithmeticRightImm32:
-			m.ShiftArithmeticRightImm32(regA, regB, valueX)
+			i.ShiftArithmeticRightImm32(regA, regB, valueX)
 		case polkavm.NegateAndAddImm32:
-			m.NegateAndAddImm32(regA, regB, valueX)
+			i.NegateAndAddImm32(regA, regB, valueX)
 		case polkavm.SetGreaterThanUnsignedImm:
-			m.SetGreaterThanUnsignedImm(regA, regB, valueX)
+			i.SetGreaterThanUnsignedImm(regA, regB, valueX)
 		case polkavm.SetGreaterThanSignedImm:
-			m.SetGreaterThanSignedImm(regA, regB, valueX)
+			i.SetGreaterThanSignedImm(regA, regB, valueX)
 		case polkavm.ShiftLogicalLeftImmAlt32:
-			m.ShiftLogicalLeftImmAlt32(regA, regB, valueX)
+			i.ShiftLogicalLeftImmAlt32(regA, regB, valueX)
 		case polkavm.ShiftArithmeticRightImmAlt32:
-			m.ShiftLogicalRightImmAlt32(regA, regB, valueX)
+			i.ShiftLogicalRightImmAlt32(regA, regB, valueX)
 		case polkavm.ShiftLogicalRightImmAlt32:
-			m.ShiftArithmeticRightImmAlt32(regA, regB, valueX)
+			i.ShiftArithmeticRightImmAlt32(regA, regB, valueX)
 		case polkavm.CmovIfZeroImm:
-			m.CmovIfZeroImm(regA, regB, valueX)
+			i.CmovIfZeroImm(regA, regB, valueX)
 		case polkavm.CmovIfNotZeroImm:
-			m.CmovIfNotZeroImm(regA, regB, valueX)
+			i.CmovIfNotZeroImm(regA, regB, valueX)
 		case polkavm.AddImm64:
-			m.AddImm64(regA, regB, valueX)
+			i.AddImm64(regA, regB, valueX)
 		case polkavm.MulImm64:
-			m.MulImm64(regA, regB, valueX)
+			i.MulImm64(regA, regB, valueX)
 		case polkavm.ShiftLogicalLeftImm64:
-			m.ShiftLogicalLeftImm64(regA, regB, valueX)
+			i.ShiftLogicalLeftImm64(regA, regB, valueX)
 		case polkavm.ShiftLogicalRightImm64:
-			m.ShiftLogicalRightImm64(regA, regB, valueX)
+			i.ShiftLogicalRightImm64(regA, regB, valueX)
 		case polkavm.ShiftArithmeticRightImm64:
-			m.ShiftArithmeticRightImm64(regA, regB, valueX)
+			i.ShiftArithmeticRightImm64(regA, regB, valueX)
 		case polkavm.NegateAndAddImm64:
-			m.NegateAndAddImm64(regA, regB, valueX)
+			i.NegateAndAddImm64(regA, regB, valueX)
 		case polkavm.ShiftLogicalLeftImmAlt64:
-			m.ShiftLogicalLeftImmAlt64(regA, regB, valueX)
+			i.ShiftLogicalLeftImmAlt64(regA, regB, valueX)
 		case polkavm.ShiftLogicalRightImmAlt64:
-			m.ShiftLogicalRightImmAlt64(regA, regB, valueX)
+			i.ShiftLogicalRightImmAlt64(regA, regB, valueX)
 		case polkavm.ShiftArithmeticRightImmAlt64:
-			m.ShiftArithmeticRightImmAlt64(regA, regB, valueX)
+			i.ShiftArithmeticRightImmAlt64(regA, regB, valueX)
 		case polkavm.RotR64Imm:
-			m.RotateRight64Imm(regA, regB, valueX)
+			i.RotateRight64Imm(regA, regB, valueX)
 		case polkavm.RotR64ImmAlt:
-			m.RotateRight64ImmAlt(regA, regB, valueX)
+			i.RotateRight64ImmAlt(regA, regB, valueX)
 		case polkavm.RotR32Imm:
-			m.RotateRight32Imm(regA, regB, valueX)
+			i.RotateRight32Imm(regA, regB, valueX)
 		case polkavm.RotR32ImmAlt:
-			m.RotateRight32ImmAlt(regA, regB, valueX)
+			i.RotateRight32ImmAlt(regA, regB, valueX)
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
@@ -439,17 +433,17 @@ func (i *Instance) step() (uint64, error) {
 
 		switch opcode {
 		case polkavm.BranchEq:
-			return 0, m.BranchEq(regA, regB, valueX)
+			return 0, i.BranchEq(regA, regB, valueX)
 		case polkavm.BranchNotEq:
-			return 0, m.BranchNotEq(regA, regB, valueX)
+			return 0, i.BranchNotEq(regA, regB, valueX)
 		case polkavm.BranchLessUnsigned:
-			return 0, m.BranchLessUnsigned(regA, regB, valueX)
+			return 0, i.BranchLessUnsigned(regA, regB, valueX)
 		case polkavm.BranchLessSigned:
-			return 0, m.BranchLessSigned(regA, regB, valueX)
+			return 0, i.BranchLessSigned(regA, regB, valueX)
 		case polkavm.BranchGreaterOrEqualUnsigned:
-			return 0, m.BranchGreaterOrEqualUnsigned(regA, regB, valueX)
+			return 0, i.BranchGreaterOrEqualUnsigned(regA, regB, valueX)
 		case polkavm.BranchGreaterOrEqualSigned:
-			return 0, m.BranchGreaterOrEqualSigned(regA, regB, valueX)
+			return 0, i.BranchGreaterOrEqualSigned(regA, regB, valueX)
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
@@ -484,7 +478,7 @@ func (i *Instance) step() (uint64, error) {
 
 		switch opcode {
 		case polkavm.LoadImmAndJumpIndirect:
-			return 0, m.LoadImmAndJumpIndirect(regA, regB, valueX, valueY)
+			return 0, i.LoadImmAndJumpIndirect(regA, regB, valueX, valueY)
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
@@ -502,87 +496,87 @@ func (i *Instance) step() (uint64, error) {
 
 		switch opcode {
 		case polkavm.Add32:
-			m.Add32(regDst, regA, regB)
+			i.Add32(regDst, regA, regB)
 		case polkavm.Sub32:
-			m.Sub32(regDst, regA, regB)
+			i.Sub32(regDst, regA, regB)
 		case polkavm.Mul32:
-			m.Mul32(regDst, regA, regB)
+			i.Mul32(regDst, regA, regB)
 		case polkavm.DivUnsigned32:
-			m.DivUnsigned32(regDst, regA, regB)
+			i.DivUnsigned32(regDst, regA, regB)
 		case polkavm.DivSigned32:
-			m.DivSigned32(regDst, regA, regB)
+			i.DivSigned32(regDst, regA, regB)
 		case polkavm.RemUnsigned32:
-			m.RemUnsigned32(regDst, regA, regB)
+			i.RemUnsigned32(regDst, regA, regB)
 		case polkavm.RemSigned32:
-			m.RemSigned32(regDst, regA, regB)
+			i.RemSigned32(regDst, regA, regB)
 		case polkavm.ShiftLogicalLeft32:
-			m.ShiftLogicalLeft32(regDst, regA, regB)
+			i.ShiftLogicalLeft32(regDst, regA, regB)
 		case polkavm.ShiftLogicalRight32:
-			m.ShiftLogicalRight32(regDst, regA, regB)
+			i.ShiftLogicalRight32(regDst, regA, regB)
 		case polkavm.ShiftArithmeticRight32:
-			m.ShiftArithmeticRight32(regDst, regA, regB)
+			i.ShiftArithmeticRight32(regDst, regA, regB)
 		case polkavm.Add64:
-			m.Add64(regDst, regA, regB)
+			i.Add64(regDst, regA, regB)
 		case polkavm.Sub64:
-			m.Sub64(regDst, regA, regB)
+			i.Sub64(regDst, regA, regB)
 		case polkavm.Mul64:
-			m.Mul64(regDst, regA, regB)
+			i.Mul64(regDst, regA, regB)
 		case polkavm.DivUnsigned64:
-			m.DivUnsigned64(regDst, regA, regB)
+			i.DivUnsigned64(regDst, regA, regB)
 		case polkavm.DivSigned64:
-			m.DivSigned64(regDst, regA, regB)
+			i.DivSigned64(regDst, regA, regB)
 		case polkavm.RemUnsigned64:
-			m.RemUnsigned64(regDst, regA, regB)
+			i.RemUnsigned64(regDst, regA, regB)
 		case polkavm.RemSigned64:
-			m.RemSigned64(regDst, regA, regB)
+			i.RemSigned64(regDst, regA, regB)
 		case polkavm.ShiftLogicalLeft64:
-			m.ShiftLogicalLeft64(regDst, regA, regB)
+			i.ShiftLogicalLeft64(regDst, regA, regB)
 		case polkavm.ShiftLogicalRight64:
-			m.ShiftLogicalRight64(regDst, regA, regB)
+			i.ShiftLogicalRight64(regDst, regA, regB)
 		case polkavm.ShiftArithmeticRight64:
-			m.ShiftArithmeticRight64(regDst, regA, regB)
+			i.ShiftArithmeticRight64(regDst, regA, regB)
 		case polkavm.And:
-			m.And(regDst, regA, regB)
+			i.And(regDst, regA, regB)
 		case polkavm.Xor:
-			m.Xor(regDst, regA, regB)
+			i.Xor(regDst, regA, regB)
 		case polkavm.Or:
-			m.Or(regDst, regA, regB)
+			i.Or(regDst, regA, regB)
 		case polkavm.MulUpperSignedSigned:
-			m.MulUpperSignedSigned(regDst, regA, regB)
+			i.MulUpperSignedSigned(regDst, regA, regB)
 		case polkavm.MulUpperUnsignedUnsigned:
-			m.MulUpperUnsignedUnsigned(regDst, regA, regB)
+			i.MulUpperUnsignedUnsigned(regDst, regA, regB)
 		case polkavm.MulUpperSignedUnsigned:
-			m.MulUpperSignedUnsigned(regDst, regA, regB)
+			i.MulUpperSignedUnsigned(regDst, regA, regB)
 		case polkavm.SetLessThanUnsigned:
-			m.SetLessThanUnsigned(regDst, regA, regB)
+			i.SetLessThanUnsigned(regDst, regA, regB)
 		case polkavm.SetLessThanSigned:
-			m.SetLessThanSigned(regDst, regA, regB)
+			i.SetLessThanSigned(regDst, regA, regB)
 		case polkavm.CmovIfZero:
-			m.CmovIfZero(regDst, regA, regB)
+			i.CmovIfZero(regDst, regA, regB)
 		case polkavm.CmovIfNotZero:
-			m.CmovIfNotZero(regDst, regA, regB)
+			i.CmovIfNotZero(regDst, regA, regB)
 		case polkavm.RotL64:
-			m.RotateLeft64(regDst, regA, regB)
+			i.RotateLeft64(regDst, regA, regB)
 		case polkavm.RotL32:
-			m.RotateLeft32(regDst, regA, regB)
+			i.RotateLeft32(regDst, regA, regB)
 		case polkavm.RotR64:
-			m.RotateRight64(regDst, regA, regB)
+			i.RotateRight64(regDst, regA, regB)
 		case polkavm.RotR32:
-			m.RotateRight32(regDst, regA, regB)
+			i.RotateRight32(regDst, regA, regB)
 		case polkavm.AndInv:
-			m.AndInverted(regDst, regA, regB)
+			i.AndInverted(regDst, regA, regB)
 		case polkavm.OrInv:
-			m.OrInverted(regDst, regA, regB)
+			i.OrInverted(regDst, regA, regB)
 		case polkavm.Xnor:
-			m.Xnor(regDst, regA, regB)
+			i.Xnor(regDst, regA, regB)
 		case polkavm.Max:
-			m.Max(regDst, regA, regB)
+			i.Max(regDst, regA, regB)
 		case polkavm.MaxU:
-			m.MaxUnsigned(regDst, regA, regB)
+			i.MaxUnsigned(regDst, regA, regB)
 		case polkavm.Min:
-			m.Min(regDst, regA, regB)
+			i.Min(regDst, regA, regB)
 		case polkavm.MinU:
-			m.MinUnsigned(regDst, regA, regB)
+			i.MinUnsigned(regDst, regA, regB)
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
