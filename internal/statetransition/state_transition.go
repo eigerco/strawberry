@@ -1820,7 +1820,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 			ServiceState:             currentState.Services,
 			ValidatorKeys:            currentState.ValidatorState.QueuedValidators,
 			PendingAuthorizersQueues: currentState.PendingAuthorizersQueues,
-		}, currentState.PrivilegedServices)
+		}, currentState.PrivilegedServices.AmountOfGasPerServiceId)
 
 	// (χ′, δ†, ι′, φ′) ≡ o (eq. 12.22)
 	intermediateServiceState := newAccumulationState.ServiceState
@@ -2356,7 +2356,7 @@ func (a *Accumulator) SequentialDelta(
 	gasLimit uint64,
 	workReports []block.WorkReport,
 	ctx state.AccumulationState,
-	privileged service.PrivilegedServices,
+	alwaysAccumulate map[block.ServiceId]uint64,
 ) (
 	uint32,
 	state.AccumulationState,
@@ -2396,7 +2396,7 @@ func (a *Accumulator) SequentialDelta(
 	gasUsed, newCtx, transfers, hashPairs := a.ParallelDelta(
 		ctx,
 		workReports[:maxReports],
-		privileged.AmountOfGasPerServiceId,
+		alwaysAccumulate,
 	)
 
 	// If we have remaining reports and gas, process recursively (∆+)
@@ -2407,7 +2407,7 @@ func (a *Accumulator) SequentialDelta(
 				remainingGas,
 				workReports[maxReports:],
 				newCtx,
-				privileged,
+				alwaysAccumulate,
 			)
 
 			return uint32(maxReports) + moreItems,
@@ -2432,7 +2432,7 @@ func getServiceIdsAsSet(m map[block.ServiceId]service.ServiceAccount) map[block.
 func (a *Accumulator) ParallelDelta(
 	initialAccState state.AccumulationState,
 	workReports []block.WorkReport,
-	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
+	alwaysAccumulate map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
 	uint64, // total gas used
 	state.AccumulationState, // updated context
@@ -2451,7 +2451,7 @@ func (a *Accumulator) ParallelDelta(
 	}
 
 	// From privileged gas assignments
-	for svcId := range privilegedGas {
+	for svcId := range alwaysAccumulate {
 		serviceIndices[svcId] = struct{}{}
 	}
 
@@ -2477,7 +2477,7 @@ func (a *Accumulator) ParallelDelta(
 			defer wg.Done()
 
 			// Process single service using Delta1
-			accState, deferredTransfers, resultHash, gasUsed := a.Delta1(initialAccState, workReports, privilegedGas, serviceId)
+			accState, deferredTransfers, resultHash, gasUsed := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 			mu.Lock()
 			defer mu.Unlock()
 
@@ -2527,7 +2527,7 @@ func (a *Accumulator) ParallelDelta(
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _ := a.Delta1(initialAccState, workReports, privilegedGas, serviceId)
+		accState, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -2540,7 +2540,7 @@ func (a *Accumulator) ParallelDelta(
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _ := a.Delta1(initialAccState, workReports, privilegedGas, serviceId)
+		accState, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -2553,7 +2553,7 @@ func (a *Accumulator) ParallelDelta(
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _ := a.Delta1(initialAccState, workReports, privilegedGas, serviceId)
+		accState, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -2584,12 +2584,12 @@ func (a *Accumulator) ParallelDelta(
 func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
-	privilegedGas map[block.ServiceId]uint64, // D⟨NS → NG⟩
+	alwaysAccumulate map[block.ServiceId]uint64, // D⟨NS → NG⟩
 	serviceIndex block.ServiceId, // NS
 ) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)
-	if gas, exists := privilegedGas[serviceIndex]; exists {
+	if gas, exists := alwaysAccumulate[serviceIndex]; exists {
 		gasLimit = gas
 	}
 

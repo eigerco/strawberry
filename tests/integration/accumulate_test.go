@@ -5,7 +5,6 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"os"
 	"testing"
@@ -16,6 +15,7 @@ import (
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/statetransition"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +34,10 @@ type AccumulateState struct {
 		Bless     block.ServiceId `json:"bless"`
 		Assign    block.ServiceId `json:"assign"`
 		Designate block.ServiceId `json:"designate"`
-		AlwaysAcc []interface{}   `json:"always_acc"`
+		AlwaysAcc []struct {
+			ServiceId block.ServiceId `json:"service_id"`
+			Gas       uint64          `json:"gas"`
+		} `json:"always_acc"`
 	} `json:"privileges"`
 	Accounts []AccumulateServiceAccount `json:"accounts"`
 }
@@ -70,27 +73,21 @@ type ReadyQueueItem struct {
 }
 
 type AccumulateServiceAccount struct {
-	Id   block.ServiceId              `json:"id"`
-	Data AccumulateServiceAccountData `json:"data"`
-}
-
-type AccumulateServiceAccountData struct {
-	Service   AccumulateServiceAccountDataService           `json:"service"`
-	Preimages []AccumulateServiceAccountDataServicePreimage `json:"preimages"`
-}
-
-type AccumulateServiceAccountDataService struct {
-	CodeHash   string `json:"code_hash"`
-	Balance    uint64 `json:"balance"`
-	MinItemGas uint64 `json:"min_item_gas"`
-	MinMemoGas uint64 `json:"min_memo_gas"`
-	Bytes      uint64 `json:"bytes"`
-	Items      uint32 `json:"items"`
-}
-
-type AccumulateServiceAccountDataServicePreimage struct {
-	Hash string `json:"hash"`
-	Blob string `json:"blob"`
+	Id   block.ServiceId `json:"id"`
+	Data struct {
+		Service struct {
+			CodeHash   string `json:"code_hash"`
+			Balance    uint64 `json:"balance"`
+			MinItemGas uint64 `json:"min_item_gas"`
+			MinMemoGas uint64 `json:"min_memo_gas"`
+			Bytes      uint64 `json:"bytes"`
+			Items      uint32 `json:"items"`
+		} `json:"service"`
+		Preimages []struct {
+			Hash string `json:"hash"`
+			Blob string `json:"blob"`
+		} `json:"preimages"`
+	} `json:"data"`
 }
 
 type AccumulateTestCase struct {
@@ -145,13 +142,17 @@ func TestAccumulate(t *testing.T) {
 }
 
 func mapAccumulateState(t *testing.T, s AccumulateState) *state.State {
+	privilegedGas := map[block.ServiceId]uint64{}
+	for _, a := range s.Privileges.AlwaysAcc {
+		privilegedGas[a.ServiceId] = a.Gas
+	}
 	return &state.State{
 		Services: mapAccumulateServices(t, s.Accounts),
 		PrivilegedServices: service.PrivilegedServices{
 			ManagerServiceId:        s.Privileges.Bless,
 			AssignServiceId:         s.Privileges.Assign,
 			DesignateServiceId:      s.Privileges.Designate,
-			AmountOfGasPerServiceId: map[block.ServiceId]uint64{}, // s.Privileges.AlwaysAcc TODO is always empty should be mapped?
+			AmountOfGasPerServiceId: privilegedGas,
 		},
 		EntropyPool:         state.EntropyPool{mapHash(s.Entropy)},
 		TimeslotIndex:       s.Slot,
