@@ -90,7 +90,7 @@ func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream 
 	}
 
 	if err = stream.Close(); err != nil {
-		fmt.Printf("failed to close stream: %d", err)
+		return fmt.Errorf("failed to close stream: %w", err)
 	}
 
 	return nil
@@ -126,7 +126,7 @@ func (s *WorkPackageSubmitter) SubmitWorkPackage(ctx context.Context, stream qui
 	}
 
 	if err = stream.Close(); err != nil {
-		fmt.Printf("failed to close stream: %d", err)
+		return fmt.Errorf("failed to close stream: %w", err)
 	}
 
 	return nil
