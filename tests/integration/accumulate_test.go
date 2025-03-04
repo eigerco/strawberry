@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
@@ -140,27 +139,7 @@ func TestAccumulate(t *testing.T) {
 				newState.ValidatorState.QueuedValidators,
 				newState.PendingAuthorizersQueues,
 				_ = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports)
-
-			if !assert.Equal(t, postState, newState) {
-				d1, err := os.Create(file.Name() + "-post-state.json")
-				require.NoError(t, err)
-				defer d1.Close()
-
-				d2, err := os.Create(file.Name() + "-new-state.json")
-				require.NoError(t, err)
-				defer d2.Close()
-
-				enc := json.NewEncoder(d1)
-				enc.SetIndent("", "  ")
-				err = enc.Encode(tc.PostState)
-				require.NoError(t, err)
-
-				enc = json.NewEncoder(d2)
-				enc.SetIndent("", "  ")
-				err = enc.Encode(toJson(newState))
-				require.NoError(t, err)
-
-			}
+			assert.Equal(t, postState, newState)
 		})
 	}
 }
@@ -274,108 +253,4 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 		serviceAccounts[account.Id] = sa
 	}
 	return serviceAccounts
-}
-
-func toJson(s *state.State) AccumulateState {
-	st := AccumulateState{
-		Slot:    s.TimeslotIndex,
-		Entropy: bytes2hex(s.EntropyPool[0][:]),
-		ReadyQueue: mapSlice(s.AccumulationQueue[:], func(t1 []state.WorkReportWithUnAccumulatedDependencies) []ReadyQueueItem {
-			return mapSlice(t1, func(t2 state.WorkReportWithUnAccumulatedDependencies) ReadyQueueItem {
-				var ss, pp []string
-				for d := range t2.Dependencies {
-					ss = append(ss, bytes2hex(d[:]))
-				}
-				for _, p := range t2.WorkReport.RefinementContext.PrerequisiteWorkPackage {
-					pp = append(pp, bytes2hex(p[:]))
-				}
-				//segmentRootLookup := make(map[crypto.Hash]crypto.Hash)
-				//for _, sr := range t2.WorkReport.SegmentRootLookup {
-				//	segmentRootLookup[mapHash(sr.SegmentTreeRoot)] = mapHash(sr.WorkPackageHash)
-				//}
-				return ReadyQueueItem{
-					Report: AccumulateReport{
-						PackageSpec: PackageSpec{
-							Hash:         bytes2hex(t2.WorkReport.WorkPackageSpecification.WorkPackageHash[:]),
-							Length:       t2.WorkReport.WorkPackageSpecification.AuditableWorkBundleLength,
-							ErasureRoot:  bytes2hex(t2.WorkReport.WorkPackageSpecification.ErasureRoot[:]),
-							ExportsRoot:  bytes2hex(t2.WorkReport.WorkPackageSpecification.SegmentRoot[:]),
-							ExportsCount: t2.WorkReport.WorkPackageSpecification.SegmentCount,
-						},
-						Context: Context{
-							Anchor:           bytes2hex(t2.WorkReport.RefinementContext.Anchor.HeaderHash[:]),
-							StateRoot:        bytes2hex(t2.WorkReport.RefinementContext.Anchor.PosteriorStateRoot[:]),
-							BeefyRoot:        bytes2hex(t2.WorkReport.RefinementContext.Anchor.PosteriorBeefyRoot[:]),
-							LookupAnchor:     bytes2hex(t2.WorkReport.RefinementContext.LookupAnchor.HeaderHash[:]),
-							LookupAnchorSlot: int(t2.WorkReport.RefinementContext.LookupAnchor.Timeslot),
-							Prerequisites:    pp,
-						},
-						CoreIndex:      t2.WorkReport.CoreIndex,
-						AuthorizerHash: bytes2hex(t2.WorkReport.AuthorizerHash[:]),
-						AuthOutput:     bytes2hex(t2.WorkReport.Output),
-						//SegmentRootLookup: segmentRootLookup,
-						Results: mapSlice(t2.WorkReport.WorkResults, func(res block.WorkResult) AccumulateReportResult {
-							return AccumulateReportResult{
-								ServiceId:     int(res.ServiceId),
-								CodeHash:      bytes2hex(res.ServiceHashCode[:]),
-								PayloadHash:   bytes2hex(res.PayloadHash[:]),
-								AccumulateGas: res.GasPrioritizationRatio,
-								Result: struct {
-									Ok string `json:"ok"`
-								}{bytes2hex(res.Output.Inner.([]byte))},
-							}
-						}),
-					},
-					Dependencies: ss,
-				}
-			})
-		}),
-		Accumulated: mapSlice(s.AccumulationHistory[:], func(t1 map[crypto.Hash]struct{}) (ss []string) {
-			ss = []string{}
-			for d := range t1 {
-				ss = append(ss, bytes2hex(d[:]))
-			}
-			return
-		}),
-		Privileges: struct {
-			Bless     block.ServiceId `json:"bless"`
-			Assign    block.ServiceId `json:"assign"`
-			Designate block.ServiceId `json:"designate"`
-			AlwaysAcc []interface{}   `json:"always_acc"`
-		}{
-			Bless:     s.PrivilegedServices.ManagerServiceId,
-			Assign:    s.PrivilegedServices.AssignServiceId,
-			Designate: s.PrivilegedServices.DesignateServiceId,
-			AlwaysAcc: []any{}, // s.PrivilegedServices.AmountOfGasPerServiceId, // TODO
-		},
-		Accounts: nil, // TODO
-	}
-	for id, sss := range s.Services {
-		preimages := []AccumulateServiceAccountDataServicePreimage{}
-		for hash, bts := range sss.PreimageLookup {
-			preimages = append(preimages, AccumulateServiceAccountDataServicePreimage{
-				Hash: bytes2hex(hash[:]),
-				Blob: bytes2hex(bts),
-			})
-		}
-		st.Accounts = append(st.Accounts, AccumulateServiceAccount{
-			Id: id,
-			Data: AccumulateServiceAccountData{
-				Service: AccumulateServiceAccountDataService{
-					CodeHash:   bytes2hex(sss.CodeHash[:]),
-					Balance:    sss.Balance,
-					MinItemGas: sss.GasLimitForAccumulator,
-					MinMemoGas: sss.GasLimitOnTransfer,
-					Bytes:      sss.TotalStorageSize(),
-					Items:      sss.TotalItems(),
-				},
-				Preimages: preimages,
-			},
-		})
-	}
-	return st
-}
-
-func bytes2hex(b []byte) string {
-	return "0x" + hex.EncodeToString(b[:])
 }
