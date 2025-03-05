@@ -65,7 +65,7 @@ func (pc *ProtocolConn) AcceptStream() error {
 	}
 
 	// Get handler for this stream kind
-	handler, err := pc.Registry.GetHandler(kind[0])
+	handler, err := pc.Registry.GetHandler(StreamKind(kind[0]))
 	if err != nil {
 		stream.Close()
 		return err
@@ -73,7 +73,7 @@ func (pc *ProtocolConn) AcceptStream() error {
 
 	// Handle the stream
 	go func() {
-		if err := handler.HandleStream(pc.TConn.Context(), stream); err != nil {
+		if err := handler.HandleStream(pc.TConn.Context(), stream, pc.TConn.PeerKey()); err != nil {
 			fmt.Printf("stream handler error: %v\n", err)
 		}
 	}()

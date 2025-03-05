@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -53,7 +54,7 @@ type blockRequestMessage struct {
 // either forward (for ascending) or backward (for descending), limited by MaxBlocks.
 // For ascending requests, the sequence starts with a child of the given block.
 // For descending requests, the sequence starts with the given block itself.
-func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stream) error {
+func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
 	// Read the request message
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {

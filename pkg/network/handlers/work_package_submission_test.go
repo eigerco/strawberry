@@ -100,7 +100,7 @@ func TestHandleWorkPackage(t *testing.T) {
 	fakeStream.Buffer.Write(msg1.Bytes())
 	fakeStream.Buffer.Write(msg2.Bytes())
 
-	err = handler.HandleStream(ctx, fakeStream)
+	err = handler.HandleStream(ctx, fakeStream, nil)
 	require.NoError(t, err)
 
 	assert.True(t, fakeStream.CloseCalled)
