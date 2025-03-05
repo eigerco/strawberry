@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 
 	"github.com/quic-go/quic-go"
@@ -45,7 +46,7 @@ func NewWorkPackageSubmissionHandler(fetcher ImportedSegmentsFetcher) *WorkPacka
 //	Message 2: [Extrinsic data (raw bytes)]
 //
 // After reading these it should fetch imported segments from the availability system
-func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream quic.Stream) error {
+func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
 	msg1, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return fmt.Errorf("failed to read message 1: %w", err)
