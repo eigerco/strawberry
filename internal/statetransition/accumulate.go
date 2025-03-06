@@ -39,7 +39,7 @@ type Accumulator struct {
 // InvokePVM ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G) Equation (B.8)
 func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
 	// if ud[s]c = ∅
-	if accState.ServiceState[serviceIndex].Code() == nil {
+	if accState.ServiceState[serviceIndex].EncodedCodeAndMetadata() == nil {
 		ctx, err := a.newCtx(accState, serviceIndex)
 		if err != nil {
 			log.Println("error creating context", "err", err)
@@ -125,7 +125,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		return gasCounter, regs, mem, ctx, err
 	}
 
-	remainingGas, ret, newCtxPair, err := interpreter.InvokeWholeProgram(accState.ServiceState[serviceIndex].Code(), 5, gas, args, hostCallFunc, newCtxPair)
+	remainingGas, ret, newCtxPair, err := interpreter.InvokeWholeProgram(accState.ServiceState[serviceIndex].EncodedCodeAndMetadata(), 5, gas, args, hostCallFunc, newCtxPair)
 	if err != nil {
 		errPanic := &polkavm.ErrPanic{}
 		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {

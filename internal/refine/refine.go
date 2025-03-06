@@ -8,6 +8,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
+	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -26,7 +27,7 @@ type Refine struct {
 	state state.State
 }
 
-// InvokePVM ΨR(N,P,Y, ⟦⟦G⟧⟧, N) → (Y ∪ J, ⟦Y⟧)
+// InvokePVM ΨR(N,P,Y, ⟦⟦G⟧⟧, N) → (Y ∪ J, ⟦G⟧)
 func (r *Refine) InvokePVM(
 	itemIndex uint32, // i
 	workPackage work.Package, // p
@@ -42,7 +43,7 @@ func (r *Refine) InvokePVM(
 		return nil, nil, err
 	}
 
-	// let a = E(ws, wy, H(p), px, pa)
+	// let a = E(ws, wy, H(p), px, pu)
 	args, err := jam.Marshal(struct {
 		ServiceIndex      block.ServiceId
 		WorkPayload       []byte
@@ -58,22 +59,29 @@ func (r *Refine) InvokePVM(
 	})
 
 	// if s ∉ K(δ) ∨ Λ(δ[s], ct, c) = ∅ then (BAD, [])
-	service, ok := r.state.Services[w.ServiceId]
+	s, ok := r.state.Services[w.ServiceId]
 	if !ok {
 		return nil, nil, ErrBad
 	}
 
-	code := service.LookupPreimage(workPackage.Context.LookupAnchor.Timeslot, w.CodeHash)
-	if code == nil {
+	// E(↕m, c) = Λ(δ[ws], (px)t, wc)
+	encodedCodeWithMeta := s.LookupPreimage(workPackage.Context.LookupAnchor.Timeslot, w.CodeHash)
+	if encodedCodeWithMeta == nil {
 		return nil, nil, ErrBad
 	}
 
+	var pvmCode service.CodeWithMetadata
+	err = jam.Unmarshal(encodedCodeWithMeta, &pvmCode)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// if |Λ(δ[s], ct, c)| > W_C then (BIG, [])
-	if len(code) > work.MaxSizeServiceCode {
+	if len(pvmCode.Code) > work.MaxSizeServiceCode {
 		return nil, nil, ErrBig
 	}
 
-	// F ∈ Ω⟨(D⟨N → M⟩, ⟦Y⟧)⟩∶ (n, ϱ, ω, μ, (m, e))
+	// F ∈ Ω⟨(D⟨N → M⟩, ⟦G⟧)⟩∶ (n, ϱ, ω, μ, (m, e))
 	hostCall := func(hostCall uint64, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctxPair polkavm.RefineContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.RefineContextPair, error) {
 		switch hostCall {
 		case host_call.HistoricalLookupID:
@@ -107,7 +115,7 @@ func (r *Refine) InvokePVM(
 	}
 
 	// (g, r, (m, e)) = ΨM(Λ(δ[w_s], (p_x)t, w_c), 0, w_g, a, F, (∅, []))∶
-	_, result, ctxPair, err := interpreter.InvokeWholeProgram(code, 0, w.GasLimitRefine, args, hostCall, polkavm.RefineContextPair{
+	_, result, ctxPair, err := interpreter.InvokeWholeProgram(pvmCode.Code, 0, w.GasLimitRefine, args, hostCall, polkavm.RefineContextPair{
 		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
 		Segments:         []work.Segment{},
 	})

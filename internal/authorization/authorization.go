@@ -5,6 +5,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
+	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -58,14 +59,20 @@ func (a *Authorization) InvokePVM(
 		return gasCounter, regs, mem, ctx, nil
 	}
 
-	pc, err := workPackage.GetAuthorizationCode(a.state.Services)
+	encodedCodeWithMeta, err := workPackage.GetAuthorizationCode(a.state.Services)
+	if err != nil {
+		return nil, err
+	}
+
+	var pvmCode service.CodeWithMetadata
+	err = jam.Unmarshal(encodedCodeWithMeta, &pvmCode)
 	if err != nil {
 		return nil, err
 	}
 
 	// (g, r, ∅) = ΨM(pc, 0, GI , E(p, c), F, ∅)
 	_, result, _, err := interpreter.InvokeWholeProgram(
-		pc,
+		pvmCode.Code, // pc
 		0,
 		common.MaxAllocatedGasIsAuthorized,
 		args,

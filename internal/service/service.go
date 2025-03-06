@@ -28,8 +28,13 @@ type ServiceAccount struct {
 	GasLimitOnTransfer     uint64                                          // Gas limit for on_transfer (m)
 }
 
-// Code returns the actual code of the service account as per Equation (9.4 v0.5.0)
-func (sa ServiceAccount) Code() []byte {
+type CodeWithMetadata struct {
+	Metadata []byte // a_m
+	Code     []byte // a_c
+}
+
+// EncodedCodeAndMetadata encoded code and metadata as per Equation (9.4 v0.6.3)
+func (sa ServiceAccount) EncodedCodeAndMetadata() []byte {
 	if code, exists := sa.PreimageLookup[sa.CodeHash]; exists {
 		return code
 	}

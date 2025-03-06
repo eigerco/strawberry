@@ -290,7 +290,7 @@ func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, t
 	}
 
 	// l = max(81, d_o) - 81
-	l := max(81, len(serviceAccount.Code())) - 81
+	l := max(81, len(serviceAccount.EncodedCodeAndMetadata())) - 81
 
 	key := service.PreImageMetaKey{Hash: crypto.Hash(h), Length: service.PreimageLength(l)}
 	dL, ok := serviceAccount.PreimageMeta[key]
