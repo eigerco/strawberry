@@ -150,6 +150,9 @@ func Fetch(
 			//i[i]ω11
 			v = []byte{importedSegments[itemIndex][index1]}
 		}
+	case 7:
+		// v = p_p
+		v = workPackage.Parameterization
 	}
 
 	if v == nil {

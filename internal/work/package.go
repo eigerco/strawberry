@@ -94,7 +94,7 @@ func (wp *Package) ComputeAuthorizerHashes(
 	return authorizationCode, impliedAuthorizerHash, nil
 }
 
-// GetAuthorizationCode pc = Λ(δ[p.h], (p.x)^t, p.u) (14.9 v0.5.4)
+// GetAuthorizationCode E(↕pm, pc) = Λ(δ[p.h], (p.x)^t, p.u) (14.9 v0.6.3)
 func (wp *Package) GetAuthorizationCode(serviceState service.ServiceState) ([]byte, error) {
 	// Retrieve the service account by authorizer service index p.h
 	sa, exists := serviceState[block.ServiceId(wp.AuthorizerService)]
@@ -102,7 +102,7 @@ func (wp *Package) GetAuthorizationCode(serviceState service.ServiceState) ([]by
 		return nil, fmt.Errorf("service %d not found in service state", wp.AuthorizerService)
 	}
 
-	// pc = Λ(δ[p.h], (p.x)^t, p.u)
+	// E(↕pm, pc) = Λ(δ[p.h], (p.x)^t, p.u)
 	authorizationCode := sa.LookupPreimage(wp.Context.LookupAnchor.Timeslot, wp.AuthCodeHash)
 	if authorizationCode == nil {
 		return nil, fmt.Errorf("unable to find preimage for AuthCodeHash at given timeslot")
