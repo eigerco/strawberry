@@ -22,18 +22,18 @@ func Test_ValidateNumberOfEntries(t *testing.T) {
 		},
 	}
 
-	err := p.ValidateNumberOfEntries()
+	err := p.ValidateLimits()
 	assert.NoError(t, err)
 
 	// Exceeding limits
-	p.WorkItems[1].ExportedSegments = 2000
-	err = p.ValidateNumberOfEntries()
+	p.WorkItems[1].ExportedSegments = 3000
+	err = p.ValidateLimits()
 	assert.Error(t, err)
 
 	// Restore and break imported
 	p.WorkItems[1].ExportedSegments = 500
 	p.WorkItems[1].ImportedSegments = make([]work.ImportedSegment, 3000)
-	err = p.ValidateNumberOfEntries()
+	err = p.ValidateLimits()
 	assert.Error(t, err)
 }
 

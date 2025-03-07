@@ -19,19 +19,28 @@ type Package struct {
 	WorkItems          []Item                  // w ∈ ⟦I⟧
 }
 
-// ValidateNumberOfEntries (14.4 v0.5.4)
-func (wp *Package) ValidateNumberOfEntries() error {
-	var totalExported, totalImported uint16
+// ValidateLimits (14.4 v0.6.3)
+func (wp *Package) ValidateLimits() error {
+	if len(wp.WorkItems) > MaxNumberOfItems {
+		return fmt.Errorf("exceeded maximum work items: %d/%d", len(wp.WorkItems), MaxNumberOfItems)
+	}
+
+	var totalExported, totalImported, totalExtrinsics uint16
 	for _, w := range wp.WorkItems {
 		totalExported += w.ExportedSegments
 		totalImported += uint16(len(w.ImportedSegments))
+		totalExtrinsics += uint16(len(w.Extrinsics))
 	}
 
-	if totalExported > MaxNumberOfEntries {
-		return fmt.Errorf("exceeded maximum exported segments: %d/%d", totalExported, MaxNumberOfEntries)
+	if totalExported > MaxNumberOfImportsExports {
+		return fmt.Errorf("exceeded maximum exported segments: %d/%d", totalExported, MaxNumberOfImportsExports)
 	}
-	if totalImported > MaxNumberOfEntries {
-		return fmt.Errorf("exceeded maximum imported segments: %d/%d", totalImported, MaxNumberOfEntries)
+	if totalImported > MaxNumberOfImportsExports {
+		return fmt.Errorf("exceeded maximum imported segments: %d/%d", totalImported, MaxNumberOfImportsExports)
+	}
+
+	if totalExtrinsics > MaxNumberOfExtrinsics {
+		return fmt.Errorf("exceeded maximum extrinsics: %d/%d", totalExtrinsics, MaxNumberOfExtrinsics)
 	}
 
 	return nil

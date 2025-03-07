@@ -1,9 +1,11 @@
 package work
 
 const (
-	MaxSizeServiceCode          = 4000000 // WC = 4000000: The maximum size of service code in octets.
-	MaxNumberOfEntries          = 1 << 11 // WM = 2^11: The maximum number of entries in a work-package manifest.
+	MaxSizeServiceCode          = 4_000_000 // WC = 4,000,000: The maximum size of service code in octets.
+	MaxNumberOfImportsExports   = 3_072     // WM = 3,072: The maximum number of imports and exports in a work-package.
+	MaxNumberOfItems            = 16        // I = 16: The maximum amount of work items in a package.
+	MaxNumberOfExtrinsics       = 128       // T = 128: The maximum number of extrinsics in a work-package.
 	SegmentsPerPage             = 64
-	MaxSizeOfEncodedWorkPackage = 12 * 1 << 20 // WB = 12*2^20 = 12MB: The maximum size of an encoded work-package together with its extrinsic data and import implications, in octets.
-	MaxAllocatedGasRefine       = 500_000_000  // GR = 500, 000, 000: The gas allocated to invoke a work-package’s Refine logic.
+	MaxSizeOfEncodedWorkPackage = 12 * 1 << 20  // WB = 12*2^20 = 12MB: The maximum size of an encoded work-package together with its extrinsic data and import implications, in octets.
+	MaxAllocatedGasRefine       = 5_000_000_000 // GR = 5,000,000,000: The gas allocated to invoke a work-package’s Refine logic.
 )

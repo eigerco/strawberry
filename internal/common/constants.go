@@ -21,7 +21,5 @@ const (
 	MaxAllocatedGasAccumulation                  = 10_000_000                                                   // GA: The gas allocated to invoke a work-report’s Accumulation logic.
 	MaxAllocatedGasIsAuthorized                  = 50_000_000                                                   // GI: The gas allocated to invoke a work-package’s Is-Authorized logic.
 	WorkReportMaxSumOfDependencies               = 8                                                            // (J) The maximum sum of dependency items in a work-report.
-	MinWorkPackageResultsSize                    = 1                                                            // () The minimum amount of work items in a package.
-	MaxWorkPackageResultsSize                    = 4                                                            // (I) The maximum amount of work items in a package.
 	MaxWorkPackageSizeBytes                      = 48 * 1024                                                    // (WR) Maximum size of a serialized work-package in bytes
 )

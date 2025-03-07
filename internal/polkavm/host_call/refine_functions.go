@@ -198,7 +198,7 @@ func Export(
 	copy(segmentData[:], paddedData)
 
 	currentCount := uint64(len(ctxPair.Segments))
-	if exportOffset+currentCount >= work.MaxNumberOfEntries {
+	if exportOffset+currentCount >= work.MaxNumberOfImportsExports {
 		return gas, withCode(regs, FULL), mem, ctxPair, nil
 	}
 
