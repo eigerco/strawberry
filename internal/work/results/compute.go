@@ -254,7 +254,7 @@ func (c *Computation) EvaluateWorkPackage(
 	wp work.Package,
 	coreIndex uint16,
 ) (*block.WorkReport, error) {
-	if err := wp.ValidateNumberOfEntries(); err != nil {
+	if err := wp.ValidateLimits(); err != nil {
 		return nil, err
 	}
 	if err := wp.ValidateSize(); err != nil {
