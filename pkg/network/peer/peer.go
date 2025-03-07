@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
-	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"net"
 	"net/netip"
+
+	"github.com/eigerco/strawberry/pkg/network/handlers"
+	"github.com/eigerco/strawberry/pkg/network/protocol"
 )
 
 // Peer represents a remote peer and provides high-level protocol operations.
@@ -18,6 +20,7 @@ type Peer struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	Ed25519Key ed25519.PublicKey
+	BAnnouncer *handlers.BlockAnnouncer
 	// Optional validator index if this peer is a validator
 	ValidatorIndex *uint16
 }

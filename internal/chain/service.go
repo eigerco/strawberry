@@ -79,7 +79,6 @@ func (bs *BlockService) initializeState() error {
 		BlockAuthorIndex: 0,
 	}
 	hash, err := genesisHeader.Hash()
-	fmt.Printf("hash: %v\n", hash)
 	if err != nil {
 		return fmt.Errorf("failed to hash genesis block: %w", err)
 	}
@@ -154,13 +153,13 @@ func (bs *BlockService) HandleNewHeader(header *block.Header) error {
 	// Get the header hash
 	hash, err := header.Hash()
 	if err != nil {
-		return fmt.Errorf("failed to hash header: %w", err)
+		return fmt.Errorf("hash header: %w", err)
 	}
 	// Need to verify this block is a descendant of latest finalized block
 	// before considering it as a potential leaf
-	isDescendant, err := bs.isDescendantOfFinalized(header)
+	isDescendant, err := bs.IsDescendantOfFinalized(header)
 	if err != nil {
-		return fmt.Errorf("failed to check if block is descendant of finalized: %w", err)
+		return fmt.Errorf("check if block is descendant of finalized: %w", err)
 	}
 	if !isDescendant {
 		return fmt.Errorf("block %s is not a descendant of latest finalized block", hash)
@@ -168,7 +167,7 @@ func (bs *BlockService) HandleNewHeader(header *block.Header) error {
 
 	// First store the header
 	if err := bs.Store.PutHeader(*header); err != nil {
-		return fmt.Errorf("failed to store header: %w", err)
+		return fmt.Errorf("store header: %w", err)
 	}
 
 	// Only update leaves if this is a descendant of finalized block
@@ -178,7 +177,7 @@ func (bs *BlockService) HandleNewHeader(header *block.Header) error {
 	// Check if this creates a finalization condition starting from parent
 	if err := bs.checkFinalization(header.ParentHash); err != nil {
 		// Log but don't fail on finalization check errors
-		fmt.Printf("Failed to check finalization: %v\n", err)
+		fmt.Printf("check finalization: %v\n", err)
 	}
 
 	return nil
@@ -206,12 +205,12 @@ func (bs *BlockService) RemoveLeaf(hash crypto.Hash) {
 	delete(bs.KnownLeaves, hash)
 }
 
-// isDescendantOfFinalized checks if a block is a descendant of the latest finalized block
+// IsDescendantOfFinalized checks if a block is a descendant of the latest finalized block
 // by walking back through its ancestors until we either:
 // - Find the latest finalized block (true)
 // - Find a different block at the same height as latest finalized (false)
 // - Can't find a parent (error)
-func (bs *BlockService) isDescendantOfFinalized(header *block.Header) (bool, error) {
+func (bs *BlockService) IsDescendantOfFinalized(header *block.Header) (bool, error) {
 	bs.Mu.RLock()
 	finalizedSlot := bs.LatestFinalized.TimeSlotIndex
 	finalizedHash := bs.LatestFinalized.Hash
@@ -221,7 +220,7 @@ func (bs *BlockService) isDescendantOfFinalized(header *block.Header) (bool, err
 	for current.TimeSlotIndex > finalizedSlot {
 		parent, err := bs.Store.GetHeader(current.ParentHash)
 		if err != nil {
-			return false, fmt.Errorf("failed to get parent block: %w", err)
+			return false, fmt.Errorf("get parent block: %w", err)
 		}
 		current = &parent
 	}
