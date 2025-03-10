@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"crypto/ed25519"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -63,6 +64,7 @@ func NewBlockAnnouncementHandler(bs *chain.BlockService, requestor BlockRequesto
 type BlockAnnouncer struct {
 	*chain.BlockService                                  // Access to local chain state
 	peerFinalized       chain.LatestFinalized            // Peer's latest finalized block
+	mu                  sync.RWMutex                     // Protects the announced and peerLeaves maps
 	peerLeaves          map[crypto.Hash]jamtime.Timeslot // Peer's leaf blocks (blocks with no children)
 	announced           map[crypto.Hash]*block.Header    // Blocks we've announced to this peer TODO: Cleanup mehcanism
 	stream              quic.Stream                      // The QUIC stream for this connection
@@ -83,8 +85,8 @@ type BlockAnnouncer struct {
 // it in the handler's Announcers map using the peer's Ed25519 key.
 func (bh *BlockAnnouncementHandler) NewBlockAnnouncer(bs *chain.BlockService, ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) *BlockAnnouncer {
 	announcerCtx, cancel := context.WithCancel(ctx)
-	bh.Mu.Lock()
-	defer bh.Mu.Unlock()
+	bh.mu.Lock()
+	defer bh.mu.Unlock()
 
 	ba := &BlockAnnouncer{
 		BlockService: bs,
@@ -191,9 +193,9 @@ func (ba *BlockAnnouncer) SendAnnouncement(header *block.Header) error {
 	case ba.sendCh <- content:
 		// Track this block as announced
 		hash, _ := header.Hash() // Error already checked in shouldAnnounce
-		ba.Mu.Lock()
+		ba.mu.Lock()
 		ba.announced[hash] = header
-		ba.Mu.Unlock()
+		ba.mu.Unlock()
 		return nil
 	case <-ba.ctx.Done():
 		return ba.ctx.Err()
@@ -205,8 +207,8 @@ func (ba *BlockAnnouncer) SendAnnouncement(header *block.Header) error {
 // - We should not announce blocks we've already announced
 // - We should not announce a block if we've already announced one of its descendants
 func (ba *BlockAnnouncer) shouldAnnounce(h *block.Header) (bool, error) {
-	ba.Mu.RLock()
-	defer ba.Mu.RUnlock()
+	ba.mu.RLock()
+	defer ba.mu.RUnlock()
 	hash, err := h.Hash()
 	if err != nil {
 		return false, fmt.Errorf("hash header: %w", err)
@@ -280,9 +282,9 @@ func (ba *BlockAnnouncer) receiveHandshake() error {
 // sendHandshake sends our handshake message to the peer, containing our
 // latest finalized block and all our known leaf blocks as required by the protocol.
 func (ba *BlockAnnouncer) sendHandshake() error {
-	ba.Mu.RLock()
+	ba.mu.RLock()
 	content := serializeHandshake(ba.LatestFinalized, ba.KnownLeaves)
-	ba.Mu.RUnlock()
+	ba.mu.RUnlock()
 
 	return WriteMessageWithContext(ba.ctx, ba.stream, content)
 }
@@ -378,7 +380,7 @@ func (ba *BlockAnnouncer) processAnnouncement(content []byte) error {
 		return fmt.Errorf("hash header: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(ba.ctx, 6*time.Second) // Arbitrary timeout
+	ctx, cancel := context.WithTimeout(ba.ctx, blockRequestTimeout)
 	defer cancel()
 	network.LogBlockEvent(time.Now(), "requesting", h, header.TimeSlotIndex.ToEpoch(), header.TimeSlotIndex)
 
@@ -495,8 +497,8 @@ func (ba *BlockAnnouncer) processHandshake(content []byte) error {
 	}
 
 	// Store peer's chain state
-	ba.Mu.Lock()
-	defer ba.Mu.Unlock()
+	ba.mu.Lock()
+	defer ba.mu.Unlock()
 	ba.peerFinalized = chain.LatestFinalized{
 		Hash:          finalized.hash,
 		TimeSlotIndex: finalized.slot,

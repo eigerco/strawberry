@@ -22,7 +22,7 @@ import (
 // It handles block announcements according to UP 0 protocol specification,
 // maintaining the set of leaf blocks and tracking finalization status.
 type BlockService struct {
-	Mu              sync.RWMutex
+	mu              sync.RWMutex
 	KnownLeaves     map[crypto.Hash]jamtime.Timeslot // Maps leaf block hashes to their timeslots
 	LatestFinalized LatestFinalized                  // Tracks the most recently finalized block
 	Store           *store.Chain                     // Persistent block storage
@@ -91,8 +91,8 @@ func (bs *BlockService) initializeState() error {
 	if err := bs.Store.PutBlock(b); err != nil {
 		return fmt.Errorf("failed to store genesis block: %w", err)
 	}
-	bs.Mu.Lock()
-	defer bs.Mu.Unlock()
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
 	bs.LatestFinalized = LatestFinalized{
 		Hash:          hash,
 		TimeSlotIndex: genesisHeader.TimeSlotIndex,
@@ -185,23 +185,23 @@ func (bs *BlockService) HandleNewHeader(header *block.Header) error {
 
 // UpdateLatestFinalized updates the latest finalized block pointer.
 func (bs *BlockService) UpdateLatestFinalized(hash crypto.Hash, slot jamtime.Timeslot) {
-	bs.Mu.Lock()
-	defer bs.Mu.Unlock()
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
 	bs.LatestFinalized = LatestFinalized{Hash: hash, TimeSlotIndex: slot}
 	network.LogBlockEvent(time.Now(), "finalizing", hash, slot.ToEpoch(), slot)
 }
 
 // AddLeaf adds a block to the set of known leaves.
 func (bs *BlockService) AddLeaf(hash crypto.Hash, slot jamtime.Timeslot) {
-	bs.Mu.Lock()
-	defer bs.Mu.Unlock()
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
 	bs.KnownLeaves[hash] = slot
 }
 
 // RemoveLeaf removes a block from the set of known leaves.
 func (bs *BlockService) RemoveLeaf(hash crypto.Hash) {
-	bs.Mu.Lock()
-	defer bs.Mu.Unlock()
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
 	delete(bs.KnownLeaves, hash)
 }
 
@@ -211,10 +211,10 @@ func (bs *BlockService) RemoveLeaf(hash crypto.Hash) {
 // - Find a different block at the same height as latest finalized (false)
 // - Can't find a parent (error)
 func (bs *BlockService) IsDescendantOfFinalized(header *block.Header) (bool, error) {
-	bs.Mu.RLock()
+	bs.mu.RLock()
 	finalizedSlot := bs.LatestFinalized.TimeSlotIndex
 	finalizedHash := bs.LatestFinalized.Hash
-	bs.Mu.RUnlock()
+	bs.mu.RUnlock()
 
 	current := header
 	for current.TimeSlotIndex > finalizedSlot {

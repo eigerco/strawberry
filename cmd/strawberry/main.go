@@ -29,28 +29,23 @@ type FullValidatorInfo struct {
 func (f FullValidatorInfo) ToJson() ([]byte, error) {
 	pub, prv, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	prvStr := hex.EncodeToString(prv)
 	pubStr := hex.EncodeToString(pub)
 	f.Ed25519Prv = prvStr
 	f.Ed25519Pub = pubStr
-	jsonData, err := json.MarshalIndent(f, "", "	")
-	if err != nil {
-		return nil, err
-	}
-
-	return jsonData, nil
+	return json.MarshalIndent(f, "", "	")
 }
 
 func loadFullValidatorInfos(filename string) ([]FullValidatorInfo, error) {
-	jsonData, err := os.ReadFile(filename)
+	f, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("error reading file: %w", err)
 	}
 
 	var validators []FullValidatorInfo
-	if err := json.Unmarshal(jsonData, &validators); err != nil {
+	if err := json.NewDecoder(f).Decode(&validators); err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
 	}
 
@@ -98,26 +93,29 @@ func main() {
 	}
 	vs, err := loadFullValidatorInfos("test_validators.json")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	i, err := strconv.Atoi(*index)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
+	}
+	if i < 0 || i >= len(vs) {
+		log.Fatalf("index %d out of bounds", i)
 	}
 	address := vs[i].IP
 	port := vs[i].Port
 	udpAddress, err := net.ResolveUDPAddr("udp", net.JoinHostPort(address, strconv.Itoa(port)))
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	fmt.Printf("listening on: %v\n", address)
 	prv, err := hex.DecodeString(vs[i].Ed25519Prv)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	pub, err := hex.DecodeString(vs[i].Ed25519Pub)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	privateKey := ed25519.PrivateKey(prv)
 	publicKey := ed25519.PublicKey(pub)
@@ -129,11 +127,11 @@ func main() {
 	for i, k := range vs {
 		pub, err := hex.DecodeString(k.Ed25519Pub)
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 		meta, err := k.ToMetadata()
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 		vk := crypto.ValidatorKey{
 			Ed25519:  ed25519.PublicKey(pub),
@@ -150,11 +148,11 @@ func main() {
 
 	node, err := peer.NewNode(ctx, udpAddress, vk, vstate, uint16(i))
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	err = node.Start()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	select {}
 }

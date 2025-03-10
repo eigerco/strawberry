@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"time"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
@@ -11,6 +12,8 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/quic-go/quic-go"
 )
+
+const blockRequestTimeout = 6 * time.Second // Arbitrary timeout for block requests
 
 // BlockRequestHandler processes CE 128 block request streams from peers.
 // It implements protocol specification section "CE 128: Block request".
