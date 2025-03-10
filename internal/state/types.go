@@ -50,10 +50,12 @@ type AccumulationState struct {
 
 // AccumulationOperand represents a single operand for accumulation (equation 179 v0.4.5)
 type AccumulationOperand struct {
-	Output              block.WorkResultOutputOrError // Output or error (o ∈ Y ∪ J)
-	PayloadHash         crypto.Hash                   // Payload hash (l ∈ H)
-	WorkPackageHash     crypto.Hash                   // Work-package hash (k ∈ H)
-	AuthorizationOutput []byte                        // Authorization output (a ∈ Y)
+	WorkPackageHash   crypto.Hash                   // Work-package hash (h ∈ H)
+	SegmentRoot       crypto.Hash                   // Segment root (e ∈ H)
+	AuthorizationHash crypto.Hash                   // Authorization hash (a ∈ H)
+	Output            []byte                        // Output of the work report (o ∈ Y)
+	PayloadHash       crypto.Hash                   // Payload hash (y ∈ H)
+	OutputOrError     block.WorkResultOutputOrError // Output or error (d ∈ Y ∪ J)
 }
 
 // AccumulationResult represents the result type from equation 162:
