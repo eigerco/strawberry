@@ -2608,10 +2608,12 @@ func (a *Accumulator) Delta1(
 		for _, result := range report.WorkResults {
 			if result.ServiceId == serviceIndex {
 				operand := state.AccumulationOperand{
-					Output:              result.Output,
-					PayloadHash:         result.PayloadHash,
-					WorkPackageHash:     report.WorkPackageSpecification.WorkPackageHash,
-					AuthorizationOutput: report.Output,
+					WorkPackageHash:   report.WorkPackageSpecification.WorkPackageHash,
+					SegmentRoot:       report.WorkPackageSpecification.SegmentRoot,
+					AuthorizationHash: report.AuthorizerHash,
+					Output:            report.Output,
+					PayloadHash:       result.PayloadHash,
+					OutputOrError:     result.Output,
 				}
 				operands = append(operands, operand)
 			}

@@ -2,6 +2,7 @@ package block
 
 import (
 	"fmt"
+
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -67,11 +68,12 @@ type RefinementContextLookupAnchor struct {
 type WorkResultError uint8
 
 const (
-	NoError               WorkResultError = iota // Represents no error, successful execution
-	OutOfGas                                     // Out-of-gas error
-	UnexpectedTermination                        // Unexpected program termination.
-	CodeNotAvailable                             // The service’s code was not available for lookup in state at the posterior state of the lookup-anchor block.
-	CodeTooLarge                                 // The code was available but was beyond the maximum size allowed S.
+	NoError                WorkResultError = iota // Represents no error, successful execution
+	OutOfGas                                      // ∞ Out-of-gas error
+	UnexpectedTermination                         // ☇ Unexpected program termination.
+	InvalidNumberOfExports                        // ⊚ The number of exports made was invalidly reported
+	CodeNotAvailable                              // BAD The service’s code was not available for lookup in state at the posterior state of the lookup-anchor block.
+	CodeTooLarge                                  // BIG The code was available but was beyond the maximum size allowed WC.
 )
 
 type ServiceId uint32
@@ -80,9 +82,9 @@ type ServiceId uint32
 type WorkResult struct {
 	ServiceId              ServiceId               // Service ID (s) - The index of the service whose state is to be altered and thus whose refine code was already executed.
 	ServiceHashCode        crypto.Hash             // Hash of the service code (c) - The hash of the code of the service at the time of being reported.
-	PayloadHash            crypto.Hash             // Hash of the payload (l) - The hash of the payload within the work item which was executed in the refine stage to give this result. Provided to the accumulation logic of the service later on.
+	PayloadHash            crypto.Hash             // Hash of the payload (y) - The hash of the payload within the work item which was executed in the refine stage to give this result. Provided to the accumulation logic of the service later on.
 	GasPrioritizationRatio uint64                  // Gas prioritization ratio (g) - used when determining how much gas should be allocated to execute of this item’s accumulate.
-	Output                 WorkResultOutputOrError // Output of the work result (o) ∈ Y ∪ J: Output or error (Y is the set of octet strings, J is the set of work execution errors)
+	Output                 WorkResultOutputOrError // Output of the work result (d) ∈ Y ∪ J: Output or error (Y is the set of octet strings, J is the set of work execution errors)
 }
 
 // WorkResultOutputOrError represents either the successful output or an error from a work result
@@ -118,7 +120,7 @@ func (wer WorkResultOutputOrError) ValueAt(index uint) (any, error) {
 	switch index {
 	case uint(NoError):
 		return []byte{}, nil
-	case uint(OutOfGas), uint(UnexpectedTermination), uint(CodeNotAvailable), uint(CodeTooLarge):
+	case uint(OutOfGas), uint(UnexpectedTermination), uint(InvalidNumberOfExports), uint(CodeNotAvailable), uint(CodeTooLarge):
 		return nil, nil
 	}
 
