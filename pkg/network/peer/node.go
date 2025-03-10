@@ -5,19 +5,19 @@ import (
 	"crypto/ed25519"
 	"crypto/tls"
 	"fmt"
-	"log"
-	"net"
-	"sync"
-	"time"
-
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/network/cert"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/network/transport"
+	"log"
+	"net"
+	"sync"
+	"time"
 )
 
 // Node manages peer connections, handles protocol messages, and coordinates network operations.
@@ -25,24 +25,14 @@ import (
 type Node struct {
 	Context              context.Context
 	Cancel               context.CancelFunc
+	ValidatorManager     *validator.ValidatorManager
 	blockService         *chain.BlockService
 	transport            *transport.Transport
 	protocolManager      *protocol.Manager
 	peersLock            sync.RWMutex
-	peersSet             *PeerSet
+	PeersSet             *PeerSet
 	blockRequester       *handlers.BlockRequester
 	workPackageSubmitter *handlers.WorkPackageSubmitter
-}
-
-// ValidatorKeys holds the cryptographic keys required for a validator node.
-// These keys are used for signing messages, participating in consensus,
-// and establishing secure connections with other nodes.
-type ValidatorKeys struct {
-	EdPrv     ed25519.PrivateKey
-	EdPub     ed25519.PublicKey
-	BanderPrv crypto.BandersnatchPrivateKey
-	BanderPub crypto.BandersnatchPublicKey
-	Bls       crypto.BlsKey
 }
 
 // PeerSet maintains mappings between peer identifiers
@@ -106,13 +96,14 @@ func (ps *PeerSet) GetByValidatorIndex(index uint16) *Peer {
 
 // NewNode creates a new Node instance with the specified configuration.
 // It initializes the TLS certificate, protocol manager, and network transport.
-func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys ValidatorKeys) (*Node, error) {
+func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.ValidatorKeys, state validator.ValidatorState, validatorIdx uint16) (*Node, error) {
 	nodeCtx, cancel := context.WithCancel(nodeCtx)
 	node := &Node{
-		peersSet: NewPeerSet(),
+		PeersSet: NewPeerSet(),
 		Context:  nodeCtx,
 		Cancel:   cancel,
 	}
+	node.ValidatorManager = validator.NewValidatorManager(keys, state, validatorIdx)
 
 	// Create TLS certificate using the node's Ed25519 key pair
 	certGen := cert.NewGenerator(cert.Config{
@@ -138,7 +129,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys ValidatorKey
 	if err != nil {
 		return nil, fmt.Errorf("failed to create block service: %w", err)
 	}
-	node.blockService = bs
+
 	protoManager, err := protocol.NewManager(protoConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create protocol manager: %w", err)
@@ -146,6 +137,8 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys ValidatorKey
 
 	// Register what type of streams the Node will support.
 	protoManager.Registry.RegisterHandler(protocol.StreamKindBlockRequest, handlers.NewBlockRequestHandler(bs))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindBlockAnnouncement, handlers.NewBlockAnnouncementHandler(bs, node))
+
 	node.blockRequester = &handlers.BlockRequester{}
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}))
@@ -167,6 +160,8 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys ValidatorKey
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transport: %w", err)
 	}
+
+	node.blockService = bs
 	node.transport = tr
 	node.protocolManager = protoManager
 	return node, nil
@@ -190,12 +185,12 @@ func (n *Node) OnConnection(conn *transport.Conn) {
 	n.peersLock.Lock()
 	defer n.peersLock.Unlock()
 	// If peer already exists, close existing connection and replace with new one.
-	if existingPeer := n.peersSet.GetByEd25519Key(conn.PeerKey()); existingPeer != nil {
+	if existingPeer := n.PeersSet.GetByEd25519Key(conn.PeerKey()); existingPeer != nil {
 		// Close existing connection
 		if err := existingPeer.ProtoConn.Close(); err != nil {
 			log.Printf("Failed to close existing peer connection: %v", err)
 		}
-		n.peersSet.RemovePeer(existingPeer)
+		n.PeersSet.RemovePeer(existingPeer)
 	}
 
 	pConn := n.protocolManager.OnConnection(conn)
@@ -208,8 +203,9 @@ func (n *Node) OnConnection(conn *transport.Conn) {
 		}
 		return
 	}
+
 	// Add to peer set
-	n.peersSet.AddPeer(peer)
+	n.PeersSet.AddPeer(peer)
 }
 
 // ConnectToPeer initiates a connection to a peer at the specified address.
@@ -217,7 +213,7 @@ func (n *Node) OnConnection(conn *transport.Conn) {
 func (n *Node) ConnectToPeer(addr *net.UDPAddr) error {
 	// Check if peer already exists before attempting connection.
 	n.peersLock.RLock()
-	existingPeer := n.peersSet.GetByAddress(addr.String())
+	existingPeer := n.PeersSet.GetByAddress(addr.String())
 	n.peersLock.RUnlock()
 
 	if existingPeer != nil {
@@ -231,12 +227,35 @@ func (n *Node) ConnectToPeer(addr *net.UDPAddr) error {
 	return nil
 }
 
-// RequestBlocks requests a block with the given hash from peers
+// ConnectToNeighbours connects to all neighbor validators according to the
+// grid structure defined in the JAMNP
+func (n *Node) ConnectToNeighbours() error {
+	neighbors, err := n.ValidatorManager.GetNeighbors()
+	if err != nil {
+		return fmt.Errorf("failed to get neighbors: %w", err)
+	}
+	for _, neighbor := range neighbors {
+		// Extract IPv6/port from validator metadata as specified in the JAMNP
+		address, err := NewPeerAddressFromMetadata(neighbor.Metadata[:])
+		if err != nil {
+			return err
+		}
+		if err := n.ConnectToPeer(address); err != nil {
+			return fmt.Errorf("failed to connect to neighbor: %w", err)
+		}
+	}
+	return nil
+}
+
+// RequestBlocks implements the CE 128 block request protocol from the JAM spec.
+// It requests one or more blocks from a peer, starting with the block identified
+// by the given hash. The direction can be ascending (child blocks) or descending
+// (parent blocks), with a maximum number of blocks to return.
 func (n *Node) RequestBlocks(ctx context.Context, hash crypto.Hash, ascending bool, maxBlocks uint32, peerKey ed25519.PublicKey) ([]block.Block, error) {
 	n.peersLock.RLock()
 	defer n.peersLock.RUnlock()
 
-	if existingPeer := n.peersSet.GetByEd25519Key(peerKey); existingPeer != nil {
+	if existingPeer := n.PeersSet.GetByEd25519Key(peerKey); existingPeer != nil {
 		stream, err := existingPeer.ProtoConn.OpenStream(ctx, protocol.StreamKindBlockRequest)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open stream: %w", err)
@@ -252,12 +271,14 @@ func (n *Node) RequestBlocks(ctx context.Context, hash crypto.Hash, ascending bo
 	return nil, fmt.Errorf("no peers available to request block from")
 }
 
-// SubmitWorkPackage sends a work-package submission to a peer
+// SubmitWorkPackage implements the CE 133 work package submission protocol from the JAMNP.
+// It allows a builder node to submit a work package to a guarantor for processing.
+// The submission includes the core index, work package, and extrinsic data.
 func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work.Package, extrinsics []byte, peerKey ed25519.PublicKey) error {
 	n.peersLock.RLock()
 	defer n.peersLock.RUnlock()
 
-	peer := n.peersSet.GetByEd25519Key(peerKey)
+	peer := n.PeersSet.GetByEd25519Key(peerKey)
 	if peer == nil {
 		return fmt.Errorf("no peer available for submission with the given key")
 	}
@@ -271,6 +292,58 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 		return fmt.Errorf("failed to submit work package: %w", err)
 	}
 	return nil
+}
+
+// AnnounceBlock implements the UP 0 block announcement protocol from the JAM spec.
+// It announces a new block to a peer by sending the block header. The announcement
+// also includes the latest finalized block information as required by the protocol.
+func (n *Node) AnnounceBlock(ctx context.Context, header *block.Header, peer *Peer) error {
+	// If we already have an announcer for this peer, use it
+	if peer.BAnnouncer != nil {
+		return peer.BAnnouncer.SendAnnouncement(header)
+	}
+
+	handler, err := peer.ProtoConn.Registry.GetHandler(protocol.StreamKindBlockAnnouncement)
+	if err != nil {
+		return fmt.Errorf("failed to get announcement handler: %w", err)
+	}
+
+	// Type assert to get the BlockAnnouncementHandler
+	bah, ok := handler.(*handlers.BlockAnnouncementHandler)
+	if !ok {
+		return fmt.Errorf("invalid handler type for block announcements")
+	}
+	// Check if we already have an announcer for this peer in BlockAnnouncementHandler. This should never happen.
+	announcer, ok := bah.Announcers[string(peer.ProtoConn.TConn.PeerKey())]
+	if ok {
+		peer.BAnnouncer = announcer
+		return announcer.SendAnnouncement(header)
+	} else { //For sure we dont have an announcer for this peer
+		stream, err := peer.ProtoConn.OpenStream(ctx, protocol.StreamKindBlockAnnouncement)
+		if err != nil {
+			return fmt.Errorf("open stream: %w", err)
+		}
+
+		peer.BAnnouncer = bah.NewBlockAnnouncer(n.blockService, peer.ProtoConn.TConn.Context(), stream, peer.ProtoConn.TConn.PeerKey())
+		// this will handle handshake
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- peer.BAnnouncer.Start()
+		}()
+
+		// Wait for either handshake completion or error
+		select {
+		case err := <-errCh:
+			if err != nil {
+				stream.Close()
+				return fmt.Errorf("failed to start announcement handler: %w", err)
+			}
+		case <-ctx.Done():
+			stream.Close()
+			return ctx.Err()
+		}
+		return peer.BAnnouncer.SendAnnouncement(header)
+	}
 }
 
 // Start begins the node's network operations, including listening for incoming connections.

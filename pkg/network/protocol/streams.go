@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"sync"
 
@@ -34,7 +35,7 @@ const (
 
 // StreamHandler processes individual QUIC streams within a connection
 type StreamHandler interface {
-	HandleStream(ctx context.Context, stream quic.Stream) error
+	HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error
 }
 
 // StreamKind represents the type of stream (Unique Persistent or Common Ephemeral)
@@ -75,10 +76,7 @@ func (r *JAMNPRegistry) RegisterHandler(kind StreamKind, handler StreamHandler) 
 
 // GetHandler retrieves the handler associated with a given stream kind byte
 // Returns an error if no handler is registered for the kind
-func (r *JAMNPRegistry) GetHandler(kindByte byte) (StreamHandler, error) {
-	// Convert raw byte to protocol's StreamKind
-	kind := StreamKind(kindByte)
-
+func (r *JAMNPRegistry) GetHandler(kind StreamKind) (StreamHandler, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

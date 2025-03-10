@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
+	"time"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
@@ -10,6 +12,8 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/quic-go/quic-go"
 )
+
+const blockRequestTimeout = 6 * time.Second // Arbitrary timeout for block requests
 
 // BlockRequestHandler processes CE 128 block request streams from peers.
 // It implements protocol specification section "CE 128: Block request".
@@ -53,7 +57,7 @@ type blockRequestMessage struct {
 // either forward (for ascending) or backward (for descending), limited by MaxBlocks.
 // For ascending requests, the sequence starts with a child of the given block.
 // For descending requests, the sequence starts with the given block itself.
-func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stream) error {
+func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
 	// Read the request message
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
