@@ -130,18 +130,39 @@ func calculateIntermediateBlockState(header block.Header, previousRecentBlocks [
 	return intermediateBlocks
 }
 
-// preimageHasBeenSolicited R(d, s, h, l) ≡ h ∉ d[s]p ∧ d[s]l[(h, l)] = [] (eq. 12.30)
+// preimageHasBeenSolicited checks if a preimage has been solicited but not yet provided
+// R(d, s, h, l) ≡ h ∉ d[s]p ∧ d[s]l[(h, l)] = [] (eq. 12.30 v0.6.3)
 func preimageHasBeenSolicited(serviceState service.ServiceState, serviceIndex block.ServiceId, preimageHash crypto.Hash, preimageLength service.PreimageLength) bool {
 	account, ok := serviceState[serviceIndex]
 	if !ok {
 		return false
 	}
 	_, preimageLookupExists := account.PreimageLookup[preimageHash]
-	existingMeta := account.PreimageMeta[service.PreImageMetaKey{Hash: preimageHash, Length: preimageLength}]
-	return !preimageLookupExists && len(existingMeta) == 0
+
+	metaKey := service.PreImageMetaKey{Hash: preimageHash, Length: preimageLength}
+	meta, metaExists := account.PreimageMeta[metaKey]
+
+	return !preimageLookupExists && (metaExists && len(meta) == 0)
 }
 
-// CalculateIntermediateServiceState Equation 24: δ† ≺ (EP, δ, τ′)
+func isPreimagesSortedUnique(preimages block.PreimageExtrinsic) bool {
+	for i := 1; i < len(preimages); i++ {
+		prev := preimages[i-1]
+		current := preimages[i]
+
+		if current.ServiceIndex < prev.ServiceIndex {
+			return false
+		}
+
+		if current.ServiceIndex == prev.ServiceIndex &&
+			bytes.Compare(current.Data, prev.Data) <= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// CalculateIntermediateServiceState implements Equations 12.28–12.33 v0.6.3
 // This function calculates the intermediate service state δ† based on:
 // - The current service state δ (serviceState)
 // - The preimage extrinsic EP (preimages)
@@ -153,7 +174,15 @@ func preimageHasBeenSolicited(serviceState service.ServiceState, serviceIndex bl
 //     length |p|, with the value being the new timeslot τ′
 //
 // The function returns a new ServiceState without modifying the input state.
-func CalculateIntermediateServiceState(preimages block.PreimageExtrinsic, serviceState service.ServiceState, newTimeslot jamtime.Timeslot) service.ServiceState {
+func CalculateIntermediateServiceState(
+	preimages block.PreimageExtrinsic,
+	serviceState service.ServiceState,
+	newTimeslot jamtime.Timeslot,
+) (service.ServiceState, error) {
+	if !isPreimagesSortedUnique(preimages) {
+		return serviceState, errors.New("preimages not sorted unique")
+	}
+
 	newServiceState := maps.Clone(serviceState)
 
 	for _, preimage := range preimages {
@@ -161,17 +190,12 @@ func CalculateIntermediateServiceState(preimages block.PreimageExtrinsic, servic
 		preimageHash := crypto.HashData(preimage.Data)
 		preimageLength := service.PreimageLength(len(preimage.Data))
 
-		// ∀(s, p) ∈ E_P∶ R(δ, s, H(p), |p|) (12.31)
+		// ∀(s, p) ∈ E_P∶ R(δ, s, H(p), |p|) (12.31 v0.6.3)
 		if !preimageHasBeenSolicited(serviceState, serviceId, preimageHash, preimageLength) {
-			continue // preimage has not been solicited
+			return nil, errors.New("preimage unneeded")
 		}
 
-		// let P = {(s, p) | (s, p) ∈ E_P , R(δ‡, s, H(p), |p|)}
-		if !preimageHasBeenSolicited(serviceState, serviceId, preimageHash, preimageLength) {
-			continue
-		}
-
-		// Eq. 12.33:
+		// Eq. 12.33 v0.6.3:
 		//							⎧ δ′[s]p[H(p)] = p
 		// δ′ = δ‡ ex. ∀(s, p) ∈ P∶ ⎨
 		//							⎩ δ′[s]l[H(p), |p|] = [τ′]
@@ -193,7 +217,7 @@ func CalculateIntermediateServiceState(preimages block.PreimageExtrinsic, servic
 		newServiceState[serviceId] = account
 	}
 
-	return newServiceState
+	return newServiceState, nil
 }
 
 // CalculateIntermediateCoreAssignmentsFromExtrinsics Equation 25: ρ† ≺ (ED , ρ)

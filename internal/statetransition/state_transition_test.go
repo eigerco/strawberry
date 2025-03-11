@@ -2,6 +2,7 @@ package statetransition
 
 import (
 	"crypto/ed25519"
+	"github.com/eigerco/strawberry/internal/service"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -9,7 +10,6 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
-	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
@@ -155,17 +155,20 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 		},
 	}
 
+	// For a preimage to be considered solicited, the PreimageMeta entry must exist and be empty.
 	serviceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
 				{4, 5, 6}: {7, 8, 9},
 			},
 			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				{Hash: crypto.Hash{4, 5, 6}, Length: service.PreimageLength(3)}: {jamtime.Timeslot(50)},
+				// Mark our preimage as solicited (empty historical timeslots).
+				{Hash: preimageHash, Length: preimageLength}: {},
 			},
 		},
 	}
 
+	// Expected state: preimage is added to lookup and metadata updated with newTimeslot.
 	expectedServiceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
@@ -173,13 +176,14 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 				preimageHash: preimageData,
 			},
 			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				{Hash: crypto.Hash{4, 5, 6}, Length: service.PreimageLength(3)}: {jamtime.Timeslot(50)},
-				{Hash: preimageHash, Length: preimageLength}:                    {newTimeslot},
+				// The solicited preimage metadata is replaced with newTimeslot.
+				{Hash: preimageHash, Length: preimageLength}: {newTimeslot},
 			},
 		},
 	}
 
-	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	require.NoError(t, err)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -197,7 +201,8 @@ func TestCalculateIntermediateServiceStateEmptyPreimages(t *testing.T) {
 
 	expectedServiceState := serviceState
 
-	newServiceState := CalculateIntermediateServiceState(block.PreimageExtrinsic{}, serviceState, jamtime.Timeslot(100))
+	newServiceState, err := CalculateIntermediateServiceState(block.PreimageExtrinsic{}, serviceState, jamtime.Timeslot(100))
+	require.NoError(t, err)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -212,6 +217,7 @@ func TestCalculateIntermediateServiceStateNonExistentService(t *testing.T) {
 		},
 	}
 
+	// Since service 1 does not exist, preimageHasBeenSolicited will return false.
 	serviceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
@@ -223,10 +229,10 @@ func TestCalculateIntermediateServiceStateNonExistentService(t *testing.T) {
 		},
 	}
 
-	expectedServiceState := serviceState
-
-	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
-	require.Equal(t, expectedServiceState, newServiceState)
+	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	require.Error(t, err)
+	require.Equal(t, "preimage unneeded", err.Error())
+	require.Nil(t, newServiceState)
 }
 
 func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
@@ -249,10 +255,14 @@ func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
 		},
 	}
 
+	// For both preimages to be solicited, add empty metadata entries.
 	serviceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{},
-			PreimageMeta:   map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{},
+			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+				{Hash: preimageHash1, Length: preimageLength1}: {},
+				{Hash: preimageHash2, Length: preimageLength2}: {},
+			},
 		},
 	}
 
@@ -269,7 +279,8 @@ func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
 		},
 	}
 
-	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	require.NoError(t, err)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
 
@@ -281,6 +292,7 @@ func TestCalculateIntermediateServiceStateExistingPreimage(t *testing.T) {
 
 	preimages := block.PreimageExtrinsic{
 		{
+			// The preimage already exists in the lookup, so it is not solicited.
 			ServiceIndex: 0,
 			Data:         existingPreimageData,
 		},
@@ -290,32 +302,25 @@ func TestCalculateIntermediateServiceStateExistingPreimage(t *testing.T) {
 		},
 	}
 
+	// In serviceState, mark the new preimage as solicited but the existing one is already provided.
 	serviceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{
 				existingPreimageHash: existingPreimageData,
 			},
 			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+				// New preimage is solicited.
+				{Hash: crypto.HashData(newPreimageData), Length: service.PreimageLength(len(newPreimageData))}: {},
+				// Existing preimage metadata is non-empty (already provided).
 				{Hash: existingPreimageHash, Length: service.PreimageLength(len(existingPreimageData))}: {jamtime.Timeslot(50)},
 			},
 		},
 	}
 
-	expectedServiceState := service.ServiceState{
-		block.ServiceId(0): {
-			PreimageLookup: map[crypto.Hash][]byte{
-				existingPreimageHash:             existingPreimageData,
-				crypto.HashData(newPreimageData): newPreimageData,
-			},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				{Hash: existingPreimageHash, Length: service.PreimageLength(len(existingPreimageData))}:        {jamtime.Timeslot(50)},
-				{Hash: crypto.HashData(newPreimageData), Length: service.PreimageLength(len(newPreimageData))}: {newTimeslot},
-			},
-		},
-	}
-
-	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
-	require.Equal(t, expectedServiceState, newServiceState)
+	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	require.Error(t, err)
+	require.Equal(t, "preimage unneeded", err.Error())
+	require.Nil(t, newServiceState)
 }
 
 func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
@@ -330,6 +335,7 @@ func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
 		},
 	}
 
+	// The metadata already exists with a non-empty slice, so the preimage is not solicited.
 	serviceState := service.ServiceState{
 		block.ServiceId(0): {
 			PreimageLookup: map[crypto.Hash][]byte{},
@@ -339,10 +345,10 @@ func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
 		},
 	}
 
-	expectedServiceState := serviceState // Should remain unchanged
-
-	newServiceState := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
-	require.Equal(t, expectedServiceState, newServiceState)
+	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	require.Error(t, err)
+	require.Equal(t, "preimage unneeded", err.Error())
+	require.Nil(t, newServiceState)
 }
 
 func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
