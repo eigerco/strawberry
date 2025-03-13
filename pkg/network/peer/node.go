@@ -26,11 +26,11 @@ type Node struct {
 	Context              context.Context
 	Cancel               context.CancelFunc
 	ValidatorManager     *validator.ValidatorManager
-	blockService         *chain.BlockService
-	transport            *transport.Transport
-	protocolManager      *protocol.Manager
-	peersLock            sync.RWMutex
+	BlockService         *chain.BlockService
+	ProtocolManager      *protocol.Manager
 	PeersSet             *PeerSet
+	peersLock            sync.RWMutex
+	transport            *transport.Transport
 	blockRequester       *handlers.BlockRequester
 	workPackageSubmitter *handlers.WorkPackageSubmitter
 }
@@ -161,9 +161,9 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 		return nil, fmt.Errorf("failed to create transport: %w", err)
 	}
 
-	node.blockService = bs
+	node.BlockService = bs
 	node.transport = tr
-	node.protocolManager = protoManager
+	node.ProtocolManager = protoManager
 	return node, nil
 }
 
@@ -193,7 +193,7 @@ func (n *Node) OnConnection(conn *transport.Conn) {
 		n.PeersSet.RemovePeer(existingPeer)
 	}
 
-	pConn := n.protocolManager.OnConnection(conn)
+	pConn := n.ProtocolManager.OnConnection(conn)
 	peer := NewPeer(pConn)
 	if peer == nil {
 		log.Printf("Failed to create peer: invalid remote address type")
@@ -324,7 +324,7 @@ func (n *Node) AnnounceBlock(ctx context.Context, header *block.Header, peer *Pe
 			return fmt.Errorf("open stream: %w", err)
 		}
 
-		peer.BAnnouncer = bah.NewBlockAnnouncer(n.blockService, peer.ProtoConn.TConn.Context(), stream, peer.ProtoConn.TConn.PeerKey())
+		peer.BAnnouncer = bah.NewBlockAnnouncer(n.BlockService, peer.ProtoConn.TConn.Context(), stream, peer.ProtoConn.TConn.PeerKey())
 		// this will handle handshake
 		errCh := make(chan error, 1)
 		go func() {
@@ -365,11 +365,11 @@ func (n *Node) Stop() error {
 // protocol requirements, including certificate validation and protocol
 // version checking.
 func (n *Node) ValidateConnection(tlsState tls.ConnectionState) error {
-	return n.protocolManager.ValidateConnection(tlsState)
+	return n.ProtocolManager.ValidateConnection(tlsState)
 }
 
 // GetProtocols returns the list of supported protocol
 // versions and variants for this node.
 func (n *Node) GetProtocols() []string {
-	return n.protocolManager.GetProtocols()
+	return n.ProtocolManager.GetProtocols()
 }

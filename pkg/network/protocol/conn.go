@@ -2,17 +2,27 @@ package protocol
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
-	"sync"
-
-	"github.com/eigerco/strawberry/pkg/network/transport"
 	"github.com/quic-go/quic-go"
+	"sync"
 )
+
+// TransportConn is an interface that abstracts the transport.Conn functionality
+// This makes it easier to mock for testing
+type TransportConn interface {
+	OpenStream(ctx context.Context) (quic.Stream, error)
+	AcceptStream() (quic.Stream, error)
+	Context() context.Context
+	PeerKey() ed25519.PublicKey
+	QConn() quic.Connection
+	Close() error
+}
 
 // ProtocolConn wraps a transport connection with protocol-specific functionality.
 // It manages stream multiplexing, handles stream kinds, and maintains unique persistent streams.
 type ProtocolConn struct {
-	TConn    *transport.Conn
+	TConn    TransportConn
 	Registry *JAMNPRegistry
 	mu       sync.RWMutex
 	streams  map[StreamKind]quic.Stream
@@ -20,7 +30,7 @@ type ProtocolConn struct {
 
 // NewProtocolConn creates a new protocol-level connection.
 // It initializes stream management and associates the connection with a handler registry.
-func NewProtocolConn(tConn *transport.Conn, registry *JAMNPRegistry) *ProtocolConn {
+func NewProtocolConn(tConn TransportConn, registry *JAMNPRegistry) *ProtocolConn {
 	return &ProtocolConn{
 		TConn:    tConn,
 		streams:  make(map[StreamKind]quic.Stream),

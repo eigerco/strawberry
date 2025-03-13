@@ -13,7 +13,7 @@ type ValidatorManager struct {
 	GridMapper GridMapper
 	Index      uint16
 	Keys       ValidatorKeys
-	state      ValidatorState
+	State      ValidatorState
 }
 
 // ValidatorKeys holds the cryptographic keys required for a validator node.
@@ -35,7 +35,7 @@ func NewValidatorManager(keys ValidatorKeys, state ValidatorState, validatorIdx 
 		GridMapper: NewGridMapper(state),
 		Index:      validatorIdx,
 		Keys:       keys,
-		state:      state,
+		State:      state,
 	}
 }
 

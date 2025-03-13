@@ -15,6 +15,17 @@ import (
 // MaxIdleTimeout defines the maximum duration a connection can be idle before timing out
 const MaxIdleTimeout = 30 * time.Minute
 
+type QuicDialer interface {
+	DialAddr(ctx context.Context, addr string, tlsConf *tls.Config, quicConfig *quic.Config) (quic.Connection, error)
+}
+
+// Default implementation
+type DefaultQuicDialer struct{}
+
+func (d *DefaultQuicDialer) DialAddr(ctx context.Context, addr string, tlsConf *tls.Config, quicConfig *quic.Config) (quic.Connection, error) {
+	return quic.DialAddr(ctx, addr, tlsConf, quicConfig)
+}
+
 // CertValidator performs TLS certificate validation and public key extraction
 type CertValidator interface {
 	// ValidateCertificate checks if a certificate meets required criteria
@@ -61,6 +72,7 @@ type Transport struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	done     chan struct{} // For clean shutdown of accept loop
+	dialer   QuicDialer
 }
 
 // NewTransport creates and configures a new transport instance.
@@ -85,6 +97,7 @@ func NewTransport(config Config) (*Transport, error) {
 		config: config,
 		ctx:    ctx,
 		cancel: cancel,
+		dialer: &DefaultQuicDialer{},
 	}, nil
 }
 
@@ -155,7 +168,7 @@ func (t *Transport) Connect(addr *net.UDPAddr) error {
 		},
 	}
 
-	quicConn, err := quic.DialAddr(t.ctx, addr.AddrPort().String(), tlsConf, &quic.Config{
+	quicConn, err := t.dialer.DialAddr(t.ctx, addr.AddrPort().String(), tlsConf, &quic.Config{
 		EnableDatagrams: true,
 		MaxIdleTimeout:  MaxIdleTimeout,
 	})
@@ -184,6 +197,10 @@ func (t *Transport) Stop() error {
 	}
 	<-t.done
 	return nil
+}
+
+func (t *Transport) SetDialer(dialer QuicDialer) {
+	t.dialer = dialer
 }
 
 // acceptLoop continuously accepts incoming connections
@@ -223,6 +240,7 @@ func (t *Transport) handleConnection(qConn quic.Connection) {
 		if cerr := qConn.CloseWithError(0, fmt.Sprintf("%s: %v", ErrInvalidCertificate.Error(), err)); cerr != nil {
 			fmt.Printf("Failed to close connection: %v\n", cerr)
 		}
+		return // issue with the peer's key
 	}
 
 	conn := newConn(qConn, t)

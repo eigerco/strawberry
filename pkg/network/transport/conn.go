@@ -16,7 +16,7 @@ const StreamTimeout = 5 * time.Second
 // It manages the underlying QUIC connection, stream creation,
 // and connection lifecycle via context cancellation.
 type Conn struct {
-	QConn     quic.Connection
+	quicConn  quic.Connection
 	transport *Transport
 	peerKey   ed25519.PublicKey
 	ctx       context.Context
@@ -30,11 +30,20 @@ func newConn(qConn quic.Connection, transport *Transport) *Conn {
 	ctx, cancel := context.WithCancel(transport.ctx)
 
 	conn := &Conn{
-		QConn:     qConn,
+		quicConn:  qConn,
 		transport: transport,
 		ctx:       ctx,
 		cancel:    cancel,
 	}
+
+	qConnCtx := qConn.Context()
+
+	go func() {
+		// This goroutine will exit when the QUIC connection is closed
+		<-qConnCtx.Done()
+		// Cancel our context to signal connection closure
+		cancel()
+	}()
 
 	return conn
 }
@@ -43,7 +52,7 @@ func newConn(qConn quic.Connection, transport *Transport) *Conn {
 // The provided context can be used to cancel the stream opening operation.
 // Returns the new stream or an error if creation fails.
 func (c *Conn) OpenStream(ctx context.Context) (quic.Stream, error) {
-	stream, err := c.QConn.OpenStreamSync(ctx)
+	stream, err := c.quicConn.OpenStreamSync(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open QUIC stream: %w", err)
 	}
@@ -55,7 +64,7 @@ func (c *Conn) OpenStream(ctx context.Context) (quic.Stream, error) {
 // Uses the connection's context for cancellation.
 // Returns the accepted stream or an error if accepting fails.
 func (c *Conn) AcceptStream() (quic.Stream, error) {
-	stream, err := c.QConn.AcceptStream(c.ctx)
+	stream, err := c.quicConn.AcceptStream(c.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to accept QUIC stream: %w", err)
 	}
@@ -73,11 +82,15 @@ func (c *Conn) SetPeerKey(key ed25519.PublicKey) {
 	c.peerKey = key
 }
 
+func (c *Conn) QConn() quic.Connection {
+	return c.quicConn
+}
+
 // Close closes the connection and cancels all associated streams.
 // Returns an error if closing the QUIC connection fails.
 func (c *Conn) Close() error {
 	c.cancel()
-	return c.QConn.CloseWithError(0, "")
+	return c.quicConn.CloseWithError(0, "")
 }
 
 // Context returns the connection's context.

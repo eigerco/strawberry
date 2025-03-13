@@ -28,7 +28,7 @@ type Peer struct {
 // NewPeer creates a new peer instance from an established transport connection.
 func NewPeer(pConn *protocol.ProtocolConn) *Peer {
 	ctx, cancel := context.WithCancel(pConn.TConn.Context())
-	remoteAddr, ok := pConn.TConn.QConn.RemoteAddr().(*net.UDPAddr)
+	remoteAddr, ok := pConn.TConn.QConn().RemoteAddr().(*net.UDPAddr)
 	if !ok {
 		cancel()
 		return nil
