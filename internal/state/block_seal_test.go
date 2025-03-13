@@ -339,3 +339,90 @@ func randomTicketBodies(t *testing.T, entropy crypto.Hash) safrole.TicketsBodies
 
 	return ticketsBodies
 }
+
+func TestIsSlotLeaderFallback(t *testing.T) {
+	privateKey := testutils.RandomBandersnatchPrivateKey(t)
+	publicKey, err := bandersnatch.Public(privateKey)
+	require.NoError(t, err)
+
+	var epochKeys = testutils.RandomEpochKeys(t)
+
+	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
+	t.Logf("random timeslot: %d", randomTimeslot)
+
+	// Replace one of the keys in the accumulator with our public key. This
+	// should later be selected as the winning key.
+	epochKeys[randomTimeslot] = publicKey
+
+	ticketAccumulator := safrole.TicketAccumulator{}
+	ticketAccumulator.Set(epochKeys)
+
+	entropy := testutils.RandomHash(t)
+	state := &State{
+		EntropyPool: [4]crypto.Hash{
+			testutils.RandomHash(t),
+			testutils.RandomHash(t),
+			testutils.RandomHash(t),
+			entropy,
+		},
+		ValidatorState: validator.ValidatorState{
+			SafroleState: safrole.State{
+				SealingKeySeries: ticketAccumulator,
+			},
+		},
+	}
+
+	ok, err := IsSlotLeader(jamtime.Timeslot(randomTimeslot), state, privateKey)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot+1), state, privateKey)
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot-1), state, privateKey)
+	require.NoError(t, err)
+	require.False(t, ok)
+}
+
+func TestIsSlotLeaderTicket(t *testing.T) {
+	entropy := testutils.RandomHash(t)
+	ticketBodies := randomTicketBodies(t, entropy)
+
+	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
+	t.Logf("random timeslot: %d", randomTimeslot)
+
+	// Create a winning ticket for our private key.
+	privateKey := testutils.RandomBandersnatchPrivateKey(t)
+	ticket := createTicket(t, privateKey, entropy, 0)
+	ticketBodies[randomTimeslot] = ticket
+
+	ticketAccumulator := safrole.TicketAccumulator{}
+	ticketAccumulator.Set(ticketBodies)
+
+	state := &State{
+		EntropyPool: [4]crypto.Hash{
+			testutils.RandomHash(t),
+			testutils.RandomHash(t),
+			testutils.RandomHash(t),
+			entropy,
+		},
+		ValidatorState: validator.ValidatorState{
+			SafroleState: safrole.State{
+				SealingKeySeries: ticketAccumulator,
+			},
+		},
+	}
+
+	ok, err := IsSlotLeader(jamtime.Timeslot(randomTimeslot), state, privateKey)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot+1), state, privateKey)
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot-1), state, privateKey)
+	require.NoError(t, err)
+	require.False(t, ok)
+}
