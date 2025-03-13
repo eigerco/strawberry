@@ -9,6 +9,7 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
+	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 )
 
@@ -30,9 +31,8 @@ type TicketOrKey interface {
 
 // Gets the winning ticket or key for the current timeslot.
 // Implements part of equation 6.15 in the graypaper: γ′s[Ht]^↺ (v0.5.4)
-func getWinningTicketOrKey(header *block.Header, state *State) (TicketOrKey, error) {
-	index := header.TimeSlotIndex.TimeslotInEpoch()
-	sealingKeys := state.ValidatorState.SafroleState.SealingKeySeries.Get()
+func getWinningTicketOrKey(timeslot jamtime.Timeslot, sealingKeys safrole.TicketsOrKeys) (TicketOrKey, error) {
+	index := timeslot.TimeslotInEpoch()
 	switch value := sealingKeys.(type) {
 	case safrole.TicketsBodies:
 		return value[index], nil
@@ -54,7 +54,10 @@ func SealBlock(
 	state *State,
 	privateKey crypto.BandersnatchPrivateKey,
 ) error {
-	winningTicketOrKey, err := getWinningTicketOrKey(header, state)
+	winningTicketOrKey, err := getWinningTicketOrKey(
+		header.TimeSlotIndex,
+		state.ValidatorState.SafroleState.SealingKeySeries.Get(),
+	)
 	if err != nil {
 		return err
 	}
@@ -278,7 +281,10 @@ func VerifyBlockSeal(
 	header *block.Header,
 	state *State,
 ) (bool, error) {
-	winningTicketOrKey, err := getWinningTicketOrKey(header, state)
+	winningTicketOrKey, err := getWinningTicketOrKey(
+		header.TimeSlotIndex,
+		state.ValidatorState.SafroleState.SealingKeySeries.Get(),
+	)
 	if err != nil {
 		return false, err
 	}
@@ -378,4 +384,53 @@ func VerifyBlockSignatures(
 	default:
 		return false, fmt.Errorf("unexpected type for ticketOrKey: %T", tok)
 	}
+}
+
+// Determines if the holder of the given privateKey is the timeslot's block
+// producer.
+func IsSlotLeader(
+	timeslot jamtime.Timeslot,
+	state *State,
+	privateKey crypto.BandersnatchPrivateKey,
+) (bool, error) {
+	winningTicketOrKey, err := getWinningTicketOrKey(
+		timeslot,
+		state.ValidatorState.SafroleState.SealingKeySeries.Get(),
+	)
+	if err != nil {
+		return false, err
+	}
+
+	entropy := state.EntropyPool[3] // η_3
+
+	switch tok := winningTicketOrKey.(type) {
+	case block.Ticket:
+		// Build the context: XT ⌢ η′3 ++ ir
+		sealContext := buildTicketSealContext(entropy, tok.EntryIndex)
+
+		signature, err := bandersnatch.Sign(privateKey, sealContext, []byte{})
+		if err != nil {
+			return false, err
+		}
+
+		sealOutputHash, err := bandersnatch.OutputHash(signature)
+		if err != nil {
+			return false, err
+		}
+
+		if sealOutputHash == tok.Identifier {
+			return true, nil
+		}
+
+	case crypto.BandersnatchPublicKey:
+		publicKey, err := bandersnatch.Public(privateKey)
+		if err != nil {
+			return false, nil
+		}
+		if publicKey == tok {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
