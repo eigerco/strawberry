@@ -1,12 +1,13 @@
-package state
+package merkle
 
 import (
+	"math"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-	"math"
 )
 
 // SerializeState serializes the given state into a map of crypto.Hash to byte arrays, for merklization.

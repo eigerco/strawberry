@@ -1,8 +1,9 @@
-package state
+package merkle
 
 import (
-	"github.com/eigerco/strawberry/internal/merkle/trie"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/merkle/trie"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

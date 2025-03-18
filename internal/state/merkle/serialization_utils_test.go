@@ -1,11 +1,12 @@
-package state
+package merkle
 
 import (
 	"fmt"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
+
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"

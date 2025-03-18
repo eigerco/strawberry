@@ -1,4 +1,4 @@
-package state
+package merkle
 
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
