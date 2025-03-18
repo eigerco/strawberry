@@ -1,4 +1,4 @@
-package state
+package merkle
 
 import (
 	"crypto/ed25519"

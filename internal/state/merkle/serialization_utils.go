@@ -1,11 +1,12 @@
-package state
+package merkle
 
 import (
 	"bytes"
 	"crypto/ed25519"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"slices"
 	"sort"
+
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
