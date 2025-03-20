@@ -112,9 +112,6 @@ func (bh *BlockAnnouncementHandler) NewBlockAnnouncer(bs *chain.BlockService, ct
 // already exists for the peer by keeping only the stream with the higher stream ID.
 // This implements the spec rule: "If exists: Close old connection, cleanup peer state."
 func (bh *BlockAnnouncementHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
-	bh.mu.Lock()
-	defer bh.mu.Unlock()
-
 	existingAnnouncer, exists := bh.Announcers[string(peerKey)]
 
 	if exists {
