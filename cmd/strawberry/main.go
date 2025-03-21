@@ -17,7 +17,7 @@ import (
 	"github.com/eigerco/strawberry/internal/safrole"
 	chainState "github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/eigerco/strawberry/pkg/network/peer"
+	"github.com/eigerco/strawberry/pkg/network/node"
 )
 
 type FullValidatorInfo struct {
@@ -150,7 +150,7 @@ func main() {
 
 	state := chainState.State{}
 
-	node, err := peer.NewNode(ctx, udpAddress, vk, vstate, state, uint16(i))
+	node, err := node.NewNode(ctx, udpAddress, vk, vstate, state, uint16(i))
 	if err != nil {
 		log.Fatal(err)
 	}

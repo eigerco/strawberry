@@ -20,13 +20,14 @@ import (
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
+	"github.com/eigerco/strawberry/pkg/network/node"
 	"github.com/eigerco/strawberry/pkg/network/peer"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-func setupNodes(ctx context.Context, t *testing.T, numNodes int) []*peer.Node {
-	nodes := []*peer.Node{}
+func setupNodes(ctx context.Context, t *testing.T, numNodes int) []*node.Node {
+	nodes := []*node.Node{}
 	validatorsData := safrole.ValidatorsData{}
 	nodeKeys := []validator.ValidatorKeys{}
 	for i := 0; i < numNodes; i++ {
@@ -56,14 +57,14 @@ func setupNodes(ctx context.Context, t *testing.T, numNodes int) []*peer.Node {
 	for i := 0; i < numNodes; i++ {
 		addr, err := peer.NewPeerAddressFromMetadata(validatorsData[i].Metadata[:])
 		require.NoError(t, err)
-		node, err := peer.NewNode(ctx, addr, nodeKeys[i], vstate, state, uint16(i))
+		node, err := node.NewNode(ctx, addr, nodeKeys[i], vstate, state, uint16(i))
 		require.NoError(t, err)
 		nodes = append(nodes, node)
 	}
 	return nodes
 }
 
-func stopNode(t *testing.T, node *peer.Node) {
+func stopNode(t *testing.T, node *node.Node) {
 	t.Helper()
 	if err := node.Stop(); err != nil {
 		t.Logf("Failed to stop node: %v", err)
