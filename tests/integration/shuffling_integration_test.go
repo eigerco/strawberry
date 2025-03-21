@@ -9,10 +9,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/common"
-	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/crypto"
 )
 
 type TestCase struct {

@@ -1,23 +1,28 @@
-package peer
+package node
 
 import (
 	"context"
 	"crypto/ed25519"
 	"crypto/tls"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/chain"
-	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/eigerco/strawberry/internal/work"
-	"github.com/eigerco/strawberry/pkg/network/cert"
-	"github.com/eigerco/strawberry/pkg/network/handlers"
-	"github.com/eigerco/strawberry/pkg/network/protocol"
-	"github.com/eigerco/strawberry/pkg/network/transport"
 	"log"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/chain"
+	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/statetransition"
+	"github.com/eigerco/strawberry/internal/validator"
+	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/pkg/network/cert"
+	"github.com/eigerco/strawberry/pkg/network/handlers"
+	"github.com/eigerco/strawberry/pkg/network/peer"
+	"github.com/eigerco/strawberry/pkg/network/protocol"
+	"github.com/eigerco/strawberry/pkg/network/transport"
 )
 
 // Node manages peer connections, handles protocol messages, and coordinates network operations.
@@ -31,33 +36,35 @@ type Node struct {
 	PeersSet             *PeerSet
 	peersLock            sync.RWMutex
 	transport            *transport.Transport
+	State                state.State
 	blockRequester       *handlers.BlockRequester
 	workPackageSubmitter *handlers.WorkPackageSubmitter
+	workPackageSharer    *handlers.WorkPackageSharer
 }
 
 // PeerSet maintains mappings between peer identifiers
 // (Ed25519 keys, network addresses, validator indices) and Peer objects.
 type PeerSet struct {
 	// Map from Ed25519 public key to peer
-	byEd25519Key map[string]*Peer
+	byEd25519Key map[string]*peer.Peer
 	// Map from string representation of address to peer
-	byAddress map[string]*Peer
+	byAddress map[string]*peer.Peer
 	// Map from validator index to peer (only for validator peers)
-	byValidatorIndex map[uint16]*Peer
+	byValidatorIndex map[uint16]*peer.Peer
 }
 
 // NewPeerSet creates a new PeerSet instance with initialized internal maps.
 func NewPeerSet() *PeerSet {
 	return &PeerSet{
-		byEd25519Key:     make(map[string]*Peer),
-		byAddress:        make(map[string]*Peer),
-		byValidatorIndex: make(map[uint16]*Peer),
+		byEd25519Key:     make(map[string]*peer.Peer),
+		byAddress:        make(map[string]*peer.Peer),
+		byValidatorIndex: make(map[uint16]*peer.Peer),
 	}
 }
 
 // AddPeer adds a peer to all relevant lookup maps in the PeerSet.
 // If the peer is a validator index, it will also have a validator index.
-func (ps *PeerSet) AddPeer(peer *Peer) {
+func (ps *PeerSet) AddPeer(peer *peer.Peer) {
 	ps.byEd25519Key[string(peer.Ed25519Key)] = peer
 	ps.byAddress[peer.Address.String()] = peer
 
@@ -67,7 +74,7 @@ func (ps *PeerSet) AddPeer(peer *Peer) {
 }
 
 // RemovePeer removes a peer from all lookup maps in the PeerSet.
-func (ps *PeerSet) RemovePeer(peer *Peer) {
+func (ps *PeerSet) RemovePeer(peer *peer.Peer) {
 	delete(ps.byEd25519Key, string(peer.Ed25519Key))
 	delete(ps.byAddress, peer.Address.String())
 
@@ -78,32 +85,33 @@ func (ps *PeerSet) RemovePeer(peer *Peer) {
 
 // GetByEd25519Key looks up a peer by their Ed25519 public key.
 // Returns nil if no peer is found with the given key.
-func (ps *PeerSet) GetByEd25519Key(key ed25519.PublicKey) *Peer {
+func (ps *PeerSet) GetByEd25519Key(key ed25519.PublicKey) *peer.Peer {
 	return ps.byEd25519Key[string(key)]
 }
 
 // GetByAddress looks up a peer by their network address.
 // Returns nil if no peer is found with the given address.
-func (ps *PeerSet) GetByAddress(addr string) *Peer {
+func (ps *PeerSet) GetByAddress(addr string) *peer.Peer {
 	return ps.byAddress[addr]
 }
 
 // GetByValidatorIndex looks up a peer by their validator index.
 // Returns nil if no peer is found with the given validator index.
-func (ps *PeerSet) GetByValidatorIndex(index uint16) *Peer {
+func (ps *PeerSet) GetByValidatorIndex(index uint16) *peer.Peer {
 	return ps.byValidatorIndex[index]
 }
 
 // NewNode creates a new Node instance with the specified configuration.
 // It initializes the TLS certificate, protocol manager, and network transport.
-func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.ValidatorKeys, state validator.ValidatorState, validatorIdx uint16) (*Node, error) {
+func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.ValidatorKeys, validatorState validator.ValidatorState, state state.State, validatorIdx uint16) (*Node, error) {
 	nodeCtx, cancel := context.WithCancel(nodeCtx)
 	node := &Node{
 		PeersSet: NewPeerSet(),
+		State:    state,
 		Context:  nodeCtx,
 		Cancel:   cancel,
 	}
-	node.ValidatorManager = validator.NewValidatorManager(keys, state, validatorIdx)
+	node.ValidatorManager = validator.NewValidatorManager(keys, validatorState, validatorIdx)
 
 	// Create TLS certificate using the node's Ed25519 key pair
 	certGen := cert.NewGenerator(cert.Config{
@@ -141,7 +149,14 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	node.blockRequester = &handlers.BlockRequester{}
 
-	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}))
+	shareFunc := func(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
+		return node.shareWorkPackageWithOtherGuarantors(ctx, coreIndex, bundle)
+	}
+
+	wpSharerHandler := handlers.NewWorkPackageSharer(shareFunc)
+	node.workPackageSharer = wpSharerHandler
+
+	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}, wpSharerHandler))
 	submitter := &handlers.WorkPackageSubmitter{}
 	node.workPackageSubmitter = submitter
 
@@ -194,7 +209,7 @@ func (n *Node) OnConnection(conn *transport.Conn) {
 	}
 
 	pConn := n.ProtocolManager.OnConnection(conn)
-	peer := NewPeer(pConn)
+	peer := peer.NewPeer(pConn)
 	if peer == nil {
 		log.Printf("Failed to create peer: invalid remote address type")
 		// Clean up the connection since we can't use it
@@ -236,7 +251,7 @@ func (n *Node) ConnectToNeighbours() error {
 	}
 	for _, neighbor := range neighbors {
 		// Extract IPv6/port from validator metadata as specified in the JAMNP
-		address, err := NewPeerAddressFromMetadata(neighbor.Metadata[:])
+		address, err := peer.NewPeerAddressFromMetadata(neighbor.Metadata[:])
 		if err != nil {
 			return err
 		}
@@ -297,7 +312,7 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 // AnnounceBlock implements the UP 0 block announcement protocol from the JAM spec.
 // It announces a new block to a peer by sending the block header. The announcement
 // also includes the latest finalized block information as required by the protocol.
-func (n *Node) AnnounceBlock(ctx context.Context, header *block.Header, peer *Peer) error {
+func (n *Node) AnnounceBlock(ctx context.Context, header *block.Header, peer *peer.Peer) error {
 	// If we already have an announcer for this peer, use it
 	if peer.BAnnouncer != nil {
 		return peer.BAnnouncer.SendAnnouncement(header)
@@ -344,6 +359,66 @@ func (n *Node) AnnounceBlock(ctx context.Context, header *block.Header, peer *Pe
 		}
 		return peer.BAnnouncer.SendAnnouncement(header)
 	}
+}
+
+func (n *Node) shareWorkPackageWithOtherGuarantors(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
+	guarantors, err := n.GetGuarantorsForCore(coreIndex)
+	if err != nil {
+		return fmt.Errorf("failed to get guarantors for core %d: %w", coreIndex, err)
+	}
+	if len(guarantors) == 0 {
+		return fmt.Errorf("no other guarantors found for core %d", coreIndex)
+	}
+
+	for _, g := range guarantors {
+		stream, err := g.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageShare)
+		if err != nil {
+			return fmt.Errorf("failed to open stream to peer %s: %w", g.Address.String(), err)
+		}
+		if err = n.workPackageSharer.SendWorkPackage(ctx, stream, coreIndex, []work.ImportedSegment{}, bundle); err != nil {
+			return fmt.Errorf("failed to share WP with peer %v: %v", g, err)
+		}
+	}
+
+	return nil
+}
+
+// GetGuarantorsForCore gets the validators who assigned to the same core
+func (n *Node) GetGuarantorsForCore(coreIndex uint16) ([]*peer.Peer, error) {
+	assignments, err := statetransition.PermuteAssignments(n.State.EntropyPool[2], n.State.TimeslotIndex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to permute validator assignments: %w", err)
+	}
+
+	totalValidators := uint16(len(assignments))
+	if totalValidators == 0 {
+		return nil, fmt.Errorf("no validators available to assign for core %d", coreIndex)
+	}
+
+	guarantorsPerCore := totalValidators / common.TotalNumberOfCores
+	if guarantorsPerCore == 0 {
+		guarantorsPerCore = 1
+	}
+
+	var guarantors []*peer.Peer
+	for validatorIdx, core := range assignments {
+		if core == uint32(coreIndex) && uint16(validatorIdx) != n.ValidatorManager.Index {
+			p := n.PeersSet.GetByValidatorIndex(uint16(validatorIdx))
+			if p == nil {
+				continue
+			}
+			guarantors = append(guarantors, p)
+			if len(guarantors) >= int(guarantorsPerCore) {
+				break
+			}
+		}
+	}
+
+	if len(guarantors) == 0 {
+		return nil, fmt.Errorf("no guarantors found for core %d", coreIndex)
+	}
+
+	return guarantors, nil
 }
 
 // Start begins the node's network operations, including listening for incoming connections.
