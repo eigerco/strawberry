@@ -9,18 +9,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/quic-go/quic-go"
+	"github.com/stretchr/testify/require"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
+	chainState "github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/network/peer"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-	"github.com/quic-go/quic-go"
-	"github.com/stretchr/testify/require"
 )
 
 func setupNodes(ctx context.Context, t *testing.T, numNodes int) []*peer.Node {
@@ -49,10 +51,12 @@ func setupNodes(ctx context.Context, t *testing.T, numNodes int) []*peer.Node {
 		QueuedValidators:   validatorsData,
 	}
 
+	state := chainState.State{}
+
 	for i := 0; i < numNodes; i++ {
 		addr, err := peer.NewPeerAddressFromMetadata(validatorsData[i].Metadata[:])
 		require.NoError(t, err)
-		node, err := peer.NewNode(ctx, addr, nodeKeys[i], vstate, uint16(i))
+		node, err := peer.NewNode(ctx, addr, nodeKeys[i], vstate, state, uint16(i))
 		require.NoError(t, err)
 		nodes = append(nodes, node)
 	}
@@ -161,8 +165,12 @@ type ExtendedWorkPackageSubmissionHandler struct {
 
 func NewExtendedWorkPackageSubmissionHandler(fetcher *MockImportSegmentsFetcher) *ExtendedWorkPackageSubmissionHandler {
 	return &ExtendedWorkPackageSubmissionHandler{
-		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(fetcher),
-		MockFetcher:                  fetcher,
+		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(
+			fetcher,
+			handlers.NewWorkPackageSharer(func(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
+				return nil
+			})),
+		MockFetcher: fetcher,
 	}
 }
 

@@ -98,7 +98,9 @@ func TestSubmitWorkPackage(t *testing.T) {
 func TestHandleWorkPackage(t *testing.T) {
 	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
-	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{})
+	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, handlers.NewWorkPackageSharer(func(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
+		return nil
+	}))
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
 	// Prepare the message data
@@ -279,7 +281,9 @@ func TestHandleStream_Success(t *testing.T) {
 	// Setup stream close expectation
 	mockStream.On("Close").Return(nil)
 
-	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{})
+	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, handlers.NewWorkPackageSharer(func(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
+		return nil
+	}))
 	ctx := context.Background()
 	err = handler.HandleStream(ctx, mockStream, peerKey)
 

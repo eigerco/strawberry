@@ -19,6 +19,14 @@ type Package struct {
 	WorkItems          []Item                  // w ∈ ⟦I⟧
 }
 
+// PackageBundle represents the auditable bundle
+type PackageBundle struct {
+	Package
+	Extrinsics       []byte
+	ImportedSegments []byte
+	Justifications   []byte
+}
+
 // ValidateLimits (14.4 v0.6.3)
 func (wp *Package) ValidateLimits() error {
 	if len(wp.WorkItems) > MaxNumberOfItems {
