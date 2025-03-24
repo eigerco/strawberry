@@ -15,6 +15,8 @@ import (
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/network/mocks"
+	"github.com/eigerco/strawberry/pkg/network/peer"
+	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -24,6 +26,16 @@ type MockFetcher struct {
 
 func (m *MockFetcher) FetchImportedSegment(hash crypto.Hash) ([]byte, error) {
 	return []byte("mock segment data"), nil
+}
+
+type MockGuarantorFinder struct {
+	mock.Mock
+}
+
+func (m *MockGuarantorFinder) GetGuarantorsForCore(coreIndex uint16) ([]*peer.Peer, error) {
+	args := m.Called(coreIndex)
+	peers, _ := args.Get(0).([]*peer.Peer)
+	return peers, args.Error(1)
 }
 
 var pkg = work.Package{
@@ -98,9 +110,8 @@ func TestSubmitWorkPackage(t *testing.T) {
 func TestHandleWorkPackage(t *testing.T) {
 	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
-	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, handlers.NewWorkPackageSharer(func(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
-		return nil
-	}))
+	mockFinder := &MockGuarantorFinder{}
+	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, handlers.NewWorkPackageSharer(mockFinder))
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
 	// Prepare the message data
@@ -111,6 +122,23 @@ func TestHandleWorkPackage(t *testing.T) {
 	require.NoError(t, err)
 	msg1Content := append(coreIndexBytes, pkgBytes...)
 	extrinsics := []byte("extrinsic_data")
+
+	mockTConn := mocks.NewMockTransportConn()
+	registry := protocol.NewJAMNPRegistry()
+
+	conn := protocol.NewProtocolConn(mockTConn, registry)
+
+	mockPeer := &peer.Peer{
+		ProtoConn: conn,
+	}
+
+	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
+	mockStream.On("Write", mock.Anything).Return(1, nil)
+
+	mockFinder.On("GetGuarantorsForCore", coreIndex).
+		Return([]*peer.Peer{mockPeer}, nil)
+
+	mockStream.On("Close").Return(nil).Once()
 
 	// Setup READ expectations for message 1 - length prefix followed by content
 	mockStream.On("Read", mock.AnythingOfType("[]uint8")).
@@ -241,8 +269,11 @@ func TestSubmitWorkPackage_CloseFailure(t *testing.T) {
 }
 
 func TestHandleStream_Success(t *testing.T) {
+	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
 	mockFetcher := &MockFetcher{}
+	mockFinder := &MockGuarantorFinder{}
+	_ = handlers.NewWorkPackageSubmissionHandler(mockFetcher, handlers.NewWorkPackageSharer(mockFinder))
 	coreIndex := uint16(5)
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
@@ -251,6 +282,21 @@ func TestHandleStream_Success(t *testing.T) {
 	pkgBytes, err := jam.Marshal(pkg)
 	require.NoError(t, err)
 	msg1Content := append(coreIndexBytes, pkgBytes...)
+
+	mockTConn := mocks.NewMockTransportConn()
+	registry := protocol.NewJAMNPRegistry()
+
+	conn := protocol.NewProtocolConn(mockTConn, registry)
+
+	mockPeer := &peer.Peer{
+		ProtoConn: conn,
+	}
+
+	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
+	mockStream.On("Write", mock.Anything).Return(1, nil)
+
+	mockFinder.On("GetGuarantorsForCore", coreIndex).
+		Return([]*peer.Peer{mockPeer}, nil)
 
 	// Setup mock to read message 1
 	mockStream.On("Read", mock.Anything).Run(func(args mock.Arguments) {
@@ -281,10 +327,7 @@ func TestHandleStream_Success(t *testing.T) {
 	// Setup stream close expectation
 	mockStream.On("Close").Return(nil)
 
-	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, handlers.NewWorkPackageSharer(func(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
-		return nil
-	}))
-	ctx := context.Background()
+	handler := handlers.NewWorkPackageSubmissionHandler(mockFetcher, handlers.NewWorkPackageSharer(mockFinder))
 	err = handler.HandleStream(ctx, mockStream, peerKey)
 
 	assert.NoError(t, err)

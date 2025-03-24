@@ -148,9 +148,11 @@ func main() {
 		QueuedValidators:   validatorsData,
 	}
 
-	state := chainState.State{}
+	state := chainState.State{
+		ValidatorState: vstate,
+	}
 
-	node, err := node.NewNode(ctx, udpAddress, vk, vstate, state, uint16(i))
+	node, err := node.NewNode(ctx, udpAddress, vk, state, uint16(i))
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -6,20 +6,23 @@ import (
 
 	"github.com/quic-go/quic-go"
 
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/pkg/network/peer"
+	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-type ShareToOtherGuarantors func(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error
-
-type WorkPackageSharer struct {
-	shareToOtherGuarantors ShareToOtherGuarantors
+type GuarantorFinder interface {
+	GetGuarantorsForCore(coreIndex uint16) ([]*peer.Peer, error)
 }
 
-func NewWorkPackageSharer(shareFunc ShareToOtherGuarantors) *WorkPackageSharer {
-	return &WorkPackageSharer{
-		shareToOtherGuarantors: shareFunc,
-	}
+type WorkPackageSharer struct {
+	guarantorFinder GuarantorFinder
+}
+
+func NewWorkPackageSharer(finder GuarantorFinder) *WorkPackageSharer {
+	return &WorkPackageSharer{finder}
 }
 
 // ValidateAndShareWorkPackage sends the work-package bundle to other guarantors.
@@ -36,11 +39,38 @@ func (h *WorkPackageSharer) ValidateAndShareWorkPackage(ctx context.Context, cor
 	// 2. Make sure that import segments have been retrieved
 	// 3. Run refine in parallel
 
-	return h.shareToOtherGuarantors(ctx, coreIndex, bundle)
+	return h.shareWorkPackageWithOtherGuarantors(ctx, coreIndex, bundle)
+}
+
+func (h *WorkPackageSharer) shareWorkPackageWithOtherGuarantors(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
+	if coreIndex >= common.TotalNumberOfCores {
+		return fmt.Errorf("invalid coreIndex: %d (must be < %d)",
+			coreIndex, common.TotalNumberOfCores)
+	}
+
+	guarantors, err := h.guarantorFinder.GetGuarantorsForCore(coreIndex)
+	if err != nil {
+		return fmt.Errorf("failed to get guarantors for core %d: %w", coreIndex, err)
+	}
+	if len(guarantors) == 0 {
+		return fmt.Errorf("no other guarantors found for core %d", coreIndex)
+	}
+
+	for _, g := range guarantors {
+		stream, err := g.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageShare)
+		if err != nil {
+			return fmt.Errorf("failed to open stream to peer %s: %w", g.Address.String(), err)
+		}
+		if err = h.sendWorkPackage(ctx, stream, coreIndex, []work.ImportedSegment{}, bundle); err != nil {
+			return fmt.Errorf("failed to share WP with peer %v: %v", g, err)
+		}
+	}
+
+	return nil
 }
 
 // SendWorkPackage transmits the work-package bundle to a specific guarantor.
-func (h *WorkPackageSharer) SendWorkPackage(
+func (h *WorkPackageSharer) sendWorkPackage(
 	ctx context.Context,
 	stream quic.Stream,
 	coreIndex uint16,

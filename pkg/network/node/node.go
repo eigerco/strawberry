@@ -103,7 +103,7 @@ func (ps *PeerSet) GetByValidatorIndex(index uint16) *peer.Peer {
 
 // NewNode creates a new Node instance with the specified configuration.
 // It initializes the TLS certificate, protocol manager, and network transport.
-func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.ValidatorKeys, validatorState validator.ValidatorState, state state.State, validatorIdx uint16) (*Node, error) {
+func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.ValidatorKeys, state state.State, validatorIdx uint16) (*Node, error) {
 	nodeCtx, cancel := context.WithCancel(nodeCtx)
 	node := &Node{
 		PeersSet: NewPeerSet(),
@@ -111,7 +111,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 		Context:  nodeCtx,
 		Cancel:   cancel,
 	}
-	node.ValidatorManager = validator.NewValidatorManager(keys, validatorState, validatorIdx)
+	node.ValidatorManager = validator.NewValidatorManager(keys, state.ValidatorState, validatorIdx)
 
 	// Create TLS certificate using the node's Ed25519 key pair
 	certGen := cert.NewGenerator(cert.Config{
@@ -149,11 +149,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	node.blockRequester = &handlers.BlockRequester{}
 
-	shareFunc := func(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
-		return node.shareWorkPackageWithOtherGuarantors(ctx, coreIndex, bundle)
-	}
-
-	wpSharerHandler := handlers.NewWorkPackageSharer(shareFunc)
+	wpSharerHandler := handlers.NewWorkPackageSharer(node)
 	node.workPackageSharer = wpSharerHandler
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}, wpSharerHandler))
@@ -309,6 +305,44 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 	return nil
 }
 
+// GetGuarantorsForCore gets the validators who assigned to the same core
+func (n *Node) GetGuarantorsForCore(coreIndex uint16) ([]*peer.Peer, error) {
+	assignments, err := statetransition.PermuteAssignments(n.State.EntropyPool[2], n.State.TimeslotIndex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to permute validator assignments: %w", err)
+	}
+
+	totalValidators := uint16(len(assignments))
+	if totalValidators == 0 {
+		return nil, fmt.Errorf("no validators available to assign for core %d", coreIndex)
+	}
+
+	guarantorsPerCore := totalValidators / common.TotalNumberOfCores
+	if guarantorsPerCore == 0 {
+		guarantorsPerCore = 1
+	}
+
+	var guarantors []*peer.Peer
+	for validatorIdx, core := range assignments {
+		if core == uint32(coreIndex) && uint16(validatorIdx) != n.ValidatorManager.Index {
+			p := n.PeersSet.GetByValidatorIndex(uint16(validatorIdx))
+			if p == nil {
+				continue
+			}
+			guarantors = append(guarantors, p)
+			if len(guarantors) >= int(guarantorsPerCore) {
+				break
+			}
+		}
+	}
+
+	if len(guarantors) == 0 {
+		return nil, fmt.Errorf("no guarantors found for core %d", coreIndex)
+	}
+
+	return guarantors, nil
+}
+
 // AnnounceBlock implements the UP 0 block announcement protocol from the JAM spec.
 // It announces a new block to a peer by sending the block header. The announcement
 // also includes the latest finalized block information as required by the protocol.
@@ -359,66 +393,6 @@ func (n *Node) AnnounceBlock(ctx context.Context, header *block.Header, peer *pe
 		}
 		return peer.BAnnouncer.SendAnnouncement(header)
 	}
-}
-
-func (n *Node) shareWorkPackageWithOtherGuarantors(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
-	guarantors, err := n.GetGuarantorsForCore(coreIndex)
-	if err != nil {
-		return fmt.Errorf("failed to get guarantors for core %d: %w", coreIndex, err)
-	}
-	if len(guarantors) == 0 {
-		return fmt.Errorf("no other guarantors found for core %d", coreIndex)
-	}
-
-	for _, g := range guarantors {
-		stream, err := g.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageShare)
-		if err != nil {
-			return fmt.Errorf("failed to open stream to peer %s: %w", g.Address.String(), err)
-		}
-		if err = n.workPackageSharer.SendWorkPackage(ctx, stream, coreIndex, []work.ImportedSegment{}, bundle); err != nil {
-			return fmt.Errorf("failed to share WP with peer %v: %v", g, err)
-		}
-	}
-
-	return nil
-}
-
-// GetGuarantorsForCore gets the validators who assigned to the same core
-func (n *Node) GetGuarantorsForCore(coreIndex uint16) ([]*peer.Peer, error) {
-	assignments, err := statetransition.PermuteAssignments(n.State.EntropyPool[2], n.State.TimeslotIndex)
-	if err != nil {
-		return nil, fmt.Errorf("failed to permute validator assignments: %w", err)
-	}
-
-	totalValidators := uint16(len(assignments))
-	if totalValidators == 0 {
-		return nil, fmt.Errorf("no validators available to assign for core %d", coreIndex)
-	}
-
-	guarantorsPerCore := totalValidators / common.TotalNumberOfCores
-	if guarantorsPerCore == 0 {
-		guarantorsPerCore = 1
-	}
-
-	var guarantors []*peer.Peer
-	for validatorIdx, core := range assignments {
-		if core == uint32(coreIndex) && uint16(validatorIdx) != n.ValidatorManager.Index {
-			p := n.PeersSet.GetByValidatorIndex(uint16(validatorIdx))
-			if p == nil {
-				continue
-			}
-			guarantors = append(guarantors, p)
-			if len(guarantors) >= int(guarantorsPerCore) {
-				break
-			}
-		}
-	}
-
-	if len(guarantors) == 0 {
-		return nil, fmt.Errorf("no guarantors found for core %d", coreIndex)
-	}
-
-	return guarantors, nil
 }
 
 // Start begins the node's network operations, including listening for incoming connections.

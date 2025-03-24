@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -52,12 +53,14 @@ func setupNodes(ctx context.Context, t *testing.T, numNodes int) []*node.Node {
 		QueuedValidators:   validatorsData,
 	}
 
-	state := chainState.State{}
+	state := chainState.State{
+		ValidatorState: vstate,
+	}
 
 	for i := 0; i < numNodes; i++ {
 		addr, err := peer.NewPeerAddressFromMetadata(validatorsData[i].Metadata[:])
 		require.NoError(t, err)
-		node, err := node.NewNode(ctx, addr, nodeKeys[i], vstate, state, uint16(i))
+		node, err := node.NewNode(ctx, addr, nodeKeys[i], state, uint16(i))
 		require.NoError(t, err)
 		nodes = append(nodes, node)
 	}
@@ -158,6 +161,14 @@ func (m *MockImportSegmentsFetcher) VerifyReceivedWorkPackage(t *testing.T, expe
 	return true
 }
 
+type MockGuarantorFinder struct {
+	mock.Mock
+}
+
+func (m *MockGuarantorFinder) GetGuarantorsForCore(coreIndex uint16) ([]*peer.Peer, error) {
+	return []*peer.Peer{}, nil
+}
+
 // ExtendedWorkPackageSubmissionHandler extends the original handler to record the received package
 type ExtendedWorkPackageSubmissionHandler struct {
 	*handlers.WorkPackageSubmissionHandler
@@ -168,9 +179,7 @@ func NewExtendedWorkPackageSubmissionHandler(fetcher *MockImportSegmentsFetcher)
 	return &ExtendedWorkPackageSubmissionHandler{
 		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(
 			fetcher,
-			handlers.NewWorkPackageSharer(func(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
-				return nil
-			})),
+			handlers.NewWorkPackageSharer(&MockGuarantorFinder{})),
 		MockFetcher: fetcher,
 	}
 }
