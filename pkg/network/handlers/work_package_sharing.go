@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log"
+	"sync"
 
 	"github.com/quic-go/quic-go"
 
@@ -56,15 +58,28 @@ func (h *WorkPackageSharer) shareWorkPackageWithOtherGuarantors(ctx context.Cont
 		return fmt.Errorf("no other guarantors found for core %d", coreIndex)
 	}
 
+	var wg sync.WaitGroup
 	for _, g := range guarantors {
-		stream, err := g.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageShare)
-		if err != nil {
-			return fmt.Errorf("failed to open stream to peer %s: %w", g.Address.String(), err)
-		}
-		if err = h.sendWorkPackage(ctx, stream, coreIndex, []work.ImportedSegment{}, bundle); err != nil {
-			return fmt.Errorf("failed to share WP with peer %v: %v", g, err)
-		}
+		wg.Add(1)
+		go func(g *peer.Peer) {
+			defer wg.Done()
+
+			stream, err := g.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageShare)
+			if err != nil {
+				log.Printf("Failed to open stream to peer %v: %v", g, err)
+				return
+			}
+
+			err = h.sendWorkPackage(ctx, stream, coreIndex, []work.ImportedSegment{}, bundle)
+			if err != nil {
+				log.Printf("Failed to share WP with peer %v: %v", g, err)
+			}
+
+			// TODO:  Once the receive side (CE-134 response) is implemented we should read the response
+		}(g)
 	}
+
+	wg.Wait()
 
 	return nil
 }
