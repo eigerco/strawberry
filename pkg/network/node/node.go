@@ -306,6 +306,7 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 }
 
 // GetGuarantorsForCore gets the validators who assigned to the same core
+// TODO: Avoid repeated calls to this function by cashing assignments
 func (n *Node) GetGuarantorsForCore(coreIndex uint16) ([]*peer.Peer, error) {
 	assignments, err := statetransition.PermuteAssignments(n.State.EntropyPool[2], n.State.TimeslotIndex)
 	if err != nil {
