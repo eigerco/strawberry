@@ -328,6 +328,12 @@ func compareWorkResultFields(t *testing.T, expected ExpectedWorkResult, actual b
 		require.True(t, found)
 		require.Equal(t, expectedWorkResult, actual.Output.Inner)
 	}
+
+	require.Equal(t, expected.RefineLoad.GasUsed, actual.GasUsed)
+	require.Equal(t, expected.RefineLoad.Imports, actual.ImportsCount)
+	require.Equal(t, expected.RefineLoad.ExtrinsicCount, actual.ExtrinsicCount)
+	require.Equal(t, expected.RefineLoad.ExtrinsicSize, actual.ExtrinsicSize)
+	require.Equal(t, expected.RefineLoad.Exports, actual.ExportsCount)
 }
 
 func compareWorkReportFields(t *testing.T, expected ExpectedWorkReport, actual block.WorkReport) {
@@ -346,6 +352,8 @@ func compareWorkReportFields(t *testing.T, expected ExpectedWorkReport, actual b
 	for j := range expected.Results {
 		compareWorkResultFields(t, expected.Results[j], actual.WorkResults[j])
 	}
+
+	require.Equal(t, expected.AuthGasUsed, actual.AuthGasUsed)
 }
 
 func compareGuaranteesFields(t *testing.T, expected []ExpectedGuarantees, actual block.GuaranteesExtrinsic) {
@@ -528,6 +536,7 @@ type ExpectedWorkReport struct {
 	AuthOutput        string                    `json:"auth_output"`
 	SegmentRootLookup []interface{}             `json:"segment_root_lookup"`
 	Results           []ExpectedWorkResult      `json:"results"`
+	AuthGasUsed       uint                      `json:"auth_gas_used"`
 }
 
 type ExpectedWorkResult struct {
@@ -537,11 +546,11 @@ type ExpectedWorkResult struct {
 	AccumulateGas uint64          `json:"accumulate_gas"`
 	Result        Result          `json:"result"`
 	RefineLoad    struct {
-		GasUsed        uint64 `json:"gas_used"`
-		Imports        uint16 `json:"imports"`
-		ExtrinsicCount uint16 `json:"extrinsic_count"`
-		ExtrinsicSize  uint32 `json:"extrinsic_size"`
-		Exports        uint16 `json:"exports"`
+		GasUsed        uint `json:"gas_used"`
+		Imports        uint `json:"imports"`
+		ExtrinsicCount uint `json:"extrinsic_count"`
+		ExtrinsicSize  uint `json:"extrinsic_size"`
+		Exports        uint `json:"exports"`
 	} `json:"refine_load"`
 }
 
