@@ -260,7 +260,8 @@ func compareHeader(t *testing.T, expected ExpectedHeader, actual block.Header) {
 		require.Equal(t, expected.EpochMark.TicketsEntropy, toHex(actual.EpochMarker.TicketsEntropy))
 
 		for i := range expected.EpochMark.Validators {
-			require.Equal(t, expected.EpochMark.Validators[i], toHex(actual.EpochMarker.Keys[i]))
+			require.Equal(t, expected.EpochMark.Validators[i].Bandersnatch, toHex(actual.EpochMarker.Keys[i].Bandersnatch))
+			require.Equal(t, expected.EpochMark.Validators[i].Ed25519, toHex(actual.EpochMarker.Keys[i].Ed25519))
 		}
 	}
 
@@ -469,9 +470,12 @@ type ExpectedHeader struct {
 	ExtrinsicHash   string           `json:"extrinsic_hash"`
 	Slot            jamtime.Timeslot `json:"slot"`
 	EpochMark       *struct {
-		Entropy        string   `json:"entropy"`
-		TicketsEntropy string   `json:"tickets_entropy"`
-		Validators     []string `json:"validators"`
+		Entropy        string `json:"entropy"`
+		TicketsEntropy string `json:"tickets_entropy"`
+		Validators     []struct {
+			Bandersnatch string `json:"bandersnatch"`
+			Ed25519      string `json:"ed25519"`
+		} `json:"validators"`
 	} `json:"epoch_mark"`
 	TicketsMark []struct {
 		Id      string `json:"id"`
@@ -532,6 +536,13 @@ type ExpectedWorkResult struct {
 	PayloadHash   string          `json:"payload_hash"`
 	AccumulateGas uint64          `json:"accumulate_gas"`
 	Result        Result          `json:"result"`
+	RefineLoad    struct {
+		GasUsed        uint64 `json:"gas_used"`
+		Imports        uint16 `json:"imports"`
+		ExtrinsicCount uint16 `json:"extrinsic_count"`
+		ExtrinsicSize  uint32 `json:"extrinsic_size"`
+		Exports        uint16 `json:"exports"`
+	} `json:"refine_load"`
 }
 
 type ExpectedRefinementContext struct {

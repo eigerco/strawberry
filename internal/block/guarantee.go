@@ -36,6 +36,7 @@ type WorkReport struct {
 	Output                   []byte                      // Output of the work report (o)
 	SegmentRootLookup        map[crypto.Hash]crypto.Hash // A segment-root lookup dictionary (l ∈ D⟨H → H⟩)
 	WorkResults              []WorkResult                // Results of the evaluation of each of the items in the work-package (r) - Min value: MinWorkPackageResultsSize. Max value: MaxWorkPackageResultsSize.
+	AuthGasUsed              uint                        // The amount of gas used during authorization (g)
 }
 
 type WorkPackageSpecification struct {
@@ -85,6 +86,11 @@ type WorkResult struct {
 	PayloadHash            crypto.Hash             // Hash of the payload (y) - The hash of the payload within the work item which was executed in the refine stage to give this result. Provided to the accumulation logic of the service later on.
 	GasPrioritizationRatio uint64                  // Gas prioritization ratio (g) - used when determining how much gas should be allocated to execute of this item’s accumulate.
 	Output                 WorkResultOutputOrError // Output of the work result (d) ∈ Y ∪ J: Output or error (Y is the set of octet strings, J is the set of work execution errors)
+	GasUsed                uint                    // (u) the actual amount of gas used during refinement
+	ImportsCount           uint                    // (i) the number of segments imported from
+	ExtrinsicCount         uint                    // (x) the number of the extrinsics used in computing the workload
+	ExtrinsicSize          uint                    // (z) total size in octets of the extrinsics used in computing the workload
+	ExportsCount           uint                    // (e) the number of segments exported into
 }
 
 // WorkResultOutputOrError represents either the successful output or an error from a work result
