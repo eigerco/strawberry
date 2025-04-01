@@ -28,16 +28,6 @@ func (m *MockFetcher) FetchImportedSegment(hash crypto.Hash) ([]byte, error) {
 	return []byte("mock segment data"), nil
 }
 
-type MockGuarantorFinder struct {
-	mock.Mock
-}
-
-func (m *MockGuarantorFinder) GetGuarantorsForCore(coreIndex uint16) ([]*peer.Peer, error) {
-	args := m.Called(coreIndex)
-	peers, _ := args.Get(0).([]*peer.Peer)
-	return peers, args.Error(1)
-}
-
 var pkg = work.Package{
 	AuthorizationToken: []byte("auth token"),
 	AuthorizerService:  1,
@@ -110,8 +100,8 @@ func TestSubmitWorkPackage(t *testing.T) {
 func TestHandleWorkPackage(t *testing.T) {
 	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
-	mockFinder := &MockGuarantorFinder{}
-	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, handlers.NewWorkPackageSharer(mockFinder))
+	workPackageSharer := handlers.NewWorkPackageSharer()
+	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer)
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
 	// Prepare the message data
@@ -134,9 +124,6 @@ func TestHandleWorkPackage(t *testing.T) {
 
 	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
 	mockStream.On("Write", mock.Anything).Return(1, nil)
-
-	mockFinder.On("GetGuarantorsForCore", coreIndex).
-		Return([]*peer.Peer{mockPeer}, nil)
 
 	mockStream.On("Close").Return(nil).Once()
 
@@ -178,6 +165,8 @@ func TestHandleWorkPackage(t *testing.T) {
 
 	// Setup for stream closure
 	mockStream.On("Close").Return(nil).Once()
+
+	workPackageSharer.SetGuarantors([]*peer.Peer{mockPeer})
 
 	// Execute
 	err = handler.HandleStream(ctx, mockStream, peerKey)
@@ -272,8 +261,7 @@ func TestHandleStream_Success(t *testing.T) {
 	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
 	mockFetcher := &MockFetcher{}
-	mockFinder := &MockGuarantorFinder{}
-	_ = handlers.NewWorkPackageSubmissionHandler(mockFetcher, handlers.NewWorkPackageSharer(mockFinder))
+	workPackageSharer := handlers.NewWorkPackageSharer()
 	coreIndex := uint16(5)
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
@@ -294,9 +282,6 @@ func TestHandleStream_Success(t *testing.T) {
 
 	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
 	mockStream.On("Write", mock.Anything).Return(1, nil)
-
-	mockFinder.On("GetGuarantorsForCore", coreIndex).
-		Return([]*peer.Peer{mockPeer}, nil)
 
 	// Setup mock to read message 1
 	mockStream.On("Read", mock.Anything).Run(func(args mock.Arguments) {
@@ -327,7 +312,9 @@ func TestHandleStream_Success(t *testing.T) {
 	// Setup stream close expectation
 	mockStream.On("Close").Return(nil)
 
-	handler := handlers.NewWorkPackageSubmissionHandler(mockFetcher, handlers.NewWorkPackageSharer(mockFinder))
+	workPackageSharer.SetGuarantors([]*peer.Peer{mockPeer})
+
+	handler := handlers.NewWorkPackageSubmissionHandler(mockFetcher, workPackageSharer)
 	err = handler.HandleStream(ctx, mockStream, peerKey)
 
 	assert.NoError(t, err)

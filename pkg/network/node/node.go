@@ -12,7 +12,6 @@ import (
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
-	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/statetransition"
@@ -28,18 +27,20 @@ import (
 // Node manages peer connections, handles protocol messages, and coordinates network operations.
 // Each Node can act as both a client and server, maintaining connections with multiple peers simultaneously.
 type Node struct {
-	Context              context.Context
-	Cancel               context.CancelFunc
-	ValidatorManager     *validator.ValidatorManager
-	BlockService         *chain.BlockService
-	ProtocolManager      *protocol.Manager
-	PeersSet             *PeerSet
-	peersLock            sync.RWMutex
-	transport            *transport.Transport
-	State                state.State
-	blockRequester       *handlers.BlockRequester
-	workPackageSubmitter *handlers.WorkPackageSubmitter
-	workPackageSharer    *handlers.WorkPackageSharer
+	Context               context.Context
+	Cancel                context.CancelFunc
+	ValidatorManager      *validator.ValidatorManager
+	BlockService          *chain.BlockService
+	ProtocolManager       *protocol.Manager
+	PeersSet              *PeerSet
+	peersLock             sync.RWMutex
+	transport             *transport.Transport
+	State                 state.State
+	blockRequester        *handlers.BlockRequester
+	workPackageSubmitter  *handlers.WorkPackageSubmitter
+	workPackageSharer     *handlers.WorkPackageSharer
+	currentCoreIndex      uint16
+	currentGuarantorPeers []*peer.Peer
 }
 
 // PeerSet maintains mappings between peer identifiers
@@ -149,7 +150,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	node.blockRequester = &handlers.BlockRequester{}
 
-	wpSharerHandler := handlers.NewWorkPackageSharer(node)
+	wpSharerHandler := handlers.NewWorkPackageSharer()
 	node.workPackageSharer = wpSharerHandler
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}, wpSharerHandler))
@@ -305,43 +306,31 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 	return nil
 }
 
-// GetGuarantorsForCore gets the validators who assigned to the same core
-// TODO: Avoid repeated calls to this function by cashing assignments
-func (n *Node) GetGuarantorsForCore(coreIndex uint16) ([]*peer.Peer, error) {
+// UpdateCoreAssignments updates current core of the node and core guarantors
+func (n *Node) UpdateCoreAssignments() error {
 	assignments, err := statetransition.PermuteAssignments(n.State.EntropyPool[2], n.State.TimeslotIndex)
 	if err != nil {
-		return nil, fmt.Errorf("failed to permute validator assignments: %w", err)
+		return fmt.Errorf("failed to permute validator assignments: %w", err)
 	}
 
-	totalValidators := uint16(len(assignments))
-	if totalValidators == 0 {
-		return nil, fmt.Errorf("no validators available to assign for core %d", coreIndex)
-	}
+	coreIndex := uint16(assignments[n.ValidatorManager.Index])
+	n.currentCoreIndex = coreIndex
 
-	guarantorsPerCore := totalValidators / common.TotalNumberOfCores
-	if guarantorsPerCore == 0 {
-		guarantorsPerCore = 1
-	}
-
-	var guarantors []*peer.Peer
+	var peers []*peer.Peer
 	for validatorIdx, core := range assignments {
 		if core == uint32(coreIndex) && uint16(validatorIdx) != n.ValidatorManager.Index {
 			p := n.PeersSet.GetByValidatorIndex(uint16(validatorIdx))
 			if p == nil {
-				continue
+				return fmt.Errorf("peer with validator index %d not found", validatorIdx)
 			}
-			guarantors = append(guarantors, p)
-			if len(guarantors) >= int(guarantorsPerCore) {
-				break
-			}
+			peers = append(peers, p)
 		}
 	}
 
-	if len(guarantors) == 0 {
-		return nil, fmt.Errorf("no guarantors found for core %d", coreIndex)
-	}
+	n.currentGuarantorPeers = peers
+	n.workPackageSharer.SetGuarantors(peers)
 
-	return guarantors, nil
+	return nil
 }
 
 // AnnounceBlock implements the UP 0 block announcement protocol from the JAM spec.

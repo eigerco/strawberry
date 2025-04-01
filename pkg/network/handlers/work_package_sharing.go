@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -15,16 +16,16 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-type GuarantorFinder interface {
-	GetGuarantorsForCore(coreIndex uint16) ([]*peer.Peer, error)
-}
-
 type WorkPackageSharer struct {
-	guarantorFinder GuarantorFinder
+	guarantors []*peer.Peer
 }
 
-func NewWorkPackageSharer(finder GuarantorFinder) *WorkPackageSharer {
-	return &WorkPackageSharer{finder}
+func NewWorkPackageSharer() *WorkPackageSharer {
+	return &WorkPackageSharer{}
+}
+
+func (h *WorkPackageSharer) SetGuarantors(guarantors []*peer.Peer) {
+	h.guarantors = guarantors
 }
 
 // ValidateAndShareWorkPackage sends the work-package bundle to other guarantors.
@@ -50,16 +51,12 @@ func (h *WorkPackageSharer) shareWorkPackageWithOtherGuarantors(ctx context.Cont
 			coreIndex, common.TotalNumberOfCores)
 	}
 
-	guarantors, err := h.guarantorFinder.GetGuarantorsForCore(coreIndex)
-	if err != nil {
-		return fmt.Errorf("failed to get guarantors for core %d: %w", coreIndex, err)
-	}
-	if len(guarantors) == 0 {
-		return fmt.Errorf("no other guarantors found for core %d", coreIndex)
+	if h.guarantors == nil {
+		return errors.New("no guarantors set")
 	}
 
 	var wg sync.WaitGroup
-	for _, g := range guarantors {
+	for _, g := range h.guarantors {
 		wg.Add(1)
 		go func(g *peer.Peer) {
 			defer wg.Done()

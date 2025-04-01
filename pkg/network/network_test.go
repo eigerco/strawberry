@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -161,14 +160,6 @@ func (m *MockImportSegmentsFetcher) VerifyReceivedWorkPackage(t *testing.T, expe
 	return true
 }
 
-type MockGuarantorFinder struct {
-	mock.Mock
-}
-
-func (m *MockGuarantorFinder) GetGuarantorsForCore(coreIndex uint16) ([]*peer.Peer, error) {
-	return []*peer.Peer{}, nil
-}
-
 // ExtendedWorkPackageSubmissionHandler extends the original handler to record the received package
 type ExtendedWorkPackageSubmissionHandler struct {
 	*handlers.WorkPackageSubmissionHandler
@@ -179,7 +170,7 @@ func NewExtendedWorkPackageSubmissionHandler(fetcher *MockImportSegmentsFetcher)
 	return &ExtendedWorkPackageSubmissionHandler{
 		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(
 			fetcher,
-			handlers.NewWorkPackageSharer(&MockGuarantorFinder{})),
+			handlers.NewWorkPackageSharer()),
 		MockFetcher: fetcher,
 	}
 }
