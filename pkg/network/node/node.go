@@ -314,7 +314,6 @@ func (n *Node) UpdateCoreAssignments() error {
 	}
 
 	coreIndex := uint16(assignments[n.ValidatorManager.Index])
-	n.currentCoreIndex = coreIndex
 
 	var peers []*peer.Peer
 	for validatorIdx, core := range assignments {
@@ -326,6 +325,8 @@ func (n *Node) UpdateCoreAssignments() error {
 			peers = append(peers, p)
 		}
 	}
+
+	n.currentCoreIndex = coreIndex
 
 	n.currentGuarantorPeers = peers
 	n.workPackageSharer.SetGuarantors(peers)
