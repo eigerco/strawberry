@@ -260,7 +260,8 @@ func compareHeader(t *testing.T, expected ExpectedHeader, actual block.Header) {
 		require.Equal(t, expected.EpochMark.TicketsEntropy, toHex(actual.EpochMarker.TicketsEntropy))
 
 		for i := range expected.EpochMark.Validators {
-			require.Equal(t, expected.EpochMark.Validators[i], toHex(actual.EpochMarker.Keys[i]))
+			require.Equal(t, expected.EpochMark.Validators[i].Bandersnatch, toHex(actual.EpochMarker.Keys[i].Bandersnatch))
+			require.Equal(t, expected.EpochMark.Validators[i].Ed25519, toHex(actual.EpochMarker.Keys[i].Ed25519))
 		}
 	}
 
@@ -327,6 +328,12 @@ func compareWorkResultFields(t *testing.T, expected ExpectedWorkResult, actual b
 		require.True(t, found)
 		require.Equal(t, expectedWorkResult, actual.Output.Inner)
 	}
+
+	require.Equal(t, expected.RefineLoad.GasUsed, actual.GasUsed)
+	require.Equal(t, expected.RefineLoad.Imports, actual.ImportsCount)
+	require.Equal(t, expected.RefineLoad.ExtrinsicCount, actual.ExtrinsicCount)
+	require.Equal(t, expected.RefineLoad.ExtrinsicSize, actual.ExtrinsicSize)
+	require.Equal(t, expected.RefineLoad.Exports, actual.ExportsCount)
 }
 
 func compareWorkReportFields(t *testing.T, expected ExpectedWorkReport, actual block.WorkReport) {
@@ -345,6 +352,8 @@ func compareWorkReportFields(t *testing.T, expected ExpectedWorkReport, actual b
 	for j := range expected.Results {
 		compareWorkResultFields(t, expected.Results[j], actual.WorkResults[j])
 	}
+
+	require.Equal(t, expected.AuthGasUsed, actual.AuthGasUsed)
 }
 
 func compareGuaranteesFields(t *testing.T, expected []ExpectedGuarantees, actual block.GuaranteesExtrinsic) {
@@ -469,9 +478,12 @@ type ExpectedHeader struct {
 	ExtrinsicHash   string           `json:"extrinsic_hash"`
 	Slot            jamtime.Timeslot `json:"slot"`
 	EpochMark       *struct {
-		Entropy        string   `json:"entropy"`
-		TicketsEntropy string   `json:"tickets_entropy"`
-		Validators     []string `json:"validators"`
+		Entropy        string `json:"entropy"`
+		TicketsEntropy string `json:"tickets_entropy"`
+		Validators     []struct {
+			Bandersnatch string `json:"bandersnatch"`
+			Ed25519      string `json:"ed25519"`
+		} `json:"validators"`
 	} `json:"epoch_mark"`
 	TicketsMark []struct {
 		Id      string `json:"id"`
@@ -524,6 +536,7 @@ type ExpectedWorkReport struct {
 	AuthOutput        string                    `json:"auth_output"`
 	SegmentRootLookup []interface{}             `json:"segment_root_lookup"`
 	Results           []ExpectedWorkResult      `json:"results"`
+	AuthGasUsed       uint                      `json:"auth_gas_used"`
 }
 
 type ExpectedWorkResult struct {
@@ -532,6 +545,13 @@ type ExpectedWorkResult struct {
 	PayloadHash   string          `json:"payload_hash"`
 	AccumulateGas uint64          `json:"accumulate_gas"`
 	Result        Result          `json:"result"`
+	RefineLoad    struct {
+		GasUsed        uint `json:"gas_used"`
+		Imports        uint `json:"imports"`
+		ExtrinsicCount uint `json:"extrinsic_count"`
+		ExtrinsicSize  uint `json:"extrinsic_size"`
+		Exports        uint `json:"exports"`
+	} `json:"refine_load"`
 }
 
 type ExpectedRefinementContext struct {

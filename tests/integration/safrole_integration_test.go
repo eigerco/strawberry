@@ -157,7 +157,7 @@ func TestSafrole(t *testing.T) {
 					expectedEpochMarker.Entropy = crypto.Hash(testutils.MustFromHex(t, expectedOutput.EpochMark.Entropy))
 					expectedEpochMarker.TicketsEntropy = crypto.Hash(testutils.MustFromHex(t, expectedOutput.EpochMark.TicketsEntropy))
 					for i, v := range expectedOutput.EpochMark.Validators {
-						expectedEpochMarker.Keys[i] = crypto.BandersnatchPublicKey(testutils.MustFromHex(t, v))
+						expectedEpochMarker.Keys[i].Bandersnatch = crypto.BandersnatchPublicKey(testutils.MustFromHex(t, v))
 					}
 					require.Equal(t, output.EpochMark, expectedEpochMarker)
 				}

@@ -21,10 +21,6 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		ExtrinsicHash:  testutils.RandomHash(t),
 		TimeSlotIndex:  123,
 		EpochMarker: &EpochMarker{
-			Keys: [common.NumberOfValidators]crypto.BandersnatchPublicKey{
-				testutils.RandomBandersnatchPublicKey(t),
-				testutils.RandomBandersnatchPublicKey(t),
-			},
 			Entropy: testutils.RandomHash(t),
 		},
 		WinningTicketsMarker: &WinningTicketMarker{
@@ -41,6 +37,11 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		BlockAuthorIndex:   1,
 		VRFSignature:       testutils.RandomBandersnatchSignature(t),
 		BlockSealSignature: testutils.RandomBandersnatchSignature(t),
+	}
+
+	for i := 0; i < common.NumberOfValidators; i++ {
+		h.EpochMarker.Keys[i].Bandersnatch = testutils.RandomBandersnatchPublicKey(t)
+		h.EpochMarker.Keys[i].Ed25519 = testutils.RandomED25519PublicKey(t)
 	}
 
 	ticketProofs := []TicketProof{

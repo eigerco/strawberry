@@ -24,12 +24,17 @@ type Header struct {
 	BlockSealSignature   crypto.BandersnatchSignature // Hs
 }
 
+type ValidatorKeys struct {
+	Bandersnatch crypto.BandersnatchPublicKey
+	Ed25519      ed25519.PublicKey
+}
+
 // EpochMarker consists of epoch randomness and a sequence of
 // Bandersnatch keys defining the Bandersnatch validator keys (kb) beginning in the next epoch.
 type EpochMarker struct {
 	Entropy        crypto.Hash
 	TicketsEntropy crypto.Hash
-	Keys           [common.NumberOfValidators]crypto.BandersnatchPublicKey
+	Keys           [common.NumberOfValidators]ValidatorKeys
 }
 
 type WinningTicketMarker [jamtime.TimeslotsPerEpoch]Ticket
