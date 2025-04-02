@@ -10,6 +10,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
@@ -21,7 +23,6 @@ import (
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/stretchr/testify/require"
 )
 
 func TestSimulateSAFROLE(t *testing.T) {
@@ -158,7 +159,7 @@ func produceBlock(
 			TicketsEntropy: currentState.EntropyPool[1],
 		}
 		for i, vd := range currentState.ValidatorState.SafroleState.NextValidators {
-			header.EpochMarker.Keys[i] = vd.Bandersnatch
+			header.EpochMarker.Keys[i].Bandersnatch = vd.Bandersnatch
 		}
 	}
 
@@ -189,7 +190,7 @@ func toBlock(t *testing.T, simBlock SimulationBlock) block.Block {
 		}
 
 		for i, v := range simBlock.Header.EpochMark.Validators {
-			epochMark.Keys[i] = crypto.BandersnatchPublicKey(testutils.MustFromHex(t, v))
+			epochMark.Keys[i].Bandersnatch = crypto.BandersnatchPublicKey(testutils.MustFromHex(t, v))
 		}
 
 		b.Header.EpochMarker = epochMark

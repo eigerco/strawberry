@@ -17,6 +17,8 @@ import (
 
 	"github.com/eigerco/strawberry/internal/statetransition"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -24,7 +26,6 @@ import (
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
-	"github.com/stretchr/testify/require"
 )
 
 func ReadJSONFile(filename string) (*JSONData, error) {
@@ -49,8 +50,17 @@ func ReadJSONFile(filename string) (*JSONData, error) {
 
 // JSON structures for test vectors
 type ServiceInfo struct {
-	ID   int            `json:"id"`
-	Info ServiceDetails `json:"info"`
+	ID   int `json:"id"`
+	Data struct {
+		Service struct {
+			CodeHash   string `json:"code_hash"`
+			Balance    int    `json:"balance"`
+			MinItemGas int    `json:"min_item_gas"`
+			MinMemoGas int    `json:"min_memo_gas"`
+			Bytes      int    `json:"bytes"`
+			Items      int    `json:"items"`
+		} `json:"service"`
+	} `json:"data"`
 }
 
 type ServiceDetails struct {
@@ -160,7 +170,7 @@ type State struct {
 	Offenders        []string            `json:"offenders"`
 	RecentBlocks     []BlockState        `json:"recent_blocks"`
 	AuthPools        [][]string          `json:"auth_pools"`
-	Services         []ServiceInfo       `json:"services"`
+	Services         []ServiceInfo       `json:"accounts"`
 }
 
 type BlockState struct {
@@ -411,10 +421,10 @@ func mapServices(services []ServiceInfo) service.ServiceState {
 			Storage:                make(map[crypto.Hash][]byte),
 			PreimageLookup:         make(map[crypto.Hash][]byte),
 			PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
-			CodeHash:               crypto.Hash(mustStringToHex(s.Info.CodeHash)),
-			Balance:                uint64(s.Info.Balance),
-			GasLimitForAccumulator: uint64(s.Info.MinItemGas),
-			GasLimitOnTransfer:     uint64(s.Info.MinMemoGas),
+			CodeHash:               crypto.Hash(mustStringToHex(s.Data.Service.CodeHash)),
+			Balance:                uint64(s.Data.Service.Balance),
+			GasLimitForAccumulator: uint64(s.Data.Service.MinItemGas),
+			GasLimitOnTransfer:     uint64(s.Data.Service.MinMemoGas),
 		}
 	}
 	return serviceState

@@ -674,7 +674,7 @@ func UpdateSafroleState(
 			TicketsEntropy: entropyPool[1],
 		}
 		for i, vd := range newValidatorState.SafroleState.NextValidators {
-			output.EpochMark.Keys[i] = vd.Bandersnatch
+			output.EpochMark.Keys[i].Bandersnatch = vd.Bandersnatch
 		}
 
 		// Reset ticket accumulator. From equation 79.
