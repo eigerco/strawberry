@@ -306,8 +306,16 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 	return nil
 }
 
-// UpdateCoreAssignments updates current core of the node and core guarantors
+// UpdateCoreAssignments updates both the current core of this node and the co-guarantors (other validators assigned to the same core).
+// The assignment logic follows the Guarantor Assignment section (11.3).
+// Every validator is deterministically assigned to one of the available cores for each rotation period (every 10 timeslots).
+// This ensures the node can interact (eg share work packages) with the other validators responsible for guaranteeing work on the same core.
+// The result is stored in `n.currentCoreIndex` and `n.currentGuarantorPeers`, and the peers are also registered in the workPackageSharer for CE-134.
+// TODO: Call this during node initialization and periodically to keep core and co-guarantors up to date.
 func (n *Node) UpdateCoreAssignments() error {
+	n.peersLock.Lock()
+	defer n.peersLock.Unlock()
+
 	assignments, err := statetransition.PermuteAssignments(n.State.EntropyPool[2], n.State.TimeslotIndex)
 	if err != nil {
 		return fmt.Errorf("failed to permute validator assignments: %w", err)
