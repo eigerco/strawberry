@@ -313,15 +313,15 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 // The result is stored in `n.currentCoreIndex` and `n.currentGuarantorPeers`, and the peers are also registered in the workPackageSharer for CE-134.
 // TODO: Call this during node initialization and periodically to keep core and co-guarantors up to date.
 func (n *Node) UpdateCoreAssignments() error {
-	n.peersLock.Lock()
-	defer n.peersLock.Unlock()
-
 	assignments, err := statetransition.PermuteAssignments(n.State.EntropyPool[2], n.State.TimeslotIndex)
 	if err != nil {
 		return fmt.Errorf("failed to permute validator assignments: %w", err)
 	}
 
 	coreIndex := uint16(assignments[n.ValidatorManager.Index])
+
+	n.peersLock.Lock()
+	defer n.peersLock.Unlock()
 
 	var peers []*peer.Peer
 	for validatorIdx, core := range assignments {
