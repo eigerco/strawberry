@@ -32,9 +32,9 @@ func TestComputeWellBalancedRoot(t *testing.T) {
 				[]byte("blob2"),
 			},
 			expected: func() crypto.Hash {
-				left := testutils.MockHashData([]byte("blob1"))
-				right := testutils.MockHashData([]byte("blob2"))
-				combined := append([]byte("node"), append(convertHashToBlob(left), convertHashToBlob(right)...)...)
+				left := []byte("blob1")
+				right := []byte("blob2")
+				combined := append([]byte("node"), append(left, right...)...)
 				return testutils.MockHashData(combined)
 			}(),
 		},
@@ -47,7 +47,11 @@ func TestComputeWellBalancedRoot(t *testing.T) {
 			},
 			expected: func() crypto.Hash {
 				// Should expect just one node prefix
-				return testutils.MockHashData(append([]byte("node"), []byte("blob1")...))
+				leaf2 := []byte("blob2")
+				leaf3 := []byte("blob3")
+				right := testutils.MockHashData(append([]byte("node"), append(leaf2, leaf3...)...))
+				left := []byte("blob1")
+				return testutils.MockHashData(append([]byte("node"), append(left, right[:]...)...))
 			}(),
 		},
 	}
