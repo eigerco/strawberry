@@ -176,7 +176,7 @@ func (w *WorkReport) Encode() ([]byte, error) {
 	if w == nil {
 		return []byte{}, nil
 	}
-	encodedData, err := jam.Marshal(w)
+	encodedData, err := jam.Marshal(*w)
 	if err != nil {
 		return []byte{}, err
 	}

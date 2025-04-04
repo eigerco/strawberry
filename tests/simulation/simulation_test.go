@@ -146,10 +146,16 @@ func produceBlock(
 	nextEpoch := timeslot.ToEpoch()
 	previousEpoch := currentState.TimeslotIndex.ToEpoch()
 
+	extrinics := block.Extrinsic{}
+	extrinsicsHash, err := extrinics.Hash()
+	if err != nil {
+		return block.Block{}, err
+	}
+
 	header := &block.Header{
 		ParentHash:     parentHash,
 		PriorStateRoot: rootHash,
-		ExtrinsicHash:  crypto.Hash{}, // TODO
+		ExtrinsicHash:  extrinsicsHash,
 		TimeSlotIndex:  timeslot,
 	}
 
