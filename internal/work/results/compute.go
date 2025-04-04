@@ -225,9 +225,6 @@ func shardData(auditableBlob []byte, exportedSegments []work.Segment) ([][]byte,
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if len(auditableShards) == 0 {
-		return nil, nil, nil, nil
-	}
 
 	// M#_B(T C#_6 (s ⌢ P(s)))
 	pagedProofs, err := ComputePagedProofs(exportedSegments)
