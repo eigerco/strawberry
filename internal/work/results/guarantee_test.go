@@ -105,10 +105,10 @@ func TestProcessWorkPackageGuarantee(t *testing.T) {
 			wp:           emptyPkg,
 			coreIndex:    1,
 			guarantorIdx: 1,
-			privKey:      nil,
+			privKey:      privateKey1,
 			authPool:     EmptyCoreAuthorizersPool(),
 			expectError:  true,
-			errorMessage: "failed computing availability spec",
+			errorMessage: "failed to generate guarantee",
 		},
 		{
 			name:         "unauthorized work package",
