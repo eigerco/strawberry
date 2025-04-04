@@ -15,6 +15,8 @@ import (
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/network/mocks"
+	"github.com/eigerco/strawberry/pkg/network/peer"
+	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -98,7 +100,8 @@ func TestSubmitWorkPackage(t *testing.T) {
 func TestHandleWorkPackage(t *testing.T) {
 	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
-	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{})
+	workPackageSharer := handlers.NewWorkPackageSharer()
+	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer)
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
 	// Prepare the message data
@@ -109,6 +112,20 @@ func TestHandleWorkPackage(t *testing.T) {
 	require.NoError(t, err)
 	msg1Content := append(coreIndexBytes, pkgBytes...)
 	extrinsics := []byte("extrinsic_data")
+
+	mockTConn := mocks.NewMockTransportConn()
+	registry := protocol.NewJAMNPRegistry()
+
+	conn := protocol.NewProtocolConn(mockTConn, registry)
+
+	mockPeer := &peer.Peer{
+		ProtoConn: conn,
+	}
+
+	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
+	mockStream.On("Write", mock.Anything).Return(1, nil)
+
+	mockStream.On("Close").Return(nil).Once()
 
 	// Setup READ expectations for message 1 - length prefix followed by content
 	mockStream.On("Read", mock.AnythingOfType("[]uint8")).
@@ -148,6 +165,8 @@ func TestHandleWorkPackage(t *testing.T) {
 
 	// Setup for stream closure
 	mockStream.On("Close").Return(nil).Once()
+
+	workPackageSharer.SetGuarantors([]*peer.Peer{mockPeer})
 
 	// Execute
 	err = handler.HandleStream(ctx, mockStream, peerKey)
@@ -239,8 +258,10 @@ func TestSubmitWorkPackage_CloseFailure(t *testing.T) {
 }
 
 func TestHandleStream_Success(t *testing.T) {
+	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
 	mockFetcher := &MockFetcher{}
+	workPackageSharer := handlers.NewWorkPackageSharer()
 	coreIndex := uint16(5)
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
@@ -249,6 +270,18 @@ func TestHandleStream_Success(t *testing.T) {
 	pkgBytes, err := jam.Marshal(pkg)
 	require.NoError(t, err)
 	msg1Content := append(coreIndexBytes, pkgBytes...)
+
+	mockTConn := mocks.NewMockTransportConn()
+	registry := protocol.NewJAMNPRegistry()
+
+	conn := protocol.NewProtocolConn(mockTConn, registry)
+
+	mockPeer := &peer.Peer{
+		ProtoConn: conn,
+	}
+
+	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
+	mockStream.On("Write", mock.Anything).Return(1, nil)
 
 	// Setup mock to read message 1
 	mockStream.On("Read", mock.Anything).Run(func(args mock.Arguments) {
@@ -279,8 +312,9 @@ func TestHandleStream_Success(t *testing.T) {
 	// Setup stream close expectation
 	mockStream.On("Close").Return(nil)
 
-	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{})
-	ctx := context.Background()
+	workPackageSharer.SetGuarantors([]*peer.Peer{mockPeer})
+
+	handler := handlers.NewWorkPackageSubmissionHandler(mockFetcher, workPackageSharer)
 	err = handler.HandleStream(ctx, mockStream, peerKey)
 
 	assert.NoError(t, err)

@@ -9,22 +9,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/quic-go/quic-go"
+	"github.com/stretchr/testify/require"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
+	chainState "github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
+	"github.com/eigerco/strawberry/pkg/network/node"
 	"github.com/eigerco/strawberry/pkg/network/peer"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-	"github.com/quic-go/quic-go"
-	"github.com/stretchr/testify/require"
 )
 
-func setupNodes(ctx context.Context, t *testing.T, numNodes int) []*peer.Node {
-	nodes := []*peer.Node{}
+func setupNodes(ctx context.Context, t *testing.T, numNodes int) []*node.Node {
+	nodes := []*node.Node{}
 	validatorsData := safrole.ValidatorsData{}
 	nodeKeys := []validator.ValidatorKeys{}
 	for i := 0; i < numNodes; i++ {
@@ -49,17 +52,21 @@ func setupNodes(ctx context.Context, t *testing.T, numNodes int) []*peer.Node {
 		QueuedValidators:   validatorsData,
 	}
 
+	state := chainState.State{
+		ValidatorState: vstate,
+	}
+
 	for i := 0; i < numNodes; i++ {
 		addr, err := peer.NewPeerAddressFromMetadata(validatorsData[i].Metadata[:])
 		require.NoError(t, err)
-		node, err := peer.NewNode(ctx, addr, nodeKeys[i], vstate, uint16(i))
+		node, err := node.NewNode(ctx, addr, nodeKeys[i], state, uint16(i))
 		require.NoError(t, err)
 		nodes = append(nodes, node)
 	}
 	return nodes
 }
 
-func stopNode(t *testing.T, node *peer.Node) {
+func stopNode(t *testing.T, node *node.Node) {
 	t.Helper()
 	if err := node.Stop(); err != nil {
 		t.Logf("Failed to stop node: %v", err)
@@ -161,8 +168,10 @@ type ExtendedWorkPackageSubmissionHandler struct {
 
 func NewExtendedWorkPackageSubmissionHandler(fetcher *MockImportSegmentsFetcher) *ExtendedWorkPackageSubmissionHandler {
 	return &ExtendedWorkPackageSubmissionHandler{
-		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(fetcher),
-		MockFetcher:                  fetcher,
+		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(
+			fetcher,
+			handlers.NewWorkPackageSharer()),
+		MockFetcher: fetcher,
 	}
 }
 

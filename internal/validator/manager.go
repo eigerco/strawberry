@@ -2,6 +2,7 @@ package validator
 
 import (
 	"crypto/ed25519"
+
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 )

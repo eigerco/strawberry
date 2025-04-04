@@ -8,14 +8,16 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/safrole"
-	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/eigerco/strawberry/pkg/network/peer"
 	"log"
 	"net"
 	"os"
 	"strconv"
+
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/safrole"
+	chainState "github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/validator"
+	"github.com/eigerco/strawberry/pkg/network/node"
 )
 
 type FullValidatorInfo struct {
@@ -146,7 +148,11 @@ func main() {
 		QueuedValidators:   validatorsData,
 	}
 
-	node, err := peer.NewNode(ctx, udpAddress, vk, vstate, uint16(i))
+	state := chainState.State{
+		ValidatorState: vstate,
+	}
+
+	node, err := node.NewNode(ctx, udpAddress, vk, state, uint16(i))
 	if err != nil {
 		log.Fatal(err)
 	}
