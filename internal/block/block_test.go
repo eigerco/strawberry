@@ -3,6 +3,7 @@ package block
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -198,6 +199,16 @@ func Test_BlockEncodeDecode(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, originalBlock, deserializedBlock)
+}
+
+func TestExtrinsicHashEmpty(t *testing.T) {
+	extrinsic := Extrinsic{}
+
+	hash, err := extrinsic.Hash()
+	require.NoError(t, err)
+
+	// Expected hash taken from https://github.com/jam-duna/jamtestnet/blob/main/data/orderedaccumulation/blocks/1_000.json
+	require.Equal(t, "189d15af832dfe4f67744008b62c334b569fcbb4c261e0f065655697306ca252", hex.EncodeToString(hash[:]))
 }
 
 func randomTicketProof(t *testing.T) [ticketProofSize]byte {
