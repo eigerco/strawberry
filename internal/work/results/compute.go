@@ -217,6 +217,7 @@ func (c *Computation) computeAvailabilitySpecifier(
 
 // shardData shards the auditable work-package and segments, computes the hash for each auditable work-package shard and
 // the merkle root for each bundle of segment shards and joins them together
+// returns the auditable work-package shards, each segment shards and the work-package bundle shard hash, segment shard root pairs
 // implements parts of eq. 14.16
 func shardData(auditableBlob []byte, exportedSegments []work.Segment) ([][]byte, [][][]byte, [][]byte, error) {
 	// H#(C⌈|b|/WE⌉(PWE(b)))
