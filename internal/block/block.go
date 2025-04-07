@@ -21,7 +21,7 @@ type Extrinsic struct {
 	ED DisputeExtrinsic
 }
 
-// Implements equations 5.4-5.6 in the graypaper (v0.6.4)
+// Hash implements equations 5.4-5.6 in the graypaper (v0.6.4)
 func (e Extrinsic) Hash() (crypto.Hash, error) {
 	// This effectively holds H_#(a) in equation 5.4. (v0.6.4)
 	var hashes struct {
