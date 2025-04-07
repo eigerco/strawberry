@@ -2,6 +2,8 @@ package results
 
 import (
 	"bytes"
+	"github.com/eigerco/strawberry/internal/erasurecoding"
+	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -135,6 +137,108 @@ func TestComputeAvailabilitySpecifier(t *testing.T) {
 	assert.NotEmpty(t, spec.ErasureRoot[:])
 }
 
+func TestComputeShardData(t *testing.T) {
+	t.Run("auditable data and no segments", func(t *testing.T) {
+		audBlob := []byte("auditable data")
+		auditableShards, shardsForSegments, auditableHashSegmentRootPairs, err := shardData(audBlob, []work.Segment{})
+		require.NoError(t, err)
+
+		assert.Len(t, auditableShards, 1023)
+		assert.Len(t, shardsForSegments, 0)
+		assert.Len(t, auditableHashSegmentRootPairs, 1023)
+		for _, pair := range auditableHashSegmentRootPairs {
+			assert.Len(t, pair, 32) // the pair should contain only one hash
+		}
+	})
+	t.Run("auditable data and one segment", func(t *testing.T) {
+		audBlob := []byte("auditable data")
+		segment := work.Segment{}
+		copy(segment[:], "segment data")
+		segmentProofs, err := ComputePagedProofs([]work.Segment{segment})
+		require.NoError(t, err)
+		require.Len(t, segmentProofs, 1)
+
+		segmentShards, err := erasurecoding.Encode(segment[:])
+		require.NoError(t, err)
+
+		segmentProofShards, err := erasurecoding.Encode(segmentProofs[0][:])
+		require.NoError(t, err)
+
+		expectedSegmentsForShards := make([][][]byte, 1023)
+		for i := range expectedSegmentsForShards {
+			assert.Len(t, segmentShards[i], 12)
+			assert.Len(t, segmentProofShards[i], 12)
+
+			require.NoError(t, err)
+			expectedSegmentsForShards[i] = [][]byte{
+				segmentShards[i],
+				segmentProofShards[i],
+			}
+
+		}
+		auditableShards, shardsForSegments, auditableHashSegmentRootPairs, err := shardData(audBlob, []work.Segment{segment})
+		require.NoError(t, err)
+
+		assert.Len(t, auditableShards, 1023)
+		assert.Equal(t, expectedSegmentsForShards, shardsForSegments)
+		assert.Len(t, auditableHashSegmentRootPairs, 1023)
+		for i, pair := range auditableHashSegmentRootPairs {
+			require.Len(t, pair, 64) // the pair should contain two hashes
+			assert.Equal(t, crypto.Hash(pair[32:]), binary_tree.ComputeWellBalancedRoot([][]byte{segmentShards[i], segmentProofShards[i]}, crypto.HashData))
+		}
+	})
+	t.Run("auditable data and two segments", func(t *testing.T) {
+		audBlob := []byte("auditable data")
+		segment1 := work.Segment{}
+		copy(segment1[:], "segment data 1")
+
+		segment2 := work.Segment{}
+		copy(segment2[:], "segment data 2")
+
+		segmentProofs, err := ComputePagedProofs([]work.Segment{segment1, segment2})
+		require.NoError(t, err)
+		require.Len(t, segmentProofs, 1)
+
+		segment1Shards, err := erasurecoding.Encode(segment1[:])
+		require.NoError(t, err)
+
+		segment2Shards, err := erasurecoding.Encode(segment2[:])
+		require.NoError(t, err)
+
+		segmentProofShards, err := erasurecoding.Encode(segmentProofs[0][:])
+		require.NoError(t, err)
+
+		expectedSegmentsForShards := make([][][]byte, 1023)
+		for i := range expectedSegmentsForShards {
+			assert.Len(t, segment1Shards[i], 12)
+			assert.Len(t, segment2Shards[i], 12)
+			assert.Len(t, segmentProofShards[i], 12)
+
+			require.NoError(t, err)
+			expectedSegmentsForShards[i] = [][]byte{
+				segment1Shards[i],
+				segment2Shards[i],
+				segmentProofShards[i],
+			}
+		}
+		auditableShards, shardsForSegments, auditableHashSegmentRootPairs, err := shardData(audBlob, []work.Segment{segment1, segment2})
+		require.NoError(t, err)
+
+		assert.Len(t, auditableShards, 1023)
+		assert.Equal(t, expectedSegmentsForShards, shardsForSegments)
+		assert.Len(t, auditableHashSegmentRootPairs, 1023)
+		for i, pair := range auditableHashSegmentRootPairs {
+			_ = i
+			require.Len(t, pair, 64) // the pair should contain two hashes
+			assert.Equal(t, crypto.Hash(pair[32:]), binary_tree.ComputeWellBalancedRoot([][]byte{
+				segment1Shards[i],
+				segment2Shards[i],
+				segmentProofShards[i],
+			}, crypto.HashData))
+		}
+	})
+}
+
 func TestEvaluateWorkPackage(t *testing.T) {
 	segRootH := crypto.HashData([]byte("rootH"))
 	segData := []byte("some segment data")
@@ -188,7 +292,7 @@ func TestComputePagedProofs(t *testing.T) {
 		{
 			name:          "empty segments",
 			inputSegments: []work.Segment{},
-			expectError:   true,
+			expectError:   false,
 			errorMessage:  "no segments provided",
 		},
 		{

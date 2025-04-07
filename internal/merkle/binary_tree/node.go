@@ -6,13 +6,14 @@ import (
 
 // ComputeNode Computes the Merkle node for a given sequence of blobs.
 func ComputeNode(blobs [][]byte, hashFunc func([]byte) crypto.Hash) []byte {
+	// H^0 if |v| = 0
 	if len(blobs) == 0 {
-		return []byte{}
+		return convertHashToBlob(crypto.Hash{})
 	}
 
-	// If |blobs| = 1, return the hash of blobs[0]
+	//v_0 if |v| = 1
 	if len(blobs) == 1 {
-		return convertHashToBlob(hashFunc(blobs[0]))
+		return blobs[0]
 	}
 
 	// Otherwise, compute the recursive hash combination

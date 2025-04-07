@@ -200,53 +200,67 @@ func (c *Computation) computeAvailabilitySpecifier(
 	if l > math.MaxUint32 {
 		return block.WorkPackageSpecification{}, fmt.Errorf("auditable blob too large")
 	}
-	auditLen := uint32(l)
 
-	segBlobs := segmentsToByteSlices(exportedSegments)
-	e := binary_tree.ComputeConstantDepthRoot(segBlobs, crypto.HashData)
+	_, _, auditableHashSegmentRootPairs, err := shardData(auditableBlob, exportedSegments)
+	if err != nil {
+		return block.WorkPackageSpecification{}, fmt.Errorf("failed to shard data: %w", err)
+	}
 
-	n := uint16(len(exportedSegments))
+	return block.WorkPackageSpecification{
+		WorkPackageHash:           packageHash,
+		AuditableWorkBundleLength: uint32(l),
+		ErasureRoot:               binary_tree.ComputeWellBalancedRoot(auditableHashSegmentRootPairs, crypto.HashData),
+		SegmentRoot:               binary_tree.ComputeConstantDepthRoot(segmentsToByteSlices(exportedSegments), crypto.HashData),
+		SegmentCount:              uint16(len(exportedSegments)),
+	}, nil
+}
 
+// shardData shards the auditable work-package and segments, computes the hash for each auditable work-package shard and
+// the merkle root for each bundle of segment shards and joins them together
+// returns the auditable work-package shards, each segment shards and the work-package bundle shard hash, segment shard root pairs
+// implements parts of eq. 14.16
+func shardData(auditableBlob []byte, exportedSegments []work.Segment) ([][]byte, [][][]byte, [][]byte, error) {
 	// H#(C⌈|b|/WE⌉(PWE(b)))
 	padded := work.ZeroPadding(auditableBlob, common.ErasureCodingChunkSize)
-	shards, err := erasurecoding.Encode(padded)
+	auditableShards, err := erasurecoding.Encode(padded)
 	if err != nil {
-		return block.WorkPackageSpecification{}, err
+		return nil, nil, nil, err
 	}
-	if len(shards) == 0 {
-		return block.WorkPackageSpecification{}, nil
-	}
-	bClubs := binary_tree.ComputeWellBalancedRoot(shards, crypto.HashData)
 
 	// M#_B(T C#_6 (s ⌢ P(s)))
 	pagedProofs, err := ComputePagedProofs(exportedSegments)
 	if err != nil {
-		return block.WorkPackageSpecification{}, fmt.Errorf("failed to compute paged proofs: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to compute paged proofs: %w", err)
 	}
 
-	combinedSegments := append(segmentsToByteSlices(exportedSegments), segmentsToByteSlices(pagedProofs)...)
-	combined := flattenBlobs(combinedSegments)
+	segmentsWithProofs := append(exportedSegments, pagedProofs...)
 
-	shards, err = erasurecoding.Encode(combined)
-	if err != nil {
-		return block.WorkPackageSpecification{}, err
-	}
-	if len(shards) == 0 {
-		return block.WorkPackageSpecification{}, nil
-	}
-	sClubs := binary_tree.ComputeWellBalancedRoot(shards, crypto.HashData)
+	var shardsForSegments [][][]byte
+	if len(segmentsWithProofs) > 0 {
+		shardsForSegments = make([][][]byte, common.NumberOfValidators)
 
-	blobs := [][]byte{bClubs[:], sClubs[:]}
-	u := binary_tree.ComputeWellBalancedRoot(blobs, crypto.HashData)
-
-	spec := block.WorkPackageSpecification{
-		WorkPackageHash:           packageHash,
-		AuditableWorkBundleLength: auditLen,
-		ErasureRoot:               u,
-		SegmentRoot:               e,
-		SegmentCount:              n,
+		for _, segmentOrProof := range segmentsWithProofs {
+			segmentOrProofShards, err := erasurecoding.Encode(segmentOrProof[:])
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to erasure code segment or proof: %w", err)
+			}
+			for shardIndex, shard := range segmentOrProofShards {
+				shardsForSegments[shardIndex] = append(shardsForSegments[shardIndex], shard)
+			}
+		}
 	}
-	return spec, nil
+
+	auditableHashSegmentRootPairs := make([][]byte, common.NumberOfValidators)
+	for i := 0; i < common.NumberOfValidators; i++ {
+		auditShardHash := crypto.HashData(auditableShards[i])
+		auditableHashSegmentRootPairs[i] = auditShardHash[:]
+		if len(shardsForSegments) > 0 {
+			segmentsShardsRoot := binary_tree.ComputeWellBalancedRoot(shardsForSegments[i], crypto.HashData)
+			auditableHashSegmentRootPairs[i] = append(auditableHashSegmentRootPairs[i], segmentsShardsRoot[:]...)
+		}
+	}
+
+	return auditableShards, shardsForSegments, auditableHashSegmentRootPairs, nil
 }
 
 // EvaluateWorkPackage Ξ : (P, N_C) → W (14.11 v0.5.4)
@@ -354,7 +368,7 @@ func (c *Computation) EvaluateWorkPackage(
 // ComputePagedProofs P(s) → [E(J₆(s,i), L₆(s,i))₍l₎ | i ∈ ℕ₍⌈|s|/64⌉₎] (14.10 v0.5.4)
 func ComputePagedProofs(segments []work.Segment) ([]work.Segment, error) {
 	if len(segments) == 0 {
-		return nil, fmt.Errorf("no segments provided")
+		return nil, nil
 	}
 	blobs := make([][]byte, len(segments))
 	for i, seg := range segments {
