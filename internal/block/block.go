@@ -72,14 +72,14 @@ func (e Extrinsic) Hash() (crypto.Hash, error) {
 	}
 	hashes.GuaranteesHash = crypto.HashData(guaranteesBytes)
 
-	/// Encode and hash assurances. Standard serialization.
+	// Encode and hash assurances. Standard serialization.
 	assurancesBytes, err := jam.Marshal(e.EA)
 	if err != nil {
 		return crypto.Hash{}, err
 	}
 	hashes.AssurancesHash = crypto.HashData(assurancesBytes)
 
-	// Encode and hash assurances. Standard serialization.
+	// Encode and hash disputes. Standard serialization.
 	disputesBytes, err := jam.Marshal(e.ED)
 	if err != nil {
 		return crypto.Hash{}, err
