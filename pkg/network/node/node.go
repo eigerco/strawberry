@@ -157,6 +157,9 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	submitter := &handlers.WorkPackageSubmitter{}
 	node.workPackageSubmitter = submitter
 
+	validatorSvc := validator.NewService()
+	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.ShardDistHandler(validatorSvc))
+
 	// Create transport
 	transportConfig := transport.Config{
 		PublicKey:     keys.EdPub,

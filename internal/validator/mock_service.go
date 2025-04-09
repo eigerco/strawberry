@@ -1,0 +1,21 @@
+package validator
+
+import (
+	"context"
+
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/stretchr/testify/mock"
+)
+
+func NewValidatorServiceMock() *ValidatorServiceMock {
+	return &ValidatorServiceMock{}
+}
+
+type ValidatorServiceMock struct {
+	mock.Mock
+}
+
+func (v *ValidatorServiceMock) ShardDist(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+	args := v.MethodCalled("ShardDist", ctx, erasureRoot, shardIndex)
+	return args.Get(0).([]byte), args.Get(1).([][]byte), args.Get(2).([][]byte), args.Error(3)
+}
