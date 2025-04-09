@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"github.com/stretchr/testify/mock"
-	"slices"
 	"testing"
 	"time"
 
@@ -24,8 +23,8 @@ import (
 func TestShardDistHandler(t *testing.T) {
 	erasureRoot := testutils.RandomHash(t)
 	shardIndex := uint16(4)
-	bundleShard := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	segmentShard := [][]byte{
+	expectedBundleShard := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	expectedSegmentShard := [][]byte{
 		{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
 		{13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
 	}
@@ -33,31 +32,31 @@ func TestShardDistHandler(t *testing.T) {
 	hash1 := testutils.RandomHash(t)
 	hash2 := testutils.RandomHash(t)
 
-	justification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
+	expectedJustification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
 
 	validatorService := validator.NewValidatorServiceMock()
 	validatorService.ExpectedCalls = append(validatorService.ExpectedCalls, &mock.Call{
 		Method:          "ShardDist",
 		Arguments:       mock.Arguments{mock.Anything, erasureRoot, shardIndex},
-		ReturnArguments: mock.Arguments{bundleShard, segmentShard, justification, nil},
+		ReturnArguments: mock.Arguments{expectedBundleShard, expectedSegmentShard, expectedJustification, nil},
 	})
 
 	shardIndexBytes := make([]byte, 2)
 
 	binary.LittleEndian.PutUint16(shardIndexBytes, shardIndex)
 
-	AssertHandler(t, ShardDistHandler(validatorService), [][]byte{
-		append(erasureRoot[:], shardIndexBytes...),
-	}, [][]byte{
-		bundleShard,                    // first message
-		slices.Concat(segmentShard...), // second message
-		slices.Concat([]byte{0}, hash1[:], []byte{0}, hash2[:], []byte{1}, hash1[:], hash2[:]), // third message
+	AssertHandler(t, ShardDistHandler(validatorService), func(stream quic.Stream, ctx context.Context) {
+		bundleShard, segmentShard, justification, err := CallShardDist(stream, ctx, erasureRoot, shardIndex)
+		require.NoError(t, err)
+		assert.Equal(t, expectedBundleShard, bundleShard)
+		assert.Equal(t, expectedSegmentShard, segmentShard)
+		assert.Equal(t, expectedJustification, justification)
 	})
 }
 
 // AssertHandler sets up a quic server that accepts one stream and calls the provided handler
 // dials and opens a stream then sends messages with the provided inputs and asserts the expected outputs
-func AssertHandler(t *testing.T, handler protocol.StreamHandler, inputs, expect [][]byte) {
+func AssertHandler(t *testing.T, handler protocol.StreamHandler, caller func(stream quic.Stream, ctx context.Context)) {
 	t.Helper()
 
 	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
@@ -111,16 +110,7 @@ func AssertHandler(t *testing.T, handler protocol.StreamHandler, inputs, expect 
 	s, err := conn.OpenStream()
 	require.NoError(t, err)
 
-	for _, msg := range inputs {
-		err = WriteMessageWithContext(ctx, s, msg)
-		require.NoError(t, err)
-	}
-
-	for i, expectMsg := range expect {
-		msg, err := ReadMessageWithContext(ctx, s)
-		require.NoError(t, err)
-		require.Equalf(t, expectMsg, msg.Content, "message index %d", i)
-	}
+	caller(s, ctx)
 
 	<-done
 

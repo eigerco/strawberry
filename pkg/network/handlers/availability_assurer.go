@@ -91,3 +91,52 @@ func encodeJustification(justification [][]byte) (justificationBytes []byte, err
 	}
 	return justificationBytes, nil
 }
+
+// CallShardDist implements the sender side of the CE 137 protocol for more details check ShardDistHandler
+func CallShardDist(stream quic.Stream, ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+	messageBytes, err := jam.Marshal(ErasureRootAndShardIndex{ErasureRoot: erasureRoot, ShardIndex: shardIndex})
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to encode erasure root and shard index: %w", err)
+	}
+	if err := WriteMessageWithContext(ctx, stream, messageBytes); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to write erasure root and shard index: %w", err)
+	}
+	bundleShardMsg, err := ReadMessageWithContext(ctx, stream)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read bundle shard message: %w", err)
+	}
+	segmentShardMsg, err := ReadMessageWithContext(ctx, stream)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read segment shard message: %w", err)
+	}
+
+	if len(segmentShardMsg.Content)%12 != 0 {
+		return nil, nil, nil, fmt.Errorf("invalid segment shard length (%d): %w", len(segmentShardMsg.Content), err)
+	}
+	for i := 0; i < len(segmentShardMsg.Content); i += 12 {
+		segmentShard = append(segmentShard, segmentShardMsg.Content[i:i+12])
+	}
+	justificationMsg, err := ReadMessageWithContext(ctx, stream)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read justification message: %w", err)
+	}
+
+	for i := 0; i < len(justificationMsg.Content); {
+		skip := 0
+		switch justificationMsg.Content[i] {
+		case 0:
+			skip = 33
+		case 1:
+			skip = 65
+		default:
+			return nil, nil, nil, fmt.Errorf("unexpected justification path segment format")
+		}
+		if i+skip > len(justificationMsg.Content) {
+			return nil, nil, nil, fmt.Errorf("unexpected justification path segment length")
+		}
+		justification = append(justification, justificationMsg.Content[i+1:i+skip])
+		i += skip
+	}
+
+	return bundleShardMsg.Content, segmentShard, justification, nil
+}
