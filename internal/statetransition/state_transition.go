@@ -575,52 +575,6 @@ func UpdateSafroleState(
 	newValidatorState := validatorState
 	output := SafroleOutput{}
 
-	// Process incoming tickets.  Check if we're still allowed to submit
-	// tickets. An implication of equation 75. m' < Y to submit.
-	if !nextTimeSlot.IsTicketSubmissionPeriod() && len(input.Tickets) > 0 {
-		return entropyPool, validatorState, SafroleOutput{}, errors.New("unexpected ticket")
-	}
-
-	if len(input.Tickets) > 0 {
-		// Validate ticket proofs and produce tickets. Tickets produced are n.
-		// As in equation 76.
-		tickets, err := calculateTickets(validatorState.SafroleState, entropyPool, input.Tickets)
-		if err != nil {
-			return entropyPool, validatorState, SafroleOutput{}, err
-		}
-
-		// Update the accumulator γ_a.
-		// Equation 79: γ′a ≡ [xy^^ x ∈ n ∪ {∅ if e′ > e, γa otherwise}]E (v.0.4.5)
-		// Combine existing and new tickets.
-		accumulator := validatorState.SafroleState.TicketAccumulator
-		allTickets := make([]block.Ticket, len(accumulator)+len(tickets))
-		copy(allTickets, accumulator)
-		copy(allTickets[len(accumulator):], tickets)
-
-		// Resort by identifier.
-		sort.Slice(allTickets, func(i, j int) bool {
-			return bytes.Compare(allTickets[i].Identifier[:], allTickets[j].Identifier[:]) < 0
-		})
-
-		// Drop older tickets, limiting the accumulator to |E|.
-		if len(allTickets) > jamtime.TimeslotsPerEpoch {
-			allTickets = allTickets[:jamtime.TimeslotsPerEpoch]
-		}
-
-		// Ensure all incoming tickets exist in the accumulator. No useless
-		// tickets are allowed. Equation 6.35: n ⊆ γ′a (v.0.5.4)
-		existingIds := make(map[crypto.BandersnatchOutputHash]struct{}, len(allTickets))
-		for _, ticket := range allTickets {
-			existingIds[ticket.Identifier] = struct{}{}
-		}
-		for _, ticket := range tickets {
-			if _, ok := existingIds[ticket.Identifier]; !ok {
-				return entropyPool, validatorState, SafroleOutput{}, errors.New("useless ticket")
-			}
-		}
-		newValidatorState.SafroleState.TicketAccumulator = allTickets
-	}
-
 	epoch := nextTimeSlot.ToEpoch()   // e'
 	preEpoch := preTimeSlot.ToEpoch() // e
 	// |γ_a| = E, a condition of equation 73.
@@ -689,6 +643,52 @@ func UpdateSafroleState(
 		// Apply the Z function to the ticket accumulator.
 		winningTickets := safrole.OutsideInSequence(newValidatorState.SafroleState.TicketAccumulator)
 		output.WinningTicketMark = (*block.WinningTicketMarker)(winningTickets)
+	}
+
+	// Process incoming tickets.  Check if we're still allowed to submit
+	// tickets. An implication of equation 75. m' < Y to submit.
+	if !nextTimeSlot.IsTicketSubmissionPeriod() && len(input.Tickets) > 0 {
+		return entropyPool, validatorState, SafroleOutput{}, errors.New("unexpected ticket")
+	}
+
+	if len(input.Tickets) > 0 {
+		// Validate ticket proofs and produce tickets. Tickets produced are n.
+		// As in equation 76.
+		tickets, err := calculateTickets(newValidatorState.SafroleState, entropyPool, input.Tickets)
+		if err != nil {
+			return entropyPool, validatorState, SafroleOutput{}, err
+		}
+
+		// Update the accumulator γ_a.
+		// Equation 79: γ′a ≡ [xy^^ x ∈ n ∪ {∅ if e′ > e, γa otherwise}]E (v.0.4.5)
+		// Combine existing and new tickets.
+		accumulator := newValidatorState.SafroleState.TicketAccumulator
+		allTickets := make([]block.Ticket, len(accumulator)+len(tickets))
+		copy(allTickets, accumulator)
+		copy(allTickets[len(accumulator):], tickets)
+
+		// Resort by identifier.
+		sort.Slice(allTickets, func(i, j int) bool {
+			return bytes.Compare(allTickets[i].Identifier[:], allTickets[j].Identifier[:]) < 0
+		})
+
+		// Drop older tickets, limiting the accumulator to |E|.
+		if len(allTickets) > jamtime.TimeslotsPerEpoch {
+			allTickets = allTickets[:jamtime.TimeslotsPerEpoch]
+		}
+
+		// Ensure all incoming tickets exist in the accumulator. No useless
+		// tickets are allowed. Equation 6.35: n ⊆ γ′a (v.0.5.4)
+		existingIds := make(map[crypto.BandersnatchOutputHash]struct{}, len(allTickets))
+		for _, ticket := range allTickets {
+			existingIds[ticket.Identifier] = struct{}{}
+		}
+		for _, ticket := range tickets {
+			if _, ok := existingIds[ticket.Identifier]; !ok {
+				return entropyPool, validatorState, SafroleOutput{}, errors.New("useless ticket")
+			}
+		}
+		newValidatorState.SafroleState.TicketAccumulator = allTickets
 	}
 
 	return newEntropyPool, newValidatorState, output, nil
