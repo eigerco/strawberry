@@ -92,6 +92,27 @@ func encodeJustification(justification [][]byte) (justificationBytes []byte, err
 	return justificationBytes, nil
 }
 
+func decodeJustification(justificationBytes []byte) (justification [][]byte, err error) {
+	for i := 0; i < len(justificationBytes); {
+		skip := 0
+		switch justificationBytes[i] {
+		case 0:
+			skip = 33
+		case 1:
+			skip = 65
+		default:
+			return nil, fmt.Errorf("unexpected justification path segment format")
+		}
+		if i+skip > len(justificationBytes) {
+			return nil, fmt.Errorf("unexpected justification path segment length")
+		}
+		justification = append(justification, justificationBytes[i+1:i+skip])
+		i += skip
+	}
+
+	return justification, nil
+}
+
 // CallShardDist implements the sender side of the CE 137 protocol for more details check ShardDistHandler
 func CallShardDist(stream quic.Stream, ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
 	messageBytes, err := jam.Marshal(ErasureRootAndShardIndex{ErasureRoot: erasureRoot, ShardIndex: shardIndex})
@@ -120,23 +141,9 @@ func CallShardDist(stream quic.Stream, ctx context.Context, erasureRoot crypto.H
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to read justification message: %w", err)
 	}
-
-	for i := 0; i < len(justificationMsg.Content); {
-		skip := 0
-		switch justificationMsg.Content[i] {
-		case 0:
-			skip = 33
-		case 1:
-			skip = 65
-		default:
-			return nil, nil, nil, fmt.Errorf("unexpected justification path segment format")
-		}
-		if i+skip > len(justificationMsg.Content) {
-			return nil, nil, nil, fmt.Errorf("unexpected justification path segment length")
-		}
-		justification = append(justification, justificationMsg.Content[i+1:i+skip])
-		i += skip
+	justification, err = decodeJustification(justificationMsg.Content)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to decode justification: %w", err)
 	}
-
 	return bundleShardMsg.Content, segmentShard, justification, nil
 }
