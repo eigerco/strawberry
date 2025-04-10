@@ -4,15 +4,18 @@
 package simulation
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -60,6 +63,12 @@ func TestSimulateSAFROLE(t *testing.T) {
 	slotLeaderKey := crypto.BandersnatchPrivateKey{}
 	slotLeaderName := ""
 
+	// Stores the number of attempts for a given validator name.
+	ticketAttempts := map[string]int{}
+	for _, k := range keys {
+		ticketAttempts[k.Name] = 0
+	}
+
 	// This is the main loop that:
 	// - Finds the slot leader key.
 	// - Produces and seals a new block using that key.
@@ -70,7 +79,15 @@ func TestSimulateSAFROLE(t *testing.T) {
 		t.Logf("timeslot: %d", timeslot)
 		currentTimeslot := jamtime.Timeslot(timeslot)
 
+		// Reset the ticket attempts at the start of each epoch.
+		if currentTimeslot.IsFirstTimeslotInEpoch() {
+			for k := range ticketAttempts {
+				ticketAttempts[k] = 0
+			}
+		}
+
 		// Find the slot leader.
+		found := false
 		for _, k := range keys {
 			key := crypto.BandersnatchPrivateKey(testutils.MustFromHex(t, k.BandersnatchPrivate))
 			ok, err := state.IsSlotLeader(currentTimeslot, currentState, key)
@@ -78,8 +95,12 @@ func TestSimulateSAFROLE(t *testing.T) {
 			if ok {
 				slotLeaderKey = key
 				slotLeaderName = k.Name
+				found = true
 				break
 			}
+		}
+		if !found {
+			t.Fatalf("slot leader not found")
 		}
 
 		require.NotEqual(t, slotLeaderKey, crypto.BandersnatchPrivateKey{})
@@ -88,12 +109,38 @@ func TestSimulateSAFROLE(t *testing.T) {
 		headerHash, err := currentBlock.Header.Hash()
 		require.NoError(t, err)
 
+		// Submit tickets if possible.
+		// TODO for now we don't submit tickets on the first slot of an epoch,
+		// there are more details we need to understand about how to correctly
+		// use the state from the previous epoch.
+		ticketProofs := []block.TicketProof{}
+		if currentTimeslot.IsTicketSubmissionPeriod() && !currentTimeslot.IsFirstTimeslotInEpoch() {
+			// Pretty simple, loop over each validator and submit a ticket if they have enough attempts left.
+			// We submit 3 tickets at a time for now.
+			for _, key := range keys {
+				if ticketAttempts[key.Name] < common.MaxTicketAttempts {
+					attempt := ticketAttempts[key.Name]
+					ticketProducerKey := crypto.BandersnatchPrivateKey(testutils.MustFromHex(t, key.BandersnatchPrivate))
+					ticketProof, err := state.CreateTicketProof(currentState, ticketProducerKey, uint8(attempt))
+					require.NoError(t, err)
+					t.Logf("submitted ticket, name: %v, attempt: %v, proof: %v", key.Name, attempt,
+						hex.EncodeToString(ticketProof.Proof[:])[:10]+"...")
+					ticketProofs = append(ticketProofs, ticketProof)
+					ticketAttempts[key.Name]++
+				}
+				if len(ticketProofs) == 3 {
+					break
+				}
+			}
+		}
+
 		newBlock, err := produceBlock(
 			currentTimeslot,
 			headerHash,
 			currentState,
 			trie,
 			slotLeaderKey,
+			ticketProofs,
 		)
 		require.NoError(t, err)
 
@@ -107,6 +154,7 @@ func TestSimulateSAFROLE(t *testing.T) {
 		safroleInput := statetransition.SafroleInput{
 			TimeSlot: currentTimeslot,
 			Entropy:  entropy,
+			Tickets:  newBlock.Extrinsic.ET.TicketProofs,
 		}
 
 		newEntropyPool, newValidatorState, safroleOutput, err := statetransition.UpdateSafroleState(
@@ -119,6 +167,9 @@ func TestSimulateSAFROLE(t *testing.T) {
 
 		// Verify that the epoch marker is correct.
 		require.Equal(t, safroleOutput.EpochMark, newBlock.Header.EpochMarker)
+
+		// Verify that the winning ticket marker is correct.
+		require.Equal(t, safroleOutput.WinningTicketMark, newBlock.Header.WinningTicketsMarker)
 
 		// Update the current state and block.
 		currentState.TimeslotIndex = currentTimeslot
@@ -137,17 +188,27 @@ func produceBlock(
 	currentState *state.State,
 	trie *trie.DB,
 	key crypto.BandersnatchPrivateKey,
+	ticketProofs []block.TicketProof,
 ) (block.Block, error) {
+	extrinsics := block.Extrinsic{}
+
+	bestTicketProofs, err := produceTicketProofs(currentState, ticketProofs)
+	if err != nil {
+		return block.Block{}, err
+	}
+
+	extrinsics.ET.TicketProofs = bestTicketProofs
+
 	rootHash, err := merkle.MerklizeState(*currentState, trie)
 	if err != nil {
 		return block.Block{}, err
 	}
 
 	nextEpoch := timeslot.ToEpoch()
-	previousEpoch := currentState.TimeslotIndex.ToEpoch()
+	previousTimeslot := currentState.TimeslotIndex
+	previousEpoch := previousTimeslot.ToEpoch()
 
-	extrinics := block.Extrinsic{}
-	extrinsicsHash, err := extrinics.Hash()
+	extrinsicsHash, err := extrinsics.Hash()
 	if err != nil {
 		return block.Block{}, err
 	}
@@ -159,6 +220,7 @@ func produceBlock(
 		TimeSlotIndex:  timeslot,
 	}
 
+	// Generate the epoch marker.
 	if nextEpoch > previousEpoch {
 		header.EpochMarker = &block.EpochMarker{
 			Entropy:        currentState.EntropyPool[0],
@@ -169,11 +231,89 @@ func produceBlock(
 		}
 	}
 
-	state.SealBlock(header, currentState, key)
+	// Generate the ticket marker.
+	ticketAccumulatorFull := len(currentState.ValidatorState.SafroleState.TicketAccumulator) == jamtime.TimeslotsPerEpoch
+	if nextEpoch == previousEpoch &&
+		timeslot.IsWinningTicketMarkerPeriod(previousTimeslot) &&
+		ticketAccumulatorFull {
+		winningTickets := safrole.OutsideInSequence(currentState.ValidatorState.SafroleState.TicketAccumulator)
+		header.WinningTicketsMarker = (*block.WinningTicketMarker)(winningTickets)
+	}
+
+	err = state.SealBlock(header, currentState, key)
+	if err != nil {
+		return block.Block{}, err
+	}
 
 	return block.Block{
-		Header: *header,
+		Header:    *header,
+		Extrinsic: extrinsics,
 	}, nil
+}
+
+// Produce ticket proofs from sumbitted ticket proofs. The idea here is to
+// filter out any useless tickets that wouldn't end up being included, and also
+// to ensure the ticket proofs are in the correcct order. TODO, this should be
+// moved when ready, similar to produceBlock.
+func produceTicketProofs(
+	currentState *state.State,
+	ticketProofs []block.TicketProof,
+) ([]block.TicketProof, error) {
+
+	// Create tickets from proofs and a mapping from ticket proof to ticket to
+	// use later.
+	proofToID := map[crypto.RingVrfSignature]crypto.BandersnatchOutputHash{}
+	newTickets := []block.Ticket{}
+	for _, tp := range ticketProofs {
+		outputHash, err := state.VerifyTicketProof(currentState, tp)
+		if err != nil {
+			return nil, err
+		}
+		newTickets = append(newTickets, block.Ticket{
+			Identifier: outputHash,
+			EntryIndex: tp.EntryIndex,
+		})
+		proofToID[tp.Proof] = outputHash
+	}
+
+	// Combine new tickets with the existing accumulator.
+	accumulator := currentState.ValidatorState.SafroleState.TicketAccumulator
+	allTickets := make([]block.Ticket, len(accumulator)+len(newTickets))
+	copy(allTickets, accumulator)
+	copy(allTickets[len(accumulator):], newTickets)
+
+	// Resort by identifier.
+	sort.Slice(allTickets, func(i, j int) bool {
+		return bytes.Compare(allTickets[i].Identifier[:], allTickets[j].Identifier[:]) < 0
+	})
+
+	// Drop older tickets, limiting the accumulator to |E|.
+	if len(allTickets) > jamtime.TimeslotsPerEpoch {
+		allTickets = allTickets[:jamtime.TimeslotsPerEpoch]
+	}
+
+	// Filter out any ticket proofs that are not in the accumulator now.
+	existingIds := make(map[crypto.BandersnatchOutputHash]struct{}, len(allTickets))
+	for _, ticket := range allTickets {
+		existingIds[ticket.Identifier] = struct{}{}
+	}
+	bestTicketProofs := []block.TicketProof{}
+	for _, tp := range ticketProofs {
+		if _, ok := existingIds[proofToID[tp.Proof]]; ok {
+			bestTicketProofs = append(bestTicketProofs, tp)
+		}
+	}
+
+	// Sort ticket proofs by their output hash using the mapping from above.
+	if len(bestTicketProofs) > 0 {
+		sort.Slice(bestTicketProofs, func(i, j int) bool {
+			hi := proofToID[bestTicketProofs[i].Proof]
+			hj := proofToID[bestTicketProofs[j].Proof]
+			return bytes.Compare(hi[:], hj[:]) < 0
+		})
+	}
+
+	return bestTicketProofs, nil
 }
 
 // Helper to covert a SimulationBlock to a Block.
