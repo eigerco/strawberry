@@ -4,32 +4,20 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/eigerco/strawberry/internal/authorization"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/erasurecoding"
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
+	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-type AuthPVMInvoker interface {
-	InvokePVM(workPackage work.Package, coreIndex uint16) ([]byte, error)
-}
-
-type RefinePVMInvoker interface {
-	InvokePVM(
-		itemIndex uint32,
-		workPackage work.Package,
-		authorizerHashOutput []byte,
-		importedSegments []work.Segment,
-		exportOffset uint64,
-	) ([]byte, []work.Segment, error)
-}
-
 type Computation struct {
-	Auth               AuthPVMInvoker
-	Refine             RefinePVMInvoker
+	Auth               authorization.AuthPVMInvoker
+	Refine             refine.RefinePVMInvoker
 	SegmentRoots       map[crypto.Hash]crypto.Hash // H⊞ -> H (14.12)
 	SegmentData        map[crypto.Hash][]byte      // H -> []byte
 	ExtrinsicPreimages map[crypto.Hash][]byte      // extrinsic hash -> payload
@@ -37,8 +25,8 @@ type Computation struct {
 
 // NewComputation constructs a struct with injected data sources (maps for now)
 func NewComputation(
-	auth AuthPVMInvoker,
-	refine RefinePVMInvoker,
+	auth authorization.AuthPVMInvoker,
+	refine refine.RefinePVMInvoker,
 	segmentRoots map[crypto.Hash]crypto.Hash,
 	segmentData map[crypto.Hash][]byte,
 	extrinsicPreimages map[crypto.Hash][]byte,
