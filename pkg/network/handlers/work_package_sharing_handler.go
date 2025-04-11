@@ -20,9 +20,9 @@ import (
 // This handler is used by a guarantor who receives a work-package bundle from another guarantor.
 type WorkPackageSharingHandler struct {
 	privateKey   ed25519.PrivateKey
-	Auth         authorization.AuthPVMInvoker
-	Refine       refine.RefinePVMInvoker
-	ServiceState service.ServiceState
+	auth         authorization.AuthPVMInvoker
+	refine       refine.RefinePVMInvoker
+	serviceState service.ServiceState
 }
 
 // NewWorkPackageSharingHandler creates a new WorkPackageSharingHandler instance.
@@ -34,9 +34,9 @@ func NewWorkPackageSharingHandler(
 ) *WorkPackageSharingHandler {
 	return &WorkPackageSharingHandler{
 		privateKey:   privateKey,
-		Auth:         auth,
-		Refine:       refine,
-		ServiceState: serviceState,
+		auth:         auth,
+		refine:       refine,
+		serviceState: serviceState,
 	}
 }
 
@@ -83,12 +83,12 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 		return fmt.Errorf("mappings verification failed: %w", err)
 	}
 
-	authOutput, err := h.Auth.InvokePVM(bundle.Package, coreIndex)
+	authOutput, err := h.auth.InvokePVM(bundle.Package, coreIndex)
 	if err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
 	}
 
-	workReport, err := ProduceWorkReport(ctx, h.Refine, h.ServiceState, authOutput, coreIndex, bundle, segmentRootLookup)
+	workReport, err := ProduceWorkReport(ctx, h.refine, h.serviceState, authOutput, coreIndex, bundle, segmentRootLookup)
 	if err != nil {
 		return fmt.Errorf("failed to produce work report: %w", err)
 	}

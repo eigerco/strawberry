@@ -22,9 +22,9 @@ import (
 
 type WorkPackageSharer struct {
 	guarantors   []*peer.Peer
-	Auth         authorization.AuthPVMInvoker
-	Refine       refine.RefinePVMInvoker
-	ServiceState service.ServiceState
+	auth         authorization.AuthPVMInvoker
+	refine       refine.RefinePVMInvoker
+	serviceState service.ServiceState
 }
 
 // SegmentRootMapping It maps a work-package hash (h⊞) to the actual segment root (H).
@@ -38,7 +38,7 @@ func NewWorkPackageSharer(
 	refine refine.RefinePVMInvoker,
 	serviceState service.ServiceState,
 ) *WorkPackageSharer {
-	return &WorkPackageSharer{Auth: auth, Refine: refine, ServiceState: serviceState}
+	return &WorkPackageSharer{auth: auth, refine: refine, serviceState: serviceState}
 }
 
 func (h *WorkPackageSharer) SetGuarantors(guarantors []*peer.Peer) {
@@ -57,7 +57,7 @@ func (h *WorkPackageSharer) ValidateAndShareWorkPackage(ctx context.Context, cor
 		return err
 	}
 
-	authOutput, err := h.Auth.InvokePVM(bundle.Package, coreIndex)
+	authOutput, err := h.auth.InvokePVM(bundle.Package, coreIndex)
 	if err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
 	}
@@ -128,10 +128,14 @@ func (h *WorkPackageSharer) shareWorkPackageAndRefine(
 	}
 
 	// start local refinement in parallel
-	_, err := ProduceWorkReport(ctx, h.Refine, h.ServiceState, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
-	if err != nil {
-		log.Printf("local refinement failed: %v", err)
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, err := ProduceWorkReport(ctx, h.refine, h.serviceState, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
+		if err != nil {
+			log.Printf("local refinement failed: %v", err)
+		}
+	}()
 
 	// TODO compare work results
 
