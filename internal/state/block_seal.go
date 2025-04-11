@@ -119,7 +119,6 @@ func SignBlockWithTicket(
 	vrfSignature crypto.BandersnatchSignature,
 	err error,
 ) {
-
 	// Build the context: XT ⌢ η′3 ++ ir
 	sealContext := buildTicketSealContext(entropy, ticket.EntryIndex)
 
