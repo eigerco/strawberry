@@ -20,7 +20,7 @@ func ProduceWorkReport(
 	coreIndex uint16,
 	bundle work.PackageBundle,
 	segmentRootLookup map[crypto.Hash]crypto.Hash,
-) (*block.WorkReport, error) {
+) (block.WorkReport, error) {
 	var allWorkResults []block.WorkResult
 	exportOffset := uint64(0)
 
@@ -51,11 +51,11 @@ func ProduceWorkReport(
 
 	_, authHash, err := bundle.Package.ComputeAuthorizerHashes(serviceState)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute authorizer hash: %w", err)
+		return block.WorkReport{}, fmt.Errorf("failed to compute authorizer hash: %w", err)
 	}
 
 	// (s, x : px, c, a : pa, o, l, r)
-	workReport := &block.WorkReport{
+	workReport := block.WorkReport{
 		// TODO: WorkPackageSpecification (14.16) to be constructed as part of the availability logic
 		RefinementContext: bundle.Package.Context,
 		CoreIndex:         coreIndex,
