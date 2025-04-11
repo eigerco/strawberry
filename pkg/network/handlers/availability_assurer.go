@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"slices"
 
 	"github.com/quic-go/quic-go"
@@ -13,10 +14,16 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-type StreamHandlerFunc func(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error
+// NewShardDistributionHandler creates a new ShardDistributionHandler
+func NewShardDistributionHandler(validatorSvc validator.ValidatorService) protocol.StreamHandler {
+	return &ShardDistributionHandler{
+		validatorSvc: validatorSvc,
+	}
+}
 
-func (fn StreamHandlerFunc) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
-	return fn(ctx, stream, peerKey)
+// ShardDistributionHandler processes incoming CE-137 submission streams
+type ShardDistributionHandler struct {
+	validatorSvc validator.ValidatorService
 }
 
 type ErasureRootAndShardIndex struct {
@@ -24,7 +31,7 @@ type ErasureRootAndShardIndex struct {
 	ShardIndex  uint16
 }
 
-// ShardDistHandler handles protocol CE 137, decodes the erasure rood and shard index
+// HandleStream handles protocol CE 137, decodes the erasure rood and shard index
 // requests the shards and justification from the validator service
 // encodes and returns the respective shards and justification
 //
@@ -38,42 +45,40 @@ type ErasureRootAndShardIndex struct {
 // <-- [Segment Shard] (Should include all exported and proof segment shards with the given index)
 // <-- Justification
 // <-- FIN
-func ShardDistHandler(validatorSvc validator.ValidatorService) StreamHandlerFunc {
-	return func(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
-		defer stream.Close()
+func (h *ShardDistributionHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+	defer stream.Close()
 
-		msg, err := ReadMessageWithContext(ctx, stream)
-		if err != nil {
-			return fmt.Errorf("unable to read message %w", err)
-		}
-
-		req := &ErasureRootAndShardIndex{}
-		if err := jam.Unmarshal(msg.Content, req); err != nil {
-			return fmt.Errorf("unable to decode message: %w", err)
-		}
-
-		bundleShard, segmentShards, justification, err := validatorSvc.ShardDist(ctx, req.ErasureRoot, req.ShardIndex)
-		if err != nil {
-			return fmt.Errorf("unable get the shard with index=%v: %w", req.ShardIndex, err)
-		}
-
-		if err := WriteMessageWithContext(ctx, stream, bundleShard); err != nil {
-			return fmt.Errorf("unable to write message: %w", err)
-		}
-
-		if err := WriteMessageWithContext(ctx, stream, slices.Concat(segmentShards...)); err != nil {
-			return fmt.Errorf("unable to write message: %w", err)
-		}
-
-		justBytes, err := encodeJustification(justification)
-		if err != nil {
-			return fmt.Errorf("unable to encode justification: %w", err)
-		}
-		if err := WriteMessageWithContext(ctx, stream, justBytes); err != nil {
-			return fmt.Errorf("unable to write message: %w", err)
-		}
-		return nil
+	msg, err := ReadMessageWithContext(ctx, stream)
+	if err != nil {
+		return fmt.Errorf("unable to read message %w", err)
 	}
+
+	req := &ErasureRootAndShardIndex{}
+	if err := jam.Unmarshal(msg.Content, req); err != nil {
+		return fmt.Errorf("unable to decode message: %w", err)
+	}
+
+	bundleShard, segmentShards, justification, err := h.validatorSvc.ShardDistribution(ctx, req.ErasureRoot, req.ShardIndex)
+	if err != nil {
+		return fmt.Errorf("unable get the shard with index=%v: %w", req.ShardIndex, err)
+	}
+
+	if err := WriteMessageWithContext(ctx, stream, bundleShard); err != nil {
+		return fmt.Errorf("unable to write message: %w", err)
+	}
+
+	if err := WriteMessageWithContext(ctx, stream, slices.Concat(segmentShards...)); err != nil {
+		return fmt.Errorf("unable to write message: %w", err)
+	}
+
+	justBytes, err := encodeJustification(justification)
+	if err != nil {
+		return fmt.Errorf("unable to encode justification: %w", err)
+	}
+	if err := WriteMessageWithContext(ctx, stream, justBytes); err != nil {
+		return fmt.Errorf("unable to write message: %w", err)
+	}
+	return nil
 }
 
 func encodeJustification(justification [][]byte) (justificationBytes []byte, err error) {
@@ -113,8 +118,13 @@ func decodeJustification(justificationBytes []byte) (justification [][]byte, err
 	return justification, nil
 }
 
-// CallShardDist implements the sender side of the CE 137 protocol for more details check ShardDistHandler
-func CallShardDist(stream quic.Stream, ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+// ShardDistributionSender handles outgoing CE-137 calls
+type ShardDistributionSender struct{}
+
+// ShardDistribution implements the sender side of the CE 137 protocol for more details check ShardDistributionHandler
+func (s *ShardDistributionSender) ShardDistribution(stream quic.Stream, ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+	defer stream.Close()
+
 	messageBytes, err := jam.Marshal(ErasureRootAndShardIndex{ErasureRoot: erasureRoot, ShardIndex: shardIndex})
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to encode erasure root and shard index: %w", err)

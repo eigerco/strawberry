@@ -15,7 +15,7 @@ type ValidatorServiceMock struct {
 	mock.Mock
 }
 
-func (v *ValidatorServiceMock) ShardDist(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
-	args := v.MethodCalled("ShardDist", ctx, erasureRoot, shardIndex)
+func (v *ValidatorServiceMock) ShardDistribution(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+	args := v.MethodCalled("ShardDistribution", ctx, erasureRoot, shardIndex)
 	return args.Get(0).([]byte), args.Get(1).([][]byte), args.Get(2).([][]byte), args.Error(3)
 }

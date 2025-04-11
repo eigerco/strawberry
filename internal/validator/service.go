@@ -7,7 +7,7 @@ import (
 )
 
 type ValidatorService interface {
-	ShardDist(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error)
+	ShardDistribution(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error)
 }
 
 func NewService() ValidatorService {
@@ -16,7 +16,7 @@ func NewService() ValidatorService {
 
 type validatorService struct{}
 
-func (s *validatorService) ShardDist(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+func (s *validatorService) ShardDistribution(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
 	//TODO implement me
 	panic("implement me")
 }

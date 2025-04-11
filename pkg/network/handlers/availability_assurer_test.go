@@ -1,26 +1,29 @@
-package handlers
+package handlers_test
 
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/tls"
 	"encoding/binary"
-	"github.com/stretchr/testify/mock"
+	"slices"
 	"testing"
-	"time"
 
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/eigerco/strawberry/pkg/network/cert"
-	"github.com/eigerco/strawberry/pkg/network/protocol"
-	"github.com/eigerco/strawberry/pkg/network/transport"
-	"github.com/quic-go/quic-go"
-	"github.com/stretchr/testify/assert"
+	"github.com/eigerco/strawberry/pkg/network/handlers"
+	"github.com/eigerco/strawberry/pkg/network/mocks"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-func TestShardDistHandler(t *testing.T) {
+func TestShardDistributionHandler(t *testing.T) {
+	ctx := context.Background()
+	mockStream := mocks.NewMockQuicStream()
+	validatorSvc := validator.NewValidatorServiceMock()
+	handler := handlers.NewShardDistributionHandler(validatorSvc)
+	peerKey, _, _ := ed25519.GenerateKey(nil)
+
+	// test data
 	erasureRoot := testutils.RandomHash(t)
 	shardIndex := uint16(4)
 	expectedBundleShard := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
@@ -34,85 +37,134 @@ func TestShardDistHandler(t *testing.T) {
 
 	expectedJustification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
 
-	validatorService := validator.NewValidatorServiceMock()
-	validatorService.ExpectedCalls = append(validatorService.ExpectedCalls, &mock.Call{
-		Method:          "ShardDist",
-		Arguments:       mock.Arguments{mock.Anything, erasureRoot, shardIndex},
-		ReturnArguments: mock.Arguments{expectedBundleShard, expectedSegmentShard, expectedJustification, nil},
-	})
+	// Prepare the message data
+	req := handlers.ErasureRootAndShardIndex{
+		ErasureRoot: erasureRoot,
+		ShardIndex:  shardIndex,
+	}
+	reqBytes, err := jam.Marshal(req)
+	require.NoError(t, err)
 
-	shardIndexBytes := make([]byte, 2)
+	validatorSvc.On("ShardDistribution", mock.Anything, mock.Anything, mock.Anything).Return(expectedBundleShard, expectedSegmentShard, expectedJustification, nil)
+	mockTConn := mocks.NewMockTransportConn()
 
-	binary.LittleEndian.PutUint16(shardIndexBytes, shardIndex)
+	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
 
-	AssertHandler(t, ShardDistHandler(validatorService), func(stream quic.Stream, ctx context.Context) {
-		bundleShard, segmentShard, justification, err := CallShardDist(stream, ctx, erasureRoot, shardIndex)
-		require.NoError(t, err)
-		assert.Equal(t, expectedBundleShard, bundleShard)
-		assert.Equal(t, expectedSegmentShard, segmentShard)
-		assert.Equal(t, expectedJustification, justification)
-	})
+	mockStream.On("Read", mock.Anything).
+		Run(readBytes(le32encode(len(reqBytes)))).Return(4, nil)
+	mockStream.On("Read", mock.Anything).
+		Run(readBytes(reqBytes)).Return(len(reqBytes), nil)
+
+	// bundle shards message
+	mockStream.On("Write", le32encode(len(expectedBundleShard))).Return(4, nil).Once()
+	mockStream.On("Write", expectedBundleShard).Return(len(expectedBundleShard), nil).Once()
+
+	// segment shards message
+	expectedSegmentShardBytes := slices.Concat(expectedSegmentShard...)
+	mockStream.On("Write", le32encode(len(expectedSegmentShardBytes))).Return(4, nil).Once()
+	mockStream.On("Write", expectedSegmentShardBytes).Return(len(expectedSegmentShardBytes), nil).Once()
+
+	// justification message
+	expectedJustificationBytes := slices.Concat([]byte{0}, hash1[:], []byte{0}, hash2[:], []byte{1}, hash1[:], hash2[:])
+	mockStream.On("Write", le32encode(len(expectedJustificationBytes))).Return(4, nil).Once()
+	mockStream.On("Write", expectedJustificationBytes).Return(len(expectedJustificationBytes), nil).Once()
+
+	// Setup for stream closure
+	mockStream.On("Close").Return(nil).Once()
+
+	// Execute
+	err = handler.HandleStream(ctx, mockStream, peerKey)
+	require.NoError(t, err)
+
+	// Verify all expectations were met
+	mockStream.AssertExpectations(t)
 }
 
-// AssertHandler sets up a quic server that accepts one stream and calls the provided handler
-// dials and opens a stream then sends messages with the provided inputs and asserts the expected outputs
-func AssertHandler(t *testing.T, handler protocol.StreamHandler, caller func(stream quic.Stream, ctx context.Context)) {
-	t.Helper()
+func TestShardDistributionSender(t *testing.T) {
+	ctx := context.Background()
+	mockStream := mocks.NewMockQuicStream()
+	validatorSvc := validator.NewValidatorServiceMock()
+	sender := &handlers.ShardDistributionSender{}
 
-	pubKey, privKey, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-
-	tlsCert, err := cert.NewGenerator(cert.Config{
-		PublicKey:          pubKey,
-		PrivateKey:         privKey,
-		CertValidityPeriod: 24 * time.Hour,
-	}).GenerateCertificate()
-	require.NoError(t, err)
-
-	tlsConfig := &tls.Config{
-		Certificates:       []tls.Certificate{*tlsCert},
-		ClientAuth:         tls.RequireAnyClientCert,
-		MinVersion:         tls.VersionTLS13,
-		InsecureSkipVerify: true,
+	// test data
+	erasureRoot := testutils.RandomHash(t)
+	shardIndex := uint16(4)
+	expectedBundleShard := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	expectedSegmentShard := [][]byte{
+		{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+		{13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2) //
-	t.Cleanup(cancel)
+	hash1 := testutils.RandomHash(t)
+	hash2 := testutils.RandomHash(t)
 
-	done := make(chan struct{})
-	addrCh := make(chan string)
+	expectedJustification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
 
-	go func() {
-		l, err := quic.ListenAddr("127.0.0.1:0000", tlsConfig, &quic.Config{
-			EnableDatagrams: true,
-			MaxIdleTimeout:  transport.MaxIdleTimeout,
-		})
-		require.NoError(t, err)
-		addrCh <- l.Addr().String()
+	validatorSvc.On("ShardDistribution", mock.Anything, mock.Anything, mock.Anything).Return(expectedBundleShard, expectedSegmentShard, expectedJustification, nil)
+	mockTConn := mocks.NewMockTransportConn()
 
-		conn, err := l.Accept(ctx)
-		require.NoError(t, err)
+	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
 
-		s, err := conn.AcceptStream(ctx)
-		require.NoError(t, err)
-
-		err = handler.HandleStream(ctx, s, pubKey)
-		assert.NoError(t, err)
-		done <- struct{}{}
-	}()
-
-	addr := <-addrCh
-	conn, err := quic.DialAddr(ctx, addr, tlsConfig, &quic.Config{
-		EnableDatagrams: true,
-		MaxIdleTimeout:  transport.MaxIdleTimeout,
-	})
-	require.NoError(t, err)
-	s, err := conn.OpenStream()
+	// Prepare the message data
+	req := handlers.ErasureRootAndShardIndex{
+		ErasureRoot: erasureRoot,
+		ShardIndex:  shardIndex,
+	}
+	reqBytes, err := jam.Marshal(req)
 	require.NoError(t, err)
 
-	caller(s, ctx)
+	// bundle shards message
+	mockStream.On("Write", le32encode(len(reqBytes))).Return(4, nil).Once()
+	mockStream.On("Write", reqBytes).Return(len(reqBytes), nil).Once()
 
-	<-done
+	// bundle shards message
+	mockStream.On("Read", mock.Anything).
+		Run(readBytes(le32encode(len(expectedBundleShard)))).
+		Return(4, nil).Once()
+	mockStream.On("Read", mock.Anything).Run(readBytes(expectedBundleShard)).
+		Return(len(expectedBundleShard), nil).Once()
 
-	s.Close()
+	// segment shards message
+	expectedSegmentShardBytes := slices.Concat(expectedSegmentShard...)
+	mockStream.On("Read", mock.Anything).
+		Run(readBytes(le32encode(len(expectedSegmentShardBytes)))).
+		Return(4, nil).Once()
+	mockStream.On("Read", mock.Anything).
+		Run(readBytes(expectedSegmentShardBytes)).
+		Return(len(expectedSegmentShardBytes), nil).Once()
+
+	// justification message
+	expectedJustificationBytes := slices.Concat([]byte{0}, hash1[:], []byte{0}, hash2[:], []byte{1}, hash1[:], hash2[:])
+	mockStream.On("Read", mock.Anything).
+		Run(readBytes(le32encode(len(expectedJustificationBytes)))).
+		Return(4, nil).Once()
+	mockStream.On("Read", mock.Anything).
+		Run(readBytes(expectedJustificationBytes)).
+		Return(len(expectedJustificationBytes), nil).Once()
+
+	// Setup for stream closure
+	mockStream.On("Close").Return(nil).Once()
+
+	// Execute
+	bundleShard, segmentShard, justification, err := sender.ShardDistribution(mockStream, ctx, erasureRoot, shardIndex)
+	require.NoError(t, err)
+	require.Equal(t, expectedBundleShard, bundleShard)
+	require.Equal(t, expectedSegmentShard, segmentShard)
+	require.Equal(t, expectedJustification, justification)
+
+	// Verify all expectations were met
+	mockStream.AssertExpectations(t)
+}
+
+func readBytes(v []byte) func(args mock.Arguments) {
+	return func(args mock.Arguments) {
+		b := args.Get(0).([]byte)
+		copy(b, v)
+	}
+}
+
+func le32encode(v int) []byte {
+	size := make([]byte, 4)
+	binary.LittleEndian.PutUint32(size, uint32(v))
+	return size
 }
