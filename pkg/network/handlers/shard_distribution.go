@@ -14,6 +14,8 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
+const SegmentShardLength = 12
+
 // NewShardDistributionHandler creates a new ShardDistributionHandler
 func NewShardDistributionHandler(validatorSvc validator.ValidatorService) protocol.StreamHandler {
 	return &ShardDistributionHandler{
@@ -31,7 +33,7 @@ type ErasureRootAndShardIndex struct {
 	ShardIndex  uint16
 }
 
-// HandleStream handles protocol CE 137, decodes the erasure rood and shard index
+// HandleStream handles protocol CE 137, decodes the erasure root and shard index
 // requests the shards and justification from the validator service
 // encodes and returns the respective shards and justification
 //
@@ -46,8 +48,6 @@ type ErasureRootAndShardIndex struct {
 // <-- Justification
 // <-- FIN
 func (h *ShardDistributionHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
-	defer stream.Close()
-
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return fmt.Errorf("unable to read message %w", err)
@@ -78,6 +78,9 @@ func (h *ShardDistributionHandler) HandleStream(ctx context.Context, stream quic
 	if err := WriteMessageWithContext(ctx, stream, justBytes); err != nil {
 		return fmt.Errorf("unable to write message: %w", err)
 	}
+	if err = stream.Close(); err != nil {
+		return fmt.Errorf("failed to close stream: %w", err)
+	}
 	return nil
 }
 
@@ -91,7 +94,7 @@ func encodeJustification(justification [][]byte) (justificationBytes []byte, err
 			justificationBytes = append(justificationBytes, 1)
 			justificationBytes = append(justificationBytes, just...)
 		default:
-			return nil, fmt.Errorf("unexpected justification path value (should be eiter one ore two hashes): %v", len(just))
+			return nil, fmt.Errorf("unexpected justification path value (should be either one ore two hashes): %v", len(just))
 		}
 	}
 	return justificationBytes, nil
@@ -102,9 +105,9 @@ func decodeJustification(justificationBytes []byte) (justification [][]byte, err
 		skip := 0
 		switch justificationBytes[i] {
 		case 0:
-			skip = 33
+			skip = crypto.HashSize + 1
 		case 1:
-			skip = 65
+			skip = crypto.HashSize*2 + 1
 		default:
 			return nil, fmt.Errorf("unexpected justification path segment format")
 		}
@@ -123,8 +126,6 @@ type ShardDistributionSender struct{}
 
 // ShardDistribution implements the sender side of the CE 137 protocol for more details check ShardDistributionHandler
 func (s *ShardDistributionSender) ShardDistribution(stream quic.Stream, ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
-	defer stream.Close()
-
 	messageBytes, err := jam.Marshal(ErasureRootAndShardIndex{ErasureRoot: erasureRoot, ShardIndex: shardIndex})
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to encode erasure root and shard index: %w", err)
@@ -141,11 +142,11 @@ func (s *ShardDistributionSender) ShardDistribution(stream quic.Stream, ctx cont
 		return nil, nil, nil, fmt.Errorf("failed to read segment shard message: %w", err)
 	}
 
-	if len(segmentShardMsg.Content)%12 != 0 {
-		return nil, nil, nil, fmt.Errorf("invalid segment shard length (%d): %w", len(segmentShardMsg.Content), err)
+	if len(segmentShardMsg.Content)%SegmentShardLength != 0 {
+		return nil, nil, nil, fmt.Errorf("invalid segment shard length (%d)", len(segmentShardMsg.Content))
 	}
-	for i := 0; i < len(segmentShardMsg.Content); i += 12 {
-		segmentShard = append(segmentShard, segmentShardMsg.Content[i:i+12])
+	for i := 0; i < len(segmentShardMsg.Content); i += SegmentShardLength {
+		segmentShard = append(segmentShard, segmentShardMsg.Content[i:i+SegmentShardLength])
 	}
 	justificationMsg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
@@ -154,6 +155,9 @@ func (s *ShardDistributionSender) ShardDistribution(stream quic.Stream, ctx cont
 	justification, err = decodeJustification(justificationMsg.Content)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to decode justification: %w", err)
+	}
+	if err = stream.Close(); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to close stream: %w", err)
 	}
 	return bundleShardMsg.Content, segmentShard, justification, nil
 }
