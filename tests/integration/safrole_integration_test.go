@@ -157,7 +157,7 @@ func TestSafrole(t *testing.T) {
 					expectedEpochMarker.Entropy = crypto.Hash(testutils.MustFromHex(t, expectedOutput.EpochMark.Entropy))
 					expectedEpochMarker.TicketsEntropy = crypto.Hash(testutils.MustFromHex(t, expectedOutput.EpochMark.TicketsEntropy))
 					for i, v := range expectedOutput.EpochMark.Validators {
-						expectedEpochMarker.Keys[i].Bandersnatch = crypto.BandersnatchPublicKey(testutils.MustFromHex(t, v))
+						expectedEpochMarker.Keys[i].Bandersnatch = crypto.BandersnatchPublicKey(testutils.MustFromHex(t, v.Bandersnatch))
 					}
 					require.Equal(t, output.EpochMark, expectedEpochMarker)
 				}
@@ -304,9 +304,14 @@ type SafroleTestVectorTicketEnvelope struct {
 }
 
 type SafroleTestVectorEpochMark struct {
-	Entropy        string   `json:"entropy"`
-	TicketsEntropy string   `json:"tickets_entropy"`
-	Validators     []string `json:"validators"`
+	Entropy        string                                 `json:"entropy"`
+	TicketsEntropy string                                 `json:"tickets_entropy"`
+	Validators     []SafroleTestVectorEpochMarkValidators `json:"validators"`
+}
+
+type SafroleTestVectorEpochMarkValidators struct {
+	Bandersnatch string `json:"bandersnatch"`
+	Ed25519      string `json:"ed25519"`
 }
 
 type SafroleTestVectorOutputMarks struct {

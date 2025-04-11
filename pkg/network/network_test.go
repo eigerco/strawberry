@@ -478,15 +478,12 @@ func TestTwoNodesDistributeShard(t *testing.T) {
 	node2Peer := node1.PeersSet.GetByAddress(node2Addr.String())
 	require.NotNil(t, node2Peer, "Node1 should have Node2 as a peer")
 
-	// Submit the work package from node1 to node2
+	// Send shards and justification
 	bundleShard, segmentShard, justification, err := node1.ShardDistributionSend(ctx, node2Peer.Ed25519Key, erasureRoot, shardIndex)
 	require.NoError(t, err)
 	assert.Equal(t, expectedBundleShard, bundleShard)
 	assert.Equal(t, expectedSegmentShard, segmentShard)
 	assert.Equal(t, expectedJustification, justification)
 
-	// Wait for the submission to be processed
-	time.Sleep(500 * time.Millisecond)
-
-	t.Log("Work package submission test completed successfully")
+	t.Log("Shard distribution has been sent")
 }
