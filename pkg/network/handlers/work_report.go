@@ -11,7 +11,7 @@ import (
 	"github.com/eigerco/strawberry/internal/work"
 )
 
-// ProduceWorkReport runs the refine invocation and returns the work report along with the wp hash
+// ProduceWorkReport runs the refine invocation and returns the work report
 func ProduceWorkReport(
 	ctx context.Context,
 	refine refine.RefinePVMInvoker,
@@ -20,7 +20,7 @@ func ProduceWorkReport(
 	coreIndex uint16,
 	bundle work.PackageBundle,
 	segmentRootLookup map[crypto.Hash]crypto.Hash,
-) (*block.WorkReport, *crypto.Hash, error) {
+) (*block.WorkReport, error) {
 	var allWorkResults []block.WorkResult
 	exportOffset := uint64(0)
 
@@ -51,7 +51,7 @@ func ProduceWorkReport(
 
 	_, authHash, err := bundle.Package.ComputeAuthorizerHashes(serviceState)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to compute authorizer hash: %w", err)
+		return nil, fmt.Errorf("failed to compute authorizer hash: %w", err)
 	}
 
 	// (s, x : px, c, a : pa, o, l, r)
@@ -65,10 +65,5 @@ func ProduceWorkReport(
 		WorkResults:       allWorkResults,
 	}
 
-	reportHash, err := workReport.Hash()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to hash work report: %w", err)
-	}
-
-	return workReport, &reportHash, nil
+	return workReport, nil
 }

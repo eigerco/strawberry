@@ -88,16 +88,21 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 		return fmt.Errorf("authorization failed: %w", err)
 	}
 
-	_, workReportHash, err := ProduceWorkReport(ctx, h.Refine, h.ServiceState, authOutput, coreIndex, bundle, segmentRootLookup)
+	workReport, err := ProduceWorkReport(ctx, h.Refine, h.ServiceState, authOutput, coreIndex, bundle, segmentRootLookup)
 	if err != nil {
 		return fmt.Errorf("failed to produce work report: %w", err)
+	}
+
+	workReportHash, err := workReport.Hash()
+	if err != nil {
+		return fmt.Errorf("failed to hash work report: %w", err)
 	}
 
 	signature := ed25519.Sign(h.privateKey, workReportHash[:])
 
 	// Prepare the response: Work-Report Hash ++ Ed25519 Signature.
 	response := struct {
-		WorkReportHash *crypto.Hash
+		WorkReportHash crypto.Hash
 		Signature      []byte
 	}{
 		WorkReportHash: workReportHash,
