@@ -4,13 +4,14 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/testutils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"net"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/quic-go/quic-go"
 	"github.com/stretchr/testify/require"
@@ -19,6 +20,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
+	"github.com/eigerco/strawberry/internal/service"
 	chainState "github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/internal/work"
@@ -163,6 +165,28 @@ func (m *MockImportSegmentsFetcher) VerifyReceivedWorkPackage(t *testing.T, expe
 	return true
 }
 
+type mockAuthorizationInvoker struct{}
+
+func (m mockAuthorizationInvoker) InvokePVM(workPackage work.Package, coreIndex uint16) ([]byte, error) {
+	return []byte("Authorized"), nil
+}
+
+type mockRefineInvoker struct{}
+
+func (m mockRefineInvoker) InvokePVM(
+	itemIndex uint32,
+	workPackage work.Package,
+	authorizerHashOutput []byte,
+	importedSegments []work.Segment,
+	exportOffset uint64,
+) ([]byte, []work.Segment, error) {
+	out := []byte("RefineOutput")
+	exported := []work.Segment{
+		{},
+	}
+	return out, exported, nil
+}
+
 // ExtendedWorkPackageSubmissionHandler extends the original handler to record the received package
 type ExtendedWorkPackageSubmissionHandler struct {
 	*handlers.WorkPackageSubmissionHandler
@@ -173,7 +197,7 @@ func NewExtendedWorkPackageSubmissionHandler(fetcher *MockImportSegmentsFetcher)
 	return &ExtendedWorkPackageSubmissionHandler{
 		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(
 			fetcher,
-			handlers.NewWorkPackageSharer()),
+			handlers.NewWorkPackageSharer(mockAuthorizationInvoker{}, mockRefineInvoker{}, make(service.ServiceState))),
 		MockFetcher: fetcher,
 	}
 }
@@ -423,6 +447,102 @@ func TestTwoNodesSubmitWorkPackage(t *testing.T) {
 	require.Equal(t, 1, segmentsFetched, "Expected 1 imported segment to be fetched")
 
 	t.Log("Work package submission test completed successfully")
+}
+
+func TestTwoNodesShareWorkPackage(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	nodes := setupNodes(ctx, t, 2)
+	node1 := nodes[0]
+	node2 := nodes[1]
+
+	_, prv, _ := ed25519.GenerateKey(nil)
+	serviceState := getServiceState()
+
+	handler := handlers.NewWorkPackageSharingHandler(
+		mockAuthorizationInvoker{},
+		mockRefineInvoker{},
+		prv,
+		serviceState,
+	)
+
+	node2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, handler)
+
+	require.NoError(t, node1.Start())
+	defer stopNode(t, node1)
+	require.NoError(t, node2.Start())
+	defer stopNode(t, node2)
+
+	time.Sleep(100 * time.Millisecond)
+
+	node2Addr, err := peer.NewPeerAddressFromMetadata(
+		nodes[1].ValidatorManager.State.CurrentValidators[1].Metadata[:],
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, node1.ConnectToPeer(node2Addr))
+	time.Sleep(100 * time.Millisecond)
+
+	authCode := []byte("auth token")
+	authHash := crypto.HashData(authCode)
+
+	bundle := work.PackageBundle{
+		Package: work.Package{
+			AuthorizationToken: authCode,
+			AuthorizerService:  1,
+			AuthCodeHash:       authHash,
+			Parameterization:   []byte("params"),
+			Context: block.RefinementContext{
+				LookupAnchor: block.RefinementContextLookupAnchor{
+					Timeslot: jamtime.Timeslot(0),
+				},
+			},
+			WorkItems: []work.Item{
+				{
+					ServiceId:        1,
+					CodeHash:         crypto.Hash{},
+					Payload:          []byte("payload"),
+					ExportedSegments: 1,
+				},
+			},
+		},
+	}
+
+	coreIndex := uint16(1)
+
+	sharer := handlers.NewWorkPackageSharer(
+		mockAuthorizationInvoker{},
+		mockRefineInvoker{},
+		serviceState,
+	)
+	sharer.SetGuarantors([]*peer.Peer{
+		node1.PeersSet.GetByAddress(node2Addr.String()),
+	})
+
+	err = sharer.ValidateAndShareWorkPackage(ctx, coreIndex, bundle)
+	require.NoError(t, err)
+}
+
+func getServiceState() service.ServiceState {
+	authCode := []byte("auth token")
+	hash := crypto.HashData(authCode)
+	timeslot := jamtime.Timeslot(0)
+
+	metaKey := service.PreImageMetaKey{
+		Hash:   hash,
+		Length: service.PreimageLength(len(authCode)),
+	}
+	return service.ServiceState{
+		1: {
+			PreimageLookup: map[crypto.Hash][]byte{
+				hash: authCode,
+			},
+			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+				metaKey: {timeslot},
+			},
+		},
+	}
 }
 
 func TestTwoNodesDistributeShard(t *testing.T) {

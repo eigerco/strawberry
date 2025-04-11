@@ -2,9 +2,10 @@ package results
 
 import (
 	"bytes"
+	"testing"
+
 	"github.com/eigerco/strawberry/internal/erasurecoding"
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

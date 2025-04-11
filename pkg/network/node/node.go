@@ -10,9 +10,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/eigerco/strawberry/internal/authorization"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/validator"
@@ -151,12 +153,14 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	node.blockRequester = &handlers.BlockRequester{}
 
-	wpSharerHandler := handlers.NewWorkPackageSharer()
+	wpSharerHandler := handlers.NewWorkPackageSharer(authorization.New(state), refine.New(state), state.Services)
 	node.workPackageSharer = wpSharerHandler
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}, wpSharerHandler))
 	submitter := &handlers.WorkPackageSubmitter{}
 	node.workPackageSubmitter = submitter
+
+	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, handlers.NewWorkPackageSharingHandler(authorization.New(state), refine.New(state), keys.EdPrv, state.Services))
 
 	validatorSvc := validator.NewService()
 	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(validatorSvc))

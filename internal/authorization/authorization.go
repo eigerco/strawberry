@@ -15,10 +15,18 @@ const (
 	isAuthorizedCost = 10
 )
 
+type AuthPVMInvoker interface {
+	InvokePVM(workPackage work.Package, coreIndex uint16) ([]byte, error)
+}
+
 type EmptyContext struct{}
 
 type Authorization struct {
 	state state.State
+}
+
+func New(state state.State) *Authorization {
+	return &Authorization{state: state}
 }
 
 // InvokePVM ΨI(P, NC) → Y ∪ J

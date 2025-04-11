@@ -12,6 +12,9 @@ import (
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/network/mocks"
@@ -31,7 +34,7 @@ func (m *MockFetcher) FetchImportedSegment(hash crypto.Hash) ([]byte, error) {
 var pkg = work.Package{
 	AuthorizationToken: []byte("auth token"),
 	AuthorizerService:  1,
-	AuthCodeHash:       crypto.Hash{0x01},
+	AuthCodeHash:       crypto.HashData([]byte("mock-auth-code")),
 	Parameterization:   []byte("parameters"),
 	Context:            block.RefinementContext{},
 	WorkItems: []work.Item{
@@ -100,7 +103,7 @@ func TestSubmitWorkPackage(t *testing.T) {
 func TestHandleWorkPackage(t *testing.T) {
 	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
-	workPackageSharer := handlers.NewWorkPackageSharer()
+	workPackageSharer := handlers.NewWorkPackageSharer(mockAuthorizationInvoker{}, mockRefineInvoker{}, getServiceState())
 	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer)
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
@@ -162,6 +165,29 @@ func TestHandleWorkPackage(t *testing.T) {
 			copy(buffer, extrinsics)
 		}).
 		Return(len(extrinsics), nil).Once()
+
+	response := struct {
+		WorkReportHash crypto.Hash
+		Signature      []byte
+	}{
+		WorkReportHash: testutils.RandomHash(t),
+		Signature:      []byte("mock-signature"),
+	}
+
+	responseBytes, err := jam.Marshal(response)
+	require.NoError(t, err)
+
+	mockStream.On("Read", mock.Anything).Run(func(args mock.Arguments) {
+		b := args.Get(0).([]byte)
+		sizeBytes, err := jam.Marshal(uint32(len(responseBytes)))
+		require.NoError(t, err)
+		copy(b, sizeBytes)
+	}).Return(4, nil).Once()
+
+	mockStream.On("Read", mock.Anything).Run(func(args mock.Arguments) {
+		b := args.Get(0).([]byte)
+		copy(b, responseBytes)
+	}).Return(len(responseBytes), nil).Once()
 
 	// Setup for stream closure
 	mockStream.On("Close").Return(nil).Once()
@@ -261,7 +287,7 @@ func TestHandleStream_Success(t *testing.T) {
 	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
 	mockFetcher := &MockFetcher{}
-	workPackageSharer := handlers.NewWorkPackageSharer()
+	workPackageSharer := handlers.NewWorkPackageSharer(mockAuthorizationInvoker{}, mockRefineInvoker{}, getServiceState())
 	coreIndex := uint16(5)
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
@@ -309,6 +335,30 @@ func TestHandleStream_Success(t *testing.T) {
 		b := args.Get(0).([]byte)
 		copy(b, extrinsics)
 	}).Return(len(extrinsics), nil).Once()
+
+	response := struct {
+		WorkReportHash crypto.Hash
+		Signature      []byte
+	}{
+		WorkReportHash: testutils.RandomHash(t),
+		Signature:      []byte("mock-signature"),
+	}
+
+	responseBytes, err := jam.Marshal(response)
+	require.NoError(t, err)
+
+	mockStream.On("Read", mock.Anything).Run(func(args mock.Arguments) {
+		b := args.Get(0).([]byte)
+		sizeBytes, err := jam.Marshal(uint32(len(responseBytes)))
+		require.NoError(t, err)
+		copy(b, sizeBytes)
+	}).Return(4, nil).Once()
+
+	mockStream.On("Read", mock.Anything).Run(func(args mock.Arguments) {
+		b := args.Get(0).([]byte)
+		copy(b, responseBytes)
+	}).Return(len(responseBytes), nil).Once()
+
 	// Setup stream close expectation
 	mockStream.On("Close").Return(nil)
 
@@ -320,4 +370,51 @@ func TestHandleStream_Success(t *testing.T) {
 	assert.NoError(t, err)
 	mockStream.AssertExpectations(t)
 	mockFetcher.AssertExpectations(t)
+}
+
+type mockAuthorizationInvoker struct{}
+
+func (m mockAuthorizationInvoker) InvokePVM(workPackage work.Package, coreIndex uint16) ([]byte, error) {
+	return []byte("Authorized"), nil
+}
+
+type mockRefineInvoker struct{}
+
+func (m mockRefineInvoker) InvokePVM(
+	itemIndex uint32,
+	workPackage work.Package,
+	authorizerHashOutput []byte,
+	importedSegments []work.Segment,
+	exportOffset uint64,
+) ([]byte, []work.Segment, error) {
+	out := []byte("RefineOutput")
+	exported := []work.Segment{
+		{},
+	}
+	return out, exported, nil
+}
+
+func getServiceState() service.ServiceState {
+	authCodeHash := pkg.AuthCodeHash
+	timeslot := jamtime.Timeslot(0)
+
+	metaKey := service.PreImageMetaKey{
+		Hash:   authCodeHash,
+		Length: service.PreimageLength(len(pkg.AuthorizationToken)),
+	}
+	meta := service.PreimageHistoricalTimeslots{timeslot}
+
+	sa := service.ServiceAccount{
+		PreimageLookup: map[crypto.Hash][]byte{
+			authCodeHash: pkg.AuthorizationToken,
+		},
+		PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
+			metaKey: meta,
+		},
+	}
+
+	services := make(service.ServiceState)
+	services[1] = sa
+
+	return services
 }
