@@ -1,8 +1,9 @@
-// Adapted from https://github.com/davxy/bandersnatch-vrfs-spec/blob/9ad0a54a3676b74f8f18b4052c716b4483ccc505/assets/example/src/main.rs
-use ark_ec_vrfs::suites::bandersnatch::edwards as bandersnatch;
-use ark_ec_vrfs::{prelude::ark_serialize, suites::bandersnatch::edwards::RingContext};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use bandersnatch::{IetfProof, Input, Output, Public, RingProof, Secret};
+// Adatped from https://github.com/davxy/bandersnatch-vrf-spec/blob/6b1ceba5b3cbc834201732bcdad1377e19e9283e/assets/example/src/main.rs
+use ark_vrf::reexports::ark_serialize::{self, CanonicalDeserialize, CanonicalSerialize};
+use ark_vrf::suites::bandersnatch;
+use bandersnatch::{
+    BandersnatchSha512Ell2, IetfProof, Input, Output, Public, RingProof, RingProofParams, Secret,
+};
 use libc::{c_int, size_t};
 use std::ptr;
 use std::slice;
@@ -39,7 +40,7 @@ fn vrf_input_point(vrf_input_data: &[u8]) -> Input {
 ///
 /// Only vrf_input_data affects the VRF output.
 fn ietf_vrf_sign_impl(secret: Secret, vrf_input_data: &[u8], aux_data: &[u8]) -> IetfVrfSignature {
-    use ark_ec_vrfs::ietf::Prover as _;
+    use ark_vrf::ietf::Prover as _;
 
     let input = vrf_input_point(vrf_input_data);
     let output = secret.output(input);
@@ -62,7 +63,7 @@ fn ietf_vrf_verify_impl(
     aux_data: &[u8],
     signature: IetfVrfSignature,
 ) -> Result<[u8; 32], ()> {
-    use ark_ec_vrfs::ietf::Verifier as _;
+    use ark_vrf::ietf::Verifier as _;
 
     let input = vrf_input_point(vrf_input_data);
     let output = signature.output;
@@ -102,9 +103,9 @@ fn ring_size() -> usize {
     *RING_SIZE.get_or_init(|| DEFAULT_RING_SIZE)
 }
 /// "Static" ring context data.
-fn ring_context() -> &'static RingContext {
-    static RING_CTX: OnceLock<RingContext> = OnceLock::new();
-    RING_CTX.get_or_init(|| {
+fn ring_proof_params() -> &'static RingProofParams {
+    static PARAMS: OnceLock<RingProofParams> = OnceLock::new();
+    PARAMS.get_or_init(|| {
         use bandersnatch::PcsParams;
         static EMBEDDED_RAW_PCS_PARAMS: &[u8] = include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -113,8 +114,8 @@ fn ring_context() -> &'static RingContext {
         let pcs_params =
             PcsParams::deserialize_uncompressed_unchecked(&mut &EMBEDDED_RAW_PCS_PARAMS[..])
                 .expect("Failed to deserialize PCS parameters");
-        RingContext::from_srs(ring_size(), pcs_params)
-            .expect("Failed to construct RingContext from SRS")
+        RingProofParams::from_pcs_params(ring_size(), pcs_params)
+            .expect("Failed to construct RingContext from PCS parameters")
     })
 }
 
@@ -149,7 +150,7 @@ impl RingVrfProver {
     ///
     /// Only vrf_input_data affects the VRF output.
     pub fn sign(&self, vrf_input_data: &[u8], aux_data: &[u8]) -> RingVrfSignature {
-        use ark_ec_vrfs::ring::Prover as _;
+        use ark_vrf::ring::Prover as _;
 
         let input = vrf_input_point(vrf_input_data);
         let output = self.secret.output(input);
@@ -158,8 +159,8 @@ impl RingVrfProver {
         let pts: Vec<_> = self.ring.iter().map(|pk| pk.0).collect();
 
         // Proof construction
-        let prover_key = ring_context().prover_key(&pts);
-        let prover = ring_context().prover(prover_key, self.prover_idx);
+        let prover_key = ring_proof_params().prover_key(&pts);
+        let prover = ring_proof_params().prover(prover_key, self.prover_idx);
         let proof = self.secret.prove(input, output, aux_data, &prover);
 
         // Output and Ring Proof bundled together (as per section 2.2).
@@ -168,7 +169,7 @@ impl RingVrfProver {
 }
 
 // This is the KZG commitment in the graypaper.
-type RingCommitment = ark_ec_vrfs::ring::RingCommitment<bandersnatch::BandersnatchSha512Ell2>;
+type RingCommitment = ark_vrf::ring::RingCommitment<BandersnatchSha512Ell2>;
 
 /// Ring VRF Prover.
 ///
@@ -192,7 +193,7 @@ impl RingVrfVerifier {
     pub fn commitment(&self) -> RingCommitment {
         // Backend currently requires the wrapped type (plain affine points)
         let pts: Vec<_> = self.ring.iter().map(|pk| pk.0).collect();
-        ring_context().verifier_key(&pts).commitment()
+        ring_proof_params().verifier_key(&pts).commitment()
     }
     /// Anonymous VRF signature verification.
     ///
@@ -211,12 +212,12 @@ impl RingVrfVerifier {
         commitment: RingCommitment,
         signature: RingVrfSignature,
     ) -> Result<[u8; 32], ()> {
-        use ark_ec_vrfs::ring::Verifier as _;
+        use ark_vrf::ring::Verifier as _;
 
         let input = vrf_input_point(vrf_input_data);
         let output = signature.output;
 
-        let ring_ctx = ring_context();
+        let ring_ctx = ring_proof_params();
         // The verifier key is reconstructed from the commitment and the
         // constant verifier key component of the SRS in order to verify some
         // proof.  As an alternative we can construct the verifier key using the
@@ -472,11 +473,11 @@ pub unsafe extern "C" fn new_ring_vrf_verifier(
     let public_keys_slice = std::slice::from_raw_parts(public_keys, public_keys_len);
     let num_keys = public_keys_len / PUBLIC_KEY_LENGTH;
 
-    let padding_point = ring_context().padding_point();
+    let padding_point = Public::from(RingProofParams::padding_point());
     let ring: Vec<Public> = public_keys_slice
         .chunks(PUBLIC_KEY_LENGTH)
         // Invalid public keys become padding points.
-        .map(|chunk| Public::deserialize_compressed(chunk).unwrap_or(Public::from(padding_point)))
+        .map(|chunk| Public::deserialize_compressed(chunk).unwrap_or(padding_point))
         .collect();
 
     if ring.len() != num_keys {
@@ -657,11 +658,11 @@ pub unsafe extern "C" fn new_ring_vrf_prover(
 
     let num_keys = public_keys_len / PUBLIC_KEY_LENGTH;
 
-    let padding_point = ring_context().padding_point();
+    let padding_point = Public::from(RingProofParams::padding_point());
     let ring: Vec<Public> = public_keys_slice
         .chunks(PUBLIC_KEY_LENGTH)
         // Invalid public keys become padding points.
-        .map(|chunk| Public::deserialize_compressed(chunk).unwrap_or(Public::from(padding_point)))
+        .map(|chunk| Public::deserialize_compressed(chunk).unwrap_or(padding_point))
         .collect();
 
     if ring.len() != num_keys {
@@ -734,7 +735,7 @@ mod tests {
         let prover_key_index: usize = 3;
 
         // NOTE: any key can be replaced with the padding point
-        let padding_point = Public::from(ring_context().padding_point());
+        let padding_point = Public::from(RingProofParams::padding_point());
         ring[2] = padding_point;
         ring[7] = padding_point;
 
