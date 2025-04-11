@@ -219,7 +219,7 @@ func NewRingVerifier(publicKeys []crypto.BandersnatchPublicKey) (*RingVrfVerifie
 // Frees the RingVrfVerifier on the Rust side. Must be called to avoid memory
 // leaks.
 func (r *RingVrfVerifier) Free() {
-	if r.ptr != nil {
+	if r != nil && r.ptr != nil {
 		freeRingVrfVerifier(r.ptr)
 		r.ptr = nil
 	}
@@ -239,7 +239,7 @@ func flattenPublicKeys(keys []crypto.BandersnatchPublicKey) []byte {
 // Get the KZG commitment of the ring. This is used to verify ring signatures
 // more efficiently. It's stored as gamma_z in SAFROLE state.
 func (r *RingVrfVerifier) Commitment() (commitment crypto.RingCommitment, err error) {
-	if r.ptr == nil {
+	if r == nil || r.ptr == nil {
 		return crypto.RingCommitment{}, errors.New("nil RingVrfVerifier")
 	}
 
@@ -261,7 +261,7 @@ func (r *RingVrfVerifier) Verify(
 	commitment crypto.RingCommitment,
 	signature crypto.RingVrfSignature,
 ) (valid bool, outputHash crypto.BandersnatchOutputHash) {
-	if r.ptr == nil {
+	if r == nil || r.ptr == nil {
 		panic("nil RingVrfVerifier")
 	}
 
@@ -300,7 +300,7 @@ func NewRingProver(secret crypto.BandersnatchPrivateKey, publicKeys []crypto.Ban
 // Frees the RingVrfProver on the Rust side. Must be called to avoid memory
 // leaks.
 func (r *RingVrfProver) Free() {
-	if r.ptr != nil {
+	if r != nil && r.ptr != nil {
 		freeRingVrfProver(r.ptr)
 		r.ptr = nil
 	}
@@ -312,7 +312,7 @@ func (r *RingVrfProver) Free() {
 // output hash of the signature depends soley on vrfInputData. Used for ticket
 // submission.
 func (r *RingVrfProver) Sign(vrfInputData []byte, auxData []byte) (signature crypto.RingVrfSignature, err error) {
-	if r.ptr == nil {
+	if r == nil || r.ptr == nil {
 		return crypto.RingVrfSignature{}, errors.New("nil RingVrfProver")
 	}
 
