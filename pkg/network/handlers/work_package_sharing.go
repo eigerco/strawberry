@@ -128,18 +128,12 @@ func (h *WorkPackageSharer) shareWorkPackageAndRefine(
 	}
 
 	// start local refinement in parallel
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	_, err := ProduceWorkReport(ctx, h.Refine, h.ServiceState, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
+	if err != nil {
+		log.Printf("local refinement failed: %v", err)
+	}
 
-		_, _, err := ProduceWorkReport(ctx, h.Refine, h.ServiceState, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
-		if err != nil {
-			log.Printf("local refinement failed: %v", err)
-		}
-
-		// TODO compare work results
-
-	}()
+	// TODO compare work results
 
 	wg.Wait()
 
