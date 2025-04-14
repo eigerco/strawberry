@@ -372,6 +372,7 @@ func (n *Node) UpdateCoreAssignments() error {
 	}
 
 	n.currentCoreIndex = coreIndex
+	n.workPackageSharingHandler.SetCurrentCore(n.currentCoreIndex)
 
 	n.currentGuarantorPeers = peers
 	n.workPackageSharer.SetGuarantors(peers)

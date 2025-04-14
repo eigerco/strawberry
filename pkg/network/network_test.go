@@ -524,6 +524,8 @@ func TestTwoNodesShareWorkPackage(t *testing.T) {
 
 	err = sharer.ValidateAndShareWorkPackage(ctx, coreIndex, bundle)
 	require.NoError(t, err)
+
+	// TODO improve this test by checking the results
 }
 
 func getServiceState() service.ServiceState {
