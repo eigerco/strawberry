@@ -94,7 +94,7 @@ func encodeJustification(justification [][]byte) (justificationBytes []byte, err
 			justificationBytes = append(justificationBytes, 1)
 			justificationBytes = append(justificationBytes, just...)
 		default:
-			return nil, fmt.Errorf("unexpected justification path value (should be either one ore two hashes): %v", len(just))
+			return nil, fmt.Errorf("unexpected justification path value (should be either one or two hashes): %v", len(just))
 		}
 	}
 	return justificationBytes, nil
@@ -125,7 +125,7 @@ func decodeJustification(justificationBytes []byte) (justification [][]byte, err
 type ShardDistributionSender struct{}
 
 // ShardDistribution implements the sender side of the CE 137 protocol for more details check ShardDistributionHandler
-func (s *ShardDistributionSender) ShardDistribution(stream quic.Stream, ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+func (s *ShardDistributionSender) ShardDistribution(ctx context.Context, stream quic.Stream, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
 	messageBytes, err := jam.Marshal(ErasureRootAndShardIndex{ErasureRoot: erasureRoot, ShardIndex: shardIndex})
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to encode erasure root and shard index: %w", err)
