@@ -13,16 +13,18 @@ import (
 	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 // WorkPackageSharingHandler processes incoming CE-134 streams
 // This handler is used by a guarantor who receives a work-package bundle from another guarantor.
 type WorkPackageSharingHandler struct {
-	privateKey   ed25519.PrivateKey
-	auth         authorization.AuthPVMInvoker
-	refine       refine.RefinePVMInvoker
-	serviceState service.ServiceState
+	currentAssignedCore uint16
+	privateKey          ed25519.PrivateKey
+	auth                authorization.AuthPVMInvoker
+	refine              refine.RefinePVMInvoker
+	serviceState        service.ServiceState
 }
 
 // NewWorkPackageSharingHandler creates a new WorkPackageSharingHandler instance.
@@ -38,6 +40,10 @@ func NewWorkPackageSharingHandler(
 		refine:       refine,
 		serviceState: serviceState,
 	}
+}
+
+func (h *WorkPackageSharingHandler) SetCurrentCore(core uint16) {
+	h.currentAssignedCore = core
 }
 
 // HandleStream implements the guarantor side of the CE-134 protocol.
@@ -56,6 +62,10 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 	var coreIndex uint16
 	if err = jam.Unmarshal(msg1.Content[:2], &coreIndex); err != nil {
 		return fmt.Errorf("failed to unmarshal share header: %w", err)
+	}
+
+	if h.currentAssignedCore != coreIndex {
+		return fmt.Errorf("not assigned to core %d, the current node core %d", coreIndex, h.currentAssignedCore)
 	}
 
 	var rootMappings []SegmentRootMapping
@@ -88,7 +98,7 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 		return fmt.Errorf("authorization failed: %w", err)
 	}
 
-	workReport, err := ProduceWorkReport(ctx, h.refine, h.serviceState, authOutput, coreIndex, bundle, segmentRootLookup)
+	workReport, err := results.ProduceWorkReport(h.refine, h.serviceState, authOutput, coreIndex, bundle, segmentRootLookup)
 	if err != nil {
 		return fmt.Errorf("failed to produce work report: %w", err)
 	}

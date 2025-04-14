@@ -29,21 +29,22 @@ import (
 // Node manages peer connections, handles protocol messages, and coordinates network operations.
 // Each Node can act as both a client and server, maintaining connections with multiple peers simultaneously.
 type Node struct {
-	Context               context.Context
-	Cancel                context.CancelFunc
-	ValidatorManager      *validator.ValidatorManager
-	BlockService          *chain.BlockService
-	ProtocolManager       *protocol.Manager
-	PeersSet              *PeerSet
-	peersLock             sync.RWMutex
-	transport             *transport.Transport
-	State                 state.State
-	blockRequester        *handlers.BlockRequester
-	workPackageSubmitter  *handlers.WorkPackageSubmitter
-	shardDistributor      *handlers.ShardDistributionSender
-	workPackageSharer     *handlers.WorkPackageSharer
-	currentCoreIndex      uint16
-	currentGuarantorPeers []*peer.Peer
+	Context                   context.Context
+	Cancel                    context.CancelFunc
+	ValidatorManager          *validator.ValidatorManager
+	BlockService              *chain.BlockService
+	ProtocolManager           *protocol.Manager
+	PeersSet                  *PeerSet
+	peersLock                 sync.RWMutex
+	transport                 *transport.Transport
+	State                     state.State
+	blockRequester            *handlers.BlockRequester
+	workPackageSubmitter      *handlers.WorkPackageSubmitter
+	shardDistributor          *handlers.ShardDistributionSender
+	workPackageSharer         *handlers.WorkPackageSharer
+	workPackageSharingHandler *handlers.WorkPackageSharingHandler
+	currentCoreIndex          uint16
+	currentGuarantorPeers     []*peer.Peer
 }
 
 // PeerSet maintains mappings between peer identifiers
@@ -160,7 +161,8 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	submitter := &handlers.WorkPackageSubmitter{}
 	node.workPackageSubmitter = submitter
 
-	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, handlers.NewWorkPackageSharingHandler(authorization.New(state), refine.New(state), keys.EdPrv, state.Services))
+	node.workPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authorization.New(state), refine.New(state), keys.EdPrv, state.Services)
+	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, node.workPackageSharingHandler)
 
 	validatorSvc := validator.NewService()
 	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(validatorSvc))

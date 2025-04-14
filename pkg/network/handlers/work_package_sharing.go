@@ -15,6 +15,7 @@ import (
 	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/network/peer"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -131,7 +132,7 @@ func (h *WorkPackageSharer) shareWorkPackageAndRefine(
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_, err := ProduceWorkReport(ctx, h.refine, h.serviceState, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
+		_, err := results.ProduceWorkReport(h.refine, h.serviceState, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
 		if err != nil {
 			log.Printf("local refinement failed: %v", err)
 		}

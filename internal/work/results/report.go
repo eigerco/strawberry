@@ -1,7 +1,6 @@
-package handlers
+package results
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -13,7 +12,6 @@ import (
 
 // ProduceWorkReport runs the refine invocation and returns the work report
 func ProduceWorkReport(
-	ctx context.Context,
 	refine refine.RefinePVMInvoker,
 	serviceState service.ServiceState,
 	authOutput []byte,

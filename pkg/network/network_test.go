@@ -467,6 +467,10 @@ func TestTwoNodesShareWorkPackage(t *testing.T) {
 		serviceState,
 	)
 
+	coreIndex := uint16(1)
+
+	handler.SetCurrentCore(1)
+
 	node2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, handler)
 
 	require.NoError(t, node1.Start())
@@ -508,8 +512,6 @@ func TestTwoNodesShareWorkPackage(t *testing.T) {
 			},
 		},
 	}
-
-	coreIndex := uint16(1)
 
 	sharer := handlers.NewWorkPackageSharer(
 		mockAuthorizationInvoker{},
