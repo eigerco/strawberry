@@ -38,6 +38,7 @@ type Node struct {
 	State                 state.State
 	blockRequester        *handlers.BlockRequester
 	workPackageSubmitter  *handlers.WorkPackageSubmitter
+	auditShardSender      *handlers.AuditShardRequestSender
 	shardDistributor      *handlers.ShardDistributionSender
 	workPackageSharer     *handlers.WorkPackageSharer
 	currentCoreIndex      uint16
@@ -160,6 +161,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	validatorSvc := validator.NewService()
 	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(validatorSvc))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindAuditShardRequest, handlers.NewAuditShardRequestHandler(validatorSvc))
 
 	// Create transport
 	transportConfig := transport.Config{
@@ -331,6 +333,29 @@ func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.Public
 		return nil, nil, nil, fmt.Errorf("failed to request shards: %w", err)
 	}
 	return bundleShard, segmentShard, justification, nil
+}
+
+// AuditShardRequestSend implements the sending side of the CE 138, it opens a connection to the provided peer
+// allowing the auditors to request shards from the assurer
+func (n *Node) AuditShardRequestSend(ctx context.Context, peerKey ed25519.PublicKey, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, justification [][]byte, err error) {
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
+
+	peer := n.PeersSet.GetByEd25519Key(peerKey)
+	if peer == nil {
+		return nil, nil, fmt.Errorf("no peer available for audit shard with the given key")
+	}
+
+	stream, err := peer.ProtoConn.OpenStream(ctx, protocol.StreamKindAuditShardRequest)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open audit shard request stream: %w", err)
+	}
+
+	bundleShard, justification, err = n.auditShardSender.AuditShardRequest(ctx, stream, erasureRoot, shardIndex)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to request shards: %w", err)
+	}
+	return bundleShard, justification, nil
 }
 
 // UpdateCoreAssignments updates both the current core of this node and the co-guarantors (other validators assigned to the same core).
