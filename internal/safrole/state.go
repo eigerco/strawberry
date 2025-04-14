@@ -70,7 +70,7 @@ func (state State) RingProver(privateKey crypto.BandersnatchPrivateKey) (*bander
 		return nil, fmt.Errorf("private key is not a ring member")
 	}
 
-	ringProver, err := bandersnatch.NewRingProver(privateKey, ring, uint(proverIdx))
+	return bandersnatch.NewRingProver(privateKey, ring, uint(proverIdx))
 	if err != nil {
 		return nil, err
 	}
