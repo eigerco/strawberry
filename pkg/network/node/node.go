@@ -38,6 +38,7 @@ type Node struct {
 	State                 state.State
 	blockRequester        *handlers.BlockRequester
 	workPackageSubmitter  *handlers.WorkPackageSubmitter
+	shardDistributor      *handlers.ShardDistributionSender
 	workPackageSharer     *handlers.WorkPackageSharer
 	currentCoreIndex      uint16
 	currentGuarantorPeers []*peer.Peer
@@ -156,6 +157,9 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}, wpSharerHandler))
 	submitter := &handlers.WorkPackageSubmitter{}
 	node.workPackageSubmitter = submitter
+
+	validatorSvc := validator.NewService()
+	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(validatorSvc))
 
 	// Create transport
 	transportConfig := transport.Config{
@@ -304,6 +308,29 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 		return fmt.Errorf("failed to submit work package: %w", err)
 	}
 	return nil
+}
+
+// ShardDistributionSend implements the sending side of the CE 137, it opens a connection to the provided peer
+// allowing the assurers request shards from the guarantor
+func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.PublicKey, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
+
+	peer := n.PeersSet.GetByEd25519Key(peerKey)
+	if peer == nil {
+		return nil, nil, nil, fmt.Errorf("no peer available for shard distribution with the given key")
+	}
+
+	stream, err := peer.ProtoConn.OpenStream(ctx, protocol.StreamKindShardDist)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to open shard distribution stream: %w", err)
+	}
+
+	bundleShard, segmentShard, justification, err = n.shardDistributor.ShardDistribution(ctx, stream, erasureRoot, shardIndex)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to request shards: %w", err)
+	}
+	return bundleShard, segmentShard, justification, nil
 }
 
 // UpdateCoreAssignments updates both the current core of this node and the co-guarantors (other validators assigned to the same core).
