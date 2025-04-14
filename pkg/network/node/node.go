@@ -326,7 +326,7 @@ func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.Public
 		return nil, nil, nil, fmt.Errorf("failed to open shard distribution stream: %w", err)
 	}
 
-	bundleShard, segmentShard, justification, err = n.shardDistributor.ShardDistribution(stream, ctx, erasureRoot, shardIndex)
+	bundleShard, segmentShard, justification, err = n.shardDistributor.ShardDistribution(ctx, stream, erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to request shards: %w", err)
 	}

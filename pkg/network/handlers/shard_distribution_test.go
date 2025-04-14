@@ -146,7 +146,7 @@ func TestShardDistributionSender(t *testing.T) {
 	mockStream.On("Close").Return(nil).Once()
 
 	// Execute
-	bundleShard, segmentShard, justification, err := sender.ShardDistribution(mockStream, ctx, erasureRoot, shardIndex)
+	bundleShard, segmentShard, justification, err := sender.ShardDistribution(ctx, mockStream, erasureRoot, shardIndex)
 	require.NoError(t, err)
 	require.Equal(t, expectedBundleShard, bundleShard)
 	require.Equal(t, expectedSegmentShard, segmentShard)
