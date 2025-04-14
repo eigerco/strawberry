@@ -1,6 +1,8 @@
 package safrole
 
 import (
+	"fmt"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -35,11 +37,36 @@ func (state State) RingVerifier() (*bandersnatch.RingVrfVerifier, error) {
 	for i, vd := range state.NextValidators {
 		ring[i] = vd.Bandersnatch
 	}
-	ringVerifier, err := bandersnatch.NewRingVerifier(ring)
+	return bandersnatch.NewRingVerifier(ring)
+}
+
+// Takes a private bandersnatch key and returns a new RingVrfProver for this state.
+func (state State) RingProver(privateKey crypto.BandersnatchPrivateKey) (*bandersnatch.RingVrfProver, error) {
+	publicKey, err := bandersnatch.Public(privateKey)
 	if err != nil {
 		return nil, err
 	}
-	return ringVerifier, nil
+
+	ring := make([]crypto.BandersnatchPublicKey, len(state.NextValidators))
+	for i, vd := range state.NextValidators {
+		ring[i] = vd.Bandersnatch
+	}
+
+	// Find the prover index in the ring, if we don't find a match we return an
+	// error.
+	proverIdx := 0
+	found := false
+	for i, pk := range ring {
+		if pk == publicKey {
+			proverIdx = i
+			found = true
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("private key is not a ring member")
+	}
+
+	return bandersnatch.NewRingProver(privateKey, ring, uint(proverIdx))
 }
 
 // SelectFallbackKeys selects the fallback keys for the sealing key series.
