@@ -37,11 +37,7 @@ func (state State) RingVerifier() (*bandersnatch.RingVrfVerifier, error) {
 	for i, vd := range state.NextValidators {
 		ring[i] = vd.Bandersnatch
 	}
-	ringVerifier, err := bandersnatch.NewRingVerifier(ring)
-	if err != nil {
-		return nil, err
-	}
-	return ringVerifier, nil
+	return bandersnatch.NewRingVerifier(ring)
 }
 
 // Takes a private bandersnatch key and returns a new RingVrfProver for this state.
@@ -71,10 +67,6 @@ func (state State) RingProver(privateKey crypto.BandersnatchPrivateKey) (*bander
 	}
 
 	return bandersnatch.NewRingProver(privateKey, ring, uint(proverIdx))
-	if err != nil {
-		return nil, err
-	}
-	return ringProver, nil
 }
 
 // SelectFallbackKeys selects the fallback keys for the sealing key series.
