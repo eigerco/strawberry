@@ -16,8 +16,9 @@ const (
 	MaxHistoricalTimeslotsForPreimageMeta        = 3
 	SizeOfSegment                                = NumberOfErasureCodecPiecesInSegment * ErasureCodingChunkSize
 	MaxWorkPackageSize                           = 12 * 1 << 20
-	NumberOfErasureCodecPiecesInSegment          = 6
-	ErasureCodingChunkSize                       = 684
+	NumberOfErasureCodecPiecesInSegment          = 1026
+	ErasureCodingOriginalShards                  = 2
+	ErasureCodingChunkSize                       = 4
 	MaxAllocatedGasAccumulation                  = 10_000_000
 	MaxAllocatedGasIsAuthorized                  = 50_000_000
 	WorkReportMaxSumOfDependencies               = 8
