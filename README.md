@@ -32,7 +32,7 @@ Strawberry follows the latest specification outlined in the graypaper which itse
 
 ### Prerequisites
 - Make
-- Go 1.22.5 or higher
+- Go 1.23.8 or higher
 - Rust 1.81.1 or higher
 
 ### Installation

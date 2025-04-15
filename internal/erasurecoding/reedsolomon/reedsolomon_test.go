@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -40,7 +40,7 @@ func TestRoundTrip(t *testing.T) {
 	}
 
 	// Randomly select shards to use for decoding.
-	seed := uint64(time.Now().UnixNano())
+	seed := time.Now().UnixNano()
 	t.Logf("using random seed: %d", seed)
 	rng := rand.New(rand.NewSource(seed))
 	indices := rng.Perm(681)
