@@ -23,8 +23,22 @@ var (
 	ErrBig = errors.New("code beyond the maximum size allowed")        // BIG
 )
 
+type RefinePVMInvoker interface {
+	InvokePVM(
+		itemIndex uint32,
+		workPackage work.Package,
+		authorizerHashOutput []byte,
+		importedSegments []work.Segment,
+		exportOffset uint64,
+	) ([]byte, []work.Segment, error)
+}
+
 type Refine struct {
 	state state.State
+}
+
+func New(state state.State) *Refine {
+	return &Refine{state: state}
 }
 
 // InvokePVM ΨR(N,P,Y, ⟦⟦G⟧⟧, N) → (Y ∪ J, ⟦G⟧)

@@ -10,9 +10,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/eigerco/strawberry/internal/authorization"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/validator"
@@ -27,22 +29,23 @@ import (
 // Node manages peer connections, handles protocol messages, and coordinates network operations.
 // Each Node can act as both a client and server, maintaining connections with multiple peers simultaneously.
 type Node struct {
-	Context               context.Context
-	Cancel                context.CancelFunc
-	ValidatorManager      *validator.ValidatorManager
-	BlockService          *chain.BlockService
-	ProtocolManager       *protocol.Manager
-	PeersSet              *PeerSet
-	peersLock             sync.RWMutex
-	transport             *transport.Transport
-	State                 state.State
-	blockRequester        *handlers.BlockRequester
-	workPackageSubmitter  *handlers.WorkPackageSubmitter
-	auditShardSender      *handlers.AuditShardRequestSender
-	shardDistributor      *handlers.ShardDistributionSender
-	workPackageSharer     *handlers.WorkPackageSharer
-	currentCoreIndex      uint16
-	currentGuarantorPeers []*peer.Peer
+	Context                   context.Context
+	Cancel                    context.CancelFunc
+	ValidatorManager          *validator.ValidatorManager
+	BlockService              *chain.BlockService
+	ProtocolManager           *protocol.Manager
+	PeersSet                  *PeerSet
+	peersLock                 sync.RWMutex
+	transport                 *transport.Transport
+	State                     state.State
+	blockRequester            *handlers.BlockRequester
+	workPackageSubmitter      *handlers.WorkPackageSubmitter
+	auditShardSender          *handlers.AuditShardRequestSender
+	shardDistributor          *handlers.ShardDistributionSender
+	workPackageSharer         *handlers.WorkPackageSharer
+	workPackageSharingHandler *handlers.WorkPackageSharingHandler
+	currentCoreIndex          uint16
+	currentGuarantorPeers     []*peer.Peer
 }
 
 // PeerSet maintains mappings between peer identifiers
@@ -152,12 +155,15 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	node.blockRequester = &handlers.BlockRequester{}
 
-	wpSharerHandler := handlers.NewWorkPackageSharer()
+	wpSharerHandler := handlers.NewWorkPackageSharer(authorization.New(state), refine.New(state), state.Services)
 	node.workPackageSharer = wpSharerHandler
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}, wpSharerHandler))
 	submitter := &handlers.WorkPackageSubmitter{}
 	node.workPackageSubmitter = submitter
+
+	node.workPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authorization.New(state), refine.New(state), keys.EdPrv, state.Services)
+	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, node.workPackageSharingHandler)
 
 	validatorSvc := validator.NewService()
 	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(validatorSvc))
@@ -391,6 +397,7 @@ func (n *Node) UpdateCoreAssignments() error {
 	}
 
 	n.currentCoreIndex = coreIndex
+	n.workPackageSharingHandler.SetCurrentCore(n.currentCoreIndex)
 
 	n.currentGuarantorPeers = peers
 	n.workPackageSharer.SetGuarantors(peers)

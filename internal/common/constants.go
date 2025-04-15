@@ -17,6 +17,7 @@ const (
 	SizeOfSegment                                = NumberOfErasureCodecPiecesInSegment * ErasureCodingChunkSize // WG = WP*WE = 4104: The size of a segment in octets.
 	MaxWorkPackageSize                           = 12 * 1 << 20                                                 // WB = 12 MB: The maximum size of an encoded work-package in octets (including extrinsic data and import implications).
 	NumberOfErasureCodecPiecesInSegment          = 6                                                            // WP = 6: The number of erasure-coded pieces in a segment.
+	ErasureCodingOriginalShards                  = 342                                                          // The number of original shards.
 	ErasureCodingChunkSize                       = 684                                                          // WE = 684: The basic size of erasure-coded pieces in octets.
 	MaxAllocatedGasAccumulation                  = 10_000_000                                                   // GA: The gas allocated to invoke a work-report’s Accumulation logic.
 	MaxAllocatedGasIsAuthorized                  = 50_000_000                                                   // GI: The gas allocated to invoke a work-package’s Is-Authorized logic.

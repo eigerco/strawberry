@@ -11,7 +11,7 @@ import (
 // These parameters allow data to be retrieved even when only 1/3 of the
 // validators are available.
 const (
-	OriginalShards = 342                                            // Number of original data shards.
+	OriginalShards = common.ErasureCodingOriginalShards             // Number of original data shards.
 	RecoveryShards = common.NumberOfValidators - OriginalShards     // Number of recovery data shards.
 	ChunkShardSize = common.ErasureCodingChunkSize / OriginalShards // In bytes.
 )
