@@ -3,6 +3,7 @@ package erasurecoding
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 )
 
 func TestUnzipLace(t *testing.T) {
@@ -60,7 +60,7 @@ func TestEncodeDecodeRoundTripRandom(t *testing.T) {
 		4104,
 	}
 
-	seed := uint64(time.Now().UnixNano())
+	seed := time.Now().UnixNano()
 	t.Logf("using random seed: %d", seed)
 	rng := rand.New(rand.NewSource(seed))
 

@@ -1,6 +1,7 @@
 package state
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -12,7 +13,6 @@ import (
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 )
 
 func TestSealVerifyBlockTicket(t *testing.T) {

@@ -4,7 +4,7 @@ on:
   pull_request:
 
 env:
-  GO_VERSION: '1.22.5'
+  GO_VERSION: '1.23.8'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -48,7 +48,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.59
+          version: v1.64.8
           args: --timeout=5m
 
   test:
