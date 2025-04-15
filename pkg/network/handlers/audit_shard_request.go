@@ -41,7 +41,7 @@ func (h *AuditShardRequestHandler) HandleStream(ctx context.Context, stream quic
 	}
 	req := ErasureRootAndShardIndex{}
 	if err := jam.Unmarshal(msg.Content, &req); err != nil {
-		return err
+		return fmt.Errorf("unable to decode erasure root and shard index %w", err)
 	}
 
 	bundleShard, justification, err := h.validatorSvc.AuditShardRequest(ctx, req.ErasureRoot, req.ShardIndex)
@@ -90,12 +90,12 @@ func (s *AuditShardRequestSender) AuditShardRequest(ctx context.Context, stream 
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to read justification message: %w", err)
 	}
-	if err := stream.Close(); err != nil {
-		return nil, nil, fmt.Errorf("unable to close stream: %w", err)
-	}
 	justification, err = decodeJustification(justificationMsg.Content)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to decode justification: %w", err)
+	}
+	if err := stream.Close(); err != nil {
+		return nil, nil, fmt.Errorf("unable to close stream: %w", err)
 	}
 	return bundleShardMsg.Content, justification, nil
 }

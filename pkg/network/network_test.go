@@ -631,6 +631,7 @@ func TestTwoNodesAuditShard(t *testing.T) {
 
 	expectedJustification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
 
+	// TODO to be replaced once we implement the assurance logic
 	validatorSvc := validator.NewValidatorServiceMock()
 	validatorSvc.On("AuditShardRequest", mock.Anything, erasureRoot, shardIndex).Return(expectedBundleShard, expectedJustification, nil)
 
