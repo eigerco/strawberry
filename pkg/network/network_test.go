@@ -611,3 +611,62 @@ func TestTwoNodesDistributeShard(t *testing.T) {
 
 	t.Log("Shard distribution has been sent")
 }
+
+func TestTwoNodesAuditShard(t *testing.T) {
+	// Create contexts for both nodes
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Setup nodes using the existing setup function
+	nodes := setupNodes(ctx, t, 2)
+	node1 := nodes[0]
+	node2 := nodes[1]
+
+	erasureRoot := testutils.RandomHash(t)
+	shardIndex := uint16(100)
+	expectedBundleShard := []byte{91, 28, 37, 46, 55, 64, 73, 82, 91, 20}
+
+	hash1 := testutils.RandomHash(t)
+	hash2 := testutils.RandomHash(t)
+
+	expectedJustification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
+
+	// TODO to be replaced once we implement the assurance logic
+	validatorSvc := validator.NewValidatorServiceMock()
+	validatorSvc.On("AuditShardRequest", mock.Anything, erasureRoot, shardIndex).Return(expectedBundleShard, expectedJustification, nil)
+
+	node2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindAuditShardRequest, handlers.NewAuditShardRequestHandler(validatorSvc))
+
+	// Start both nodes
+	err := node1.Start()
+	require.NoError(t, err)
+	defer stopNode(t, node1)
+
+	err = node2.Start()
+	require.NoError(t, err)
+	defer stopNode(t, node2)
+
+	// Allow time for the nodes to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Connect node1 to node2
+	node2Addr, err := peer.NewPeerAddressFromMetadata(nodes[1].ValidatorManager.State.CurrentValidators[1].Metadata[:])
+	require.NoError(t, err)
+	err = node1.ConnectToPeer(node2Addr)
+	require.NoError(t, err)
+
+	// Wait for connection to be established
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify nodes are connected
+	node2Peer := node1.PeersSet.GetByAddress(node2Addr.String())
+	require.NotNil(t, node2Peer, "Node1 should have Node2 as a peer")
+
+	// Send shards and justification
+	bundleShard, justification, err := node1.AuditShardRequestSend(ctx, node2Peer.Ed25519Key, erasureRoot, shardIndex)
+	require.NoError(t, err)
+	assert.Equal(t, expectedBundleShard, bundleShard)
+	assert.Equal(t, expectedJustification, justification)
+
+	t.Log("Audit shard has been sent")
+}
