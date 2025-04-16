@@ -42,6 +42,7 @@ type Node struct {
 	workPackageSubmitter      *handlers.WorkPackageSubmitter
 	auditShardSender          *handlers.AuditShardRequestSender
 	shardDistributor          *handlers.ShardDistributionSender
+	segmentShardRequestSender *handlers.SegmentShardRequestSender
 	workPackageSharer         *handlers.WorkPackageSharer
 	workPackageSharingHandler *handlers.WorkPackageSharingHandler
 	currentCoreIndex          uint16
@@ -168,6 +169,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	validatorSvc := validator.NewService()
 	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(validatorSvc))
 	protoManager.Registry.RegisterHandler(protocol.StreamKindAuditShardRequest, handlers.NewAuditShardRequestHandler(validatorSvc))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequest, handlers.NewSegmentShardRequestHandler(validatorSvc))
 
 	// Create transport
 	transportConfig := transport.Config{
@@ -362,6 +364,29 @@ func (n *Node) AuditShardRequestSend(ctx context.Context, peerKey ed25519.Public
 		return nil, nil, fmt.Errorf("failed to request shards: %w", err)
 	}
 	return bundleShard, justification, nil
+}
+
+// SegmentShardRequestSend implements the sending side of the CE 139 protocol, opens a connection between
+// the guarantor and assurer allowing the guarantor to reconstruct the segments
+func (n *Node) SegmentShardRequestSend(ctx context.Context, peerKey ed25519.PublicKey, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, err error) {
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
+
+	peer := n.PeersSet.GetByEd25519Key(peerKey)
+	if peer == nil {
+		return nil, fmt.Errorf("no peer available for audit shard with the given key")
+	}
+
+	stream, err := peer.ProtoConn.OpenStream(ctx, protocol.StreamKindSegmentRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open audit shard request stream: %w", err)
+	}
+
+	segmentShards, err = n.segmentShardRequestSender.SegmentShardRequest(ctx, stream, erasureRoot, shardIndex, segmentIndexes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to request shards: %w", err)
+	}
+	return segmentShards, nil
 }
 
 // UpdateCoreAssignments updates both the current core of this node and the co-guarantors (other validators assigned to the same core).

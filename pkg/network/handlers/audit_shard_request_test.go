@@ -40,15 +40,15 @@ func TestAuditShardRequestHandler(t *testing.T) {
 	reqBytes, err := jam.Marshal(req)
 	require.NoError(t, err)
 
-	validatorSvc.On("AuditShardRequest", mock.Anything, mock.Anything, mock.Anything).Return(expectedBundleShard, expectedJustification, nil)
+	validatorSvc.On("AuditShardRequest", mock.Anything, erasureRoot, shardIndex).Return(expectedBundleShard, expectedJustification, nil)
 	mockTConn := mocks.NewMockTransportConn()
 
 	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
 
 	mockStream.On("Read", mock.Anything).
-		Run(readBytes(le32encode(len(reqBytes)))).Return(4, nil)
+		Run(readBytes(le32encode(len(reqBytes)))).Return(4, nil).Once()
 	mockStream.On("Read", mock.Anything).
-		Run(readBytes(reqBytes)).Return(len(reqBytes), nil)
+		Run(readBytes(reqBytes)).Return(len(reqBytes), nil).Once()
 
 	// bundle shards message
 	mockStream.On("Write", le32encode(len(expectedBundleShard))).Return(4, nil).Once()
@@ -88,7 +88,7 @@ func TestAuditShardRequestSender(t *testing.T) {
 
 	expectedJustification := [][]byte{hash1[:], hash2[:], append(hash3[:], hash4[:]...)}
 
-	validatorSvc.On("AuditShardRequest", mock.Anything, mock.Anything, mock.Anything).Return(expectedBundleShard, expectedJustification, nil)
+	validatorSvc.On("AuditShardRequest", mock.Anything, erasureRoot, shardIndex).Return(expectedBundleShard, expectedJustification, nil)
 	mockTConn := mocks.NewMockTransportConn()
 
 	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
