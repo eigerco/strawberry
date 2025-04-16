@@ -654,7 +654,7 @@ func UpdateSafroleState(
 	if len(input.Tickets) > 0 {
 		// Validate ticket proofs and produce tickets. Tickets produced are n.
 		// As in equation 76.
-		tickets, err := calculateTickets(newValidatorState.SafroleState, entropyPool, input.Tickets)
+		tickets, err := calculateTickets(newValidatorState.SafroleState, newEntropyPool, input.Tickets)
 		if err != nil {
 			return entropyPool, validatorState, SafroleOutput{}, err
 		}
