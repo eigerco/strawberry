@@ -84,6 +84,10 @@ func (s *SegmentShardRequestSender) SegmentShardRequest(ctx context.Context, str
 		return nil, fmt.Errorf("failed to write segment shard request: %w", err)
 	}
 
+	if err := stream.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close stream: %w", err)
+	}
+
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read segment shard request: %w", err)
@@ -92,9 +96,6 @@ func (s *SegmentShardRequestSender) SegmentShardRequest(ctx context.Context, str
 	segmentShards, err = decodeSegmentShards(msg.Content)
 	if err != nil {
 		return nil, err
-	}
-	if err := stream.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close stream: %w", err)
 	}
 	return segmentShards, nil
 }
