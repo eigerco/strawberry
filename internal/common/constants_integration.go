@@ -23,4 +23,5 @@ const (
 	MaxAllocatedGasIsAuthorized                  = 50_000_000
 	WorkReportMaxSumOfDependencies               = 8
 	MaxWorkPackageSizeBytes                      = 48 * 1024
+	MaxNrImportsExports                          = 3072
 )
