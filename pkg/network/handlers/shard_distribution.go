@@ -87,11 +87,14 @@ func (h *ShardDistributionHandler) HandleStream(ctx context.Context, stream quic
 func encodeJustification(justification [][]byte) (justificationBytes []byte, err error) {
 	for _, just := range justification {
 		switch len(just) {
-		case 32: // one hash
+		case crypto.HashSize: // one hash
 			justificationBytes = append(justificationBytes, 0)
 			justificationBytes = append(justificationBytes, just...)
-		case 64: // two hashes in case of a leaf
+		case crypto.HashSize * 2: // two hashes in case of a leaf
 			justificationBytes = append(justificationBytes, 1)
+			justificationBytes = append(justificationBytes, just...)
+		case SegmentShardLength: // TODO segment shard
+			justificationBytes = append(justificationBytes, 2)
 			justificationBytes = append(justificationBytes, just...)
 		default:
 			return nil, fmt.Errorf("unexpected justification path value (should be either one or two hashes): %v", len(just))
@@ -108,6 +111,8 @@ func decodeJustification(justificationBytes []byte) (justification [][]byte, err
 			skip = crypto.HashSize + 1
 		case 1:
 			skip = crypto.HashSize*2 + 1
+		case 2:
+			skip = SegmentShardLength + 1
 		default:
 			return nil, fmt.Errorf("unexpected justification path segment format")
 		}

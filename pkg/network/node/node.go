@@ -29,24 +29,25 @@ import (
 // Node manages peer connections, handles protocol messages, and coordinates network operations.
 // Each Node can act as both a client and server, maintaining connections with multiple peers simultaneously.
 type Node struct {
-	Context                   context.Context
-	Cancel                    context.CancelFunc
-	ValidatorManager          *validator.ValidatorManager
-	BlockService              *chain.BlockService
-	ProtocolManager           *protocol.Manager
-	PeersSet                  *PeerSet
-	peersLock                 sync.RWMutex
-	transport                 *transport.Transport
-	State                     state.State
-	blockRequester            *handlers.BlockRequester
-	workPackageSubmitter      *handlers.WorkPackageSubmitter
-	auditShardSender          *handlers.AuditShardRequestSender
-	shardDistributor          *handlers.ShardDistributionSender
-	segmentShardRequestSender *handlers.SegmentShardRequestSender
-	workPackageSharer         *handlers.WorkPackageSharer
-	workPackageSharingHandler *handlers.WorkPackageSharingHandler
-	currentCoreIndex          uint16
-	currentGuarantorPeers     []*peer.Peer
+	Context                       context.Context
+	Cancel                        context.CancelFunc
+	ValidatorManager              *validator.ValidatorManager
+	BlockService                  *chain.BlockService
+	ProtocolManager               *protocol.Manager
+	PeersSet                      *PeerSet
+	peersLock                     sync.RWMutex
+	transport                     *transport.Transport
+	State                         state.State
+	blockRequester                *handlers.BlockRequester
+	workPackageSubmitter          *handlers.WorkPackageSubmitter
+	auditShardSender              *handlers.AuditShardRequestSender
+	shardDistributor              *handlers.ShardDistributionSender
+	segmentShardRequestSender     *handlers.SegmentShardRequestSender
+	segmentShardRequestJustSender *handlers.SegmentShardRequestJustificationSender
+	workPackageSharer             *handlers.WorkPackageSharer
+	workPackageSharingHandler     *handlers.WorkPackageSharingHandler
+	currentCoreIndex              uint16
+	currentGuarantorPeers         []*peer.Peer
 }
 
 // PeerSet maintains mappings between peer identifiers
@@ -387,6 +388,29 @@ func (n *Node) SegmentShardRequestSend(ctx context.Context, peerKey ed25519.Publ
 		return nil, fmt.Errorf("failed to request shards: %w", err)
 	}
 	return segmentShards, nil
+}
+
+// SegmentShardRequestJustificationSend implements the sending side of the CE 140 protocol, opens a connection between
+// the guarantor and assurer allowing the guarantor to reconstruct the segments and to immediately assess the correctness of the response.
+func (n *Node) SegmentShardRequestJustificationSend(ctx context.Context, peerKey ed25519.PublicKey, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, justification [][][]byte, err error) {
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
+
+	peer := n.PeersSet.GetByEd25519Key(peerKey)
+	if peer == nil {
+		return nil, nil, fmt.Errorf("no peer available for audit shard with the given key")
+	}
+
+	stream, err := peer.ProtoConn.OpenStream(ctx, protocol.StreamKindSegmentRequestJust)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open audit shard request stream: %w", err)
+	}
+
+	segmentShards, justification, err = n.segmentShardRequestJustSender.SegmentShardRequestJustification(ctx, stream, erasureRoot, shardIndex, segmentIndexes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to request shards with justification: %w", err)
+	}
+	return segmentShards, justification, nil
 }
 
 // UpdateCoreAssignments updates both the current core of this node and the co-guarantors (other validators assigned to the same core).
