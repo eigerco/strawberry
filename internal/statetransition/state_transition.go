@@ -50,7 +50,12 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	if err != nil {
 		return err
 	}
-	newEntropyPool, newValidatorState, _, err := UpdateSafroleState(safroleInput, s.TimeslotIndex, s.EntropyPool, s.ValidatorState)
+	newEntropyPool, newValidatorState, _, err := UpdateSafroleState(
+		safroleInput,
+		s.TimeslotIndex,
+		s.EntropyPool,
+		s.ValidatorState,
+		s.PastJudgements.OffendingValidators)
 	if err != nil {
 		return err
 	}
@@ -438,8 +443,6 @@ type SafroleInput struct {
 	Tickets []block.TicketProof
 	// Y(Hv)
 	Entropy crypto.BandersnatchOutputHash
-	// ψ′
-	Offenders []ed25519.PublicKey
 }
 
 func NewSafroleInputFromBlock(block block.Block) (SafroleInput, error) {
@@ -451,10 +454,9 @@ func NewSafroleInputFromBlock(block block.Block) (SafroleInput, error) {
 	// TODO - might want to make a deep copy for ticket proofs and offenders
 	// here, but should be ok since it's read only.
 	return SafroleInput{
-		TimeSlot:  block.Header.TimeSlotIndex,
-		Tickets:   block.Extrinsic.ET.TicketProofs,
-		Entropy:   entropy,
-		Offenders: block.Header.OffendersMarkers,
+		TimeSlot: block.Header.TimeSlotIndex,
+		Tickets:  block.Extrinsic.ET.TicketProofs,
+		Entropy:  entropy,
 	}, nil
 }
 
@@ -557,6 +559,7 @@ func UpdateSafroleState(
 	preTimeSlot jamtime.Timeslot,
 	entropyPool state.EntropyPool,
 	validatorState validator.ValidatorState,
+	offenders []ed25519.PublicKey,
 ) (state.EntropyPool, validator.ValidatorState, SafroleOutput, error) {
 	if input.TimeSlot <= preTimeSlot {
 		return entropyPool, validatorState, SafroleOutput{}, errors.New("bad slot")
@@ -586,7 +589,7 @@ func UpdateSafroleState(
 	if epoch > preEpoch {
 		// Equation 59: Φ(k) ≡ [0, 0, ...] if ke ∈ ψ′o (v.0.4.5)
 		//                     k otherwise
-		newValidatorState.SafroleState.NextValidators = validator.NullifyOffenders(validatorState.QueuedValidators, input.Offenders)
+		newValidatorState.SafroleState.NextValidators = validator.NullifyOffenders(validatorState.QueuedValidators, offenders)
 		newValidatorState.CurrentValidators = validatorState.SafroleState.NextValidators
 		newValidatorState.ArchivedValidators = validatorState.CurrentValidators
 

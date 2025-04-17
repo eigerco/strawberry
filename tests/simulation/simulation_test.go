@@ -162,6 +162,7 @@ func TestSimulateSAFROLE(t *testing.T) {
 			currentState.TimeslotIndex,
 			currentState.EntropyPool,
 			currentState.ValidatorState,
+			currentState.PastJudgements.OffendingValidators,
 		)
 		require.NoError(t, err)
 

@@ -134,10 +134,9 @@ func TestSafrole(t *testing.T) {
 			}
 
 			input := statetransition.SafroleInput{
-				TimeSlot:  jamtime.Timeslot(tv.Input.Slot),
-				Tickets:   tickets,
-				Entropy:   crypto.BandersnatchOutputHash(testutils.MustFromHex(t, tv.Input.Entropy)),
-				Offenders: offenders,
+				TimeSlot: jamtime.Timeslot(tv.Input.Slot),
+				Tickets:  tickets,
+				Entropy:  crypto.BandersnatchOutputHash(testutils.MustFromHex(t, tv.Input.Entropy)),
 			}
 
 			preEntropyPool := toEntropyPool(t, tv.PreState)
@@ -147,7 +146,9 @@ func TestSafrole(t *testing.T) {
 			postEntropyPool, postValidatorState, output, err := statetransition.UpdateSafroleState(input,
 				jamtime.Timeslot(tv.PreState.Tau),
 				preEntropyPool,
-				preValidatorState)
+				preValidatorState,
+				offenders,
+			)
 			if tv.Output.Err != "" {
 				// There was an output error in the test vector, so we should produce a matching error.
 				require.EqualError(t, err, strings.ReplaceAll(tv.Output.Err, "_", " "))
