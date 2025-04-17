@@ -79,6 +79,9 @@ func TestSimulateSAFROLE(t *testing.T) {
 		t.Logf("timeslot: %d", timeslot)
 		currentTimeslot := jamtime.Timeslot(timeslot)
 
+		nextEpoch := currentTimeslot.ToEpoch()
+		previousEpoch := currentState.TimeslotIndex.ToEpoch()
+
 		// Reset the ticket attempts at the start of each epoch.
 		if currentTimeslot.IsFirstTimeslotInEpoch() {
 			for k := range ticketAttempts {
@@ -90,7 +93,7 @@ func TestSimulateSAFROLE(t *testing.T) {
 		found := false
 		for _, k := range keys {
 			key := crypto.BandersnatchPrivateKey(testutils.MustFromHex(t, k.BandersnatchPrivate))
-			ok, err := state.IsSlotLeader(currentTimeslot, currentState, key)
+			ok, err := isSlotLeader(currentTimeslot, currentState, key)
 			require.NoError(t, err)
 			if ok {
 				slotLeaderKey = key
@@ -109,10 +112,14 @@ func TestSimulateSAFROLE(t *testing.T) {
 		headerHash, err := currentBlock.Header.Hash()
 		require.NoError(t, err)
 
+		entropy := currentState.EntropyPool[2]
+		pendingValidators := currentState.ValidatorState.SafroleState.NextValidators
+		if nextEpoch > previousEpoch {
+			pendingValidators = validator.NullifyOffenders(currentState.ValidatorState.QueuedValidators, currentState.PastJudgements.OffendingValidators)
+			entropy = currentState.EntropyPool[1]
+		}
+
 		// Submit tickets if possible.
-		// TODO for now we don't submit tickets on the first slot of an epoch,
-		// there are more details we need to understand about how to correctly
-		// use the state from the previous epoch.
 		ticketProofs := []block.TicketProof{}
 		if currentTimeslot.IsTicketSubmissionPeriod() && !currentTimeslot.IsFirstTimeslotInEpoch() {
 			// Pretty simple, loop over each validator and submit a ticket if they have enough attempts left.
@@ -121,14 +128,15 @@ func TestSimulateSAFROLE(t *testing.T) {
 				if ticketAttempts[key.Name] < common.MaxTicketAttempts {
 					attempt := ticketAttempts[key.Name]
 					ticketProducerKey := crypto.BandersnatchPrivateKey(testutils.MustFromHex(t, key.BandersnatchPrivate))
-					ticketProof, err := state.CreateTicketProof(currentState, ticketProducerKey, uint8(attempt))
+					// TOOD this will need fancier logic too. Needs to use the right yk and eta depending on epoch change.
+					ticketProof, err := state.CreateTicketProof(pendingValidators, entropy, ticketProducerKey, uint8(attempt))
 					require.NoError(t, err)
 					t.Logf("submitted ticket, name: %v, attempt: %v, proof: %v", key.Name, attempt,
 						hex.EncodeToString(ticketProof.Proof[:])[:10]+"...")
 					ticketProofs = append(ticketProofs, ticketProof)
 					ticketAttempts[key.Name]++
 				}
-				if len(ticketProofs) == 3 {
+				if len(ticketProofs) == common.MaxTicketExtrinsicSize {
 					break
 				}
 			}
@@ -148,12 +156,12 @@ func TestSimulateSAFROLE(t *testing.T) {
 		t.Logf("block parent hash: %v", hex.EncodeToString(newBlock.Header.ParentHash[:]))
 
 		// Update the SAFROLE state.
-		entropy, err := bandersnatch.OutputHash(newBlock.Header.VRFSignature)
+		entropyHash, err := bandersnatch.OutputHash(newBlock.Header.VRFSignature)
 		require.NoError(t, err)
 
 		safroleInput := statetransition.SafroleInput{
 			TimeSlot: currentTimeslot,
-			Entropy:  entropy,
+			Entropy:  entropyHash,
 			Tickets:  newBlock.Extrinsic.ET.TicketProofs,
 		}
 
@@ -181,19 +189,45 @@ func TestSimulateSAFROLE(t *testing.T) {
 	}
 }
 
-// Produces and seals an empty block. TODO, move this to a better package an
-// make it public when it's ready.
+func isSlotLeader(timeslot jamtime.Timeslot, currentState *state.State, privateKey crypto.BandersnatchPrivateKey) (bool, error) {
+	_, sealingKeys, sealingEntropy, _, err := nextSAFROLEState(currentState, timeslot)
+	if err != nil {
+		return false, err
+	}
+
+	return state.IsSlotLeader(timeslot, sealingKeys, sealingEntropy, privateKey)
+}
+
+// Produces and seals a block with potential tickets.
+// TODO, move this to a better package an make it public when it's ready.
 func produceBlock(
 	timeslot jamtime.Timeslot,
 	parentHash crypto.Hash,
 	currentState *state.State,
 	trie *trie.DB,
-	key crypto.BandersnatchPrivateKey,
+	privateKey crypto.BandersnatchPrivateKey,
 	ticketProofs []block.TicketProof,
 ) (block.Block, error) {
+
+	nextEpoch := timeslot.ToEpoch()
+	previousTimeslot := currentState.TimeslotIndex
+	previousEpoch := previousTimeslot.ToEpoch()
+	isNewEpoch := nextEpoch > previousEpoch
+
+	pendingValidators, sealingKeys, sealingEntropy, ticketEntropy, err := nextSAFROLEState(currentState, timeslot)
+	if err != nil {
+		return block.Block{}, err
+	}
+
 	extrinsics := block.Extrinsic{}
 
-	bestTicketProofs, err := produceTicketProofs(currentState, ticketProofs)
+	ringCommitment, err := pendingValidators.RingCommitment()
+	if err != nil {
+		return block.Block{}, err
+	}
+
+	accumulator := currentState.ValidatorState.SafroleState.TicketAccumulator
+	bestTicketProofs, err := filterTicketProofs(accumulator, ringCommitment, ticketEntropy, ticketProofs)
 	if err != nil {
 		return block.Block{}, err
 	}
@@ -204,10 +238,6 @@ func produceBlock(
 	if err != nil {
 		return block.Block{}, err
 	}
-
-	nextEpoch := timeslot.ToEpoch()
-	previousTimeslot := currentState.TimeslotIndex
-	previousEpoch := previousTimeslot.ToEpoch()
 
 	extrinsicsHash, err := extrinsics.Hash()
 	if err != nil {
@@ -222,18 +252,18 @@ func produceBlock(
 	}
 
 	// Generate the epoch marker.
-	if nextEpoch > previousEpoch {
+	if isNewEpoch {
 		header.EpochMarker = &block.EpochMarker{
 			Entropy:        currentState.EntropyPool[0],
 			TicketsEntropy: currentState.EntropyPool[1],
 		}
-		for i, vd := range currentState.ValidatorState.SafroleState.NextValidators {
+		for i, vd := range pendingValidators {
 			header.EpochMarker.Keys[i].Bandersnatch = vd.Bandersnatch
 		}
 	}
 
 	// Generate the ticket marker.
-	ticketAccumulatorFull := len(currentState.ValidatorState.SafroleState.TicketAccumulator) == jamtime.TimeslotsPerEpoch
+	ticketAccumulatorFull := len(accumulator) == jamtime.TimeslotsPerEpoch
 	if nextEpoch == previousEpoch &&
 		timeslot.IsWinningTicketMarkerPeriod(previousTimeslot) &&
 		ticketAccumulatorFull {
@@ -241,7 +271,9 @@ func produceBlock(
 		header.WinningTicketsMarker = (*block.WinningTicketMarker)(winningTickets)
 	}
 
-	err = state.SealBlock(header, currentState, key)
+	// Now we can finally seal the block. Just need to use the right entropy, if it's an epoch change
+	// we use eta_2, that will become eta_3, otherwise just eta_3.
+	err = state.SealBlock(header, sealingKeys, sealingEntropy, privateKey)
 	if err != nil {
 		return block.Block{}, err
 	}
@@ -252,12 +284,14 @@ func produceBlock(
 	}, nil
 }
 
-// Produce ticket proofs from sumbitted ticket proofs. The idea here is to
-// filter out any useless tickets that wouldn't end up being included, and also
-// to ensure the ticket proofs are in the correcct order. TODO, this should be
+// Filter ticket proofs from sumbitted ticket proofs. The idea here is to filter
+// out any useless tickets that wouldn't end up being included, and also to
+// ensure the ticket proofs are in the correcct order. TODO, this should be
 // moved when ready, similar to produceBlock.
-func produceTicketProofs(
-	currentState *state.State,
+func filterTicketProofs(
+	accumulator []block.Ticket,
+	ringCommitment crypto.RingCommitment,
+	entropy crypto.Hash,
 	ticketProofs []block.TicketProof,
 ) ([]block.TicketProof, error) {
 
@@ -266,7 +300,9 @@ func produceTicketProofs(
 	proofToID := map[crypto.RingVrfSignature]crypto.BandersnatchOutputHash{}
 	newTickets := []block.Ticket{}
 	for _, tp := range ticketProofs {
-		outputHash, err := state.VerifyTicketProof(currentState, tp)
+		// TODO this will require some fancier logic.
+		// will need the correct yk and eta depending on epoch change.
+		outputHash, err := state.VerifyTicketProof(ringCommitment, entropy, tp)
 		if err != nil {
 			return nil, err
 		}
@@ -278,7 +314,6 @@ func produceTicketProofs(
 	}
 
 	// Combine new tickets with the existing accumulator.
-	accumulator := currentState.ValidatorState.SafroleState.TicketAccumulator
 	allTickets := make([]block.Ticket, len(accumulator)+len(newTickets))
 	copy(allTickets, accumulator)
 	copy(allTickets[len(accumulator):], newTickets)
@@ -315,6 +350,58 @@ func produceTicketProofs(
 	}
 
 	return bestTicketProofs, nil
+}
+
+// Determine the next components of the SAFROLE state. This mostly concerns an epoch change.
+// If there's an epoch change then we can't use the current state as is, instead we need to figure out what the next
+// state for the various SAFROLE components will become.
+// If there's a new epoch then:
+// - pendingValidators, ie y_k becomes the queued validators with offenders nullified.
+// - sealingKeys become the outside in function applied to the current ticket accumulator, or else fallback.
+// - sealingEntropy becomes eta_2, which becomes eta_3 in the next epoch.
+// - ticketEntropy becomes eta_1, which becomes eta_2 in the next epoch.
+func nextSAFROLEState(currentState *state.State, nextTimeslot jamtime.Timeslot) (
+	pendingValidators safrole.ValidatorsData,
+	sealingKeys safrole.SealingKeys,
+	sealingEntropy crypto.Hash,
+	ticketEntropy crypto.Hash,
+	err error,
+) {
+
+	nextEpoch := nextTimeslot.ToEpoch()
+	previousTimeslot := currentState.TimeslotIndex
+	previousEpoch := previousTimeslot.ToEpoch()
+	isNewEpoch := nextEpoch > previousEpoch
+	accumulator := currentState.ValidatorState.SafroleState.TicketAccumulator
+	ticketAccumulatorFull := len(accumulator) == jamtime.TimeslotsPerEpoch
+
+	if isNewEpoch {
+		pendingValidators = validator.NullifyOffenders(currentState.ValidatorState.QueuedValidators, currentState.PastJudgements.OffendingValidators)
+		sealingEntropy = currentState.EntropyPool[2]
+		ticketEntropy = currentState.EntropyPool[1]
+		if nextEpoch == previousEpoch+jamtime.Epoch(1) &&
+			!previousTimeslot.IsTicketSubmissionPeriod() &&
+			ticketAccumulatorFull {
+			// Ticket case.
+			sealingTickets := safrole.OutsideInSequence(currentState.ValidatorState.SafroleState.TicketAccumulator)
+			sealingKeys.Set(safrole.TicketsBodies(sealingTickets))
+		} else {
+			// Fallback case.
+			// Here we need to use eta_1 which will become eta_2 in the next epoch.
+			fallbackKeys, err := safrole.SelectFallbackKeys(currentState.EntropyPool[1], currentState.ValidatorState.SafroleState.NextValidators)
+			if err != nil {
+				return pendingValidators, sealingKeys, ticketEntropy, sealingEntropy, err
+			}
+			sealingKeys.Set(fallbackKeys)
+		}
+	} else {
+		pendingValidators = currentState.ValidatorState.SafroleState.NextValidators
+		sealingEntropy = currentState.EntropyPool[3]
+		ticketEntropy = currentState.EntropyPool[2]
+		sealingKeys = currentState.ValidatorState.SafroleState.SealingKeySeries
+	}
+
+	return pendingValidators, sealingKeys, sealingEntropy, ticketEntropy, nil
 }
 
 // Helper to covert a SimulationBlock to a Block.
@@ -396,7 +483,7 @@ func toState(t *testing.T, s SimulationState) *state.State {
 		}
 	}
 
-	ticketOrKeys := safrole.TicketAccumulator{}
+	ticketOrKeys := safrole.SealingKeys{}
 	if len(s.Gamma.GammaS.Keys) > 0 {
 		keys := crypto.EpochKeys{}
 		for i, k := range s.Gamma.GammaS.Keys {

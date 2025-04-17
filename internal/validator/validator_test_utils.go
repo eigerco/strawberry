@@ -21,7 +21,7 @@ func SetupValidatorState(t *testing.T) *ValidatorState {
 	for i := 0; i < jamtime.TimeslotsPerEpoch; i++ {
 		safroleState.TicketAccumulator[i] = RandomTicket(t)
 	}
-	safroleState.SealingKeySeries = safrole.TicketAccumulator{}
+	safroleState.SealingKeySeries = safrole.SealingKeys{}
 	var epochKeys crypto.EpochKeys
 	for i := 0; i < jamtime.TimeslotsPerEpoch; i++ {
 		epochKeys[i] = testutils.RandomBandersnatchPublicKey(t)

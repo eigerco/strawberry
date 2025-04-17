@@ -243,7 +243,7 @@ func toValidatorState(t *testing.T, s SafroleTestVectorState) validator.Validato
 		}
 	}
 
-	ticketOrKeys := safrole.TicketAccumulator{}
+	ticketOrKeys := safrole.SealingKeys{}
 	if len(s.GammaS.Keys) > 0 {
 		keys := crypto.EpochKeys{}
 		for i, k := range s.GammaS.Keys {

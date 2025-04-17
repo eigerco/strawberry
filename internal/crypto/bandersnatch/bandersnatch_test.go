@@ -83,7 +83,12 @@ func TestRingSignAndVerify(t *testing.T) {
 	ringSignature, err := prover.Sign(vrfInputData, auxData)
 	require.NoError(t, err)
 
-	ok, ringOutputHash := verifier.Verify(vrfInputData, auxData, commitment, ringSignature)
+	// Check that we can verify with only the commitment and not using the ring at all.
+	verifierOnly, err := NewRingVerifier([]crypto.BandersnatchPublicKey{})
+	require.NoError(t, err)
+	defer verifierOnly.Free()
+
+	ok, ringOutputHash := verifierOnly.Verify(vrfInputData, auxData, commitment, ringSignature)
 	require.True(t, ok)
 
 	// Sign the same vrf input data using the regular bandersnatch signature,

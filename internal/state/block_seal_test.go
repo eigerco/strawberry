@@ -10,13 +10,13 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/testutils"
-	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSealVerifyBlockTicket(t *testing.T) {
 	entropy := testutils.RandomHash(t)
+
 	ticketBodies := randomTicketBodies(t, entropy)
 
 	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
@@ -27,7 +27,7 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 	ticket := createTicket(t, privateKey, entropy, 0)
 	ticketBodies[randomTimeslot] = ticket
 
-	ticketAccumulator := safrole.TicketAccumulator{}
+	ticketAccumulator := safrole.SealingKeys{}
 	ticketAccumulator.Set(ticketBodies)
 
 	header := &block.Header{
@@ -51,22 +51,7 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 		Bandersnatch: publicKey,
 	}
 
-	state := &State{
-		EntropyPool: [4]crypto.Hash{
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			entropy,
-		},
-		ValidatorState: validator.ValidatorState{
-			SafroleState: safrole.State{
-				SealingKeySeries: ticketAccumulator,
-			},
-			CurrentValidators: currentValidators,
-		},
-	}
-
-	err = SealBlock(header, state, privateKey)
+	err = SealBlock(header, ticketAccumulator, entropy, privateKey)
 	require.NoError(t, err)
 	assert.NotEmpty(t, header.BlockSealSignature)
 	assert.NotEmpty(t, header.VRFSignature)
@@ -74,7 +59,7 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 	// Tampering with the block seal signature should fail verification.
 	sealSignature := header.BlockSealSignature
 	header.BlockSealSignature = testutils.RandomBandersnatchSignature(t)
-	ok, err := VerifyBlockSeal(header, state)
+	ok, err := VerifyBlockSeal(header, ticketAccumulator, currentValidators, entropy)
 	require.NoError(t, err)
 	require.False(t, ok)
 	header.BlockSealSignature = sealSignature
@@ -82,18 +67,20 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 	// Tampering with the VRF signature should fail verification.
 	vrfSignature := header.VRFSignature
 	header.VRFSignature = testutils.RandomBandersnatchSignature(t)
-	ok, err = VerifyBlockSeal(header, state)
+	ok, err = VerifyBlockSeal(header, ticketAccumulator, currentValidators, entropy)
 	require.NoError(t, err)
 	require.False(t, ok)
 	header.VRFSignature = vrfSignature
 
 	// Valid signatures verify.
-	ok, err = VerifyBlockSeal(header, state)
+	ok, err = VerifyBlockSeal(header, ticketAccumulator, currentValidators, entropy)
 	require.NoError(t, err)
 	require.True(t, ok)
 }
 
 func TestSealVerifyBlockFallback(t *testing.T) {
+	entropy := testutils.RandomHash(t)
+
 	privateKey := testutils.RandomBandersnatchPrivateKey(t)
 	publicKey, err := bandersnatch.Public(privateKey)
 	require.NoError(t, err)
@@ -107,7 +94,7 @@ func TestSealVerifyBlockFallback(t *testing.T) {
 	// should later be selected as the winning key.
 	epochKeys[randomTimeslot] = publicKey
 
-	ticketAccumulator := safrole.TicketAccumulator{}
+	ticketAccumulator := safrole.SealingKeys{}
 	ticketAccumulator.Set(epochKeys)
 
 	header := &block.Header{
@@ -117,22 +104,9 @@ func TestSealVerifyBlockFallback(t *testing.T) {
 		TimeSlotIndex:  jamtime.Timeslot(randomTimeslot),
 	}
 
-	entropy := testutils.RandomHash(t)
-	state := &State{
-		EntropyPool: [4]crypto.Hash{
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			entropy,
-		},
-		ValidatorState: validator.ValidatorState{
-			SafroleState: safrole.State{
-				SealingKeySeries: ticketAccumulator,
-			},
-		},
-	}
+	currentValidators := safrole.ValidatorsData{}
 
-	err = SealBlock(header, state, privateKey)
+	err = SealBlock(header, ticketAccumulator, entropy, privateKey)
 	require.NoError(t, err)
 	assert.NotEmpty(t, header.BlockSealSignature)
 	assert.NotEmpty(t, header.VRFSignature)
@@ -140,7 +114,7 @@ func TestSealVerifyBlockFallback(t *testing.T) {
 	// Tampering with the block seal signature should fail verification.
 	sealSignature := header.BlockSealSignature
 	header.BlockSealSignature = testutils.RandomBandersnatchSignature(t)
-	ok, err := VerifyBlockSeal(header, state)
+	ok, err := VerifyBlockSeal(header, ticketAccumulator, currentValidators, entropy)
 	require.NoError(t, err)
 	require.False(t, ok)
 	header.BlockSealSignature = sealSignature
@@ -148,13 +122,13 @@ func TestSealVerifyBlockFallback(t *testing.T) {
 	// Tampering with the VRF signature should fail verification.
 	vrfSignature := header.VRFSignature
 	header.VRFSignature = testutils.RandomBandersnatchSignature(t)
-	ok, err = VerifyBlockSeal(header, state)
+	ok, err = VerifyBlockSeal(header, ticketAccumulator, currentValidators, entropy)
 	require.NoError(t, err)
 	require.False(t, ok)
 	header.VRFSignature = vrfSignature
 
 	// Valid signatures verify.
-	ok, err = VerifyBlockSeal(header, state)
+	ok, err = VerifyBlockSeal(header, ticketAccumulator, currentValidators, entropy)
 	require.NoError(t, err)
 	require.True(t, ok)
 }
@@ -163,7 +137,7 @@ func TestSealBlockInvalidAuthor(t *testing.T) {
 	entropy := testutils.RandomHash(t)
 	ticketBodies := randomTicketBodies(t, entropy)
 
-	ticketAccumulator := safrole.TicketAccumulator{}
+	ticketAccumulator := safrole.SealingKeys{}
 	ticketAccumulator.Set(ticketBodies)
 
 	header := &block.Header{
@@ -173,22 +147,8 @@ func TestSealBlockInvalidAuthor(t *testing.T) {
 		TimeSlotIndex:  testutils.RandomTimeslot(),
 	}
 
-	state := &State{
-		EntropyPool: [4]crypto.Hash{
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			entropy,
-		},
-		ValidatorState: validator.ValidatorState{
-			SafroleState: safrole.State{
-				SealingKeySeries: ticketAccumulator,
-			},
-		},
-	}
-
 	privateKey := testutils.RandomBandersnatchPrivateKey(t)
-	err := SealBlock(header, state, privateKey)
+	err := SealBlock(header, ticketAccumulator, entropy, privateKey)
 	require.ErrorIs(t, err, ErrBlockSealInvalidAuthor)
 }
 
@@ -204,7 +164,7 @@ func TestVerfyBlockInvalidVRFSignature(t *testing.T) {
 	ticket := createTicket(t, privateKey, entropy, 0)
 	ticketBodies[randomTimeslot] = ticket
 
-	ticketAccumulator := safrole.TicketAccumulator{}
+	ticketAccumulator := safrole.SealingKeys{}
 	ticketAccumulator.Set(ticketBodies)
 
 	header := &block.Header{
@@ -228,21 +188,6 @@ func TestVerfyBlockInvalidVRFSignature(t *testing.T) {
 		Bandersnatch: publicKey,
 	}
 
-	state := &State{
-		EntropyPool: [4]crypto.Hash{
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			entropy,
-		},
-		ValidatorState: validator.ValidatorState{
-			SafroleState: safrole.State{
-				SealingKeySeries: ticketAccumulator,
-			},
-			CurrentValidators: currentValidators,
-		},
-	}
-
 	vrfSignature := testutils.RandomBandersnatchSignature(t)
 	sealContext := buildTicketSealContext(entropy, ticket.EntryIndex)
 
@@ -254,12 +199,14 @@ func TestVerfyBlockInvalidVRFSignature(t *testing.T) {
 	require.NoError(t, err)
 	header.BlockSealSignature = sealSignature
 
-	ok, err := VerifyBlockSeal(header, state)
+	ok, err := VerifyBlockSeal(header, ticketAccumulator, currentValidators, entropy)
 	require.NoError(t, err)
 	require.False(t, ok)
 }
 
 func TestVerifyBlockInvalidVRFFallback(t *testing.T) {
+	entropy := testutils.RandomHash(t)
+
 	privateKey := testutils.RandomBandersnatchPrivateKey(t)
 	publicKey, err := bandersnatch.Public(privateKey)
 	require.NoError(t, err)
@@ -273,7 +220,7 @@ func TestVerifyBlockInvalidVRFFallback(t *testing.T) {
 	// should later be selected as the winning key.
 	epochKeys[randomTimeslot] = publicKey
 
-	ticketAccumulator := safrole.TicketAccumulator{}
+	ticketAccumulator := safrole.SealingKeys{}
 	ticketAccumulator.Set(epochKeys)
 
 	header := &block.Header{
@@ -283,20 +230,7 @@ func TestVerifyBlockInvalidVRFFallback(t *testing.T) {
 		TimeSlotIndex:  jamtime.Timeslot(randomTimeslot),
 	}
 
-	entropy := testutils.RandomHash(t)
-	state := &State{
-		EntropyPool: [4]crypto.Hash{
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			entropy,
-		},
-		ValidatorState: validator.ValidatorState{
-			SafroleState: safrole.State{
-				SealingKeySeries: ticketAccumulator,
-			},
-		},
-	}
+	currentValidators := safrole.ValidatorsData{}
 
 	vrfSignature := testutils.RandomBandersnatchSignature(t)
 	sealContext := buildTicketFallbackContext(entropy)
@@ -309,7 +243,7 @@ func TestVerifyBlockInvalidVRFFallback(t *testing.T) {
 	require.NoError(t, err)
 	header.BlockSealSignature = sealSignature
 
-	ok, err := VerifyBlockSeal(header, state)
+	ok, err := VerifyBlockSeal(header, ticketAccumulator, currentValidators, entropy)
 	require.NoError(t, err)
 	require.False(t, ok)
 }
@@ -341,6 +275,8 @@ func randomTicketBodies(t *testing.T, entropy crypto.Hash) safrole.TicketsBodies
 }
 
 func TestIsSlotLeaderFallback(t *testing.T) {
+	entropy := testutils.RandomHash(t)
+
 	privateKey := testutils.RandomBandersnatchPrivateKey(t)
 	publicKey, err := bandersnatch.Public(privateKey)
 	require.NoError(t, err)
@@ -354,39 +290,25 @@ func TestIsSlotLeaderFallback(t *testing.T) {
 	// should later be selected as the winning key.
 	epochKeys[randomTimeslot] = publicKey
 
-	ticketAccumulator := safrole.TicketAccumulator{}
+	ticketAccumulator := safrole.SealingKeys{}
 	ticketAccumulator.Set(epochKeys)
 
-	entropy := testutils.RandomHash(t)
-	state := &State{
-		EntropyPool: [4]crypto.Hash{
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			entropy,
-		},
-		ValidatorState: validator.ValidatorState{
-			SafroleState: safrole.State{
-				SealingKeySeries: ticketAccumulator,
-			},
-		},
-	}
-
-	ok, err := IsSlotLeader(jamtime.Timeslot(randomTimeslot), state, privateKey)
+	ok, err := IsSlotLeader(jamtime.Timeslot(randomTimeslot), ticketAccumulator, entropy, privateKey)
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot+1), state, privateKey)
+	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot+1), ticketAccumulator, entropy, privateKey)
 	require.NoError(t, err)
 	require.False(t, ok)
 
-	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot-1), state, privateKey)
+	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot-1), ticketAccumulator, entropy, privateKey)
 	require.NoError(t, err)
 	require.False(t, ok)
 }
 
 func TestIsSlotLeaderTicket(t *testing.T) {
 	entropy := testutils.RandomHash(t)
+
 	ticketBodies := randomTicketBodies(t, entropy)
 
 	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
@@ -397,32 +319,18 @@ func TestIsSlotLeaderTicket(t *testing.T) {
 	ticket := createTicket(t, privateKey, entropy, 0)
 	ticketBodies[randomTimeslot] = ticket
 
-	ticketAccumulator := safrole.TicketAccumulator{}
+	ticketAccumulator := safrole.SealingKeys{}
 	ticketAccumulator.Set(ticketBodies)
 
-	state := &State{
-		EntropyPool: [4]crypto.Hash{
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			testutils.RandomHash(t),
-			entropy,
-		},
-		ValidatorState: validator.ValidatorState{
-			SafroleState: safrole.State{
-				SealingKeySeries: ticketAccumulator,
-			},
-		},
-	}
-
-	ok, err := IsSlotLeader(jamtime.Timeslot(randomTimeslot), state, privateKey)
+	ok, err := IsSlotLeader(jamtime.Timeslot(randomTimeslot), ticketAccumulator, entropy, privateKey)
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot+1), state, privateKey)
+	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot+1), ticketAccumulator, entropy, privateKey)
 	require.NoError(t, err)
 	require.False(t, ok)
 
-	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot-1), state, privateKey)
+	ok, err = IsSlotLeader(jamtime.Timeslot(randomTimeslot-1), ticketAccumulator, entropy, privateKey)
 	require.NoError(t, err)
 	require.False(t, ok)
 }
