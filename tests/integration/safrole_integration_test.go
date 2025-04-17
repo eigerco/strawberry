@@ -102,6 +102,12 @@ func TestSafrole(t *testing.T) {
 		// One of the keys is just invalid (i.e. it can't be decoded into a valid Bandersnatch point).
 		// Both the invalid keys are replaced with the padding point during ring commitment computation.
 		"vectors/safrole/enact-epoch-change-with-padding-1.json",
+
+		// Custom vector for publishing tickets in the first slot of a new
+		// epoch. In this case we should be verifying this using the updated
+		// entropy pool and ring commitment for the current epoch, not the
+		// previous state values.
+		"vectors/safrole/custom-publish-ticket-first-slot-new-epoch.json",
 	}
 
 	for _, tf := range testFiles {
