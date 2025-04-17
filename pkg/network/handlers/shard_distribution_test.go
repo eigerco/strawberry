@@ -100,7 +100,7 @@ func TestShardDistributionSender(t *testing.T) {
 
 	expectedJustification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
 
-	validatorSvc.On("ShardDistribution", mock.Anything, mock.Anything, mock.Anything).Return(expectedBundleShard, expectedSegmentShard, expectedJustification, nil)
+	validatorSvc.On("ShardDistribution", mock.Anything, erasureRoot, shardIndex).Return(expectedBundleShard, expectedSegmentShard, expectedJustification, nil)
 	mockTConn := mocks.NewMockTransportConn()
 
 	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)

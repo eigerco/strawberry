@@ -142,11 +142,9 @@ func (s *ShardDistributionSender) ShardDistribution(ctx context.Context, stream 
 		return nil, nil, nil, fmt.Errorf("failed to read segment shard message: %w", err)
 	}
 
-	if len(segmentShardMsg.Content)%SegmentShardLength != 0 {
-		return nil, nil, nil, fmt.Errorf("invalid segment shard length (%d)", len(segmentShardMsg.Content))
-	}
-	for i := 0; i < len(segmentShardMsg.Content); i += SegmentShardLength {
-		segmentShard = append(segmentShard, segmentShardMsg.Content[i:i+SegmentShardLength])
+	segmentShard, err = decodeSegmentShards(segmentShardMsg.Content)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	justificationMsg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
@@ -160,4 +158,14 @@ func (s *ShardDistributionSender) ShardDistribution(ctx context.Context, stream 
 		return nil, nil, nil, fmt.Errorf("failed to close stream: %w", err)
 	}
 	return bundleShardMsg.Content, segmentShard, justification, nil
+}
+
+func decodeSegmentShards(payload []byte) (segmentShard [][]byte, err error) {
+	if len(payload)%SegmentShardLength != 0 {
+		return nil, fmt.Errorf("invalid segment shard length (%d)", len(payload))
+	}
+	for i := 0; i < len(payload); i += SegmentShardLength {
+		segmentShard = append(segmentShard, payload[i:i+SegmentShardLength])
+	}
+	return segmentShard, nil
 }

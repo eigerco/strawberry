@@ -23,4 +23,5 @@ const (
 	MaxAllocatedGasIsAuthorized                  = 50_000_000                                                   // GI: The gas allocated to invoke a work-package’s Is-Authorized logic.
 	WorkReportMaxSumOfDependencies               = 8                                                            // (J) The maximum sum of dependency items in a work-report.
 	MaxWorkPackageSizeBytes                      = 48 * 1024                                                    // (WR) Maximum size of a serialized work-package in bytes
+	MaxNrImportsExports                          = 3072                                                         // WM = 3072: The maximum number of imports and exports in a work-package.
 )
