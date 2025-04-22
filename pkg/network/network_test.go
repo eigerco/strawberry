@@ -728,3 +728,71 @@ func TestTwoNodesSegmentShard(t *testing.T) {
 
 	t.Log("Segments shards have been sent")
 }
+
+func TestTwoNodesSegmentJustificationShard(t *testing.T) {
+	// Create contexts for both nodes
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Setup nodes using the existing setup function
+	nodes := setupNodes(ctx, t, 2)
+	node1 := nodes[0]
+	node2 := nodes[1]
+
+	erasureRoot := testutils.RandomHash(t)
+	shardIndex := uint16(77)
+	segmentIndexes := []uint16{0, 1, 2}
+	expectedSegmentShard := [][]byte{
+		{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+		{13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
+		{23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34},
+	}
+	hash1 := testutils.RandomHash(t)
+	hash2 := testutils.RandomHash(t)
+	hash3 := testutils.RandomHash(t)
+	hash4 := testutils.RandomHash(t)
+	expectedJustification := [][][]byte{
+		{hash1[:], hash2[:], append(hash3[:], hash4[:]...), expectedSegmentShard[0]},
+		{hash1[:], hash2[:], append(hash3[:], hash4[:]...), expectedSegmentShard[1]},
+		{hash1[:], hash2[:], append(hash3[:], hash4[:]...), expectedSegmentShard[2]},
+	}
+
+	// TODO to be replaced once we implement the assurance logic
+	validatorSvc := validator.NewValidatorServiceMock()
+	validatorSvc.On("SegmentShardRequestJustification", mock.Anything, erasureRoot, shardIndex, segmentIndexes).Return(expectedSegmentShard, expectedJustification, nil)
+
+	node2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequestJust, handlers.NewSegmentShardRequestJustificationHandler(validatorSvc))
+
+	// Start both nodes
+	err := node1.Start()
+	require.NoError(t, err)
+	defer stopNode(t, node1)
+
+	err = node2.Start()
+	require.NoError(t, err)
+	defer stopNode(t, node2)
+
+	// Allow time for the nodes to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Connect node1 to node2
+	node2Addr, err := peer.NewPeerAddressFromMetadata(nodes[1].ValidatorManager.State.CurrentValidators[1].Metadata[:])
+	require.NoError(t, err)
+	err = node1.ConnectToPeer(node2Addr)
+	require.NoError(t, err)
+
+	// Wait for connection to be established
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify nodes are connected
+	node2Peer := node1.PeersSet.GetByAddress(node2Addr.String())
+	require.NotNil(t, node2Peer, "Node1 should have Node2 as a peer")
+
+	// Send shards request
+	segmentShards, justification, err := node1.SegmentShardRequestJustificationSend(ctx, node2Peer.Ed25519Key, erasureRoot, shardIndex, segmentIndexes)
+	require.NoError(t, err)
+	assert.Equal(t, expectedSegmentShard, segmentShards)
+	assert.Equal(t, expectedJustification, justification)
+
+	t.Log("Segments shards have been sent")
+}

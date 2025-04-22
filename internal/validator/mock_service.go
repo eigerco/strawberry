@@ -29,3 +29,8 @@ func (v *ValidatorServiceMock) SegmentShardRequest(ctx context.Context, erasureR
 	args := v.MethodCalled("SegmentShardRequest", ctx, erasureRoot, shardIndex, segmentIndexes)
 	return args.Get(0).([][]byte), args.Error(1)
 }
+
+func (v *ValidatorServiceMock) SegmentShardRequestJustification(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, justification [][][]byte, err error) {
+	args := v.MethodCalled("SegmentShardRequestJustification", ctx, erasureRoot, shardIndex, segmentIndexes)
+	return args.Get(0).([][]byte), args.Get(1).([][][]byte), args.Error(2)
+}
