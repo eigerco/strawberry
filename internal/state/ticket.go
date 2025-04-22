@@ -45,7 +45,9 @@ func CreateTicketProof(pendingValidators safrole.ValidatorsData, entropy crypto.
 // an error if it is not.
 func VerifyTicketProof(ringCommitment crypto.RingCommitment, entropy crypto.Hash, ticket block.TicketProof) (crypto.BandersnatchOutputHash, error) {
 	// TODO: if this is too expensive to construct each time we should pass it in.
-	ringVerifier, err := bandersnatch.NewRingVerifier([]crypto.BandersnatchPublicKey{})
+	// TODO: this should be replaced by a function call to verify a ring
+	// signature without the need to construct a ring verifier at all.
+	ringVerifier, err := bandersnatch.NewRingVerifier([]crypto.BandersnatchPublicKey{}) // Pass an empty ring since we're only going to be verifying.
 	defer ringVerifier.Free()
 	if err != nil {
 		return crypto.BandersnatchOutputHash{}, err

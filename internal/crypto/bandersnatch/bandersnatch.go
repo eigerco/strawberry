@@ -255,6 +255,9 @@ func (r *RingVrfVerifier) Commitment() (commitment crypto.RingCommitment, err er
 // commitment. Returns a bool indicating success along with the bandersnatch
 // output hash. This is used as the ticket ID/score. Notice that we have no idea
 // who signed, only that the signature came from one of the ring members.
+// TODO: make this a standalone function that can be used to verify a ring
+// signature without the need to construct a ring verifier since it doesn't
+// require the ring.
 func (r *RingVrfVerifier) Verify(
 	vrfInputData []byte,
 	auxData []byte,
