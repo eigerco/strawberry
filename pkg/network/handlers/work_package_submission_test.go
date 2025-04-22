@@ -14,6 +14,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
@@ -103,12 +104,14 @@ func TestSubmitWorkPackage(t *testing.T) {
 func TestHandleWorkPackage(t *testing.T) {
 	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
-	workPackageSharer := handlers.NewWorkPackageSharer(mockAuthorizationInvoker{}, mockRefineInvoker{}, getServiceState())
+	coreIndex := uint16(1)
+
+	_, prv, _ := ed25519.GenerateKey(nil)
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, state.State{Services: getServiceState()}, peer.NewPeerSet())
 	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer)
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
 	// Prepare the message data
-	coreIndex := uint16(1)
 	coreIndexBytes, err := jam.Marshal(coreIndex)
 	require.NoError(t, err)
 	pkgBytes, err := jam.Marshal(pkg)
@@ -287,8 +290,10 @@ func TestHandleStream_Success(t *testing.T) {
 	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
 	mockFetcher := &MockFetcher{}
-	workPackageSharer := handlers.NewWorkPackageSharer(mockAuthorizationInvoker{}, mockRefineInvoker{}, getServiceState())
 	coreIndex := uint16(5)
+	_, prv, _ := ed25519.GenerateKey(nil)
+
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, state.State{Services: getServiceState()}, peer.NewPeerSet())
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
 	coreIndexBytes, err := jam.Marshal(coreIndex)

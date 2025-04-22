@@ -26,4 +26,7 @@ const (
 
 	// The number of slots into an epoch at which ticket-submission ends.
 	TicketSubmissionTimeSlots = 500
+
+	// R = 10: The rotation period of validator-core assignments, in timeslots.
+	ValidatorRotationPeriod = Timeslot(10)
 )

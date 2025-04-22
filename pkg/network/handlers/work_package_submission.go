@@ -30,11 +30,11 @@ func (m *ImportSegments) FetchImportedSegment(hash crypto.Hash) ([]byte, error) 
 // WorkPackageSubmissionHandler processes incoming CE-133 submission streams
 type WorkPackageSubmissionHandler struct {
 	Fetcher          ImportedSegmentsFetcher
-	WPSharingHandler *WorkPackageSharer
+	WPSharingHandler *WorkReportGuarantor
 }
 
 // NewWorkPackageSubmissionHandler creates a new handler instance with the given fetcher.
-func NewWorkPackageSubmissionHandler(fetcher ImportedSegmentsFetcher, wpSharingHandler *WorkPackageSharer) *WorkPackageSubmissionHandler {
+func NewWorkPackageSubmissionHandler(fetcher ImportedSegmentsFetcher, wpSharingHandler *WorkReportGuarantor) *WorkPackageSubmissionHandler {
 	return &WorkPackageSubmissionHandler{
 		Fetcher:          fetcher,
 		WPSharingHandler: wpSharingHandler,
@@ -101,7 +101,7 @@ func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream 
 		return fmt.Errorf("failed to close stream: %w", err)
 	}
 
-	return h.WPSharingHandler.ValidateAndShareWorkPackage(ctx, coreIndex, bundle)
+	return h.WPSharingHandler.ValidateAndProcessWorkPackage(ctx, coreIndex, bundle)
 }
 
 // WorkPackageSubmitter handles outgoing CE-133 submissions (builder side).

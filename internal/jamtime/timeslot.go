@@ -113,3 +113,8 @@ func (ts Timeslot) IsWinningTicketMarkerPeriod(previous Timeslot) bool {
 	return previous.TimeslotInEpoch() < TicketSubmissionTimeSlots &&
 		TicketSubmissionTimeSlots <= ts.TimeslotInEpoch()
 }
+
+// IsLastCoreRotation checks if the timeslot is within the last core rotation of the epoch
+func (ts Timeslot) IsLastCoreRotation() bool {
+	return ts.TimeslotInEpoch() >= uint32(TimeslotsPerEpoch-ValidatorRotationPeriod)
+}

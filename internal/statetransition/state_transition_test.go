@@ -6,6 +6,9 @@ import (
 
 	"github.com/eigerco/strawberry/internal/service"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -15,8 +18,6 @@ import (
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCalculateNewTimeStateTransition(t *testing.T) {
@@ -547,7 +548,7 @@ func TestCalculateNewCoreAssignments(t *testing.T) {
 		}
 
 		// Create guarantee with timeslot outside valid range
-		oldTimeslot := currentTimeslot - common.ValidatorRotationPeriod*2
+		oldTimeslot := currentTimeslot - jamtime.ValidatorRotationPeriod*2
 		guarantees := block.GuaranteesExtrinsic{
 			Guarantees: []block.Guarantee{
 				{

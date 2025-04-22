@@ -36,7 +36,7 @@ type Node struct {
 	ValidatorManager              *validator.ValidatorManager
 	BlockService                  *chain.BlockService
 	ProtocolManager               *protocol.Manager
-	PeersSet                      *PeerSet
+	PeersSet                      *peer.PeerSet
 	peersLock                     sync.RWMutex
 	transport                     *transport.Transport
 	State                         state.State
@@ -46,72 +46,13 @@ type Node struct {
 	shardDistributor              *handlers.ShardDistributionSender
 	segmentShardRequestSender     *handlers.SegmentShardRequestSender
 	segmentShardRequestJustSender *handlers.SegmentShardRequestJustificationSender
-	workPackageSharer             *handlers.WorkPackageSharer
+	workPackageSharer             *handlers.WorkReportGuarantor
 	workPackageSharingHandler     *handlers.WorkPackageSharingHandler
 	currentCoreIndex              uint16
 	currentGuarantorPeers         []*peer.Peer
 	validatorService              validator.ValidatorService
 
 	AvailabilityStore *store.Availability
-}
-
-// PeerSet maintains mappings between peer identifiers
-// (Ed25519 keys, network addresses, validator indices) and Peer objects.
-type PeerSet struct {
-	// Map from Ed25519 public key to peer
-	byEd25519Key map[string]*peer.Peer
-	// Map from string representation of address to peer
-	byAddress map[string]*peer.Peer
-	// Map from validator index to peer (only for validator peers)
-	byValidatorIndex map[uint16]*peer.Peer
-}
-
-// NewPeerSet creates a new PeerSet instance with initialized internal maps.
-func NewPeerSet() *PeerSet {
-	return &PeerSet{
-		byEd25519Key:     make(map[string]*peer.Peer),
-		byAddress:        make(map[string]*peer.Peer),
-		byValidatorIndex: make(map[uint16]*peer.Peer),
-	}
-}
-
-// AddPeer adds a peer to all relevant lookup maps in the PeerSet.
-// If the peer is a validator index, it will also have a validator index.
-func (ps *PeerSet) AddPeer(peer *peer.Peer) {
-	ps.byEd25519Key[string(peer.Ed25519Key)] = peer
-	ps.byAddress[peer.Address.String()] = peer
-
-	if peer.ValidatorIndex != nil {
-		ps.byValidatorIndex[*peer.ValidatorIndex] = peer
-	}
-}
-
-// RemovePeer removes a peer from all lookup maps in the PeerSet.
-func (ps *PeerSet) RemovePeer(peer *peer.Peer) {
-	delete(ps.byEd25519Key, string(peer.Ed25519Key))
-	delete(ps.byAddress, peer.Address.String())
-
-	if peer.ValidatorIndex != nil {
-		delete(ps.byValidatorIndex, *peer.ValidatorIndex)
-	}
-}
-
-// GetByEd25519Key looks up a peer by their Ed25519 public key.
-// Returns nil if no peer is found with the given key.
-func (ps *PeerSet) GetByEd25519Key(key ed25519.PublicKey) *peer.Peer {
-	return ps.byEd25519Key[string(key)]
-}
-
-// GetByAddress looks up a peer by their network address.
-// Returns nil if no peer is found with the given address.
-func (ps *PeerSet) GetByAddress(addr string) *peer.Peer {
-	return ps.byAddress[addr]
-}
-
-// GetByValidatorIndex looks up a peer by their validator index.
-// Returns nil if no peer is found with the given validator index.
-func (ps *PeerSet) GetByValidatorIndex(index uint16) *peer.Peer {
-	return ps.byValidatorIndex[index]
 }
 
 // NewNode creates a new Node instance with the specified configuration.
@@ -124,8 +65,9 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	availabilityStore := store.NewAvailability(kvStore)
 	nodeCtx, cancel := context.WithCancel(nodeCtx)
+	peerSet := peer.NewPeerSet()
 	node := &Node{
-		PeersSet:          NewPeerSet(),
+		PeersSet:          peerSet,
 		State:             state,
 		Context:           nodeCtx,
 		Cancel:            cancel,
@@ -170,7 +112,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	node.blockRequester = &handlers.BlockRequester{}
 
-	wpSharerHandler := handlers.NewWorkPackageSharer(authorization.New(state), refine.New(state), state.Services)
+	wpSharerHandler := handlers.NewWorkReportGuarantor(validatorIdx, keys.EdPrv, authorization.New(state), refine.New(state), state, peerSet)
 	node.workPackageSharer = wpSharerHandler
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}, wpSharerHandler))
@@ -179,6 +121,8 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	node.workPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authorization.New(state), refine.New(state), keys.EdPrv, state.Services)
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, node.workPackageSharingHandler)
+
+	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkReportDist, handlers.NewWorkReportDistributionHandler())
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(node.validatorService))
 	protoManager.Registry.RegisterHandler(protocol.StreamKindAuditShardRequest, handlers.NewAuditShardRequestHandler(node.validatorService))

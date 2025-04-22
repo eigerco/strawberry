@@ -110,19 +110,9 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 
 	signature := ed25519.Sign(h.privateKey, workReportHash[:])
 
-	// Prepare the response: Work-Report Hash ++ Ed25519 Signature.
-	response := struct {
-		WorkReportHash crypto.Hash
-		Signature      []byte
-	}{
-		WorkReportHash: workReportHash,
-		Signature:      signature,
-	}
-
-	respBytes, err := jam.Marshal(response)
-	if err != nil {
-		return fmt.Errorf("failed to marshal response: %w", err)
-	}
+	var respBytes []byte
+	respBytes = append(respBytes, workReportHash[:]...)
+	respBytes = append(respBytes, signature...)
 
 	if err := WriteMessageWithContext(ctx, stream, respBytes); err != nil {
 		return fmt.Errorf("failed to write response: %w", err)
