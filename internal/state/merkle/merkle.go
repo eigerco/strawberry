@@ -2,12 +2,12 @@ package merkle
 
 import (
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/merkle/trie"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/store"
 )
 
 // MerklizeState computes the Merkle root of a given state.
-func MerklizeState(s state.State, store *trie.DB) (crypto.Hash, error) {
+func MerklizeState(s state.State, store *store.Trie) (crypto.Hash, error) {
 	// Serialize the state
 	serializedState, err := SerializeState(s)
 	if err != nil {

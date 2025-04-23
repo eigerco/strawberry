@@ -1,9 +1,10 @@
 package trie
 
 import (
+	"testing"
+
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/stretchr/testify/require"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -19,7 +20,8 @@ func TestEncodeBranchNode(t *testing.T) {
 		gotLeft, gotRight, err := node.GetBranchHashes()
 		require.NoError(t, err)
 
-		assert.Equal(t, left[1:], gotLeft[:31])
+		// The first byte of the left hash is changed due to the encoding
+		assert.Equal(t, left[1:], gotLeft[1:])
 		assert.Equal(t, right, gotRight)
 	})
 
@@ -33,7 +35,7 @@ func TestEncodeBranchNode(t *testing.T) {
 		gotLeft, gotRight, err := node.GetBranchHashes()
 		require.NoError(t, err)
 
-		assert.Equal(t, left[1:], gotLeft[:31])
+		assert.Equal(t, left[1:], gotLeft[1:])
 		assert.Equal(t, right, gotRight)
 	})
 

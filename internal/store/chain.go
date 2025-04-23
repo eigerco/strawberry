@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"sync/atomic"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -15,30 +14,20 @@ import (
 var (
 	ErrBlockNotFound  = errors.New("block not found")
 	ErrHeaderNotFound = errors.New("header not found")
-	ErrChainClosed    = errors.New("chain store is closed")
-)
-
-const (
-	prefixHeader byte = iota + 1
-	prefixBlock
 )
 
 // Chain manages blockchain storage using a key-value store
 type Chain struct {
-	db     db.KVStore
-	closed atomic.Bool
+	db.KVStore
 }
 
 // NewChain creates a new chain store using KVStore
 func NewChain(db db.KVStore) *Chain {
-	return &Chain{db: db}
+	return &Chain{KVStore: db}
 }
 
 // PutHeader stores a header in the chain store
 func (c *Chain) PutHeader(h block.Header) error {
-	if c.closed.Load() {
-		return ErrChainClosed
-	}
 	bytes, err := h.Bytes()
 	if err != nil {
 		return fmt.Errorf("marshal header: %w", err)
@@ -47,7 +36,7 @@ func (c *Chain) PutHeader(h block.Header) error {
 	if err != nil {
 		return fmt.Errorf("hash header: %w", err)
 	}
-	if err := c.db.Put(makeKey(prefixHeader, hash[:]), bytes); err != nil {
+	if err := c.Put(makeKey(prefixHeader, hash[:]), bytes); err != nil {
 		return fmt.Errorf("store header: %w", err)
 	}
 	return nil
@@ -55,11 +44,7 @@ func (c *Chain) PutHeader(h block.Header) error {
 
 // GetHeader retrieves a header by its hash
 func (c *Chain) GetHeader(hash crypto.Hash) (block.Header, error) {
-	if c.closed.Load() {
-		return block.Header{}, ErrChainClosed
-	}
-
-	headerBytes, err := c.db.Get(makeKey(prefixHeader, hash[:]))
+	headerBytes, err := c.Get(makeKey(prefixHeader, hash[:]))
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
 			return block.Header{}, ErrHeaderNotFound
@@ -75,81 +60,118 @@ func (c *Chain) GetHeader(hash crypto.Hash) (block.Header, error) {
 // Returns zero header and nil error if no match is found.
 // Returns zero header and error if the chain is closed or if database operations fail.
 func (c *Chain) FindHeader(fn func(header block.Header) bool) (block.Header, error) {
-	if c.closed.Load() {
-		return block.Header{}, ErrChainClosed
-	}
-
 	// Create iterator for header prefix
-	iter, err := c.db.NewIterator([]byte{prefixHeader}, []byte{prefixHeader + 1})
+	iter, err := c.NewIterator([]byte{prefixHeader}, []byte{prefixHeader + 1})
 	if err != nil {
 		return block.Header{}, fmt.Errorf("create iterator: %w", err)
 	}
-	defer iter.Close()
+
+	// We'll track any error we might return, to also handle close errors.
+	var returnErr error
+	var result block.Header
 
 	// Iterate through headers
 	for iter.Next() {
 		headerBytes, err := iter.Value()
 		if err != nil {
-			return block.Header{}, fmt.Errorf("get header value: %w", err)
+			returnErr = fmt.Errorf("get header value: %w", err)
+			break
 		}
 
 		header, err := block.HeaderFromBytes(headerBytes)
 		if err != nil {
-			return block.Header{}, fmt.Errorf("parse header from bytes: %w", err)
+			returnErr = fmt.Errorf("parse header from bytes: %w", err)
+			break
 		}
 
 		if fn(header) {
-			return header, nil
+			result = header
+			break
 		}
 	}
 
-	return block.Header{}, nil
+	// Close iterator explicitly
+	if cerr := iter.Close(); cerr != nil {
+		if returnErr == nil {
+			returnErr = fmt.Errorf("iterator close error: %w", cerr)
+		}
+	}
+
+	// If retErr is still nil, check if result was set
+	if returnErr != nil {
+		return block.Header{}, returnErr
+	}
+	return result, nil
 }
 
 // PutBlock stores a block and its header atomically
 func (c *Chain) PutBlock(b block.Block) error {
-	if c.closed.Load() {
-		return ErrChainClosed
-	}
 	// Create new batch for atomic operations
-	batch := c.db.NewBatch()
-	defer batch.Close()
+	batch := c.NewBatch()
+
 	headerHash, err := b.Header.Hash()
 	if err != nil {
+		closeErr := batch.Close()
+		if closeErr != nil {
+			return fmt.Errorf("hash header error: %v, close error: %v", err, closeErr)
+		}
 		return fmt.Errorf("hash header: %w", err)
 	}
 
 	// Store the header
 	headerBytes, err := b.Header.Bytes()
 	if err != nil {
+		closeErr := batch.Close()
+		if closeErr != nil {
+			return fmt.Errorf("marshal header error: %v, close error: %v", err, closeErr)
+		}
 		return fmt.Errorf("marshal header: %w", err)
 	}
 	if err := batch.Put(makeKey(prefixHeader, headerHash[:]), headerBytes); err != nil {
+		closeErr := batch.Close()
+		if closeErr != nil {
+			return fmt.Errorf("store header error: %v, close error: %v", err, closeErr)
+		}
 		return fmt.Errorf("store header: %w", err)
 	}
 
 	// Store full block
 	blockBytes, err := b.Bytes()
 	if err != nil {
+		closeErr := batch.Close()
+		if closeErr != nil {
+			return fmt.Errorf("marshal block error: %v, close error: %v", err, closeErr)
+		}
 		return fmt.Errorf("marshal block: %w", err)
 	}
 	if err := batch.Put(makeKey(prefixBlock, headerHash[:]), blockBytes); err != nil {
+		closeErr := batch.Close()
+		if closeErr != nil {
+			return fmt.Errorf("store block error: %v, close error: %v", err, closeErr)
+		}
 		return fmt.Errorf("store block: %w", err)
 	}
+
 	// Commit the batch
 	if err := batch.Commit(); err != nil {
-		return fmt.Errorf("commit batch: %w", err)
+		closeErr := batch.Close()
+		if closeErr != nil {
+			return fmt.Errorf("commit error: %v, close error: %v", err, closeErr)
+		}
+		return fmt.Errorf(ErrFailedBatchCommit, err)
 	}
+
+	// Close the batch after successful commit
+	if err := batch.Close(); err != nil {
+		return fmt.Errorf(ErrFailedBatchCommit, err)
+	}
+
 	return nil
 }
 
 // GetBlock retrieves a block by its header hash
 func (c *Chain) GetBlock(hash crypto.Hash) (block.Block, error) {
-	if c.closed.Load() {
-		return block.Block{}, ErrChainClosed
-	}
-
-	blockBytes, err := c.db.Get(makeKey(prefixBlock, hash[:]))
+	blockBytes, err := c.Get(makeKey(prefixBlock, hash[:]))
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
 			return block.Block{}, ErrBlockNotFound
@@ -162,29 +184,26 @@ func (c *Chain) GetBlock(hash crypto.Hash) (block.Block, error) {
 
 // FindChildren finds all immediate child blocks for a given block hash
 func (c *Chain) FindChildren(parentHash crypto.Hash) ([]block.Block, error) {
-	if c.closed.Load() {
-		return nil, ErrChainClosed
-	}
-
 	var children []block.Block
 
 	// Create iterator for block prefix
-	iter, err := c.db.NewIterator([]byte{prefixBlock}, []byte{prefixBlock + 1})
+	iter, err := c.NewIterator([]byte{prefixBlock}, []byte{prefixBlock + 1})
 	if err != nil {
 		return nil, fmt.Errorf("create iterator: %w", err)
 	}
-	defer iter.Close()
+
+	var resultErr error
 
 	// Iterate through blocks
 	for iter.Next() {
 		blockBytes, err := iter.Value()
 		if err != nil {
-			log.Println("read block value from iterator", err)
+			log.Println("read block value from iterator:", err)
 			continue
 		}
 		b, err := block.BlockFromBytes(blockBytes)
 		if err != nil {
-			log.Println("parse block from bytes", err)
+			log.Println("parse block from bytes:", err)
 			continue
 		}
 
@@ -193,17 +212,19 @@ func (c *Chain) FindChildren(parentHash crypto.Hash) ([]block.Block, error) {
 		}
 	}
 
-	return children, nil
+	// Close iterator manually and capture any error
+	if cerr := iter.Close(); cerr != nil {
+		resultErr = fmt.Errorf("iterator close error: %w", cerr)
+	}
+
+	// Return collected children and potential close error
+	return children, resultErr
 }
 
 // GetBlockSequence retrieves a sequence of blocks.
 // If ascending is true, returns children of the start block (exclusive).
 // If ascending is false, returns the start block and its ancestors (inclusive).
 func (c *Chain) GetBlockSequence(startHash crypto.Hash, ascending bool, maxBlocks uint32) ([]block.Block, error) {
-	if c.closed.Load() {
-		return nil, ErrChainClosed
-	}
-
 	currentBlock, err := c.GetBlock(startHash)
 	if err != nil {
 		if errors.Is(err, ErrBlockNotFound) {
@@ -249,32 +270,4 @@ func (c *Chain) GetBlockSequence(startHash crypto.Hash, ascending bool, maxBlock
 	}
 
 	return blocks, nil
-}
-
-// Close closes the chain store
-func (c *Chain) Close() error {
-	if !c.closed.CompareAndSwap(false, true) {
-		return nil
-	}
-	return c.db.Close()
-}
-
-// PrefixToString converts a prefix byte to a string
-func PrefixToString(p byte) string {
-	switch p {
-	case prefixHeader:
-		return "header"
-	case prefixBlock:
-		return "block"
-	default:
-		return "unknown"
-	}
-}
-
-// makeKey creates a key from a prefix and hash
-func makeKey(prefix byte, hash []byte) []byte {
-	key := make([]byte, 1+len(hash))
-	key[0] = prefix
-	copy(key[1:], hash)
-	return key
 }

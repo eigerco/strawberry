@@ -1,5 +1,4 @@
 //go:build integration
-
 // Genesis state, block and keys adapted from: https://github.com/jam-duna/jamtestnet
 package simulation
 
@@ -19,13 +18,14 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/eigerco/strawberry/internal/jamtime"
-	"github.com/eigerco/strawberry/internal/merkle/trie"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/merkle"
 	"github.com/eigerco/strawberry/internal/statetransition"
+	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
+	"github.com/eigerco/strawberry/pkg/db/pebble"
 )
 
 func TestSimulateSAFROLE(t *testing.T) {
@@ -54,9 +54,14 @@ func TestSimulateSAFROLE(t *testing.T) {
 	require.NoError(t, err)
 
 	// Trie DB for merklization.
-	trie, err := trie.NewDB()
+	db, err := pebble.NewKVStore()
 	require.NoError(t, err)
-	defer trie.Close()
+	defer func() {
+		err := db.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
+	trie := store.NewTrie(db)
+	require.NoError(t, err)
 
 	initialTimeslot := 12
 	endTimeslot := initialTimeslot + 24
@@ -204,7 +209,7 @@ func produceBlock(
 	timeslot jamtime.Timeslot,
 	parentHash crypto.Hash,
 	currentState *state.State,
-	trie *trie.DB,
+	trie *store.Trie,
 	privateKey crypto.BandersnatchPrivateKey,
 	ticketProofs []block.TicketProof,
 ) (block.Block, error) {
