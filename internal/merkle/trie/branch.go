@@ -18,7 +18,7 @@ import "github.com/eigerco/strawberry/internal/crypto"
 func EncodeBranchNode(left, right crypto.Hash) Node {
 	var node Node
 
-	// Clear only the least significant bit of the first byte
+	// Clear only the most significant bit of the first byte
 	node[0] = left[0] & 0b01111111
 
 	// Copy the rest of l

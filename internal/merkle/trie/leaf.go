@@ -8,7 +8,7 @@ import (
 //
 // A leaf node is represented by a 64-byte array where:
 // - The first bit is 1, indicating a leaf node.
-// - The second bit indicates the leaf type: 1 for embedded-value, 0 for regular.
+// - The second bit indicates the leaf type: 0 for embedded-value, 1 for regular.
 // - For embedded-value leaves (value <= 32 bytes):
 //   - The remaining 6 bits of the first byte store the encoded value's length.
 //   - The next 31 bytes store the first 31 bytes of the key.

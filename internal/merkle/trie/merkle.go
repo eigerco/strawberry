@@ -6,7 +6,7 @@ import (
 )
 
 // Merklize computes the Merklize root hash of a list of key-value pairs, and stores the nodes if function provided.
-func Merklize(keyValues [][2][]byte, i int, storeNode func(crypto.Hash, Node) error) (crypto.Hash, error) {
+func Merklize(keyValues [][2][]byte, i int, storeNode func(crypto.Hash, Node) error, storeValue func([]byte) error) (crypto.Hash, error) {
 	// If no keys, return a zero hash
 	if len(keyValues) == 0 {
 		return crypto.Hash(bytes.Repeat([]byte{0}, 32)), nil
@@ -18,9 +18,18 @@ func Merklize(keyValues [][2][]byte, i int, storeNode func(crypto.Hash, Node) er
 		value := keyValues[0][1]
 		var stateKey StateKey
 		copy(stateKey[:], key)
+
+		// If it is a regualar leaf (the value is too big to be embedded), store the value
+		if len(value) > EmbeddedValueMaxSize && storeValue != nil {
+			err := storeValue(value)
+			if err != nil {
+				return crypto.Hash{}, err
+			}
+		}
+
 		leafNode := EncodeLeafNode(stateKey, value)
 		hash := crypto.HashData(leafNode[:])
-		// If storeNode is provided, store the leaf node
+
 		if storeNode != nil {
 			if err := storeNode(hash, leafNode); err != nil {
 				return crypto.Hash{}, err
@@ -40,11 +49,11 @@ func Merklize(keyValues [][2][]byte, i int, storeNode func(crypto.Hash, Node) er
 	}
 
 	// Recursively compute the left and right branch hashes
-	leftHash, err := Merklize(leftKVs, i+1, storeNode)
+	leftHash, err := Merklize(leftKVs, i+1, storeNode, storeValue)
 	if err != nil {
 		return crypto.Hash{}, err
 	}
-	rightHash, err := Merklize(rightKVs, i+1, storeNode)
+	rightHash, err := Merklize(rightKVs, i+1, storeNode, storeValue)
 	if err != nil {
 		return crypto.Hash{}, err
 	}

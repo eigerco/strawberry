@@ -42,7 +42,7 @@ func TestMerkleTreeFromJSON(t *testing.T) {
 		}
 
 		// Calculate the merkle root
-		result, err := trie.Merklize(kvs, 0, nil)
+		result, err := trie.Merklize(kvs, 0, nil, nil)
 		require.NoError(t, err)
 
 		// Check if the calculated output matches the expected output

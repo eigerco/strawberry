@@ -3,7 +3,8 @@ package merkle
 import (
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/merkle/trie"
+	"github.com/eigerco/strawberry/internal/store"
+	"github.com/eigerco/strawberry/pkg/db/pebble"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,14 +12,23 @@ import (
 
 // TestMerklizeState_ConsistentRoot tests that the same state always produces the same Merkle root.
 func TestMerklizeState_ConsistentRoot(t *testing.T) {
-	// Create two separate DB instances
-	store1, err := trie.NewDB()
+	kv1, err := pebble.NewKVStore()
 	require.NoError(t, err)
-	defer store1.Close()
+	defer func() {
+		err := kv1.Close()
+		require.NoError(t, err, "failed to close kv1")
+	}()
 
-	store2, err := trie.NewDB()
+	store1 := store.NewTrie(kv1)
+
+	kv2, err := pebble.NewKVStore()
 	require.NoError(t, err)
-	defer store2.Close()
+	defer func() {
+		err := kv2.Close()
+		require.NoError(t, err, "failed to close kv2")
+	}()
+
+	store2 := store.NewTrie(kv2)
 
 	// Generate identical states
 	state1 := RandomState(t)
@@ -34,25 +44,32 @@ func TestMerklizeState_ConsistentRoot(t *testing.T) {
 	assert.Equal(t, rootHash1, rootHash2, "The same state should produce the same Merkle root.")
 
 	// Verify that both stores contain the same nodes
-	value1, err := store1.Get(rootHash1)
+	value1, err := store1.GetNode(rootHash1)
 	require.NoError(t, err)
 	require.NotNil(t, value1, "Root node should exist in store1")
 
-	value2, err := store2.Get(rootHash2)
+	value2, err := store2.GetNode(rootHash2)
 	require.NoError(t, err)
 	require.NotNil(t, value2, "Root node should exist in store2")
 }
 
 // TestMerklizeState_DifferentState tests that different states produce different Merkle roots.
 func TestMerklizeState_DifferentState(t *testing.T) {
-	// Create KVStore instances
-	store1, err := trie.NewDB()
+	kv1, err := pebble.NewKVStore()
 	require.NoError(t, err)
-	defer store1.Close()
+	defer func() {
+		err := kv1.Close()
+		require.NoError(t, err, "failed to close kv1")
+	}()
+	store1 := store.NewTrie(kv1)
 
-	store2, err := trie.NewDB()
+	kv2, err := pebble.NewKVStore()
 	require.NoError(t, err)
-	defer store2.Close()
+	defer func() {
+		err := kv2.Close()
+		require.NoError(t, err, "failed to close kv2")
+	}()
+	store2 := store.NewTrie(kv2)
 
 	// Generate random states
 	state1 := RandomState(t)
@@ -70,11 +87,11 @@ func TestMerklizeState_DifferentState(t *testing.T) {
 	assert.NotEqual(t, rootHash1, rootHash2, "Different states should produce different Merkle roots.")
 
 	// Verify that both stores contain their respective nodes
-	value1, err := store1.Get(rootHash1)
+	value1, err := store1.GetNode(rootHash1)
 	require.NoError(t, err)
 	require.NotNil(t, value1, "Root node should exist in store1")
 
-	value2, err := store2.Get(rootHash2)
+	value2, err := store2.GetNode(rootHash2)
 	require.NoError(t, err)
 	require.NotNil(t, value2, "Root node should exist in store2")
 }

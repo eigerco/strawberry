@@ -12,7 +12,7 @@ const (
 	// LeafNodeFlag indicates a leaf node.
 	LeafNodeFlag byte = 0b10000000
 
-	// NotEmbeddedLeafFlag indicates an embedded leaf node.
+	// NotEmbeddedLeafFlag indicates a regular (non-embedded) leaf node.
 	NotEmbeddedLeafFlag byte = 0b01000000
 
 	// ValueSizeMask extracts the embedded value size.
@@ -60,18 +60,12 @@ func (n Node) GetEmbeddedValueSize() (int, error) {
 }
 
 // GetBranchHashes retrieves both the left and right hashes from a branch node.
-// It returns two Hash values and a boolean indicating success.
-// For the left hash, we ignore the first byte of the node (which is the node type identifier)
 func (n Node) GetBranchHashes() (crypto.Hash, crypto.Hash, error) {
 	if !n.IsBranch() {
 		return crypto.Hash{}, crypto.Hash{}, ErrNotBranchNode
 	}
-
 	var left, right crypto.Hash
-
-	// Extract left hash
-	copy(left[:], n[1:32])
-	// Extract right hash
+	copy(left[:], n[:32])
 	copy(right[:], n[32:])
 
 	return left, right, nil

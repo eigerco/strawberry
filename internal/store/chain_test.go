@@ -18,7 +18,10 @@ func TestPutAndGetHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	chain := NewChain(db)
-	defer chain.Close()
+	defer func() {
+		err := db.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 
 	// Create a parent header with a zero ParentHash (genesis block)
 	parentHeader := block.Header{
@@ -60,7 +63,10 @@ func TestGetNonExistentAncestor(t *testing.T) {
 	require.NoError(t, err)
 
 	chain := NewChain(db)
-	defer chain.Close()
+	defer func() {
+		err := db.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 
 	header := block.Header{
 		ParentHash: crypto.Hash{1, 2, 3}, // This hash doesn't exist in store
@@ -74,7 +80,10 @@ func TestGetNonExistentAncestor(t *testing.T) {
 
 func Test_FindHeader_ByParentHash(t *testing.T) {
 	chain := newStore(t)
-	defer chain.Close()
+	defer func() {
+		err := chain.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 
 	parentHash := testutils.RandomHash(t)
 	header1 := block.Header{
@@ -102,7 +111,10 @@ func Test_FindHeader_ByParentHash(t *testing.T) {
 
 func Test_FindHeader_ByTimeSlot(t *testing.T) {
 	chain := newStore(t)
-	defer chain.Close()
+	defer func() {
+		err := chain.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 
 	targetSlot := jamtime.Timeslot(5)
 	header1 := block.Header{
@@ -130,7 +142,10 @@ func Test_FindHeader_ByTimeSlot(t *testing.T) {
 
 func Test_FindHeader_NotFound(t *testing.T) {
 	chain := newStore(t)
-	defer chain.Close()
+	defer func() {
+		err := chain.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 
 	header := block.Header{
 		ParentHash:     testutils.RandomHash(t),
@@ -147,18 +162,12 @@ func Test_FindHeader_NotFound(t *testing.T) {
 	require.Empty(t, h)
 }
 
-func Test_FindHeader_ChainClosed(t *testing.T) {
-	chain := newStore(t)
-	chain.Close()
-
-	_, err := chain.FindHeader(func(h block.Header) bool {
-		return true
-	})
-	require.ErrorIs(t, err, ErrChainClosed)
-}
-
 func Test_PutGetBlock(t *testing.T) {
 	chain := newStore(t)
+	defer func() {
+		err := chain.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 	header := block.Header{
 		ParentHash: testutils.RandomHash(t),
 	}
@@ -177,6 +186,10 @@ func Test_PutGetBlock(t *testing.T) {
 
 func Test_GetBlockNotFound(t *testing.T) {
 	chain := newStore(t)
+	defer func() {
+		err := chain.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 	_, err := chain.GetBlock(testutils.RandomHash(t))
 	require.Error(t, err)
 	require.Equal(t, ErrBlockNotFound, err)
@@ -191,17 +204,12 @@ func Test_Close(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func Test_ChainClosed(t *testing.T) {
-	chain := newStore(t)
-	chain.Close()
-	_, err := chain.GetBlock(testutils.RandomHash(t))
-	require.Error(t, err)
-	require.Equal(t, ErrChainClosed, err)
-}
-
 func Test_FindChildren(t *testing.T) {
 	chain := newStore(t)
-
+	defer func() {
+		err := chain.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 	// Create parent block
 	parentBlock := block.Block{
 		Header: block.Header{
@@ -244,7 +252,10 @@ func Test_FindChildren(t *testing.T) {
 
 func Test_FindChildren_NoChildren(t *testing.T) {
 	chain := newStore(t)
-
+	defer func() {
+		err := chain.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 	// Create parent block
 	parentBlock := block.Block{
 		Header: block.Header{
@@ -262,18 +273,12 @@ func Test_FindChildren_NoChildren(t *testing.T) {
 	require.Empty(t, children)
 }
 
-func Test_FindChildren_ChainClosed(t *testing.T) {
-	chain := newStore(t)
-	chain.Close()
-
-	_, err := chain.FindChildren(testutils.RandomHash(t))
-	require.Error(t, err)
-	require.Equal(t, ErrChainClosed, err)
-}
-
 func Test_GetBlockSequence_Ascending(t *testing.T) {
 	chain := newStore(t)
-
+	defer func() {
+		err := chain.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 	// Create a sequence of blocks
 	blocks := createNumOfRandomBlocks(5, t)
 	for _, b := range blocks {
@@ -294,7 +299,10 @@ func Test_GetBlockSequence_Ascending(t *testing.T) {
 
 func Test_GetBlockSequence_AscendingRequestTooMany(t *testing.T) {
 	chain := newStore(t)
-
+	defer func() {
+		err := chain.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 	// Create a sequence of blocks
 	blocks := createNumOfRandomBlocks(5, t)
 	for _, b := range blocks {
@@ -315,7 +323,10 @@ func Test_GetBlockSequence_AscendingRequestTooMany(t *testing.T) {
 
 func Test_GetBlockSequence_Descending(t *testing.T) {
 	chain := newStore(t)
-
+	defer func() {
+		err := chain.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 	// Create a sequence of blocks
 	blocks := createNumOfRandomBlocks(5, t)
 	for _, b := range blocks {
@@ -339,7 +350,10 @@ func Test_GetBlockSequence_Descending(t *testing.T) {
 
 func Test_GetBlockSequence_DescendingRequestTooMany(t *testing.T) {
 	chain := newStore(t)
-
+	defer func() {
+		err := chain.Close()
+		require.NoError(t, err, "failed to close db")
+	}()
 	// Create a sequence of blocks
 	blocks := createNumOfRandomBlocks(5, t)
 	for _, b := range blocks {
@@ -359,15 +373,6 @@ func Test_GetBlockSequence_DescendingRequestTooMany(t *testing.T) {
 		// The sequence should be in reverse order
 		require.Equal(t, blocks[len(blocks)-1-i], sequence[i])
 	}
-}
-
-func Test_GetBlockSequence_ChainClosed(t *testing.T) {
-	chain := newStore(t)
-	chain.Close()
-
-	_, err := chain.GetBlockSequence(testutils.RandomHash(t), true, 5)
-	require.Error(t, err)
-	require.Equal(t, ErrChainClosed, err)
 }
 
 // CreateRandomBlock generates a random block for testing purposes
