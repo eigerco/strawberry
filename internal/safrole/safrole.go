@@ -14,7 +14,7 @@ type TicketsBodies [jamtime.TimeslotsPerEpoch]block.Ticket
 
 func (t TicketsBodies) TicketsOrKeysType() {}
 
-// SealingKeys is enum/union that represents ys. It should contain either
+// SealingKeys is enum/union that represents γs. It should contain either
 // TicketBodies which is an array of tickets, or in the fallback case
 // crypto.EpochKeys, an array of bandersnatch public keys.
 type SealingKeys struct {
