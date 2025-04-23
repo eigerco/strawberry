@@ -2,8 +2,9 @@ package statetransition
 
 import (
 	"crypto/ed25519"
-	"github.com/eigerco/strawberry/internal/service"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/service"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -912,12 +913,12 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 func TestCalculateNewValidatorStatistics(t *testing.T) {
 	t.Run("new epoch transition", func(t *testing.T) {
 		// Initial state with some existing stats
-		initialStats := validator.ValidatorStatisticsState{
-			0: [common.NumberOfValidators]validator.ValidatorStatistics{
+		initialStats := validator.ActivityStatisticsState{
+			ValidatorsLast: [common.NumberOfValidators]validator.ValidatorStatistics{
 				0: {NumOfBlocks: 5},
 				1: {NumOfTickets: 3},
 			},
-			1: [common.NumberOfValidators]validator.ValidatorStatistics{
+			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{
 				0: {NumOfBlocks: 10},
 				1: {NumOfTickets: 6},
 			},
@@ -930,18 +931,18 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 			},
 		}
 
-		newStats := CalculateNewValidatorStatistics(block, jamtime.Timeslot(599), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{})
+		newStats := CalculateNewActivityStatistics(block, jamtime.Timeslot(599), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{})
 
 		// Check that stats were rotated correctly
-		assert.Equal(t, uint32(10), newStats[0][0].NumOfBlocks, "Previous current stats should become history")
-		assert.Equal(t, uint64(6), newStats[0][1].NumOfTickets, "Previous current stats should become history")
-		assert.Equal(t, uint32(0), newStats[1][0].NumOfBlocks, "Current stats should be reset")
-		assert.Equal(t, uint64(0), newStats[1][1].NumOfTickets, "Current stats should be reset")
+		assert.Equal(t, uint32(10), newStats.ValidatorsLast[0].NumOfBlocks, "Previous current stats should become history")
+		assert.Equal(t, uint64(6), newStats.ValidatorsLast[1].NumOfTickets, "Previous current stats should become history")
+		assert.Equal(t, uint32(0), newStats.ValidatorsCurrent[0].NumOfBlocks, "Current stats should be reset")
+		assert.Equal(t, uint64(0), newStats.ValidatorsCurrent[1].NumOfTickets, "Current stats should be reset")
 	})
 
 	t.Run("block author statistics", func(t *testing.T) {
-		initialStats := validator.ValidatorStatisticsState{
-			1: [common.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
+		initialStats := validator.ActivityStatisticsState{
+			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
 		}
 
 		block := block.Block{
@@ -960,21 +961,21 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 			},
 		}
 
-		newStats := CalculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{})
+		newStats := CalculateNewActivityStatistics(block, jamtime.Timeslot(5), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{})
 
 		// Check block author stats
-		assert.Equal(t, uint32(1), newStats[1][1].NumOfBlocks, "Block count should increment")
-		assert.Equal(t, uint64(3), newStats[1][1].NumOfTickets, "Ticket count should match")
-		assert.Equal(t, uint64(2), newStats[1][1].NumOfPreimages, "Preimage count should match")
-		assert.Equal(t, uint64(10), newStats[1][1].NumOfBytesAllPreimages, "Preimage bytes should match")
+		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[1].NumOfBlocks, "Block count should increment")
+		assert.Equal(t, uint64(3), newStats.ValidatorsCurrent[1].NumOfTickets, "Ticket count should match")
+		assert.Equal(t, uint64(2), newStats.ValidatorsCurrent[1].NumOfPreimages, "Preimage count should match")
+		assert.Equal(t, uint64(10), newStats.ValidatorsCurrent[1].NumOfBytesAllPreimages, "Preimage bytes should match")
 
 		// Check non-author stats remained zero
-		assert.Equal(t, uint32(0), newStats[1][0].NumOfBlocks, "Non-author stats should remain zero")
+		assert.Equal(t, uint32(0), newStats.ValidatorsCurrent[0].NumOfBlocks, "Non-author stats should remain zero")
 	})
 
 	t.Run("guarantees and assurances", func(t *testing.T) {
-		initialStats := validator.ValidatorStatisticsState{
-			1: [common.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
+		initialStats := validator.ActivityStatisticsState{
+			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
 		}
 
 		block := block.Block{
@@ -1008,18 +1009,18 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 		reporters := make(crypto.ED25519PublicKeySet)
 		reporters.Add(ed25519key1)
 		reporters.Add(ed25519key2)
-		newStats := CalculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}})
+		newStats := CalculateNewActivityStatistics(block, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}})
 
 		// Check guarantees and assurances
-		assert.Equal(t, uint64(1), newStats[1][0].NumOfGuaranteedReports, "Should count all guarantees for validator 0")
-		assert.Equal(t, uint64(1), newStats[1][1].NumOfGuaranteedReports, "Should count all guarantees for validator 1")
-		assert.Equal(t, uint64(1), newStats[1][0].NumOfAvailabilityAssurances, "Should count assurance for validator 0")
-		assert.Equal(t, uint64(1), newStats[1][1].NumOfAvailabilityAssurances, "Should count assurance for validator 1")
+		assert.Equal(t, uint64(1), newStats.ValidatorsCurrent[0].NumOfGuaranteedReports, "Should count all guarantees for validator 0")
+		assert.Equal(t, uint64(1), newStats.ValidatorsCurrent[1].NumOfGuaranteedReports, "Should count all guarantees for validator 1")
+		assert.Equal(t, uint64(1), newStats.ValidatorsCurrent[0].NumOfAvailabilityAssurances, "Should count assurance for validator 0")
+		assert.Equal(t, uint64(1), newStats.ValidatorsCurrent[1].NumOfAvailabilityAssurances, "Should count assurance for validator 1")
 	})
 
 	t.Run("full block processing", func(t *testing.T) {
-		initialStats := validator.ValidatorStatisticsState{
-			1: [common.NumberOfValidators]validator.ValidatorStatistics{
+		initialStats := validator.ActivityStatisticsState{
+			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{
 				1: {
 					NumOfBlocks:                 5,
 					NumOfTickets:                10,
@@ -1063,7 +1064,7 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 		reporters := make(crypto.ED25519PublicKeySet)
 		reporters.Add(ed25519key1)
 		reporters.Add(ed25519key2)
-		newStats := CalculateNewValidatorStatistics(block, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}})
+		newStats := CalculateNewActivityStatistics(block, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}})
 
 		expected := validator.ValidatorStatistics{
 			NumOfBlocks:                 6,
@@ -1074,7 +1075,7 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 			NumOfAvailabilityAssurances: 3,
 		}
 
-		assert.Equal(t, expected, newStats[1][1], "All statistics should be updated correctly")
+		assert.Equal(t, expected, newStats.ValidatorsCurrent[1], "All statistics should be updated correctly")
 	})
 }
 

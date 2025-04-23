@@ -3,6 +3,7 @@ package validator
 import (
 	"crypto/ed25519"
 
+	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
@@ -16,8 +17,13 @@ type ValidatorState struct {
 	SafroleState       safrole.State          // Safrole State (𝛾) (state of block-production algorithm)
 }
 
-// ValidatorStatisticsState represents the statistics related to validators.
-type ValidatorStatisticsState [2][common.NumberOfValidators]ValidatorStatistics // Completed statistics (π[0]) - The activity statistics for the validators which have completed their work. Present statistics (π[1]) - The activity statistics for the validators which are currently being accumulated.
+// ActivityStatisticsState represents the statistics related to validators.
+type ActivityStatisticsState struct {
+	ValidatorsLast    [common.NumberOfValidators]ValidatorStatistics // Completed validator statistics (π_l) - The activity statistics for the validators which have completed their work.
+	ValidatorsCurrent [common.NumberOfValidators]ValidatorStatistics // Present validator statistics (π_v) - The activity statistics for the validators which are currently being accumulated.
+	Cores             [common.TotalNumberOfCores]CoreStatistics      // Core statistics (π_c) - The activity statistics for each core.
+	Services          []ServiceStatistics                            // Service statistics (π_s) - The activity statistics for each service.
+}
 
 type ValidatorStatistics struct {
 	NumOfBlocks                 uint32 // Number of blocks (b) - The number of blocks produced by the validator.
@@ -26,6 +32,40 @@ type ValidatorStatistics struct {
 	NumOfBytesAllPreimages      uint64 // Number of bytes across all preimages (d) - The total number of octets across all preimages introduced by the validator.
 	NumOfGuaranteedReports      uint64 // Number of guaranteed reports (g) - The number of reports guaranteed by the validator.
 	NumOfAvailabilityAssurances uint64 // Number of availability assurances (a) - The number of assurances of availability made by the validator.
+}
+
+type CoreStatistics struct {
+	// DALoad (d) is the amount of bytes placed into either Audits or Segments DA.
+	// This includes the work-bundle (including all extrinsics and imports) as well as all
+	// (exported) segments.
+	DALoad         uint32
+	Popularity     uint16 // Popularity (p) is the number of validators which formed super-majority for assurance.
+	Imports        uint16 // Imports (i) is the number of segments imported from DA made by core for reported work.
+	Exports        uint16 // Exports (e) is the number of segments exported into DA made by core for reported work.
+	ExtrinsicSize  uint32 // ExtrinsicSize (x) is the total size of extrinsics used by core for reported work.
+	ExtrinsicCount uint16 // ExtrinsicCount (z) is the total number of extrinsics used by core for reported work.
+	BundleSize     uint32 // BundleSize (b) is the work-bundle size. This is the size of data being placed into Audits DA by the core.
+	GasUsed        uint64 // GasUsed (g) is the total gas consumed by core for reported work. Includes all refinement and authorizations.
+}
+
+type ServiceActivityRecord struct {
+	ProvidedCount      uint16 // ProvidedCount (p.0) is the number of preimages provided to this service.
+	ProvidedSize       uint32 // ProvidedSize (p.1) is the total size of preimages provided to this service.
+	RefinementCount    uint32 // RefinementCount (r.0) is the number of work-items refined by service for reported work.
+	RefinementGasUsed  uint64 // RefinementGasUsed (r.1) is the amount of gas used for refinement by service for reported work.
+	Imports            uint32 // Imports (i) is the number of segments imported from the DL by service for reported work.
+	Exports            uint32 // Exports (e) is the number of segments exported into the DL by service for reported work.
+	ExtrinsicSize      uint32 // ExtrinsicSize (x) is the total size of extrinsics used by service for reported work.
+	ExtrinsicCount     uint32 // ExtrinsicCount (z) is the total number of extrinsics used by service for reported work.
+	AccumulateCount    uint32 // AccumulateCount (a.0) is the number of work-items accumulated by service.
+	AccumulateGasUsed  uint64 // AccumulateGasUsed (a.1) is the amount of gas used for accumulation by service.
+	OnTransfersCount   uint32 // OnTransfersCount (t.0) is the number of transfers processed by service.
+	OnTransfersGasUsed uint64 // OnTransfersGasUsed (t.1) is the amount of gas used for processing transfers by service.
+}
+
+type ServiceStatistics struct {
+	ID     block.ServiceId       // ID is the service identifier
+	Record ServiceActivityRecord // Record contains the activity metrics for the service
 }
 
 // Implements equation 59 from the graypaper, i.e Φ(k). If any of the queued

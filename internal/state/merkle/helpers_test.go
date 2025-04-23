@@ -236,10 +236,10 @@ func RandomValidatorStatistics() validator.ValidatorStatistics {
 	}
 }
 
-func RandomValidatorStatisticsState() validator.ValidatorStatisticsState {
-	return validator.ValidatorStatisticsState{
-		[common.NumberOfValidators]validator.ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
-		[common.NumberOfValidators]validator.ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
+func RandomValidatorStatisticsState() validator.ActivityStatisticsState {
+	return validator.ActivityStatisticsState{
+		ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
+		ValidatorsLast:    [common.NumberOfValidators]validator.ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
 	}
 }
 
@@ -298,7 +298,7 @@ func RandomState(t *testing.T) state.State {
 		RecentBlocks:             []state.BlockState{RandomBlockState(t)},
 		TimeslotIndex:            testutils.RandomTimeslot(),
 		PastJudgements:           RandomJudgements(t),
-		ValidatorStatistics:      RandomValidatorStatisticsState(),
+		ActivityStatistics:       RandomValidatorStatisticsState(),
 		AccumulationQueue:        RandomAccumulationQueue(t),
 		AccumulationHistory:      RandomAccumulationHistory(t),
 	}
@@ -333,7 +333,7 @@ func DeserializeState(serializedState map[crypto.Hash][]byte) (state.State, erro
 		{10, &deserializedState.CoreAssignments},
 		{11, &deserializedState.TimeslotIndex},
 		{12, &deserializedState.PrivilegedServices},
-		{13, &deserializedState.ValidatorStatistics},
+		{13, &deserializedState.ActivityStatistics},
 		{14, &deserializedState.AccumulationQueue},
 		{15, &deserializedState.AccumulationHistory},
 	}

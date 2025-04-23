@@ -69,7 +69,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	if err != nil {
 		return err
 	}
-	newValidatorStatistics := CalculateNewValidatorStatistics(newBlock, newTimeState, s.ValidatorStatistics, reporters, s.ValidatorState.CurrentValidators)
+	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, newTimeState, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators)
 
 	workReports := GetAvailableWorkReports(newCoreAssignments)
 
@@ -104,7 +104,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	s.EntropyPool = newEntropyPool
 	s.ValidatorState = newValidatorState
 	s.ValidatorState.QueuedValidators = newQueuedValidators
-	s.ValidatorStatistics = newValidatorStatistics
+	s.ActivityStatistics = newValidatorStatistics
 	s.RecentBlocks = newRecentBlocks
 	s.CoreAssignments = newCoreAssignments
 	s.PastJudgements = newJudgements
@@ -2319,9 +2319,10 @@ func buildServiceAccumulationCommitments(accumResults map[block.ServiceId]state.
 	return commitments
 }
 
-// CalculateNewValidatorStatistics implements equation 30:
+// CalculateNewActivityStatistics implements equation 30:
 // π′ ≺ (EG, EP, EA, ET, τ, κ′, π, H)
-func CalculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslot, validatorStatistics validator.ValidatorStatisticsState, reporters crypto.ED25519PublicKeySet, currValidators safrole.ValidatorsData) validator.ValidatorStatisticsState {
+// TODO: add core and service statistics when vectors are available.
+func CalculateNewActivityStatistics(block block.Block, timeslot jamtime.Timeslot, validatorStatistics validator.ActivityStatisticsState, reporters crypto.ED25519PublicKeySet, currValidators safrole.ValidatorsData) validator.ActivityStatisticsState {
 	newStats := validatorStatistics
 
 	// Implements equations 170-171:
@@ -2330,28 +2331,28 @@ func CalculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslo
 	//              ([{0,...,[0,...]},...], π₀) otherwise
 	if timeslot.ToEpoch() != block.Header.TimeSlotIndex.ToEpoch() {
 		// Rotate statistics - completed stats become history, start fresh present stats
-		newStats[0] = newStats[1]                                                // Move current to history
-		newStats[1] = [common.NumberOfValidators]validator.ValidatorStatistics{} // Reset current
+		newStats.ValidatorsLast = newStats.ValidatorsCurrent                                    // Move current to history
+		newStats.ValidatorsCurrent = [common.NumberOfValidators]validator.ValidatorStatistics{} // Reset current
 	}
 
 	// Implements equation 172: ∀v ∈ NV
-	for v := uint16(0); v < uint16(len(newStats[0])); v++ {
+	for v := uint16(0); v < uint16(len(newStats.ValidatorsCurrent)); v++ {
 		// π′₀[v]b ≡ a[v]b + (v = Hi)
 		if v == block.Header.BlockAuthorIndex {
-			newStats[1][v].NumOfBlocks++
+			newStats.ValidatorsCurrent[v].NumOfBlocks++
 
 			// π′₀[v]t ≡ a[v]t + {|ET| if v = Hi
 			//                     0 otherwise
-			newStats[1][v].NumOfTickets += uint64(len(block.Extrinsic.ET.TicketProofs))
+			newStats.ValidatorsCurrent[v].NumOfTickets += uint64(len(block.Extrinsic.ET.TicketProofs))
 
 			// π′₀[v]p ≡ a[v]p + {|EP| if v = Hi
 			//                     0 otherwise
-			newStats[1][v].NumOfPreimages += uint64(len(block.Extrinsic.EP))
+			newStats.ValidatorsCurrent[v].NumOfPreimages += uint64(len(block.Extrinsic.EP))
 
 			// π′₀[v]d ≡ a[v]d + {Σd∈EP|d| if v = Hi
 			//                     0 otherwise
 			for _, preimage := range block.Extrinsic.EP {
-				newStats[1][v].NumOfBytesAllPreimages += uint64(len(preimage.Data))
+				newStats.ValidatorsCurrent[v].NumOfBytesAllPreimages += uint64(len(preimage.Data))
 			}
 		}
 
@@ -2359,14 +2360,14 @@ func CalculateNewValidatorStatistics(block block.Block, timeslot jamtime.Timeslo
 		// Where R is the set of reporter keys defined in 11.26 0.6.2
 		for reporter := range reporters {
 			if currValidators[v] != nil && slices.Equal(currValidators[v].Ed25519, reporter[:]) {
-				newStats[1][v].NumOfGuaranteedReports++
+				newStats.ValidatorsCurrent[v].NumOfGuaranteedReports++
 			}
 		}
 
 		// π′₀[v]a ≡ a[v]a + (∃a ∈ EA : av = v)
 		for _, assurance := range block.Extrinsic.EA {
 			if assurance.ValidatorIndex == v {
-				newStats[1][v].NumOfAvailabilityAssurances++
+				newStats.ValidatorsCurrent[v].NumOfAvailabilityAssurances++
 			}
 		}
 	}
