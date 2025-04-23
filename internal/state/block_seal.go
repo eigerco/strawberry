@@ -51,18 +51,17 @@ func getWinningTicketOrKey(timeslot jamtime.Timeslot, sealingKeys safrole.Ticket
 // Implements equations 6.15-6.20 in the graypaper. (v0.5.4)
 func SealBlock(
 	header *block.Header,
-	state *State,
+	sealKeys safrole.SealingKeys,
+	entropy crypto.Hash,
 	privateKey crypto.BandersnatchPrivateKey,
 ) error {
 	winningTicketOrKey, err := getWinningTicketOrKey(
 		header.TimeSlotIndex,
-		state.ValidatorState.SafroleState.SealingKeySeries.Get(),
+		sealKeys.Get(),
 	)
 	if err != nil {
 		return err
 	}
-
-	entropy := state.EntropyPool[3] // η_3
 
 	var (
 		sealSignature crypto.BandersnatchSignature
@@ -278,19 +277,19 @@ func encodeUnsealedHeader(header block.Header) ([]byte, error) {
 
 func VerifyBlockSeal(
 	header *block.Header,
-	state *State,
+	sealKeys safrole.SealingKeys,
+	validators safrole.ValidatorsData,
+	entropy crypto.Hash,
 ) (bool, error) {
 	winningTicketOrKey, err := getWinningTicketOrKey(
 		header.TimeSlotIndex,
-		state.ValidatorState.SafroleState.SealingKeySeries.Get(),
+		sealKeys.Get(),
 	)
 	if err != nil {
 		return false, err
 	}
 
-	entropy := state.EntropyPool[3] // η_3
-
-	return VerifyBlockSignatures(*header, winningTicketOrKey, state.ValidatorState.CurrentValidators, entropy)
+	return VerifyBlockSignatures(*header, winningTicketOrKey, validators, entropy)
 }
 
 func VerifyBlockSignatures(
@@ -389,18 +388,17 @@ func VerifyBlockSignatures(
 // producer.
 func IsSlotLeader(
 	timeslot jamtime.Timeslot,
-	state *State,
+	sealingKeys safrole.SealingKeys,
+	entropy crypto.Hash,
 	privateKey crypto.BandersnatchPrivateKey,
 ) (bool, error) {
 	winningTicketOrKey, err := getWinningTicketOrKey(
 		timeslot,
-		state.ValidatorState.SafroleState.SealingKeySeries.Get(),
+		sealingKeys.Get(),
 	)
 	if err != nil {
 		return false, err
 	}
-
-	entropy := state.EntropyPool[3] // η_3
 
 	switch tok := winningTicketOrKey.(type) {
 	case block.Ticket:

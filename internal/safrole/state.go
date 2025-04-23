@@ -15,15 +15,24 @@ import (
 type State struct {
 	NextValidators    ValidatorsData        // (γk) Validator keys for the following epoch.
 	TicketAccumulator []block.Ticket        // (γa) Sealing-key contest ticket accumulator.
-	SealingKeySeries  TicketAccumulator     // (γs) Sealing-key series of the current epoch.
+	SealingKeySeries  SealingKeys           // (γs) Sealing-key series of the current epoch.
 	RingCommitment    crypto.RingCommitment // (γz) Bandersnatch ring commitment.
 }
 
 type ValidatorsData [common.NumberOfValidators]*crypto.ValidatorKey
 
-// Returns the RingCommitment for this state i.e. γz.
-func (state State) CalculateRingCommitment() (crypto.RingCommitment, error) {
-	ringVerifier, err := state.RingVerifier()
+// Returns a new RingVrfVerifier for this these validators.
+func (vsd ValidatorsData) RingVerifier() (*bandersnatch.RingVrfVerifier, error) {
+	ring := make([]crypto.BandersnatchPublicKey, len(vsd))
+	for i, vd := range vsd {
+		ring[i] = vd.Bandersnatch
+	}
+	return bandersnatch.NewRingVerifier(ring)
+}
+
+// Returns the RingCommitment for this validator set.
+func (vsd ValidatorsData) RingCommitment() (crypto.RingCommitment, error) {
+	ringVerifier, err := vsd.RingVerifier()
 	defer ringVerifier.Free()
 	if err != nil {
 		return crypto.RingCommitment{}, err
@@ -31,24 +40,15 @@ func (state State) CalculateRingCommitment() (crypto.RingCommitment, error) {
 	return ringVerifier.Commitment()
 }
 
-// Returns a new RingVrfVerifier for this state.
-func (state State) RingVerifier() (*bandersnatch.RingVrfVerifier, error) {
-	ring := make([]crypto.BandersnatchPublicKey, len(state.NextValidators))
-	for i, vd := range state.NextValidators {
-		ring[i] = vd.Bandersnatch
-	}
-	return bandersnatch.NewRingVerifier(ring)
-}
-
-// Takes a private bandersnatch key and returns a new RingVrfProver for this state.
-func (state State) RingProver(privateKey crypto.BandersnatchPrivateKey) (*bandersnatch.RingVrfProver, error) {
+// Takes a private bandersnatch key and returns a new RingVrfProver for this validator set.
+func (vsd ValidatorsData) RingProver(privateKey crypto.BandersnatchPrivateKey) (*bandersnatch.RingVrfProver, error) {
 	publicKey, err := bandersnatch.Public(privateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	ring := make([]crypto.BandersnatchPublicKey, len(state.NextValidators))
-	for i, vd := range state.NextValidators {
+	ring := make([]crypto.BandersnatchPublicKey, len(vsd))
+	for i, vd := range vsd {
 		ring[i] = vd.Bandersnatch
 	}
 

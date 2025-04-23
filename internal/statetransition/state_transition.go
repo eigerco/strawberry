@@ -482,7 +482,7 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 		return []block.Ticket{}, errors.New("too many tickets")
 	}
 
-	ringVerifier, err := safstate.RingVerifier()
+	ringVerifier, err := safstate.NextValidators.RingVerifier()
 	defer ringVerifier.Free()
 	if err != nil {
 		return []block.Ticket{}, err
@@ -595,7 +595,7 @@ func UpdateSafroleState(
 
 		// Calculate new ring commitment. (γ_z) . Apply the O function from equation 58.
 		//  Equation 58: z = O([kb S k <− γ′k])
-		ringCommitment, err := newValidatorState.SafroleState.CalculateRingCommitment()
+		ringCommitment, err := newValidatorState.SafroleState.NextValidators.RingCommitment()
 		if err != nil {
 			return entropyPool, validatorState, SafroleOutput{}, errors.New("unable to calculate ring commitment")
 		}

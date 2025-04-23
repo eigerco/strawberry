@@ -14,10 +14,10 @@ type TicketsBodies [jamtime.TimeslotsPerEpoch]block.Ticket
 
 func (t TicketsBodies) TicketsOrKeysType() {}
 
-// TicketAccumulator is enum/union that represents ya. It should contain either
+// SealingKeys is enum/union that represents γs. It should contain either
 // TicketBodies which is an array of tickets, or in the fallback case
 // crypto.EpochKeys, an array of bandersnatch public keys.
-type TicketAccumulator struct {
+type SealingKeys struct {
 	inner TicketsOrKeys
 }
 
@@ -27,43 +27,43 @@ type TicketsOrKeys interface {
 	TicketsOrKeysType()
 }
 
-func (ta *TicketAccumulator) Set(value TicketsOrKeys) {
-	ta.inner = value
+func (sk *SealingKeys) Set(value TicketsOrKeys) {
+	sk.inner = value
 }
 
-func (ta *TicketAccumulator) Get() TicketsOrKeys {
-	return ta.inner
+func (sk *SealingKeys) Get() TicketsOrKeys {
+	return sk.inner
 }
 
-func (ta *TicketAccumulator) SetValue(value any) error {
+func (sk *SealingKeys) SetValue(value any) error {
 	switch value := value.(type) {
 	case crypto.EpochKeys:
-		ta.inner = value
+		sk.inner = value
 		return nil
 	case TicketsBodies:
-		ta.inner = value
+		sk.inner = value
 		return nil
 	default:
 		return fmt.Errorf(jam.ErrUnsupportedType, value)
 	}
 }
 
-func (ta TicketAccumulator) IndexValue() (uint, any, error) {
-	switch ta.inner.(type) {
+func (sk SealingKeys) IndexValue() (uint, any, error) {
+	switch sk.inner.(type) {
 	case crypto.EpochKeys:
-		return 1, ta.inner, nil
+		return 1, sk.inner, nil
 	case TicketsBodies:
-		return 0, ta.inner, nil
+		return 0, sk.inner, nil
 	}
 	return 0, nil, jam.ErrUnsupportedEnumTypeValue
 }
 
-func (ta TicketAccumulator) Value() (value any, err error) {
-	_, value, err = ta.IndexValue()
+func (sk SealingKeys) Value() (value any, err error) {
+	_, value, err = sk.IndexValue()
 	return
 }
 
-func (ta TicketAccumulator) ValueAt(index uint) (any, error) {
+func (sk SealingKeys) ValueAt(index uint) (any, error) {
 	switch index {
 	case 1:
 		return crypto.EpochKeys{}, nil
