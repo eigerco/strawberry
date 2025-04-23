@@ -32,6 +32,9 @@ const (
 	maxWaitTime                       = time.Second * 2
 )
 
+// WorkReportGuarantor handles CE-134 and CE-135:
+// - CE-134: share a work-package with other guarantors, run local refinement, collect wr hashes signatures
+// - CE-135: if enough signatures are gathered, broadcast the guaranteed work-report to validators
 type WorkReportGuarantor struct {
 	validatorIndex uint16
 	privateKey     ed25519.PrivateKey
@@ -84,6 +87,7 @@ func (h *WorkReportGuarantor) SetGuarantors(guarantors []*peer.Peer) {
 
 // ValidateAndProcessWorkPackage sends the work-package bundle to other guarantors and runs local refinement
 func (h *WorkReportGuarantor) ValidateAndProcessWorkPackage(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
+	// Validate the basic structure and constraints of the work-package
 	if err := bundle.Package.ValidateLimits(); err != nil {
 		return err
 	}
@@ -94,6 +98,7 @@ func (h *WorkReportGuarantor) ValidateAndProcessWorkPackage(ctx context.Context,
 		return err
 	}
 
+	// Run authorization to produce the auth output needed for refinement
 	authOutput, err := h.auth.InvokePVM(bundle.Package, coreIndex)
 	if err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
@@ -104,6 +109,7 @@ func (h *WorkReportGuarantor) ValidateAndProcessWorkPackage(ctx context.Context,
 	return h.processWorkPackage(ctx, authOutput, segments, coreIndex, bundle)
 }
 
+// Start sharing work package bundle with other guarantors and local refinement in parallel
 func (h *WorkReportGuarantor) processWorkPackage(
 	ctx context.Context,
 	authOutput []byte,
@@ -123,6 +129,7 @@ func (h *WorkReportGuarantor) processWorkPackage(
 	remoteResultCh := make(chan guaranteeResponse, len(h.guarantors))
 	localResultCh := make(chan localReportResult, 1)
 
+	// share work package with guarantors
 	var wg sync.WaitGroup
 	for _, g := range h.guarantors {
 		wg.Add(1)
@@ -150,6 +157,9 @@ func (h *WorkReportGuarantor) processWorkPackage(
 	return nil
 }
 
+// CE-134:
+// Share the work-package bundle with other guarantors and collect signed responses.
+//
 // Guarantor -> Guarantor
 //
 // --> Core Index ++ Segments-Root Mappings
@@ -214,6 +224,9 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 	}
 }
 
+// Collect local refinement result and responses from other guarantors (via channel).
+// Filter only matching hashes, add local signature, and construct the full Guarantee.
+// If enough signatures are collected (>= 2) after the timeout (maxWaitTime), proceed to distribute it (CE-135).
 func (h *WorkReportGuarantor) processWorkReports(
 	ctx context.Context,
 	localResultCh <-chan localReportResult,
@@ -222,10 +235,12 @@ func (h *WorkReportGuarantor) processWorkReports(
 	localResult, remoteResponses, err := h.collectReports(ctx, guaranteeRespCh, localResultCh)
 	if err != nil {
 		log.Printf("local refinement failed: %v", err)
+
 		return
 	}
 	if localResult.err != nil {
-		log.Println("aborting distribution because local report errored")
+		log.Println("aborting guarantee distribution: local refinement failed")
+
 		return
 	}
 
@@ -274,7 +289,10 @@ func (h *WorkReportGuarantor) processWorkReports(
 	}
 }
 
-// collectReports waits for the local refinement result and remote guarantee responses.
+// Wait up to 2 seconds for:
+// - local refinement result
+// - enough remote signed responses (2 total)
+// Return when both conditions are met or timeout.
 func (h *WorkReportGuarantor) collectReports(
 	ctx context.Context,
 	remoteCh <-chan guaranteeResponse,
@@ -360,6 +378,10 @@ func (h *WorkReportGuarantor) sendWorkPackage(
 	return nil
 }
 
+// CE-135:
+// distribute guarantee to all current validators.
+// If it’s the last core rotation in the epoch, also send it to next epoch validators.
+//
 // Guaranteed Work-Report = Work-Report ++ Slot ++ len++[Validator Index ++ Ed25519 Signature] (As in GP)
 //
 // Guarantor -> Validator
@@ -413,6 +435,7 @@ func (h *WorkReportGuarantor) distributeGuaranteedWorkReport(
 	return nil
 }
 
+// Determine the correct set of validators to distribute work report
 func (h *WorkReportGuarantor) recipientValidators() []*peer.Peer {
 	var cur, next []*peer.Peer
 
@@ -430,6 +453,7 @@ func (h *WorkReportGuarantor) recipientValidators() []*peer.Peer {
 	return mergePeers(cur, next)
 }
 
+// Transforms safrole.ValidatorsData to []*peer.Peer
 func (h *WorkReportGuarantor) convertValidatorsDataToPeers(data safrole.ValidatorsData) []*peer.Peer {
 	var peers []*peer.Peer
 	for _, v := range data {
@@ -443,6 +467,7 @@ func (h *WorkReportGuarantor) convertValidatorsDataToPeers(data safrole.Validato
 	return peers
 }
 
+// mergePeers returns the union of two peer slices ensuring no duplicate ValidatorIndex entries
 func mergePeers(a, b []*peer.Peer) []*peer.Peer {
 	exists := make(map[uint16]struct{})
 	var merged []*peer.Peer

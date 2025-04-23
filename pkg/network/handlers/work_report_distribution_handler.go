@@ -12,6 +12,8 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
+// WorkReportDistributionHandler processes incoming CE-135 streams
+// This handler is used by a validator who receives a work-report guarantee
 type WorkReportDistributionHandler struct {
 }
 
