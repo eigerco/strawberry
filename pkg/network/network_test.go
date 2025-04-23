@@ -557,8 +557,11 @@ func TestWorkReportGuarantee(t *testing.T) {
 		Ed25519: peer3.Ed25519Key,
 	}
 
+	pool := chainState.CoreAuthorizersPool{}
+	pool[coreIndex] = []crypto.Hash{bundle.Package.AuthCodeHash}
 	currentState := chainState.State{
-		Services: serviceState,
+		Services:            serviceState,
+		CoreAuthorizersPool: pool,
 		ValidatorState: validator.ValidatorState{
 			CurrentValidators: validators,
 			SafroleState: safrole.State{

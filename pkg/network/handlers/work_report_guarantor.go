@@ -98,6 +98,10 @@ func (h *WorkReportGuarantor) ValidateAndProcessWorkPackage(ctx context.Context,
 		return err
 	}
 
+	if err := h.validateAgainstAuthorizationPool(coreIndex, bundle.Package); err != nil {
+		return err
+	}
+
 	// Run authorization to produce the auth output needed for refinement
 	authOutput, err := h.auth.InvokePVM(bundle.Package, coreIndex)
 	if err != nil {
@@ -107,6 +111,23 @@ func (h *WorkReportGuarantor) ValidateAndProcessWorkPackage(ctx context.Context,
 	segments := h.buildSegmentRootMapping(bundle)
 
 	return h.processWorkPackage(ctx, authOutput, segments, coreIndex, bundle)
+}
+
+// validateAgainstAuthorizationPool checks 11.29:
+//   - the work-package AuthCodeHash must be present in the core's pool.
+func (h *WorkReportGuarantor) validateAgainstAuthorizationPool(
+	coreIdx uint16,
+	pkg work.Package,
+) error {
+	pool := h.state.CoreAuthorizersPool[coreIdx]
+	for _, hash := range pool {
+		if hash == pkg.AuthCodeHash {
+			// authorized
+			return nil
+		}
+	}
+	return fmt.Errorf("auth hash %x is not in authorizer pool for core %d",
+		pkg.AuthCodeHash, coreIdx)
 }
 
 // Start sharing work package bundle with other guarantors and local refinement in parallel

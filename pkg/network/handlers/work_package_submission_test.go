@@ -106,8 +106,15 @@ func TestHandleWorkPackage(t *testing.T) {
 	mockStream := mocks.NewMockQuicStream()
 	coreIndex := uint16(1)
 
+	pool := state.CoreAuthorizersPool{}
+	pool[coreIndex] = []crypto.Hash{pkg.AuthCodeHash}
+	currentState := state.State{
+		Services:            getServiceState(),
+		CoreAuthorizersPool: pool,
+	}
+
 	_, prv, _ := ed25519.GenerateKey(nil)
-	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, state.State{Services: getServiceState()}, peer.NewPeerSet())
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet())
 	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer)
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
@@ -293,7 +300,14 @@ func TestHandleStream_Success(t *testing.T) {
 	coreIndex := uint16(5)
 	_, prv, _ := ed25519.GenerateKey(nil)
 
-	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, state.State{Services: getServiceState()}, peer.NewPeerSet())
+	pool := state.CoreAuthorizersPool{}
+	pool[coreIndex] = []crypto.Hash{pkg.AuthCodeHash, crypto.HashData([]byte("another hash"))}
+	currentState := state.State{
+		Services:            getServiceState(),
+		CoreAuthorizersPool: pool,
+	}
+
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet())
 	peerKey, _, _ := ed25519.GenerateKey(nil)
 
 	coreIndexBytes, err := jam.Marshal(coreIndex)
