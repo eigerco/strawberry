@@ -65,30 +65,43 @@ func (c *Chain) FindHeader(fn func(header block.Header) bool) (block.Header, err
 	if err != nil {
 		return block.Header{}, fmt.Errorf("create iterator: %w", err)
 	}
-	defer func() {
-		if cerr := iter.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("iterator close error: %w", cerr)
-		}
-	}()
+
+	// We'll track any error we might return, to also handle close errors.
+	var returnErr error
+	var result block.Header
 
 	// Iterate through headers
 	for iter.Next() {
 		headerBytes, err := iter.Value()
 		if err != nil {
-			return block.Header{}, fmt.Errorf("get header value: %w", err)
+			returnErr = fmt.Errorf("get header value: %w", err)
+			break
 		}
 
 		header, err := block.HeaderFromBytes(headerBytes)
 		if err != nil {
-			return block.Header{}, fmt.Errorf("parse header from bytes: %w", err)
+			returnErr = fmt.Errorf("parse header from bytes: %w", err)
+			break
 		}
 
 		if fn(header) {
-			return header, nil
+			result = header
+			break
 		}
 	}
 
-	return block.Header{}, nil
+	// Close iterator explicitly
+	if cerr := iter.Close(); cerr != nil {
+		if returnErr == nil {
+			returnErr = fmt.Errorf("iterator close error: %w", cerr)
+		}
+	}
+
+	// If retErr is still nil, check if result was set
+	if returnErr != nil {
+		return block.Header{}, returnErr
+	}
+	return result, nil
 }
 
 // PutBlock stores a block and its header atomically
@@ -178,18 +191,19 @@ func (c *Chain) FindChildren(parentHash crypto.Hash) ([]block.Block, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create iterator: %w", err)
 	}
-	defer iter.Close()
+
+	var resultErr error
 
 	// Iterate through blocks
 	for iter.Next() {
 		blockBytes, err := iter.Value()
 		if err != nil {
-			log.Println("read block value from iterator", err)
+			log.Println("read block value from iterator:", err)
 			continue
 		}
 		b, err := block.BlockFromBytes(blockBytes)
 		if err != nil {
-			log.Println("parse block from bytes", err)
+			log.Println("parse block from bytes:", err)
 			continue
 		}
 
@@ -198,7 +212,13 @@ func (c *Chain) FindChildren(parentHash crypto.Hash) ([]block.Block, error) {
 		}
 	}
 
-	return children, nil
+	// Close iterator manually and capture any error
+	if cerr := iter.Close(); cerr != nil {
+		resultErr = fmt.Errorf("iterator close error: %w", cerr)
+	}
+
+	// Return collected children and potential close error
+	return children, resultErr
 }
 
 // GetBlockSequence retrieves a sequence of blocks.

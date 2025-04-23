@@ -234,14 +234,14 @@ func (t *Trie) deleteNode(hash crypto.Hash, forceDelete bool) error {
 		}
 
 		// Delete left child if not empty
-		if !isZeroHash(leftHash) {
+		if leftHash != (crypto.Hash{}) {
 			if err := t.deleteNode(leftHash, false); err != nil {
 				return fmt.Errorf("failed to delete left child: %v", err)
 			}
 		}
 
 		// Delete right child if not empty
-		if !isZeroHash(rightHash) {
+		if rightHash != (crypto.Hash{}) {
 			if err := t.deleteNode(rightHash, false); err != nil {
 				return fmt.Errorf("failed to delete right child: %v", err)
 			}
@@ -277,14 +277,4 @@ func (t *Trie) deleteNode(hash crypto.Hash, forceDelete bool) error {
 	}
 
 	return nil
-}
-
-// isZeroHash checks if a hash is all zeros
-func isZeroHash(hash crypto.Hash) bool {
-	for _, b := range hash {
-		if b != 0 {
-			return false
-		}
-	}
-	return true
 }
