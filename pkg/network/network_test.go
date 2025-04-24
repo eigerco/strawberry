@@ -449,7 +449,7 @@ func TestTwoNodesSubmitWorkPackage(t *testing.T) {
 	t.Log("Work package submission test completed successfully")
 }
 
-func TestWorkReportGuarantee(t *testing.T) {
+func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -608,7 +608,7 @@ func TestWorkReportGuarantee(t *testing.T) {
 	err = builderNode.SubmitWorkPackage(ctx, coreIndex, bundle.Package, []byte{}, mainGuarantor.ValidatorManager.Keys.EdPub)
 	require.NoError(t, err)
 
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 	// TODO improve this test by checking the results after we store the guarantee
 }

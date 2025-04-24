@@ -131,8 +131,10 @@ func TestHandleWorkPackage(t *testing.T) {
 
 	conn := protocol.NewProtocolConn(mockTConn, registry)
 
+	validatorIndex := uint16(1)
 	mockPeer := &peer.Peer{
-		ProtoConn: conn,
+		ProtoConn:      conn,
+		ValidatorIndex: &validatorIndex,
 	}
 
 	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
@@ -321,8 +323,10 @@ func TestHandleStream_Success(t *testing.T) {
 
 	conn := protocol.NewProtocolConn(mockTConn, registry)
 
+	validatorIndex := uint16(1)
 	mockPeer := &peer.Peer{
-		ProtoConn: conn,
+		ProtoConn:      conn,
+		ValidatorIndex: &validatorIndex,
 	}
 
 	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)

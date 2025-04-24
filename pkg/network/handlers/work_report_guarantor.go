@@ -199,24 +199,33 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 ) {
 	defer wg.Done()
 
+	if g.ValidatorIndex == nil {
+		guaranteeCh <- guaranteeResponse{
+			Err: fmt.Errorf("missing validator index for peer %v", g),
+		}
+		log.Printf("Skipping peer with unknown validator index: %v", g)
+		return
+	}
+	validatorIndex := *g.ValidatorIndex
+
 	stream, err := g.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageShare)
 	if err != nil {
 		guaranteeCh <- guaranteeResponse{Err: err}
-		log.Printf("Failed to open stream to peer %v: %v", g, err)
+		log.Printf("Failed to open stream to peer %v: %v", validatorIndex, err)
 		return
 	}
 
 	err = h.sendWorkPackage(ctx, stream, coreIndex, segments, bundle)
 	if err != nil {
 		guaranteeCh <- guaranteeResponse{Err: err}
-		log.Printf("Failed to share WP with peer %v: %v", g, err)
+		log.Printf("Failed to share WP with peer %v: %v", validatorIndex, err)
 	}
 
 	// Handle CE-134 response from the receiving guarantor
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		guaranteeCh <- guaranteeResponse{Err: err}
-		log.Printf("Failed to read response from peer %v: %v", g, err)
+		log.Printf("Failed to read response from peer %v: %v", validatorIndex, err)
 		return
 	}
 
@@ -226,13 +235,8 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 	}
 	if err := jam.Unmarshal(msg.Content, &response); err != nil {
 		guaranteeCh <- guaranteeResponse{Err: err}
-		log.Printf("Failed to decode CE-134 response from peer %v: %v", g.ValidatorIndex, err)
+		log.Printf("Failed to decode CE-134 response from peer %v: %v", validatorIndex, err)
 		return
-	}
-
-	var validatorIndex uint16
-	if g.ValidatorIndex != nil {
-		validatorIndex = *g.ValidatorIndex
 	}
 
 	log.Printf("Received work-report hash and signature from peer %v:\n- Hash: %x\n- Signature: %x",
