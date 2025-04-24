@@ -3,7 +3,6 @@ package network_test
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/rand"
 	"fmt"
 	"net"
 	"sync"
@@ -33,7 +32,7 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-func setupNodes(ctx context.Context, t *testing.T, numNodes int) []*node.Node {
+func setupNodes(ctx context.Context, t *testing.T, state chainState.State, numNodes int) []*node.Node {
 	nodes := []*node.Node{}
 	validatorsData := safrole.ValidatorsData{}
 	nodeKeys := []validator.ValidatorKeys{}
@@ -59,9 +58,7 @@ func setupNodes(ctx context.Context, t *testing.T, numNodes int) []*node.Node {
 		QueuedValidators:   validatorsData,
 	}
 
-	state := chainState.State{
-		ValidatorState: vstate,
-	}
+	state.ValidatorState = vstate
 
 	for i := 0; i < numNodes; i++ {
 		addr, err := peer.NewPeerAddressFromMetadata(validatorsData[i].Metadata[:])
@@ -258,7 +255,7 @@ func TestTwoNodesAnnounceBlocks(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	nodes := setupNodes(ctx, t, 2)
+	nodes := setupNodes(ctx, t, chainState.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 	// Start both nodes
@@ -326,7 +323,7 @@ func TestTwoNodesRequestBlock(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	nodes := setupNodes(ctx, t, 2)
+	nodes := setupNodes(ctx, t, chainState.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 	// Start both nodes
@@ -381,7 +378,7 @@ func TestTwoNodesSubmitWorkPackage(t *testing.T) {
 	defer cancel()
 
 	// Setup nodes using the existing setup function
-	nodes := setupNodes(ctx, t, 2)
+	nodes := setupNodes(ctx, t, chainState.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 
@@ -456,66 +453,10 @@ func TestWorkReportGuarantee(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	nodes := setupNodes(ctx, t, 3)
-	node1 := nodes[0]
-	node2 := nodes[1]
-	node3 := nodes[2]
-
-	_, prv, _ := ed25519.GenerateKey(rand.Reader)
-	serviceState := getServiceState()
-
-	handler2 := handlers.NewWorkPackageSharingHandler(
-		mockAuthorizationInvoker{},
-		mockRefineInvoker{},
-		prv,
-		serviceState,
-	)
-
-	_, prv3, _ := ed25519.GenerateKey(rand.Reader)
-	handler3 := handlers.NewWorkPackageSharingHandler(
-		mockAuthorizationInvoker{},
-		mockRefineInvoker{},
-		prv3,
-		serviceState,
-	)
-
 	coreIndex := uint16(1)
-
-	handler2.SetCurrentCore(1)
-	handler3.SetCurrentCore(1)
-
-	node2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, handler2)
-	node3.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, handler3)
-
-	distHandler2 := handlers.NewWorkReportDistributionHandler()
-	distHandler3 := handlers.NewWorkReportDistributionHandler()
-
-	node2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkReportDist, distHandler2)
-	node3.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkReportDist, distHandler3)
-
-	require.NoError(t, node1.Start())
-	defer stopNode(t, node1)
-	require.NoError(t, node2.Start())
-	defer stopNode(t, node2)
-	require.NoError(t, node3.Start())
-	defer stopNode(t, node3)
-
-	time.Sleep(100 * time.Millisecond)
-
-	node2Addr, err := peer.NewPeerAddressFromMetadata(
-		nodes[1].ValidatorManager.State.CurrentValidators[1].Metadata[:],
-	)
-	require.NoError(t, err)
-	node3Addr, err := peer.NewPeerAddressFromMetadata(nodes[2].ValidatorManager.State.CurrentValidators[2].Metadata[:])
-	require.NoError(t, err)
-
-	require.NoError(t, node1.ConnectToPeer(node2Addr))
-	require.NoError(t, node1.ConnectToPeer(node3Addr))
-	time.Sleep(100 * time.Millisecond)
 
 	authCode := []byte("auth token")
 	authHash := crypto.HashData(authCode)
-
 	bundle := work.PackageBundle{
 		Package: work.Package{
 			AuthorizationToken: authCode,
@@ -538,58 +479,136 @@ func TestWorkReportGuarantee(t *testing.T) {
 		},
 	}
 
-	peerSet := peer.NewPeerSet()
-	peer2 := node1.PeersSet.GetByAddress(node2Addr.String())
-	index2 := uint16(2)
-	peer2.ValidatorIndex = &index2
-	peerSet.AddPeer(peer2)
-
-	peer3 := node1.PeersSet.GetByAddress(node3Addr.String())
-	index3 := uint16(3)
-	peer3.ValidatorIndex = &index3
-	peerSet.AddPeer(peer3)
-
-	var validators safrole.ValidatorsData
-	validators[0] = &crypto.ValidatorKey{
-		Ed25519: peer2.Ed25519Key,
-	}
-	validators[1] = &crypto.ValidatorKey{
-		Ed25519: peer3.Ed25519Key,
-	}
+	_, prv, _ := ed25519.GenerateKey(nil)
+	serviceState := getServiceState()
 
 	pool := chainState.CoreAuthorizersPool{}
 	pool[coreIndex] = []crypto.Hash{bundle.Package.AuthCodeHash}
 	currentState := chainState.State{
 		Services:            serviceState,
 		CoreAuthorizersPool: pool,
-		ValidatorState: validator.ValidatorState{
-			CurrentValidators: validators,
-			SafroleState: safrole.State{
-				NextValidators: validators,
-			},
-		},
-		TimeslotIndex: jamtime.Timeslot(599),
+		TimeslotIndex:       jamtime.Timeslot(599),
 	}
 
-	sharer := handlers.NewWorkReportGuarantor(
-		coreIndex,
-		prv,
-		mockAuthorizationInvoker{},
-		mockRefineInvoker{},
-		currentState,
-		peerSet,
-	)
+	// setup 6 nodes (1 builder, 3 guarantors, 2 validators)
+	nodes := setupNodes(ctx, t, currentState, 6)
+	builderNode := nodes[0]
+	mainGuarantor := nodes[1]
+	remoteGuarantor2 := nodes[2]
+	remoteGuarantor3 := nodes[3]
+	validator1 := nodes[4]
+	validator2 := nodes[5]
 
-	sharer.SetGuarantors([]*peer.Peer{
+	require.NoError(t, builderNode.Start())
+	defer stopNode(t, builderNode)
+	require.NoError(t, mainGuarantor.Start())
+	defer stopNode(t, mainGuarantor)
+	require.NoError(t, remoteGuarantor2.Start())
+	defer stopNode(t, remoteGuarantor2)
+	require.NoError(t, remoteGuarantor3.Start())
+	defer stopNode(t, remoteGuarantor3)
+	require.NoError(t, validator1.Start())
+	defer stopNode(t, validator1)
+	require.NoError(t, validator2.Start())
+	defer stopNode(t, validator2)
+
+	time.Sleep(100 * time.Millisecond)
+
+	mainGuarantorAddr, err := peer.NewPeerAddressFromMetadata(
+		nodes[1].ValidatorManager.State.CurrentValidators[1].Metadata[:],
+	)
+	require.NoError(t, err)
+
+	remoteGuarantor2Addr, err := peer.NewPeerAddressFromMetadata(
+		nodes[2].ValidatorManager.State.CurrentValidators[2].Metadata[:],
+	)
+	require.NoError(t, err)
+
+	remoteGuarantor3Addr, err := peer.NewPeerAddressFromMetadata(nodes[3].ValidatorManager.State.CurrentValidators[3].Metadata[:])
+	require.NoError(t, err)
+
+	validator1Addr, err := peer.NewPeerAddressFromMetadata(nodes[4].ValidatorManager.State.CurrentValidators[4].Metadata[:])
+	require.NoError(t, err)
+
+	validator2Addr, err := peer.NewPeerAddressFromMetadata(nodes[5].ValidatorManager.State.CurrentValidators[5].Metadata[:])
+	require.NoError(t, err)
+
+	require.NoError(t, mainGuarantor.ConnectToPeer(remoteGuarantor2Addr))
+	require.NoError(t, mainGuarantor.ConnectToPeer(remoteGuarantor3Addr))
+
+	require.NoError(t, mainGuarantor.ConnectToPeer(validator1Addr))
+	require.NoError(t, mainGuarantor.ConnectToPeer(validator2Addr))
+
+	require.NoError(t, builderNode.ConnectToPeer(mainGuarantorAddr))
+	time.Sleep(100 * time.Millisecond)
+
+	peerSet := peer.NewPeerSet()
+	// remote guarantor
+	peer2 := mainGuarantor.PeersSet.GetByAddress(remoteGuarantor2Addr.String())
+	index2 := uint16(2)
+	peer2.ValidatorIndex = &index2
+	peerSet.AddPeer(peer2)
+
+	// remote guarantor
+	peer3 := mainGuarantor.PeersSet.GetByAddress(remoteGuarantor3Addr.String())
+	index3 := uint16(3)
+	peer3.ValidatorIndex = &index3
+	peerSet.AddPeer(peer3)
+
+	// validators
+	peer4 := mainGuarantor.PeersSet.GetByAddress(validator1Addr.String())
+	index4 := uint16(4)
+	peer4.ValidatorIndex = &index4
+	peerSet.AddPeer(peer4)
+	peer5 := mainGuarantor.PeersSet.GetByAddress(validator2Addr.String())
+	index5 := uint16(5)
+	peer5.ValidatorIndex = &index5
+	peerSet.AddPeer(peer5)
+
+	var validators safrole.ValidatorsData
+	validators[4] = &crypto.ValidatorKey{
+		Ed25519: peer4.Ed25519Key,
+	}
+	validators[5] = &crypto.ValidatorKey{
+		Ed25519: peer5.Ed25519Key,
+	}
+	currentState.ValidatorState.CurrentValidators = validators
+	currentState.ValidatorState.SafroleState = safrole.State{
+		NextValidators: validators,
+	}
+	mainGuarantor.WorkReportGuarantor = handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peerSet)
+
+	submissionHandler := handlers.NewWorkPackageSubmissionHandler(
+		&MockImportSegmentsFetcher{},
+		mainGuarantor.WorkReportGuarantor)
+	mainGuarantor.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, submissionHandler)
+
+	mainGuarantor.WorkReportGuarantor.SetGuarantors([]*peer.Peer{
 		peer2,
 		peer3,
 	})
 
-	err = sharer.ValidateAndProcessWorkPackage(ctx, coreIndex, bundle)
+	mockPVMSharingHandler := handlers.NewWorkPackageSharingHandler(
+		mockAuthorizationInvoker{},
+		mockRefineInvoker{},
+		prv,
+		serviceState,
+	)
 
-	time.Sleep(100 * time.Millisecond)
+	// override handlers in order to mock pvm invocations
+	remoteGuarantor2.WorkPackageSharingHandler = mockPVMSharingHandler
+	remoteGuarantor2.WorkPackageSharingHandler.SetCurrentCore(coreIndex)
+	remoteGuarantor2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, remoteGuarantor2.WorkPackageSharingHandler)
 
+	remoteGuarantor3.WorkPackageSharingHandler = mockPVMSharingHandler
+	remoteGuarantor3.WorkPackageSharingHandler.SetCurrentCore(coreIndex)
+	remoteGuarantor3.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, remoteGuarantor3.WorkPackageSharingHandler)
+
+	// send work package builder->guarantor to initiate the flow (CE-133 → CE-134 → CE-135)
+	err = builderNode.SubmitWorkPackage(ctx, coreIndex, bundle.Package, []byte{}, mainGuarantor.ValidatorManager.Keys.EdPub)
 	require.NoError(t, err)
+
+	time.Sleep(300 * time.Millisecond)
 
 	// TODO improve this test by checking the results after we store the guarantee
 }
@@ -621,7 +640,7 @@ func TestTwoNodesDistributeShard(t *testing.T) {
 	defer cancel()
 
 	// Setup nodes using the existing setup function
-	nodes := setupNodes(ctx, t, 2)
+	nodes := setupNodes(ctx, t, chainState.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 
@@ -684,7 +703,7 @@ func TestTwoNodesAuditShard(t *testing.T) {
 	defer cancel()
 
 	// Setup nodes using the existing setup function
-	nodes := setupNodes(ctx, t, 2)
+	nodes := setupNodes(ctx, t, chainState.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 
@@ -740,7 +759,7 @@ func TestTwoNodesSegmentShard(t *testing.T) {
 	defer cancel()
 
 	// Setup nodes using the existing setup function
-	nodes := setupNodes(ctx, t, 2)
+	nodes := setupNodes(ctx, t, chainState.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 
@@ -795,7 +814,7 @@ func TestTwoNodesSegmentJustificationShard(t *testing.T) {
 	defer cancel()
 
 	// Setup nodes using the existing setup function
-	nodes := setupNodes(ctx, t, 2)
+	nodes := setupNodes(ctx, t, chainState.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 

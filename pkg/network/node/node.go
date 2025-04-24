@@ -46,8 +46,8 @@ type Node struct {
 	shardDistributor              *handlers.ShardDistributionSender
 	segmentShardRequestSender     *handlers.SegmentShardRequestSender
 	segmentShardRequestJustSender *handlers.SegmentShardRequestJustificationSender
-	workPackageSharer             *handlers.WorkReportGuarantor
-	workPackageSharingHandler     *handlers.WorkPackageSharingHandler
+	WorkReportGuarantor           *handlers.WorkReportGuarantor
+	WorkPackageSharingHandler     *handlers.WorkPackageSharingHandler
 	currentCoreIndex              uint16
 	currentGuarantorPeers         []*peer.Peer
 	validatorService              validator.ValidatorService
@@ -113,14 +113,14 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	node.blockRequester = &handlers.BlockRequester{}
 
 	wpSharerHandler := handlers.NewWorkReportGuarantor(validatorIdx, keys.EdPrv, authorization.New(state), refine.New(state), state, peerSet)
-	node.workPackageSharer = wpSharerHandler
+	node.WorkReportGuarantor = wpSharerHandler
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}, wpSharerHandler))
 	submitter := &handlers.WorkPackageSubmitter{}
 	node.workPackageSubmitter = submitter
 
-	node.workPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authorization.New(state), refine.New(state), keys.EdPrv, state.Services)
-	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, node.workPackageSharingHandler)
+	node.WorkPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authorization.New(state), refine.New(state), keys.EdPrv, state.Services)
+	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, node.WorkPackageSharingHandler)
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkReportDist, handlers.NewWorkReportDistributionHandler())
 
@@ -275,6 +275,7 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 	if err = n.workPackageSubmitter.SubmitWorkPackage(ctx, stream, coreIndex, pkg, extrinsics); err != nil {
 		return fmt.Errorf("failed to submit work package: %w", err)
 	}
+
 	return nil
 }
 
@@ -378,7 +379,7 @@ func (n *Node) SegmentShardRequestJustificationSend(ctx context.Context, peerKey
 // 2. Shuffle the sequence deterministically using the epochal entropy η2 (for the current epoch guarantors)
 // 3. Apply a rotation offset based on the current timeslot (every 10 blocks)
 // 4. Update our local node’s core index via assignments
-// 5. Identify and register other validators who share that same core and update workPackageSharer handler for CE-134
+// 5. Identify and register other validators who share that same core and update WorkReportGuarantor handler for CE-134
 // TODO: Call this during node initialization and periodically to keep core and co-guarantors up to date.
 func (n *Node) UpdateCoreAssignments() error {
 	assignments, err := statetransition.PermuteAssignments(n.State.EntropyPool[2], n.State.TimeslotIndex)
@@ -403,10 +404,10 @@ func (n *Node) UpdateCoreAssignments() error {
 	}
 
 	n.currentCoreIndex = coreIndex
-	n.workPackageSharingHandler.SetCurrentCore(n.currentCoreIndex)
+	n.WorkPackageSharingHandler.SetCurrentCore(n.currentCoreIndex)
 
 	n.currentGuarantorPeers = peers
-	n.workPackageSharer.SetGuarantors(peers)
+	n.WorkReportGuarantor.SetGuarantors(peers)
 
 	return nil
 }
