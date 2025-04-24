@@ -36,8 +36,8 @@ type StatisticsState struct {
 }
 
 type Pi struct {
-	Current []PiData `json:"current"`
-	Last    []PiData `json:"last"`
+	ValsCurrent []PiData `json:"current"`
+	ValsLast    []PiData `json:"last"`
 }
 
 type PiData struct {
@@ -132,8 +132,8 @@ func mapStatisticsInput(s StatisticsInput) block.Block {
 
 func mapStatisticsState(s StatisticsState) state.State {
 	return state.State{
-		ValidatorStatistics: [2][common.NumberOfValidators]validator.ValidatorStatistics{
-			[common.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.Pi.Last, func(pi PiData) validator.ValidatorStatistics {
+		ActivityStatistics: validator.ActivityStatisticsState{
+			ValidatorsLast: [common.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.Pi.ValsLast, func(pi PiData) validator.ValidatorStatistics {
 				return validator.ValidatorStatistics{
 					NumOfBlocks:                 pi.Blocks,
 					NumOfTickets:                pi.Tickets,
@@ -143,7 +143,7 @@ func mapStatisticsState(s StatisticsState) state.State {
 					NumOfAvailabilityAssurances: pi.Assurances,
 				}
 			})),
-			[common.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.Pi.Current, func(pi PiData) validator.ValidatorStatistics {
+			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.Pi.ValsCurrent, func(pi PiData) validator.ValidatorStatistics {
 				return validator.ValidatorStatistics{
 					NumOfBlocks:                 pi.Blocks,
 					NumOfTickets:                pi.Tickets,
@@ -190,7 +190,7 @@ func TestStatistics(t *testing.T) {
 				reporters.Add(mustStringToHex(reporter))
 			}
 
-			preState.ValidatorStatistics = statetransition.CalculateNewValidatorStatistics(newBlock, preState.TimeslotIndex, preState.ValidatorStatistics, reporters, preState.ValidatorState.CurrentValidators)
+			preState.ActivityStatistics = statetransition.CalculateNewActivityStatistics(newBlock, preState.TimeslotIndex, preState.ActivityStatistics, reporters, preState.ValidatorState.CurrentValidators)
 
 			postState := mapStatisticsState(tc.PostState)
 
