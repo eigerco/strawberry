@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"sync"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
@@ -20,6 +21,7 @@ type BlockAnnouncer interface {
 // PeerSet maintains mappings between peer identifiers
 // (Ed25519 keys, network addresses, validator indices) and Peer objects.
 type PeerSet struct {
+	mu sync.RWMutex
 	// Map from Ed25519 public key to peer
 	byEd25519Key map[string]*Peer
 	// Map from string representation of address to peer
@@ -40,6 +42,9 @@ func NewPeerSet() *PeerSet {
 // AddPeer adds a peer to all relevant lookup maps in the PeerSet.
 // If the peer is a validator index, it will also have a validator index.
 func (ps *PeerSet) AddPeer(peer *Peer) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
 	ps.byEd25519Key[string(peer.Ed25519Key)] = peer
 	ps.byAddress[peer.Address.String()] = peer
 
@@ -50,6 +55,9 @@ func (ps *PeerSet) AddPeer(peer *Peer) {
 
 // RemovePeer removes a peer from all lookup maps in the PeerSet.
 func (ps *PeerSet) RemovePeer(peer *Peer) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
 	delete(ps.byEd25519Key, string(peer.Ed25519Key))
 	delete(ps.byAddress, peer.Address.String())
 
@@ -61,18 +69,27 @@ func (ps *PeerSet) RemovePeer(peer *Peer) {
 // GetByEd25519Key looks up a peer by their Ed25519 public key.
 // Returns nil if no peer is found with the given key.
 func (ps *PeerSet) GetByEd25519Key(key ed25519.PublicKey) *Peer {
+	ps.mu.RLock()
+	defer ps.mu.RUnlock()
+
 	return ps.byEd25519Key[string(key)]
 }
 
 // GetByAddress looks up a peer by their network address.
 // Returns nil if no peer is found with the given address.
 func (ps *PeerSet) GetByAddress(addr string) *Peer {
+	ps.mu.RLock()
+	defer ps.mu.RUnlock()
+
 	return ps.byAddress[addr]
 }
 
 // GetByValidatorIndex looks up a peer by their validator index.
 // Returns nil if no peer is found with the given validator index.
 func (ps *PeerSet) GetByValidatorIndex(index uint16) *Peer {
+	ps.mu.RLock()
+	defer ps.mu.RUnlock()
+
 	return ps.byValidatorIndex[index]
 }
 

@@ -39,6 +39,7 @@ type WorkReportGuarantor struct {
 	validatorIndex uint16
 	privateKey     ed25519.PrivateKey
 	guarantors     []*peer.Peer
+	mu             sync.RWMutex
 	auth           authorization.AuthPVMInvoker
 	refine         refine.RefinePVMInvoker
 	state          *state.State
@@ -82,6 +83,9 @@ func NewWorkReportGuarantor(
 }
 
 func (h *WorkReportGuarantor) SetGuarantors(guarantors []*peer.Peer) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	h.guarantors = guarantors
 }
 
@@ -143,16 +147,20 @@ func (h *WorkReportGuarantor) processWorkPackage(
 			coreIndex, common.TotalNumberOfCores)
 	}
 
-	if h.guarantors == nil {
+	h.mu.RLock()
+	guarantors := h.guarantors
+	h.mu.RUnlock()
+
+	if guarantors == nil {
 		return errors.New("no guarantors set")
 	}
 
-	remoteResultCh := make(chan guaranteeResponse, len(h.guarantors))
+	remoteResultCh := make(chan guaranteeResponse, len(guarantors))
 	localResultCh := make(chan localReportResult, 1)
 
 	// share work package with guarantors
 	var wg sync.WaitGroup
-	for _, g := range h.guarantors {
+	for _, g := range guarantors {
 		wg.Add(1)
 		go h.shareWorkPackage(ctx, &wg, g, remoteResultCh, segments, coreIndex, bundle)
 	}
