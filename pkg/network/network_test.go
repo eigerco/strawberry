@@ -455,6 +455,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 	coreIndex := uint16(1)
 
+	// Create a mock work package bundle with authorization
 	authCode := []byte("auth token")
 	authHash := crypto.HashData(authCode)
 	bundle := work.PackageBundle{
@@ -479,9 +480,11 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 		},
 	}
 
+	// Generate validator key for mainGuarantor
 	_, prv, _ := ed25519.GenerateKey(nil)
 	serviceState := getServiceState()
 
+	// Add the auth hash to the core's authorization pool
 	pool := chainState.CoreAuthorizersPool{}
 	pool[coreIndex] = []crypto.Hash{bundle.Package.AuthCodeHash}
 	currentState := chainState.State{
@@ -490,7 +493,11 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 		TimeslotIndex:       jamtime.Timeslot(599),
 	}
 
-	// setup 6 nodes (1 builder, 3 guarantors, 2 validators)
+	// Spin up 6 nodes
+	// 0: builder
+	// 1: mainGuarantor
+	// 2-3: remote co-guarantors
+	// 4-5: validators
 	nodes := setupNodes(ctx, t, currentState, 6)
 	builderNode := nodes[0]
 	mainGuarantor := nodes[1]
@@ -514,6 +521,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
+	// Extract addresses from metadata for connecting nodes
 	mainGuarantorAddr, err := peer.NewPeerAddressFromMetadata(
 		nodes[1].ValidatorManager.State.CurrentValidators[1].Metadata[:],
 	)
@@ -533,15 +541,18 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	validator2Addr, err := peer.NewPeerAddressFromMetadata(nodes[5].ValidatorManager.State.CurrentValidators[5].Metadata[:])
 	require.NoError(t, err)
 
+	// Connect mainGuarantor to co-guarantors and validators
 	require.NoError(t, mainGuarantor.ConnectToPeer(remoteGuarantor2Addr))
 	require.NoError(t, mainGuarantor.ConnectToPeer(remoteGuarantor3Addr))
 
 	require.NoError(t, mainGuarantor.ConnectToPeer(validator1Addr))
 	require.NoError(t, mainGuarantor.ConnectToPeer(validator2Addr))
 
+	// Connect builder to the mainGuarantor (submitting WP will happen over this connection)
 	require.NoError(t, builderNode.ConnectToPeer(mainGuarantorAddr))
 	time.Sleep(100 * time.Millisecond)
 
+	// Register peer set with mainGuarantor
 	peerSet := peer.NewPeerSet()
 	// remote guarantor
 	peer2 := mainGuarantor.PeersSet.GetByAddress(remoteGuarantor2Addr.String())
@@ -565,6 +576,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	peer5.ValidatorIndex = &index5
 	peerSet.AddPeer(peer5)
 
+	// Set current + next validators in state (needed for distribution step)
 	var validators safrole.ValidatorsData
 	validators[4] = &crypto.ValidatorKey{
 		Ed25519: peer4.Ed25519Key,
