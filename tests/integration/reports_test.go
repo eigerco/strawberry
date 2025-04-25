@@ -485,7 +485,6 @@ func mapAuthPools(pools [][]string) state.CoreAuthorizersPool {
 			break
 		}
 
-		result[i] = make([]crypto.Hash, len(pool))
 		for j, hash := range pool {
 			result[i][j] = crypto.Hash(mustStringToHex(hash))
 		}

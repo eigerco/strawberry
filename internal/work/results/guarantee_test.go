@@ -2,9 +2,10 @@ package results
 
 import (
 	"crypto/ed25519"
+	"testing"
+
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/testutils"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,16 +14,6 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/work"
 )
-
-func EmptyCoreAuthorizersPool() state.CoreAuthorizersPool {
-	var pool state.CoreAuthorizersPool
-	for i := range pool {
-		for range state.MaxAuthorizersPerCore {
-			pool[i] = append(pool[i], crypto.Hash{})
-		}
-	}
-	return pool
-}
 
 func TestNewGuaranteeManager(t *testing.T) {
 	t.Run("valid computation", func(t *testing.T) {
@@ -58,7 +49,10 @@ func TestProcessWorkPackageGuarantee(t *testing.T) {
 		exHash: exData,
 	}
 
+	authCodeHash := testutils.RandomHash(t)
+
 	validPkg := work.Package{
+		AuthCodeHash: authCodeHash,
 		WorkItems: []work.Item{
 			{
 				ImportedSegments: []work.ImportedSegment{
@@ -95,7 +89,7 @@ func TestProcessWorkPackageGuarantee(t *testing.T) {
 			coreIndex:    1,
 			guarantorIdx: 1,
 			privKey:      privateKey1,
-			authPool:     EmptyCoreAuthorizersPool(),
+			authPool:     state.CoreAuthorizersPool{},
 			extraCreds: []block.CredentialSignature{
 				{ValidatorIndex: 2, Signature: crypto.Ed25519Signature{1}}, // Add a second credential
 			},
@@ -106,7 +100,7 @@ func TestProcessWorkPackageGuarantee(t *testing.T) {
 			coreIndex:    1,
 			guarantorIdx: 1,
 			privKey:      privateKey1,
-			authPool:     EmptyCoreAuthorizersPool(),
+			authPool:     state.CoreAuthorizersPool{},
 			expectError:  true,
 			errorMessage: "failed to generate guarantee",
 		},
@@ -116,7 +110,7 @@ func TestProcessWorkPackageGuarantee(t *testing.T) {
 			coreIndex:    1,
 			guarantorIdx: 1,
 			privKey:      privateKey1,
-			authPool:     state.CoreAuthorizersPool{}, // Empty pool
+			authPool:     state.CoreAuthorizersPool{},
 			expectError:  true,
 			errorMessage: "work package not authorized for this core",
 		},

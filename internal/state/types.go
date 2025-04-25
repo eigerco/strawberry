@@ -29,7 +29,8 @@ type PendingAuthorizersQueue [PendingAuthorizersQueueSize]crypto.Hash
 type PendingAuthorizersQueues [common.TotalNumberOfCores]PendingAuthorizersQueue
 
 type EntropyPool [EntropyPoolSize]crypto.Hash
-type CoreAuthorizersPool [common.TotalNumberOfCores][]crypto.Hash // TODO: Maximum length per core: MaxAuthorizersPerCore
+
+type CoreAuthorizersPool [common.TotalNumberOfCores][MaxAuthorizersPerCore]crypto.Hash
 
 type WorkReportWithUnAccumulatedDependencies struct {
 	WorkReport   block.WorkReport

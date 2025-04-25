@@ -5,12 +5,13 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/common"
-	"github.com/eigerco/strawberry/internal/crypto"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/crypto"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -75,7 +76,6 @@ func mapAuthState(s AuthState) state.State {
 		if i >= int(common.TotalNumberOfCores) {
 			break
 		}
-		authPools[i] = make([]crypto.Hash, len(pool))
 		for j, hash := range pool {
 			authPools[i][j] = crypto.Hash(mustStringToHex(hash))
 		}

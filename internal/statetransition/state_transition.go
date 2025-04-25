@@ -727,7 +727,7 @@ func CalculateNewCoreAuthorizations(header block.Header, guarantees block.Guaran
 	for c := uint16(0); c < common.TotalNumberOfCores; c++ {
 		// Start with the existing authorizations for this core
 		newAuths := make([]crypto.Hash, len(currentAuthorizations[c]))
-		copy(newAuths, currentAuthorizations[c])
+		copy(newAuths, currentAuthorizations[c][:])
 
 		// Track whether a guarantee's authorizer removal has occurred
 		guaranteeAuthorizerRemoved := false
@@ -758,7 +758,7 @@ func CalculateNewCoreAuthorizations(header block.Header, guarantees block.Guaran
 		}
 
 		// Store the new authorizations for this core
-		newCoreAuthorizations[c] = newAuths
+		copy(newCoreAuthorizations[c][:], newAuths)
 	}
 
 	return newCoreAuthorizations

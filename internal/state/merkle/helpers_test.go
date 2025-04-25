@@ -90,8 +90,8 @@ func RandomEntropyPool(t *testing.T) state.EntropyPool {
 func RandomCoreAuthorizersPool(t *testing.T) state.CoreAuthorizersPool {
 	var pool state.CoreAuthorizersPool
 	for i := range pool {
-		for range state.MaxAuthorizersPerCore {
-			pool[i] = append(pool[i], testutils.RandomHash(t))
+		for j := range state.MaxAuthorizersPerCore {
+			pool[i][j] = testutils.RandomHash(t)
 		}
 	}
 	return pool
