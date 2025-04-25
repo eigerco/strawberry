@@ -555,27 +555,25 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 	// Register peer set with mainGuarantor
 	peerSet := peer.NewPeerSet()
-	mainGuarantor.PeersLock.RLock()
-	defer mainGuarantor.PeersLock.RUnlock()
 
 	// remote guarantor
-	peer2 := mainGuarantor.PeersSet.GetByAddress(remoteGuarantor2Addr.String())
+	peer2 := mainGuarantor.GetByAddress(remoteGuarantor2Addr.String())
 	index2 := uint16(2)
 	peer2.ValidatorIndex = &index2
 	peerSet.AddPeer(peer2)
 
 	// remote guarantor
-	peer3 := mainGuarantor.PeersSet.GetByAddress(remoteGuarantor3Addr.String())
+	peer3 := mainGuarantor.GetByAddress(remoteGuarantor3Addr.String())
 	index3 := uint16(3)
 	peer3.ValidatorIndex = &index3
 	peerSet.AddPeer(peer3)
 
 	// validators
-	peer4 := mainGuarantor.PeersSet.GetByAddress(validator1Addr.String())
+	peer4 := mainGuarantor.GetByAddress(validator1Addr.String())
 	index4 := uint16(4)
 	peer4.ValidatorIndex = &index4
 	peerSet.AddPeer(peer4)
-	peer5 := mainGuarantor.PeersSet.GetByAddress(validator2Addr.String())
+	peer5 := mainGuarantor.GetByAddress(validator2Addr.String())
 	index5 := uint16(5)
 	peer5.ValidatorIndex = &index5
 	peerSet.AddPeer(peer5)

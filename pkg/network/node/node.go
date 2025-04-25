@@ -37,7 +37,7 @@ type Node struct {
 	BlockService                  *chain.BlockService
 	ProtocolManager               *protocol.Manager
 	PeersSet                      *peer.PeerSet
-	PeersLock                     sync.RWMutex
+	peersLock                     sync.RWMutex
 	transport                     *transport.Transport
 	State                         state.State
 	blockRequester                *handlers.BlockRequester
@@ -166,8 +166,8 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 // This design separates transport-level connection handling (TLS, QUIC)
 // from protocol-level peer management (stream handling, peer state).
 func (n *Node) OnConnection(conn *transport.Conn) {
-	n.PeersLock.Lock()
-	defer n.PeersLock.Unlock()
+	n.peersLock.Lock()
+	defer n.peersLock.Unlock()
 	// If peer already exists, close existing connection and replace with new one.
 	if existingPeer := n.PeersSet.GetByEd25519Key(conn.PeerKey()); existingPeer != nil {
 		// Close existing connection
@@ -196,9 +196,9 @@ func (n *Node) OnConnection(conn *transport.Conn) {
 // It prevents duplicate connections to the same peer.
 func (n *Node) ConnectToPeer(addr *net.UDPAddr) error {
 	// Check if peer already exists before attempting connection.
-	n.PeersLock.RLock()
+	n.peersLock.RLock()
 	existingPeer := n.PeersSet.GetByAddress(addr.String())
-	n.PeersLock.RUnlock()
+	n.peersLock.RUnlock()
 
 	if existingPeer != nil {
 		return fmt.Errorf("peer already exists")
@@ -236,8 +236,8 @@ func (n *Node) ConnectToNeighbours() error {
 // by the given hash. The direction can be ascending (child blocks) or descending
 // (parent blocks), with a maximum number of blocks to return.
 func (n *Node) RequestBlocks(ctx context.Context, hash crypto.Hash, ascending bool, maxBlocks uint32, peerKey ed25519.PublicKey) ([]block.Block, error) {
-	n.PeersLock.RLock()
-	defer n.PeersLock.RUnlock()
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
 
 	if existingPeer := n.PeersSet.GetByEd25519Key(peerKey); existingPeer != nil {
 		stream, err := existingPeer.ProtoConn.OpenStream(ctx, protocol.StreamKindBlockRequest)
@@ -259,8 +259,8 @@ func (n *Node) RequestBlocks(ctx context.Context, hash crypto.Hash, ascending bo
 // It allows a builder node to submit a work package to a guarantor for processing.
 // The submission includes the core index, work package, and extrinsic data.
 func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work.Package, extrinsics []byte, peerKey ed25519.PublicKey) error {
-	n.PeersLock.RLock()
-	defer n.PeersLock.RUnlock()
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
 
 	peer := n.PeersSet.GetByEd25519Key(peerKey)
 	if peer == nil {
@@ -282,8 +282,8 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 // ShardDistributionSend implements the sending side of the CE 137, it opens a connection to the provided peer
 // allowing the assurers request shards from the guarantor
 func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.PublicKey, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
-	n.PeersLock.RLock()
-	defer n.PeersLock.RUnlock()
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
 
 	peer := n.PeersSet.GetByEd25519Key(peerKey)
 	if peer == nil {
@@ -305,8 +305,8 @@ func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.Public
 // AuditShardRequestSend implements the sending side of the CE 138, it opens a connection to the provided peer
 // allowing the auditors to request shards from the assurer
 func (n *Node) AuditShardRequestSend(ctx context.Context, peerKey ed25519.PublicKey, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, justification [][]byte, err error) {
-	n.PeersLock.RLock()
-	defer n.PeersLock.RUnlock()
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
 
 	peer := n.PeersSet.GetByEd25519Key(peerKey)
 	if peer == nil {
@@ -328,8 +328,8 @@ func (n *Node) AuditShardRequestSend(ctx context.Context, peerKey ed25519.Public
 // SegmentShardRequestSend implements the sending side of the CE 139 protocol, opens a connection between
 // the guarantor and assurer allowing the guarantor to reconstruct the segments
 func (n *Node) SegmentShardRequestSend(ctx context.Context, peerKey ed25519.PublicKey, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, err error) {
-	n.PeersLock.RLock()
-	defer n.PeersLock.RUnlock()
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
 
 	peer := n.PeersSet.GetByEd25519Key(peerKey)
 	if peer == nil {
@@ -351,8 +351,8 @@ func (n *Node) SegmentShardRequestSend(ctx context.Context, peerKey ed25519.Publ
 // SegmentShardRequestJustificationSend implements the sending side of the CE 140 protocol, opens a connection between
 // the guarantor and assurer allowing the guarantor to reconstruct the segments and to immediately assess the correctness of the response.
 func (n *Node) SegmentShardRequestJustificationSend(ctx context.Context, peerKey ed25519.PublicKey, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, justification [][][]byte, err error) {
-	n.PeersLock.RLock()
-	defer n.PeersLock.RUnlock()
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
 
 	peer := n.PeersSet.GetByEd25519Key(peerKey)
 	if peer == nil {
@@ -389,8 +389,8 @@ func (n *Node) UpdateCoreAssignments() error {
 
 	coreIndex := uint16(assignments[n.ValidatorManager.Index])
 
-	n.PeersLock.Lock()
-	defer n.PeersLock.Unlock()
+	n.peersLock.Lock()
+	defer n.peersLock.Unlock()
 
 	var peers []*peer.Peer
 	for validatorIdx, core := range assignments {
@@ -519,4 +519,13 @@ func (n *Node) GetGuaranteedShardsAndStore(ctx context.Context, guarantee block.
 	}
 
 	return fmt.Errorf("unable to get shards from guarantors")
+}
+
+// GetByAddress acquires the lock and return peer by address
+// TODO: Temporary workaround for avoiding data race in e2e test. Should be removed after proper test setup is implemented.
+func (n *Node) GetByAddress(addr string) *peer.Peer {
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
+
+	return n.PeersSet.GetByAddress(addr)
 }
