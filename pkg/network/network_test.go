@@ -555,6 +555,9 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 	// Register peer set with mainGuarantor
 	peerSet := peer.NewPeerSet()
+	mainGuarantor.PeersLock.RLock()
+	defer mainGuarantor.PeersLock.RUnlock()
+
 	// remote guarantor
 	peer2 := mainGuarantor.PeersSet.GetByAddress(remoteGuarantor2Addr.String())
 	index2 := uint16(2)
