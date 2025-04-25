@@ -38,5 +38,7 @@ func (h *WorkReportDistributionHandler) HandleStream(ctx context.Context, stream
 		return fmt.Errorf("failed to close stream: %w", err)
 	}
 
+	// TODO: proceed with basic validation (signatures) and proceed to block authoring if valid
+
 	return nil
 }

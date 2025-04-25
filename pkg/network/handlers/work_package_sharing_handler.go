@@ -29,6 +29,13 @@ type WorkPackageSharingHandler struct {
 	serviceState        service.ServiceState
 }
 
+// WorkPackageSharingResponse is the response payload of CE-134
+// <-- Work-Report Hash ++ Ed25519 Signature
+type workPackageSharingResponse struct {
+	WorkReportHash crypto.Hash
+	Signature      crypto.Ed25519Signature
+}
+
 // NewWorkPackageSharingHandler creates a new WorkPackageSharingHandler instance.
 func NewWorkPackageSharingHandler(
 	auth authorization.AuthPVMInvoker,
@@ -119,9 +126,11 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 
 	signature := ed25519.Sign(h.privateKey, workReportHash[:])
 
-	var respBytes []byte
-	respBytes = append(respBytes, workReportHash[:]...)
-	respBytes = append(respBytes, signature...)
+	resp := workPackageSharingResponse{
+		WorkReportHash: workReportHash,
+		Signature:      crypto.Ed25519Signature(signature),
+	}
+	respBytes, _ := jam.Marshal(resp)
 
 	if err := WriteMessageWithContext(ctx, stream, respBytes); err != nil {
 		return fmt.Errorf("failed to write response: %w", err)

@@ -386,6 +386,7 @@ func TestTwoNodesSubmitWorkPackage(t *testing.T) {
 	mockFetcher := NewMockImportSegmentsFetcher()
 
 	// Replace the default handler with our extended handler in node2
+	// TODO: remove mocks in this e2e test
 	extendedHandler := NewExtendedWorkPackageSubmissionHandler(mockFetcher)
 	node2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, extendedHandler)
 
@@ -588,6 +589,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	currentState.ValidatorState.SafroleState = safrole.State{
 		NextValidators: validators,
 	}
+	// TODO: remove mocks in this e2e test
 	mainGuarantor.WorkReportGuarantor = handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peerSet)
 
 	submissionHandler := handlers.NewWorkPackageSubmissionHandler(
@@ -600,6 +602,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 		peer3,
 	})
 
+	// TODO: remove mocks in this e2e test
 	mockPVMSharingHandler := handlers.NewWorkPackageSharingHandler(
 		mockAuthorizationInvoker{},
 		mockRefineInvoker{},

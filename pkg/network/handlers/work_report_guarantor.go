@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/quic-go/quic-go"
-
 	"github.com/eigerco/strawberry/internal/authorization"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -158,11 +156,16 @@ func (h *WorkReportGuarantor) processWorkPackage(
 	remoteResultCh := make(chan guaranteeResponse, len(guarantors))
 	localResultCh := make(chan localReportResult, 1)
 
+	bundleBytes, err := jam.Marshal(bundle)
+	if err != nil {
+		return fmt.Errorf("failed to marshal WP bundle: %w", err)
+	}
+
 	// share work package with guarantors
 	var wg sync.WaitGroup
 	for _, g := range guarantors {
 		wg.Add(1)
-		go h.shareWorkPackage(ctx, &wg, g, remoteResultCh, segments, coreIndex, bundle)
+		go h.shareWorkPackage(ctx, &wg, g, remoteResultCh, segments, coreIndex, bundleBytes)
 	}
 
 	// start local refinement in parallel
@@ -203,7 +206,7 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 	guaranteeCh chan<- guaranteeResponse,
 	segments []SegmentRootMapping,
 	coreIndex uint16,
-	bundle work.PackageBundle,
+	bundleBytes []byte,
 ) {
 	defer wg.Done()
 
@@ -216,34 +219,10 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 	}
 	validatorIndex := *g.ValidatorIndex
 
-	stream, err := g.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageShare)
-	if err != nil {
-		guaranteeCh <- guaranteeResponse{Err: err}
-		log.Printf("Failed to open stream to peer %v: %v", validatorIndex, err)
-		return
-	}
-
-	err = h.sendWorkPackage(ctx, stream, coreIndex, segments, bundle)
+	response, err := h.sendWorkPackage(ctx, g, coreIndex, segments, bundleBytes)
 	if err != nil {
 		guaranteeCh <- guaranteeResponse{Err: err}
 		log.Printf("Failed to share WP with peer %v: %v", validatorIndex, err)
-	}
-
-	// Handle CE-134 response from the receiving guarantor
-	msg, err := ReadMessageWithContext(ctx, stream)
-	if err != nil {
-		guaranteeCh <- guaranteeResponse{Err: err}
-		log.Printf("Failed to read response from peer %v: %v", validatorIndex, err)
-		return
-	}
-
-	var response struct {
-		WorkReportHash crypto.Hash
-		Signature      crypto.Ed25519Signature
-	}
-	if err := jam.Unmarshal(msg.Content, &response); err != nil {
-		guaranteeCh <- guaranteeResponse{Err: err}
-		log.Printf("Failed to decode CE-134 response from peer %v: %v", validatorIndex, err)
 		return
 	}
 
@@ -371,14 +350,27 @@ func (h *WorkReportGuarantor) buildSegmentRootMapping(pkg work.PackageBundle) []
 	return []SegmentRootMapping{}
 }
 
-// SendWorkPackage transmits the work-package bundle to a specific guarantor.
+// sendWorkPackage sends 2 messages to another guarantor and closes the stream:
+//
+// --> Core Index ++ Segments-Root Mappings
+//   - Informs the receiving guarantor which core this work-package belongs to.
+//   - Provides the mapping between imported segment hashes and their Merkle roots.
+//   - This mapping is used during refinement to validate imported segments.
+//
+// --> Work-Package Bundle
+//   - Contains the actual work-package bundle and any associated extrinsics.
+//
+// --> FIN
+//   - Closes the stream after sending both messages. The response is expected before finalization.
+//
+// The bundle should include imported data segments and their justifications as well as the work-package and extrinsic data.
 func (h *WorkReportGuarantor) sendWorkPackage(
 	ctx context.Context,
-	stream quic.Stream,
+	g *peer.Peer,
 	coreIndex uint16,
 	imported []SegmentRootMapping,
-	bundle work.PackageBundle,
-) error {
+	bundleBytes []byte,
+) (*workPackageSharingResponse, error) {
 	msg1, err := jam.Marshal(struct {
 		CoreIndex          uint16
 		SegmentRootMapping []SegmentRootMapping
@@ -387,28 +379,40 @@ func (h *WorkReportGuarantor) sendWorkPackage(
 		SegmentRootMapping: imported,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to marshal first message: %w", err)
+		return nil, fmt.Errorf("failed to marshal first message: %w", err)
+	}
+
+	stream, err := g.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageShare)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to open stream: %v", err)
 	}
 
 	// 1st: “CoreIndex ++ Segments-Root Mappings”
 	if err = WriteMessageWithContext(ctx, stream, msg1); err != nil {
-		return fmt.Errorf("failed to send first message: %w", err)
+		return nil, fmt.Errorf("failed to send first message: %w", err)
 	}
 
 	// 2nd: “Work-Package Bundle”
-	bundleBytes, err := jam.Marshal(bundle)
-	if err != nil {
-		return fmt.Errorf("failed to marshal WP bundle: %w", err)
-	}
 	if err = WriteMessageWithContext(ctx, stream, bundleBytes); err != nil {
-		return fmt.Errorf("failed to send WP bundle: %w", err)
+		return nil, fmt.Errorf("failed to send WP bundle: %w", err)
+	}
+
+	// Handle CE-134 response from the receiving guarantor
+	msg, err := ReadMessageWithContext(ctx, stream)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	if err := stream.Close(); err != nil {
-		return fmt.Errorf("failed to close stream: %w", err)
+		return nil, fmt.Errorf("failed to close stream: %w", err)
 	}
 
-	return nil
+	var response workPackageSharingResponse
+	if err := jam.Unmarshal(msg.Content, &response); err != nil {
+		return nil, fmt.Errorf("failed to decode CE-134 response: %w", err)
+	}
+
+	return &response, nil
 }
 
 // CE-135:

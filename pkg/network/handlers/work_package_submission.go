@@ -29,25 +29,29 @@ func (m *ImportSegments) FetchImportedSegment(hash crypto.Hash) ([]byte, error) 
 
 // WorkPackageSubmissionHandler processes incoming CE-133 submission streams
 type WorkPackageSubmissionHandler struct {
-	Fetcher          ImportedSegmentsFetcher
-	WPSharingHandler *WorkReportGuarantor
+	// Fetcher is used to retrieve imported segments referenced in the work-package.
+	Fetcher ImportedSegmentsFetcher
+	// workReportGuarantor handles the rest of the flow after submission:
+	// running validation + auth + refinement (CE-134) and distributing guarantees (CE-135).
+	workReportGuarantor *WorkReportGuarantor
 }
 
 // NewWorkPackageSubmissionHandler creates a new handler instance with the given fetcher.
 func NewWorkPackageSubmissionHandler(fetcher ImportedSegmentsFetcher, wpSharingHandler *WorkReportGuarantor) *WorkPackageSubmissionHandler {
 	return &WorkPackageSubmissionHandler{
-		Fetcher:          fetcher,
-		WPSharingHandler: wpSharingHandler,
+		Fetcher:             fetcher,
+		workReportGuarantor: wpSharingHandler,
 	}
 }
 
-// HandleStream implements the guarantor side of the CE-133 protocol.
-// It expects two messages:
+// HandleStream processes the CE-133 submission stream from a builder.
+// This starts the full flow (CE-133 → CE-134 → CE-135).
+// It reads two messages:
+//  1. [Core Index (u16) ++ work.Package]
+//  2. [Extrinsics (raw bytes)]
 //
-//	Message 1: [Core Index (u16) ++ work.Package]
-//	Message 2: [Extrinsic data (raw bytes)]
-//
-// After reading these it should fetch imported segments from the availability system
+// Then fetches imported segments (if needed), wraps the data into a bundle,
+// and starts validation, refinement, and distribution.
 func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
 	msg1, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
@@ -101,7 +105,7 @@ func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream 
 		return fmt.Errorf("failed to close stream: %w", err)
 	}
 
-	return h.WPSharingHandler.ValidateAndProcessWorkPackage(ctx, coreIndex, bundle)
+	return h.workReportGuarantor.ValidateAndProcessWorkPackage(ctx, coreIndex, bundle)
 }
 
 // WorkPackageSubmitter handles outgoing CE-133 submissions (builder side).
