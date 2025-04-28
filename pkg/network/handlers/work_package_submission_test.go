@@ -180,10 +180,10 @@ func TestHandleWorkPackage(t *testing.T) {
 
 	response := struct {
 		WorkReportHash crypto.Hash
-		Signature      []byte
+		Signature      crypto.Ed25519Signature
 	}{
 		WorkReportHash: testutils.RandomHash(t),
-		Signature:      []byte("mock-signature"),
+		Signature:      testutils.RandomEd25519Signature(t),
 	}
 
 	responseBytes, err := jam.Marshal(response)
@@ -361,10 +361,10 @@ func TestHandleStream_Success(t *testing.T) {
 
 	response := struct {
 		WorkReportHash crypto.Hash
-		Signature      []byte
+		Signature      crypto.Ed25519Signature
 	}{
 		WorkReportHash: testutils.RandomHash(t),
-		Signature:      []byte("mock-signature"),
+		Signature:      testutils.RandomEd25519Signature(t),
 	}
 
 	responseBytes, err := jam.Marshal(response)

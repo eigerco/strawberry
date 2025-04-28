@@ -26,8 +26,13 @@ import (
 )
 
 const (
-	minSignaturesRequiredForGuarantee = 2
-	maxWaitTime                       = time.Second * 2
+	// The maximum amount of signatures we can obtain to guarantee work report
+	maxSignaturesRequiredToGuarantee = 3
+	// We need at least this amount of signatures to guarantee work report
+	minSignaturesRequiredToGuarantee = 2
+	// The third guarantor should be given a reasonable amount of time (e.g. two seconds) to produce
+	// an additional signature before the guaranteed work-report is distrubuted
+	maxWaitTimeForThirdGuarantor = time.Second * 2
 )
 
 // WorkReportGuarantor handles CE-134 and CE-135:
@@ -51,10 +56,10 @@ type SegmentRootMapping struct {
 }
 
 type guaranteeResponse struct {
-	WorkReportHash crypto.Hash
-	ValidatorIndex uint16
-	Signature      crypto.Ed25519Signature
-	Err            error
+	workReportHash crypto.Hash
+	validatorIndex uint16
+	signature      crypto.Ed25519Signature
+	err            error
 }
 
 type localReportResult struct {
@@ -179,12 +184,19 @@ func (h *WorkReportGuarantor) processWorkPackage(
 			return
 		}
 
+		log.Println("local refinement finished")
+
 		localResultCh <- localReportResult{report: workReport}
 	}()
 
-	h.processWorkReports(ctx, localResultCh, remoteResultCh)
+	localResult, remoteResponses, err := h.collectReports(ctx, remoteResultCh, localResultCh)
+	if err != nil {
+		return err
+	}
 
 	wg.Wait()
+
+	h.processWorkReports(ctx, localResult, remoteResponses)
 
 	return nil
 }
@@ -212,7 +224,7 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 
 	if g.ValidatorIndex == nil {
 		guaranteeCh <- guaranteeResponse{
-			Err: fmt.Errorf("missing validator index for peer %v", g),
+			err: fmt.Errorf("missing validator index for peer %v", g),
 		}
 		log.Printf("Skipping peer with unknown validator index: %v", g)
 		return
@@ -221,7 +233,7 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 
 	response, err := h.sendWorkPackage(ctx, g, coreIndex, segments, bundleBytes)
 	if err != nil {
-		guaranteeCh <- guaranteeResponse{Err: err}
+		guaranteeCh <- guaranteeResponse{err: err}
 		log.Printf("Failed to share WP with peer %v: %v", validatorIndex, err)
 		return
 	}
@@ -230,26 +242,21 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 		validatorIndex, response.WorkReportHash, response.Signature)
 
 	guaranteeCh <- guaranteeResponse{
-		WorkReportHash: response.WorkReportHash,
-		ValidatorIndex: validatorIndex,
-		Signature:      response.Signature,
+		workReportHash: response.WorkReportHash,
+		validatorIndex: validatorIndex,
+		signature:      response.Signature,
 	}
 }
 
 // Collect local refinement result and responses from other guarantors (via channel).
 // Filter only matching hashes, add local signature, and construct the full Guarantee.
-// If enough signatures are collected (>= 2) after the timeout (maxWaitTime), proceed to distribute it (CE-135).
+// If enough signatures are collected (>= 2) after the timeout (maxWaitTimeForThirdGuarantor), proceed to distribute it (CE-135).
 func (h *WorkReportGuarantor) processWorkReports(
 	ctx context.Context,
-	localResultCh <-chan localReportResult,
-	guaranteeRespCh <-chan guaranteeResponse,
+	localResult localReportResult,
+	remoteResponses []guaranteeResponse,
 ) {
-	localResult, remoteResponses, err := h.collectReports(ctx, guaranteeRespCh, localResultCh)
-	if err != nil {
-		log.Printf("local refinement failed: %v", err)
 
-		return
-	}
 	if localResult.err != nil {
 		log.Println("aborting guarantee distribution: local refinement failed")
 
@@ -264,20 +271,20 @@ func (h *WorkReportGuarantor) processWorkReports(
 
 	var creds []block.CredentialSignature
 	for _, r := range remoteResponses {
-		if r.WorkReportHash != wrHash {
+		if r.workReportHash != wrHash {
 			log.Printf("ignoring mismatching work report hash from validator %d local=%x, remote=%x",
-				r.ValidatorIndex, wrHash, r.WorkReportHash)
+				r.validatorIndex, wrHash, r.workReportHash)
 			continue
 		}
-		creds = append(creds, block.CredentialSignature{ValidatorIndex: r.ValidatorIndex, Signature: r.Signature})
+		creds = append(creds, block.CredentialSignature{ValidatorIndex: r.validatorIndex, Signature: r.signature})
 	}
 
 	localSig := ed25519.Sign(h.privateKey, wrHash[:])
 	creds = append(creds, block.CredentialSignature{ValidatorIndex: h.validatorIndex, Signature: crypto.Ed25519Signature(localSig)})
 
-	log.Printf("local work-report hash and signature:\n- Hash: %x\n- Signature: %x", wrHash, localSig)
+	log.Printf("local work-report hash and signature:\n- Hash: %x\n- signature: %x", wrHash, localSig)
 
-	if len(creds) < minSignaturesRequiredForGuarantee {
+	if len(creds) < minSignaturesRequiredToGuarantee {
 		log.Printf("not enough credentials to guarantee work report")
 		return
 	}
@@ -301,10 +308,15 @@ func (h *WorkReportGuarantor) processWorkReports(
 	}
 }
 
-// Wait up to 2 seconds for:
-// - local refinement result
-// - enough remote signed responses (2 total)
-// Return when both conditions are met or timeout.
+// collectReports collects valid work-report refinements (local and remote) following CE-134/135.
+//
+// - Wait for at least two successful refinement responses (local or remote), without any timeout
+// - Once two valid results are received, start a timer for a possible third response
+// - If a third valid result arrives before the timer expires, return immediately
+// - If the timer expires first, proceed with the two collected results
+// - Remote failures are tolerated and skipped
+// - Local refinement failure is tolerated as long as enough remote signatures are collected
+// - Context cancellation causes an immediate exit
 func (h *WorkReportGuarantor) collectReports(
 	ctx context.Context,
 	remoteCh <-chan guaranteeResponse,
@@ -312,37 +324,60 @@ func (h *WorkReportGuarantor) collectReports(
 ) (localReportResult, []guaranteeResponse, error) {
 	var remoteResults []guaranteeResponse
 	var localRes localReportResult
+	var totalValidResults uint
+	var timer *time.Timer
 
-	localReceived := false
-
-	ctx, cancel := context.WithTimeout(ctx, maxWaitTime)
-	defer cancel()
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
 
 	for {
 		select {
+		case r := <-remoteCh:
+			if r.err != nil {
+				log.Printf("remote refinment failed: %v", r.err)
+				continue
+			}
+			totalValidResults++
+			remoteResults = append(remoteResults, r)
+
 		case l := <-localCh:
 			localRes = l
 			if l.err != nil {
-				return l, remoteResults, l.err
-			}
-			localReceived = true
-
-			if len(remoteResults) == minSignaturesRequiredForGuarantee {
-				return localRes, remoteResults, nil
-			}
-		case r := <-remoteCh:
-			if r.Err != nil {
-				log.Printf("Remote response error: %v", r.Err)
+				log.Printf("local refinment failed: %v", l.err)
 				continue
 			}
-			remoteResults = append(remoteResults, r)
-			if localReceived && len(remoteResults) == minSignaturesRequiredForGuarantee {
-				return localRes, remoteResults, nil
-			}
+			totalValidResults++
+
 		case <-ctx.Done():
+			return localRes, remoteResults, ctx.Err()
+
+		case <-safeTimerC(timer):
+			// Timer expired
+			return localRes, remoteResults, nil
+		}
+
+		if totalValidResults == minSignaturesRequiredToGuarantee {
+			// First 2 valid results already received — start the timer
+			timer = time.NewTimer(maxWaitTimeForThirdGuarantor)
+		}
+
+		if totalValidResults == maxSignaturesRequiredToGuarantee {
+			// If we already have all signatures before timer fires, return early
 			return localRes, remoteResults, nil
 		}
 	}
+}
+
+// safeTimerC safely returns a channel to select on only if timer is active
+func safeTimerC(t *time.Timer) <-chan time.Time {
+	if t != nil {
+		return t.C
+	}
+	// blocked forever if no timer yet
+	return make(<-chan time.Time)
 }
 
 // TODO: Build segment-root mappings based on historical data
