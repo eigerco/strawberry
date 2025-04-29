@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"github.com/eigerco/strawberry/pkg/db/pebble"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -11,8 +12,11 @@ import (
 )
 
 func TestCheckFinalization(t *testing.T) {
+	db, err := pebble.NewKVStore()
+	require.NoError(t, err)
+
 	// Create a new BlockService
-	bs, err := NewBlockService()
+	bs, err := NewBlockService(db)
 	require.NoError(t, err)
 
 	// Create a chain of 7 headers (0->1->2->3->4->5->6)

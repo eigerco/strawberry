@@ -631,14 +631,11 @@ func TestTwoNodesAuditShard(t *testing.T) {
 
 	expectedJustification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
 
-	// TODO to be replaced once we implement the assurance logic
-	validatorSvc := validator.NewValidatorServiceMock()
-	validatorSvc.On("AuditShardRequest", mock.Anything, erasureRoot, shardIndex).Return(expectedBundleShard, expectedJustification, nil)
-
-	node2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindAuditShardRequest, handlers.NewAuditShardRequestHandler(validatorSvc))
+	err := node2.AvailabilityStore.PutShardsAndJudgements(erasureRoot, shardIndex, expectedBundleShard, nil, expectedJustification)
+	require.NoError(t, err)
 
 	// Start both nodes
-	err := node1.Start()
+	err = node1.Start()
 	require.NoError(t, err)
 	defer stopNode(t, node1)
 
@@ -690,14 +687,11 @@ func TestTwoNodesSegmentShard(t *testing.T) {
 		{23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34},
 	}
 
-	// TODO to be replaced once we implement the assurance logic
-	validatorSvc := validator.NewValidatorServiceMock()
-	validatorSvc.On("SegmentShardRequest", mock.Anything, erasureRoot, shardIndex, segmentIndexes).Return(expectedSegmentShard, nil)
-
-	node2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequest, handlers.NewSegmentShardRequestHandler(validatorSvc))
+	err := node2.AvailabilityStore.PutShardsAndJudgements(erasureRoot, shardIndex, nil, expectedSegmentShard, nil)
+	require.NoError(t, err)
 
 	// Start both nodes
-	err := node1.Start()
+	err = node1.Start()
 	require.NoError(t, err)
 	defer stopNode(t, node1)
 
@@ -751,20 +745,14 @@ func TestTwoNodesSegmentJustificationShard(t *testing.T) {
 	hash2 := testutils.RandomHash(t)
 	hash3 := testutils.RandomHash(t)
 	hash4 := testutils.RandomHash(t)
-	expectedJustification := [][][]byte{
-		{hash1[:], hash2[:], append(hash3[:], hash4[:]...), expectedSegmentShard[0]},
-		{hash1[:], hash2[:], append(hash3[:], hash4[:]...), expectedSegmentShard[1]},
-		{hash1[:], hash2[:], append(hash3[:], hash4[:]...), expectedSegmentShard[2]},
-	}
 
-	// TODO to be replaced once we implement the assurance logic
-	validatorSvc := validator.NewValidatorServiceMock()
-	validatorSvc.On("SegmentShardRequestJustification", mock.Anything, erasureRoot, shardIndex, segmentIndexes).Return(expectedSegmentShard, expectedJustification, nil)
+	baseJustification := [][]byte{hash1[:], hash2[:], append(hash3[:], hash4[:]...)}
 
-	node2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequestJust, handlers.NewSegmentShardRequestJustificationHandler(validatorSvc))
+	err := node2.AvailabilityStore.PutShardsAndJudgements(erasureRoot, shardIndex, nil, expectedSegmentShard, baseJustification)
+	require.NoError(t, err)
 
 	// Start both nodes
-	err := node1.Start()
+	err = node1.Start()
 	require.NoError(t, err)
 	defer stopNode(t, node1)
 
@@ -792,7 +780,11 @@ func TestTwoNodesSegmentJustificationShard(t *testing.T) {
 	segmentShards, justification, err := node1.SegmentShardRequestJustificationSend(ctx, node2Peer.Ed25519Key, erasureRoot, shardIndex, segmentIndexes)
 	require.NoError(t, err)
 	assert.Equal(t, expectedSegmentShard, segmentShards)
-	assert.Equal(t, expectedJustification, justification)
+	if assert.Len(t, justification, len(expectedSegmentShard)) {
+		for i := 0; i < len(expectedSegmentShard); i++ {
+			assert.Equal(t, justification[i][:3], baseJustification)
+		}
+	}
 
 	t.Log("Segments shards have been sent")
 }

@@ -17,8 +17,10 @@ import (
 	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/statetransition"
+	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/pkg/db/pebble"
 	"github.com/eigerco/strawberry/pkg/network/cert"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/network/peer"
@@ -48,6 +50,9 @@ type Node struct {
 	workPackageSharingHandler     *handlers.WorkPackageSharingHandler
 	currentCoreIndex              uint16
 	currentGuarantorPeers         []*peer.Peer
+	validatorService              validator.ValidatorService
+
+	AvailabilityStore *store.Availability
 }
 
 // PeerSet maintains mappings between peer identifiers
@@ -112,12 +117,20 @@ func (ps *PeerSet) GetByValidatorIndex(index uint16) *peer.Peer {
 // NewNode creates a new Node instance with the specified configuration.
 // It initializes the TLS certificate, protocol manager, and network transport.
 func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.ValidatorKeys, state state.State, validatorIdx uint16) (*Node, error) {
+	kvStore, err := pebble.NewKVStore()
+	if err != nil {
+		return nil, err
+	}
+
+	availabilityStore := store.NewAvailability(kvStore)
 	nodeCtx, cancel := context.WithCancel(nodeCtx)
 	node := &Node{
-		PeersSet: NewPeerSet(),
-		State:    state,
-		Context:  nodeCtx,
-		Cancel:   cancel,
+		PeersSet:          NewPeerSet(),
+		State:             state,
+		Context:           nodeCtx,
+		Cancel:            cancel,
+		validatorService:  validator.NewService(availabilityStore),
+		AvailabilityStore: availabilityStore,
 	}
 	node.ValidatorManager = validator.NewValidatorManager(keys, state.ValidatorState, validatorIdx)
 
@@ -141,7 +154,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	}
 
 	// Create block service
-	bs, err := chain.NewBlockService()
+	bs, err := chain.NewBlockService(kvStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create block service: %w", err)
 	}
@@ -167,10 +180,10 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	node.workPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authorization.New(state), refine.New(state), keys.EdPrv, state.Services)
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, node.workPackageSharingHandler)
 
-	validatorSvc := validator.NewService()
-	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(validatorSvc))
-	protoManager.Registry.RegisterHandler(protocol.StreamKindAuditShardRequest, handlers.NewAuditShardRequestHandler(validatorSvc))
-	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequest, handlers.NewSegmentShardRequestHandler(validatorSvc))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(node.validatorService))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindAuditShardRequest, handlers.NewAuditShardRequestHandler(node.validatorService))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequest, handlers.NewSegmentShardRequestHandler(node.validatorService))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequestJust, handlers.NewSegmentShardRequestJustificationHandler(node.validatorService))
 
 	// Create transport
 	transportConfig := transport.Config{
@@ -532,4 +545,33 @@ func (n *Node) ValidateConnection(tlsState tls.ConnectionState) error {
 // versions and variants for this node.
 func (n *Node) GetProtocols() []string {
 	return n.ProtocolManager.GetProtocols()
+}
+
+// GetGuaranteedShardsAndStore requests the shards from the appropriate guarantors,
+// if shard distribution request fails, will try again for the next guarantor, if unable to get shards from any guarantor will fail
+// TODO this method needs to be called upon receiving a new block
+func (n *Node) GetGuaranteedShardsAndStore(ctx context.Context, guarantee block.Guarantee) error {
+	for _, credential := range guarantee.Credentials {
+		peer := n.PeersSet.GetByValidatorIndex(credential.ValidatorIndex)
+		if peer == nil {
+			return fmt.Errorf("peer with validator index %d not found", credential.ValidatorIndex)
+		}
+
+		erasureRoot := guarantee.WorkReport.WorkPackageSpecification.ErasureRoot
+		validatorIndex := n.ValidatorManager.Index
+
+		bundleShard, segmentsShard, justification, err := n.ShardDistributionSend(ctx, peer.Ed25519Key, erasureRoot, validatorIndex)
+		if err != nil {
+			log.Printf("Error getting shards from guarantor with index %d; trying again with other guarantor", credential.ValidatorIndex)
+			continue
+		}
+
+		if err := n.AvailabilityStore.PutShardsAndJudgements(erasureRoot, validatorIndex, bundleShard, segmentsShard, justification); err != nil {
+			return fmt.Errorf("failed to store shards and judgements: %w", err)
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("unable to get shards from guarantors")
 }

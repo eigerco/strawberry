@@ -48,11 +48,7 @@ type Leaf struct {
 // - Empty leaf block set
 // - Persistent block storage using PebbleDB
 // - Genesis block as the latest finalized block
-func NewBlockService() (*BlockService, error) {
-	kvStore, err := pebble.NewKVStore()
-	if err != nil {
-		return nil, err
-	}
+func NewBlockService(kvStore *pebble.KVStore) (*BlockService, error) {
 	chain := store.NewChain(kvStore)
 	bs := &BlockService{
 		Store:       chain,
