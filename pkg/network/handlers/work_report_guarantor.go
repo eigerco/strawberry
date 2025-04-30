@@ -587,20 +587,18 @@ func (h *WorkReportGuarantor) convertValidatorsDataToPeers(data safrole.Validato
 	return peers
 }
 
-// mergePeers returns the union of two peer slices ensuring no duplicate ValidatorIndex entries
+// mergePeers returns the union of two peer slices ensuring no duplicate entries based on Ed25519 public keys
 func mergePeers(a, b []*peer.Peer) []*peer.Peer {
-	exists := make(map[uint16]struct{})
+	exists := make(map[string]struct{})
 	var merged []*peer.Peer
 
 	for _, p := range a {
 		merged = append(merged, p)
-		if p.ValidatorIndex != nil {
-			exists[*p.ValidatorIndex] = struct{}{}
-		}
+		exists[string(p.Ed25519Key)] = struct{}{}
 	}
 	for _, p := range b {
 		if p.ValidatorIndex != nil {
-			if _, ok := exists[*p.ValidatorIndex]; !ok {
+			if _, ok := exists[string(p.Ed25519Key)]; !ok {
 				merged = append(merged, p)
 			}
 		}
