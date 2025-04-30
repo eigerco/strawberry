@@ -10,6 +10,8 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 )
 
+// ValidatorService holds the logic for storing DA shards for availability purposes, and distributing the shards with
+// justifications after the guarantors finished processing
 type ValidatorService interface {
 	ShardDistribution(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error)
 	AuditShardRequest(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, justification [][]byte, err error)
@@ -17,6 +19,7 @@ type ValidatorService interface {
 	SegmentShardRequestJustification(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, justification [][][]byte, err error)
 }
 
+// NewService creates a new validator service that implements ValidatorService interface
 func NewService(availabilityStore *store.Availability) ValidatorService {
 	return &validatorService{
 		availabilityStore: availabilityStore,
@@ -32,6 +35,7 @@ func (s *validatorService) ShardDistribution(ctx context.Context, erasureRoot cr
 	panic("implement me")
 }
 
+// AuditShardRequest gets the audit shards and justification from the availability store
 func (s *validatorService) AuditShardRequest(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, justification [][]byte, err error) {
 	bundleShard, err = s.availabilityStore.GetAuditShard(erasureRoot, shardIndex)
 	if err != nil {
@@ -46,6 +50,7 @@ func (s *validatorService) AuditShardRequest(ctx context.Context, erasureRoot cr
 	return bundleShard, justification, nil
 }
 
+// SegmentShardRequest gets the segments shards from the store and filters so only the shard segments with provided indexes are returned
 func (s *validatorService) SegmentShardRequest(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, err error) {
 	allSegmentsShards, err := s.availabilityStore.GetSegmentsShard(erasureRoot, shardIndex)
 	if err != nil {
@@ -60,6 +65,8 @@ func (s *validatorService) SegmentShardRequest(ctx context.Context, erasureRoot 
 	return segmentShards, nil
 }
 
+// SegmentShardRequestJustification similar to SegmentShardRequest gets the segments shards and filters them,
+// but also constructs the justification for each segment shard
 func (s *validatorService) SegmentShardRequestJustification(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, justification [][][]byte, err error) {
 	allSegmentsShards, err := s.availabilityStore.GetSegmentsShard(erasureRoot, shardIndex)
 	if err != nil {
