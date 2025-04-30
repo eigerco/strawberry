@@ -33,6 +33,8 @@ const (
 	// The third guarantor should be given a reasonable amount of time (e.g. two seconds) to produce
 	// an additional signature before the guaranteed work-report is distrubuted
 	maxWaitTimeForThirdGuarantor = time.Second * 2
+	// maxWaitTimeForCollectingReports defines the maximum wait time to collect all work reports
+	maxWaitTimeForCollectingReports = time.Second * 5
 )
 
 // WorkReportGuarantor handles CE-134 and CE-135:
@@ -154,7 +156,7 @@ func (h *WorkReportGuarantor) processWorkPackage(
 	guarantors := h.guarantors
 	h.mu.RUnlock()
 
-	if guarantors == nil {
+	if len(guarantors) == 0 {
 		return errors.New("no guarantors set")
 	}
 
@@ -314,10 +316,11 @@ func (h *WorkReportGuarantor) processWorkReports(
 
 // collectReports collects valid work-report refinements (local and remote) following CE-134/135.
 //
-// - Wait for at least two successful refinement responses (local or remote), without any timeout
+// - Wait for at least two successful refinement responses (local or remote) are collected
 // - Once two valid results are received, start a timer for a possible third response
 // - If a third valid result arrives before the timer expires, return immediately
 // - If the timer expires first, proceed with the collected results
+// - A general timeout of (maxWaitTimeForCollectingReports) is applied to the entire collection process
 // - Remote failures are tolerated and skipped
 // - Local refinement failure is tolerated as long as enough remote signatures are collected
 // - If fewer than two valid results are collected after all responses or timeout, the caller must handle the failure
@@ -331,6 +334,9 @@ func (h *WorkReportGuarantor) collectReports(
 	var localRes localReportResult
 	var totalResponses, totalValidResults uint
 	var timer *time.Timer
+
+	ctx, cancel := context.WithTimeout(ctx, maxWaitTimeForCollectingReports)
+	defer cancel()
 
 	defer func() {
 		if timer != nil {
@@ -367,7 +373,7 @@ func (h *WorkReportGuarantor) collectReports(
 		}
 
 		// if the first 2 valid results already received — start the timer
-		if totalValidResults == minSignaturesRequiredToGuarantee {
+		if timer == nil && totalValidResults == minSignaturesRequiredToGuarantee {
 			log.Println("waiting for third response")
 			timer = time.NewTimer(maxWaitTimeForThirdGuarantor)
 		}
@@ -393,7 +399,7 @@ func (h *WorkReportGuarantor) buildSegmentRootMapping(pkg work.PackageBundle) []
 	return []SegmentRootMapping{}
 }
 
-// sendWorkPackage sends 2 messages to another guarantor and closes the stream:
+// CE 134: sendWorkPackage sends 2 messages to another guarantor and closes the stream:
 //
 // --> Core Index ++ Segments-Root Mappings
 //   - Informs the receiving guarantor which core this work-package belongs to.
@@ -406,7 +412,18 @@ func (h *WorkReportGuarantor) buildSegmentRootMapping(pkg work.PackageBundle) []
 // --> FIN
 //   - Closes the stream after sending both messages. The response is expected before finalization.
 //
-// The bundle should include imported data segments and their justifications as well as the work-package and extrinsic data.
+// <-- Work-Report Hash ++ Ed25519 Signature
+//   - The receiving guarantor performs refinement and responds with:
+//   - The hash of the resulting work-report.
+//   - Their Ed25519 signature over the hash.
+//   - This response is used to help assemble a guaranteed work-report.
+//
+// <-- FIN
+//   - The stream is closed after the response is read and decoded.
+//
+// Returns:
+// - A `workPackageSharingResponse` containing the signed hash of the refined work-report.
+// - An error if sending, receiving, decoding, or stream closure fails.
 func (h *WorkReportGuarantor) sendWorkPackage(
 	ctx context.Context,
 	g *peer.Peer,
@@ -427,7 +444,7 @@ func (h *WorkReportGuarantor) sendWorkPackage(
 
 	stream, err := g.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageShare)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to open stream: %v", err)
+		return nil, fmt.Errorf("failed to open stream: %v", err)
 	}
 
 	// 1st: “CoreIndex ++ Segments-Root Mappings”
@@ -440,14 +457,14 @@ func (h *WorkReportGuarantor) sendWorkPackage(
 		return nil, fmt.Errorf("failed to send WP bundle: %w", err)
 	}
 
+	if err := stream.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close stream: %w", err)
+	}
+
 	// Handle CE-134 response from the receiving guarantor
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if err := stream.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close stream: %w", err)
 	}
 
 	var response workPackageSharingResponse
