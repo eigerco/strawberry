@@ -631,7 +631,7 @@ func TestTwoNodesAuditShard(t *testing.T) {
 
 	expectedJustification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
 
-	err := node2.AvailabilityStore.PutShardsAndJudgements(erasureRoot, shardIndex, expectedBundleShard, nil, expectedJustification)
+	err := node2.AvailabilityStore.PutShardsAndJustification(erasureRoot, shardIndex, expectedBundleShard, nil, expectedJustification)
 	require.NoError(t, err)
 
 	// Start both nodes
@@ -687,7 +687,7 @@ func TestTwoNodesSegmentShard(t *testing.T) {
 		{23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34},
 	}
 
-	err := node2.AvailabilityStore.PutShardsAndJudgements(erasureRoot, shardIndex, nil, expectedSegmentShard, nil)
+	err := node2.AvailabilityStore.PutShardsAndJustification(erasureRoot, shardIndex, nil, expectedSegmentShard, nil)
 	require.NoError(t, err)
 
 	// Start both nodes
@@ -748,7 +748,7 @@ func TestTwoNodesSegmentJustificationShard(t *testing.T) {
 
 	baseJustification := [][]byte{hash1[:], hash2[:], append(hash3[:], hash4[:]...)}
 
-	err := node2.AvailabilityStore.PutShardsAndJudgements(erasureRoot, shardIndex, nil, expectedSegmentShard, baseJustification)
+	err := node2.AvailabilityStore.PutShardsAndJustification(erasureRoot, shardIndex, nil, expectedSegmentShard, baseJustification)
 	require.NoError(t, err)
 
 	// Start both nodes

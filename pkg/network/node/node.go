@@ -566,8 +566,8 @@ func (n *Node) GetGuaranteedShardsAndStore(ctx context.Context, guarantee block.
 			continue
 		}
 
-		if err := n.AvailabilityStore.PutShardsAndJudgements(erasureRoot, validatorIndex, bundleShard, segmentsShard, justification); err != nil {
-			return fmt.Errorf("failed to store shards and judgements: %w", err)
+		if err := n.AvailabilityStore.PutShardsAndJustification(erasureRoot, validatorIndex, bundleShard, segmentsShard, justification); err != nil {
+			return fmt.Errorf("failed to store shards and justification: %w", err)
 		}
 
 		return nil
