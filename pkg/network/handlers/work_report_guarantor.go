@@ -65,8 +65,10 @@ type guaranteeResponse struct {
 }
 
 type localReportResult struct {
-	report block.WorkReport
-	err    error
+	report         block.WorkReport
+	workReportHash crypto.Hash
+	signature      crypto.Ed25519Signature
+	err            error
 }
 
 func NewWorkReportGuarantor(
@@ -177,19 +179,7 @@ func (h *WorkReportGuarantor) processWorkPackage(
 
 	// start local refinement in parallel
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		workReport, err := results.ProduceWorkReport(h.refine, h.state.Services, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
-		if err != nil {
-			localResultCh <- localReportResult{err: err}
-			log.Printf("local refinement failed: %v", err)
-			return
-		}
-
-		log.Println("local refinement finished")
-
-		localResultCh <- localReportResult{report: workReport}
-	}()
+	go h.startLocalRefinement(&wg, coreIndex, authOutput, bundle, segments, localResultCh)
 
 	localResult, remoteResponses, err := h.collectReports(ctx, remoteResultCh, localResultCh)
 	if err != nil {
@@ -199,6 +189,47 @@ func (h *WorkReportGuarantor) processWorkPackage(
 	wg.Wait()
 
 	return h.processWorkReports(ctx, localResult, remoteResponses)
+}
+
+// startLocalRefinement performs local refinement of a work-package in a separate goroutine.
+//
+// If successful, it computes the hash of the work-report and signs it
+// The result (including a report, hash, and signature) is sent to the localResultCh channel
+// If refinement fails or hashing fails, an error is sent instead
+func (h *WorkReportGuarantor) startLocalRefinement(
+	wg *sync.WaitGroup,
+	coreIndex uint16,
+	authOutput []byte,
+	bundle work.PackageBundle,
+	segments []SegmentRootMapping,
+	localResultCh chan<- localReportResult,
+) {
+	defer wg.Done()
+	workReport, err := results.ProduceWorkReport(h.refine, h.state.Services, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
+	if err != nil {
+		localResultCh <- localReportResult{err: err}
+		log.Printf("local refinement failed: %v", err)
+		return
+	}
+
+	log.Println("local refinement finished")
+
+	wrHash, err := workReport.Hash()
+	if err != nil {
+		localResultCh <- localReportResult{err: err}
+		log.Printf("failed to compute work report hash: %v", err)
+		return
+	}
+
+	localSig := ed25519.Sign(h.privateKey, wrHash[:])
+
+	log.Printf("local work-report hash and signature:\n- Hash: %x\n- Signature: %x", wrHash, localSig)
+
+	localResultCh <- localReportResult{
+		report:         workReport,
+		workReportHash: wrHash,
+		signature:      crypto.Ed25519Signature(localSig),
+	}
 }
 
 // CE-134:
@@ -265,18 +296,10 @@ func (h *WorkReportGuarantor) processWorkReports(
 
 	// Local refinement succeeded
 	if localResult.err == nil {
-		wrHash, err := localResult.report.Hash()
-		if err != nil {
-			return fmt.Errorf("failed to compute work report hash: %v", err)
-		}
-
-		localSig := ed25519.Sign(h.privateKey, wrHash[:])
 		creds = append(creds, block.CredentialSignature{
 			ValidatorIndex: h.validatorIndex,
-			Signature:      crypto.Ed25519Signature(localSig),
+			Signature:      localResult.signature,
 		})
-		log.Printf("local work-report hash and signature:\n- Hash: %x\n- Signature: %x", wrHash, localSig)
-
 		report = localResult.report
 	}
 
