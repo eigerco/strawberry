@@ -17,6 +17,7 @@ import (
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/network/mocks"
 	"github.com/eigerco/strawberry/pkg/network/peer"
@@ -178,11 +179,18 @@ func TestHandleWorkPackage(t *testing.T) {
 		}).
 		Return(len(extrinsics), nil).Once()
 
+	bundle := work.PackageBundle{Package: pkg}
+	workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
+	require.NoError(t, err)
+
+	h, err := workReport.Hash()
+	require.NoError(t, err)
+
 	response := struct {
 		WorkReportHash crypto.Hash
 		Signature      crypto.Ed25519Signature
 	}{
-		WorkReportHash: testutils.RandomHash(t),
+		WorkReportHash: h,
 		Signature:      testutils.RandomEd25519Signature(t),
 	}
 
@@ -359,11 +367,18 @@ func TestHandleStream_Success(t *testing.T) {
 		copy(b, extrinsics)
 	}).Return(len(extrinsics), nil).Once()
 
+	bundle := work.PackageBundle{Package: pkg}
+	workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
+	require.NoError(t, err)
+
+	h, err := workReport.Hash()
+	require.NoError(t, err)
+
 	response := struct {
 		WorkReportHash crypto.Hash
 		Signature      crypto.Ed25519Signature
 	}{
-		WorkReportHash: testutils.RandomHash(t),
+		WorkReportHash: h,
 		Signature:      testutils.RandomEd25519Signature(t),
 	}
 
