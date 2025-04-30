@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_makeAvailabilityKey(t *testing.T) {
+func TestMakeAvailabilityKey(t *testing.T) {
 	key := makeAvailabilityKey(prefixAvailabilitySegmentsShard, crypto.Hash{}, 1)
 	assert.Equal(t, []byte{prefixAvailabilitySegmentsShard, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0}, key)
 

@@ -3,22 +3,31 @@ package store
 import (
 	"encoding/binary"
 	"fmt"
+	"log"
+
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/pkg/db"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
+// NewAvailability creates a new availability store
 func NewAvailability(db db.KVStore) *Availability {
 	return &Availability{db: db}
 }
 
+// Availability stores
 type Availability struct {
 	db db.KVStore
 }
 
+// PutShardsAndJustification stores segment shards, audit bundle shards and justification in one batch for an erasure root and shard index
 func (a *Availability) PutShardsAndJustification(erasureRoot crypto.Hash, shardIndex uint16, bundleShard []byte, segmentsShard [][]byte, justification [][]byte) error {
 	batch := a.db.NewBatch()
-	defer batch.Close()
+	defer func() {
+		if err := batch.Close(); err != nil {
+			log.Printf("error closing store: %v", err)
+		}
+	}()
 
 	if err := batch.Put(makeAvailabilityKey(prefixAvailabilityAuditShard, erasureRoot, shardIndex), bundleShard); err != nil {
 		return fmt.Errorf("unable to store audit bundle shard: %w", err)
@@ -41,6 +50,7 @@ func (a *Availability) PutShardsAndJustification(erasureRoot crypto.Hash, shardI
 	return batch.Commit()
 }
 
+// GetAuditShard gets an audit shard by erasure root and shard index
 func (a *Availability) GetAuditShard(erasureRoot crypto.Hash, shardIndex uint16) ([]byte, error) {
 	val, err := a.db.Get(makeAvailabilityKey(prefixAvailabilityAuditShard, erasureRoot, shardIndex))
 	if err != nil {
@@ -50,6 +60,7 @@ func (a *Availability) GetAuditShard(erasureRoot crypto.Hash, shardIndex uint16)
 	return val, nil
 }
 
+// GetSegmentsShard gets a segment shard by erasure root and shard index
 func (a *Availability) GetSegmentsShard(erasureRoot crypto.Hash, shardIndex uint16) ([][]byte, error) {
 	val, err := a.db.Get(makeAvailabilityKey(prefixAvailabilitySegmentsShard, erasureRoot, shardIndex))
 	if err != nil {
@@ -63,6 +74,7 @@ func (a *Availability) GetSegmentsShard(erasureRoot crypto.Hash, shardIndex uint
 	return segmentsShards, nil
 }
 
+// GetJustification gets a justification by erasure root and shard index
 func (a *Availability) GetJustification(erasureRoot crypto.Hash, shardIndex uint16) ([][]byte, error) {
 	val, err := a.db.Get(makeAvailabilityKey(prefixAvailabilityJustification, erasureRoot, shardIndex))
 	if err != nil {

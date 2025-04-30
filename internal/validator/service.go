@@ -51,20 +51,31 @@ func (s *validatorService) SegmentShardRequest(ctx context.Context, erasureRoot 
 	if err != nil {
 		return nil, err
 	}
-	for _, shardIndex := range segmentIndexes {
-		if len(allSegmentsShards) < int(shardIndex) {
-			return nil, fmt.Errorf("segment shard index %d out of bounds", shardIndex)
+	for _, segmentIndex := range segmentIndexes {
+		if len(allSegmentsShards) <= int(segmentIndex) {
+			return nil, fmt.Errorf("segment shard segment index %d out of bounds", segmentIndex)
 		}
-		segmentShards = append(segmentShards, allSegmentsShards[shardIndex])
+		segmentShards = append(segmentShards, allSegmentsShards[segmentIndex])
 	}
 	return segmentShards, nil
 }
 
 func (s *validatorService) SegmentShardRequestJustification(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, justification [][][]byte, err error) {
-	segmentShards, err = s.availabilityStore.GetSegmentsShard(erasureRoot, shardIndex)
+	allSegmentsShards, err := s.availabilityStore.GetSegmentsShard(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, err
 	}
+	for _, segmentIndex := range segmentIndexes {
+		if len(allSegmentsShards) <= int(segmentIndex) {
+			return nil, nil, fmt.Errorf("segment shard segment index %d out of bounds", segmentIndex)
+		}
+		segmentShards = append(segmentShards, allSegmentsShards[segmentIndex])
+	}
+
+	if len(segmentShards) == 0 {
+		return nil, nil, nil
+	}
+
 	auditShard, err := s.availabilityStore.GetAuditShard(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, err
