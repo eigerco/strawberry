@@ -71,6 +71,16 @@ type localReportResult struct {
 	err            error
 }
 
+// signedWorkReport represents a guarantor signature over a work-report hash.
+// - If Report is non-nil, it means this was the locally computed work-report and contains the full body.
+// - Remote responses only contain hash + signature.
+type signedWorkReport struct {
+	WorkReportHash crypto.Hash
+	Signature      crypto.Ed25519Signature
+	ValidatorIndex uint16
+	Report         *block.WorkReport // Only set if local and successful
+}
+
 func NewWorkReportGuarantor(
 	validatorIndex uint16,
 	privateKey ed25519.PrivateKey,
@@ -181,14 +191,14 @@ func (h *WorkReportGuarantor) processWorkPackage(
 	wg.Add(1)
 	go h.startLocalRefinement(&wg, coreIndex, authOutput, bundle, segments, localResultCh)
 
-	localResult, remoteResponses, err := h.collectReports(ctx, remoteResultCh, localResultCh)
+	signedWorkReports, err := h.collectSignedReports(ctx, remoteResultCh, localResultCh)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to collect signed work reports: %w", err)
 	}
 
 	wg.Wait()
 
-	return h.processWorkReports(ctx, localResult, remoteResponses)
+	return h.processWorkReports(ctx, signedWorkReports)
 }
 
 // startLocalRefinement performs local refinement of a work-package in a separate goroutine.
@@ -279,44 +289,51 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 	}
 }
 
-// processWorkReports constructs and distributes a block.Guarantee
+// processWorkReports constructs and distributes a block.Guarantee from a set of signed work-reports
 //
-// It collects signatures from the local refinement (if available) and from remote guarantors.
-// - If local refinement succeeds, the local node signs the work-report and uses its body.
+// - Groups signatures by work-report hash and selects the first group with at least 2 signatures
 // - If local refinement fails, remote signatures are still used, but the work-report body must eventually be fetched separately from a peer
-// - At least two valid signatures (local or remote) are required to proceed.
+// - Credentials (signatures) are sorted by validator index as required by the protocol
+// - If no quorum group is found, returns an error without broadcasting anything
 // - Credentials are sorted by validator index before constructing the guarantee.
 func (h *WorkReportGuarantor) processWorkReports(
 	ctx context.Context,
-	localResult localReportResult,
-	remoteResponses []guaranteeResponse,
+	signed []signedWorkReport,
 ) error {
-	var creds []block.CredentialSignature
+	groups := make(map[crypto.Hash][]signedWorkReport)
+
+	for _, s := range signed {
+		groups[s.WorkReportHash] = append(groups[s.WorkReportHash], s)
+	}
+
+	var winningGroup []signedWorkReport
+	for _, sigs := range groups {
+		if len(sigs) >= minSignaturesRequiredToGuarantee {
+			winningGroup = sigs
+			break
+		}
+	}
+
+	if len(winningGroup) < minSignaturesRequiredToGuarantee {
+		return fmt.Errorf("not enough matching signatures for any work-report hash")
+	}
+
 	var report block.WorkReport
+	reportSet := false
 
-	// Local refinement succeeded
-	if localResult.err == nil {
+	var creds []block.CredentialSignature
+	for _, s := range winningGroup {
 		creds = append(creds, block.CredentialSignature{
-			ValidatorIndex: h.validatorIndex,
-			Signature:      localResult.signature,
+			ValidatorIndex: s.ValidatorIndex,
+			Signature:      s.Signature,
 		})
-		report = localResult.report
+		if s.Report != nil {
+			report = *s.Report
+			reportSet = true
+		}
 	}
 
-	// Add remote signatures
-	for _, r := range remoteResponses {
-		creds = append(creds, block.CredentialSignature{
-			ValidatorIndex: r.validatorIndex,
-			Signature:      r.signature,
-		})
-	}
-
-	if len(creds) < minSignaturesRequiredToGuarantee {
-		return fmt.Errorf("not enough credentials to guarantee work report: have %d", len(creds))
-	}
-
-	// If local refinement failed, we need to fetch the full work report
-	if localResult.err != nil {
+	if !reportSet {
 		log.Println("fetching full work report from remote peer")
 		// TODO Need to fetch full work report by hash from remote peer CE-136
 	}
@@ -337,26 +354,25 @@ func (h *WorkReportGuarantor) processWorkReports(
 	return h.distributeGuaranteedWorkReport(ctx, guarantee)
 }
 
-// collectReports collects valid work-report refinements (local and remote) following CE-134/135.
+// collectSignedReports gathers signed work-report hashes from both local refinement and remote guarantors.
 //
-// - Wait for at least two successful refinement responses (local or remote) are collected
-// - Once two valid results are received, start a timer for a possible third response
-// - If a third valid result arrives before the timer expires, return immediately
-// - If the timer expires first, proceed with the collected results
+// - It waits for at least two successful responses (local or remote) that agree on the same hash
+// - Once two matching hashes are received, start a timer for a possible third response
 // - A general timeout of (maxWaitTimeForCollectingReports) is applied to the entire collection process
-// - Remote failures are tolerated and skipped
-// - Local refinement failure is tolerated as long as enough remote signatures are collected
-// - If fewer than two valid results are collected after all responses or timeout, the caller must handle the failure
+// - All signatures are grouped by hash to identify the largest group with matching work-report hashes
+// - Local failures are tolerated as long as enough remote responses are collected
+// - If no matching quorum is found after timeout or all responses, the caller must handle the failure
 // - Context cancellation causes an immediate exit
-func (h *WorkReportGuarantor) collectReports(
+func (h *WorkReportGuarantor) collectSignedReports(
 	ctx context.Context,
 	remoteCh <-chan guaranteeResponse,
 	localCh <-chan localReportResult,
-) (localReportResult, []guaranteeResponse, error) {
-	var remoteResults []guaranteeResponse
-	var localRes localReportResult
-	var totalResponses, totalValidResults uint
+) ([]signedWorkReport, error) {
 	var timer *time.Timer
+	var signedReports []signedWorkReport
+	var totalResponses uint
+	var hashCounts = make(map[crypto.Hash]int)
+	var quorumReached bool
 
 	ctx, cancel := context.WithTimeout(ctx, maxWaitTimeForCollectingReports)
 	defer cancel()
@@ -372,38 +388,54 @@ func (h *WorkReportGuarantor) collectReports(
 		case r := <-remoteCh:
 			totalResponses++
 			if r.err != nil {
-				log.Printf("remote refinment failed: %v", r.err)
+				log.Printf("remote refinement failed: %v", r.err)
 				continue
 			}
-			totalValidResults++
-			remoteResults = append(remoteResults, r)
+
+			hashCounts[r.workReportHash]++
+			signedReports = append(signedReports, signedWorkReport{
+				ValidatorIndex: r.validatorIndex,
+				Signature:      r.signature,
+				WorkReportHash: r.workReportHash,
+			})
 
 		case l := <-localCh:
 			totalResponses++
-			localRes = l
 			if l.err != nil {
-				log.Printf("local refinment failed: %v", l.err)
+				log.Printf("local refinement failed: %v", l.err)
 				continue
 			}
-			totalValidResults++
 
+			hashCounts[l.workReportHash]++
+			signedReports = append(signedReports, signedWorkReport{
+				ValidatorIndex: h.validatorIndex,
+				Signature:      l.signature,
+				WorkReportHash: l.workReportHash,
+				Report:         &l.report,
+			})
 		case <-ctx.Done():
-			return localRes, remoteResults, ctx.Err()
+			return signedReports, ctx.Err()
 
 		case <-safeTimerC(timer):
 			// Timer expired
-			return localRes, remoteResults, nil
-		}
-
-		// if the first 2 valid results already received — start the timer
-		if timer == nil && totalValidResults == minSignaturesRequiredToGuarantee {
-			log.Println("waiting for third response")
-			timer = time.NewTimer(maxWaitTimeForThirdGuarantor)
+			return signedReports, nil
 		}
 
 		// if all responses arrived, return early
 		if totalResponses == maxSignaturesRequiredToGuarantee {
-			return localRes, remoteResults, nil
+			return signedReports, nil
+		}
+
+		// Check if quorum has been reached for any hash to start the timer
+		if timer == nil && !quorumReached {
+			for _, count := range hashCounts {
+				if count == minSignaturesRequiredToGuarantee {
+					log.Println("quorum reached, starting timer for optional third signature")
+					timer = time.NewTimer(maxWaitTimeForThirdGuarantor)
+					quorumReached = true
+					break
+				}
+			}
 		}
 	}
 }
