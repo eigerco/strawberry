@@ -72,29 +72,41 @@ func (s *validatorService) SegmentShardRequestJustification(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// build the segment index map to be able to filter only the needed segments
+	segmentIndexesMap := make(map[uint16]struct{})
 	for _, segmentIndex := range segmentIndexes {
 		if len(allSegmentsShards) <= int(segmentIndex) {
 			return nil, nil, fmt.Errorf("segment shard segment index %d out of bounds", segmentIndex)
 		}
-		segmentShards = append(segmentShards, allSegmentsShards[segmentIndex])
+		segmentIndexesMap[segmentIndex] = struct{}{}
 	}
 
 	if len(segmentShards) == 0 {
 		return nil, nil, nil
 	}
 
+	// ret audit shard from store, required for computing the audit shard hash for the segment justification
 	auditShard, err := s.availabilityStore.GetAuditShard(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, err
 	}
+	auditShardHash := crypto.HashData(auditShard)
+
 	baseJustification, err := s.availabilityStore.GetJustification(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	for segmentIndex := range segmentShards {
-		auditShardHash := crypto.HashData(auditShard)
-		segmentShardJustification := binary_tree.ComputeTrace(segmentShards, segmentIndex, crypto.HashData)
+	// compute the justification for each segment shard
+	for segmentIndex, segmentShard := range allSegmentsShards {
+		_, ok := segmentIndexesMap[uint16(segmentIndex)]
+		if !ok {
+			continue
+		}
+
+		segmentShards = append(segmentShards, segmentShard)
+		segmentShardJustification := binary_tree.ComputeTrace(allSegmentsShards, segmentIndex, crypto.HashData)
 
 		// j ⌢ [b] ⌢ T(s, i, H)
 		justification = append(justification, slices.Concat(baseJustification, [][]byte{auditShardHash[:]}, segmentShardJustification))

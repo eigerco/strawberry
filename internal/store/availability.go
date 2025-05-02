@@ -15,7 +15,7 @@ func NewAvailability(db db.KVStore) *Availability {
 	return &Availability{db: db}
 }
 
-// Availability stores
+// Availability responsible for storing the bundle and segments shards and justifications
 type Availability struct {
 	db db.KVStore
 }
@@ -29,9 +29,12 @@ func (a *Availability) PutShardsAndJustification(erasureRoot crypto.Hash, shardI
 		}
 	}()
 
+	// encode and store bundle shards
 	if err := batch.Put(makeAvailabilityKey(prefixAvailabilityAuditShard, erasureRoot, shardIndex), bundleShard); err != nil {
 		return fmt.Errorf("unable to store audit bundle shard: %w", err)
 	}
+
+	// encode and store segments shards
 	segmentsBytes, err := jam.Marshal(segmentsShard)
 	if err != nil {
 		return fmt.Errorf("unable to marshal segments shard: %w", err)
@@ -39,6 +42,8 @@ func (a *Availability) PutShardsAndJustification(erasureRoot crypto.Hash, shardI
 	if err := batch.Put(makeAvailabilityKey(prefixAvailabilitySegmentsShard, erasureRoot, shardIndex), segmentsBytes); err != nil {
 		return fmt.Errorf("unable to store segments shard: %w", err)
 	}
+
+	// encode and store justification
 	justificationBytes, err := jam.Marshal(justification)
 	if err != nil {
 		return fmt.Errorf("unable to marshal justification: %w", err)
