@@ -130,7 +130,10 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 		WorkReportHash: workReportHash,
 		Signature:      crypto.Ed25519Signature(signature),
 	}
-	respBytes, _ := jam.Marshal(resp)
+	respBytes, err := jam.Marshal(resp)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response: %w", err)
+	}
 
 	if err := WriteMessageWithContext(ctx, stream, respBytes); err != nil {
 		return fmt.Errorf("failed to write response: %w", err)
