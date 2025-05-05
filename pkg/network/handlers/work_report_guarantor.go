@@ -192,14 +192,14 @@ func (h *WorkReportGuarantor) processWorkPackage(
 	wg.Add(1)
 	go h.startLocalRefinement(&wg, coreIndex, authOutput, bundle, segments, localResultCh)
 
-	signedWorkReports, err := h.collectSignedReports(ctx, remoteResultCh, localResultCh)
+	groupedWorkReports, err := h.collectSignedReports(ctx, remoteResultCh, localResultCh)
 	if err != nil {
 		return fmt.Errorf("failed to collect signed work reports: %w", err)
 	}
 
 	wg.Wait()
 
-	return h.processWorkReports(ctx, signedWorkReports)
+	return h.processWorkReports(ctx, groupedWorkReports)
 }
 
 // startLocalRefinement performs local refinement of a work-package in a separate goroutine.
@@ -300,14 +300,8 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 // - Credentials are sorted by validator index before constructing the guarantee.
 func (h *WorkReportGuarantor) processWorkReports(
 	ctx context.Context,
-	signed []signedWorkReport,
+	groups map[crypto.Hash][]signedWorkReport,
 ) error {
-	groups := make(map[crypto.Hash][]signedWorkReport)
-
-	for _, s := range signed {
-		groups[s.WorkReportHash] = append(groups[s.WorkReportHash], s)
-	}
-
 	var winningGroup []signedWorkReport
 	for _, sigs := range groups {
 		if len(sigs) >= minSignaturesRequiredToGuarantee {
@@ -371,11 +365,10 @@ func (h *WorkReportGuarantor) collectSignedReports(
 	ctx context.Context,
 	remoteCh <-chan guaranteeResponse,
 	localCh <-chan localReportResult,
-) ([]signedWorkReport, error) {
+) (map[crypto.Hash][]signedWorkReport, error) {
 	var timer *time.Timer
-	var signedReports []signedWorkReport
 	var totalResults uint
-	var hashCounts = make(map[crypto.Hash]int)
+	var grouped = make(map[crypto.Hash][]signedWorkReport)
 	var quorumReached bool
 
 	ctx, cancel := context.WithTimeout(ctx, maxWaitTimeForCollectingReports)
@@ -401,8 +394,7 @@ func (h *WorkReportGuarantor) collectSignedReports(
 				continue
 			}
 
-			hashCounts[r.workReportHash]++
-			signedReports = append(signedReports, signedWorkReport{
+			grouped[r.workReportHash] = append(grouped[r.workReportHash], signedWorkReport{
 				ValidatorIndex: r.validatorIndex,
 				Signature:      r.signature,
 				WorkReportHash: r.workReportHash,
@@ -415,30 +407,29 @@ func (h *WorkReportGuarantor) collectSignedReports(
 				continue
 			}
 
-			hashCounts[l.workReportHash]++
-			signedReports = append(signedReports, signedWorkReport{
+			grouped[l.workReportHash] = append(grouped[l.workReportHash], signedWorkReport{
 				ValidatorIndex: h.validatorIndex,
 				Signature:      l.signature,
 				WorkReportHash: l.workReportHash,
 				Report:         &l.report,
 			})
 		case <-ctx.Done():
-			return signedReports, ctx.Err()
+			return grouped, ctx.Err()
 
 		case <-safeTimerC(timer):
 			// Timer expired
-			return signedReports, nil
+			return grouped, nil
 		}
 
 		// if all results arrived, return early
 		if totalResults == maxExpectedResults {
-			return signedReports, nil
+			return grouped, nil
 		}
 
 		// Check if quorum has been reached for any hash to start the timer
 		if timer == nil && !quorumReached {
-			for _, count := range hashCounts {
-				if count == minSignaturesRequiredToGuarantee {
+			for _, signs := range grouped {
+				if len(signs) == minSignaturesRequiredToGuarantee {
 					log.Println("quorum reached, starting timer for optional third signature")
 					timer = time.NewTimer(maxWaitTimeForThirdGuarantor)
 					quorumReached = true
