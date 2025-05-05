@@ -482,7 +482,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	}
 
 	// Generate validator key for mainGuarantor
-	_, prv, _ := ed25519.GenerateKey(nil)
+	pub, prv, _ := ed25519.GenerateKey(nil)
 	serviceState := getServiceState()
 
 	// Add the auth hash to the core's authorization pool
@@ -560,12 +560,14 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	peer2 := mainGuarantor.GetByAddress(remoteGuarantor2Addr.String())
 	index2 := uint16(2)
 	peer2.ValidatorIndex = &index2
+	peer2.Ed25519Key = pub
 	peerSet.AddPeer(peer2)
 
 	// remote guarantor
 	peer3 := mainGuarantor.GetByAddress(remoteGuarantor3Addr.String())
 	index3 := uint16(3)
 	peer3.ValidatorIndex = &index3
+	peer3.Ed25519Key = pub
 	peerSet.AddPeer(peer3)
 
 	// validators

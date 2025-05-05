@@ -60,6 +60,7 @@ type SegmentRootMapping struct {
 type guaranteeResponse struct {
 	workReportHash crypto.Hash
 	validatorIndex uint16
+	ed25519Key     ed25519.PublicKey
 	signature      crypto.Ed25519Signature
 	err            error
 }
@@ -285,6 +286,7 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 	guaranteeCh <- guaranteeResponse{
 		workReportHash: response.WorkReportHash,
 		validatorIndex: validatorIndex,
+		ed25519Key:     g.Ed25519Key,
 		signature:      response.Signature,
 	}
 }
@@ -357,6 +359,7 @@ func (h *WorkReportGuarantor) processWorkReports(
 // collectSignedReports gathers signed work-report hashes from both local refinement and remote guarantors.
 //
 //   - It waits for at least two successful responses (local or remote) that agree on the same hash
+//   - Remote responses are accepted only if their Ed25519 signatures are valid.
 //   - Once two matching hashes are received, start a timer for a possible third response
 //   - A general timeout of (maxWaitTimeForCollectingReports) is applied to the entire collection process
 //   - All signatures are grouped by hash to identify the largest group with matching work-report hashes
@@ -390,6 +393,11 @@ func (h *WorkReportGuarantor) collectSignedReports(
 			totalResults++
 			if r.err != nil {
 				log.Printf("remote refinement failed: %v", r.err)
+				continue
+			}
+
+			if !ed25519.Verify(r.ed25519Key, r.workReportHash[:], r.signature[:]) {
+				log.Printf("discarding invalid signature from guarantor with index %d", r.validatorIndex)
 				continue
 			}
 
