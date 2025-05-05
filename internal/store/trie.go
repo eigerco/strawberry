@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -12,7 +13,6 @@ import (
 )
 
 const (
-	// ErrNotLeafNode is returned when a non-leaf node is used where a leaf is expected
 	ErrNotLeafNode = "not a leaf node"
 )
 
@@ -277,4 +277,277 @@ func (t *Trie) deleteNode(hash crypto.Hash, forceDelete bool) error {
 	}
 
 	return nil
+}
+
+// KeyValuePair represents a single key-value pair from the trie
+type KeyValuePair struct {
+	Key   [31]byte
+	Value []byte
+}
+
+// TrieRangeResult represents the result of a trie range query
+type TrieRangeResult struct {
+	Pairs         []KeyValuePair // The key-value pairs in the range
+	BoundaryNodes []trie.Node    // Boundary nodes covering the paths from root to the edges
+}
+
+// FetchStateTrieRange retrieves a range of key-value pairs from the trie starting at startKey and ending at or before endKey.
+// It also returns boundary nodes covering the paths from root to the start key and to the last key in the response.
+// The response size is limited to maxSize bytes, unless the response contains only a single key/value pair.
+func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]byte, maxSize uint32) (TrieRangeResult, error) {
+	// Validate maxSize
+	if maxSize == 0 {
+		return TrieRangeResult{}, errors.New("maxSize must be greater than zero")
+	}
+
+	// Check if startKey > endKey, return empty result
+	if bytes.Compare(startKey[:], endKey[:]) > 0 {
+		return TrieRangeResult{}, nil
+	}
+
+	// Initialize result collections
+	pairs := make([]KeyValuePair, 0)
+
+	// Map to store all nodes we encounter during traversal
+	allNodes := make(map[crypto.Hash]trie.Node)
+
+	// Track paths to first key and current last key (for boundary nodes)
+	var firstKeyPath []crypto.Hash
+	var lastKeyPath []crypto.Hash
+	var previousLastKeyPath []crypto.Hash // Track the previous last key path for backtracking
+
+	// Use a stack for iterative traversal (DFS approach ensures in-order traversal)
+	type stackItem struct {
+		nodeHash crypto.Hash
+		path     []crypto.Hash // Track path from root to this node
+		depth    int
+	}
+
+	stack := []stackItem{{
+		nodeHash: rootHash,
+		path:     []crypto.Hash{rootHash},
+		depth:    0,
+	}}
+
+	for len(stack) > 0 {
+		// Pop from stack (DFS)
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		// Get the current node
+		node, err := t.GetNode(current.nodeHash)
+		if err != nil {
+			return TrieRangeResult{}, fmt.Errorf("failed to get node %x: %w", current.nodeHash, err)
+		}
+
+		// Store the node
+		allNodes[current.nodeHash] = node
+
+		if node.IsLeaf() {
+			leafKey, err := node.GetLeafKey()
+			if err != nil {
+				return TrieRangeResult{}, fmt.Errorf("failed to get leaf key: %w", err)
+			}
+
+			var key31 [31]byte
+			copy(key31[:], leafKey[:31])
+
+			// Early termination: if we've passed the end key, we can stop traversal entirely
+			// This optimization prevents unnecessary processing of keys that are out of range
+			if bytes.Compare(key31[:], endKey[:]) > 0 {
+				break
+			}
+
+			// Determine if the current key is within our query range by performing lexicographical byte comparisons:
+			// 1. First check: bytes.Compare(key31[:], startKey[:]) >= 0 ensures the key is either equal to or comes after our startKey
+			//    (bytes.Compare returns -1 if key31 < startKey, 0 if equal, 1 if key31 > startKey)
+			// 2. Second check: bytes.Compare(key31[:], endKey[:]) <= 0 ensures the key is either equal to or comes before our endKey
+			// Together, these conditions verify the key falls within our inclusive range boundaries [startKey, endKey]
+			if bytes.Compare(key31[:], startKey[:]) >= 0 && bytes.Compare(key31[:], endKey[:]) <= 0 {
+				// Get the value
+				var valueData []byte
+
+				if node.IsEmbeddedLeaf() {
+					valueData, err = node.GetLeafValue()
+					if err != nil {
+						return TrieRangeResult{}, fmt.Errorf("failed to get embedded leaf value: %w", err)
+					}
+				} else {
+					valueHash, err := node.GetLeafValueHash()
+					if err != nil {
+						return TrieRangeResult{}, fmt.Errorf("failed to get leaf value hash: %w", err)
+					}
+					valueData, err = t.getValue(valueHash)
+					if err != nil {
+						return TrieRangeResult{}, fmt.Errorf("failed to get value for hash %x: %w", valueHash, err)
+					}
+				}
+
+				// Create and add the key-value pair
+				pair := KeyValuePair{
+					Key:   key31,
+					Value: valueData,
+				}
+				pairs = append(pairs, pair)
+
+				// Track path for boundary nodes
+				if len(pairs) == 1 {
+					// This is the first key - save its path
+					firstKeyPath = make([]crypto.Hash, len(current.path))
+					copy(firstKeyPath, current.path)
+				}
+
+				// Save the previous last key path before updating
+				if len(pairs) > 1 {
+					previousLastKeyPath = make([]crypto.Hash, len(lastKeyPath))
+					copy(previousLastKeyPath, lastKeyPath)
+				}
+
+				// Always update last key path
+				lastKeyPath = make([]crypto.Hash, len(current.path))
+				copy(lastKeyPath, current.path)
+
+				// Check if we've exceeded max size
+				// Calculate total response size including boundary nodes
+				tempBoundaryNodes := extractBoundaryNodes(firstKeyPath, lastKeyPath, allNodes)
+				tempSize := calculateResponseSize(pairs, tempBoundaryNodes)
+
+				// Check if adding this pair would exceed maxSize and we have more than one key
+				if tempSize > maxSize && len(pairs) > 1 {
+					// Remove the last key-value pair we just added
+					pairs = pairs[:len(pairs)-1]
+
+					// Restore the previous lastKeyPath
+					if len(previousLastKeyPath) > 0 {
+						lastKeyPath = previousLastKeyPath
+					} else {
+						// If we only had one key before adding this one, then use firstKeyPath
+						lastKeyPath = firstKeyPath
+					}
+
+					// Break out of the loop - we've hit our size limit
+					break
+				}
+			}
+
+			continue
+		}
+
+		// For branch nodes
+		leftHash, rightHash, err := node.GetBranchHashes()
+		if err != nil {
+			return TrieRangeResult{}, fmt.Errorf("failed to get branch hashes: %w", err)
+		}
+
+		// Process right child first (will be processed after left since we're using a stack)
+		if rightHash != (crypto.Hash{}) {
+			rightPath := make([]crypto.Hash, len(current.path)+1)
+			copy(rightPath, current.path)
+			rightPath[len(current.path)] = rightHash
+
+			stack = append(stack, stackItem{
+				nodeHash: rightHash,
+				path:     rightPath,
+				depth:    current.depth + 1,
+			})
+		}
+
+		// Process left child
+		if leftHash != (crypto.Hash{}) {
+			leftPath := make([]crypto.Hash, len(current.path)+1)
+			copy(leftPath, current.path)
+			leftPath[len(current.path)] = leftHash
+
+			stack = append(stack, stackItem{
+				nodeHash: leftHash,
+				path:     leftPath,
+				depth:    current.depth + 1,
+			})
+		}
+	}
+
+	// Extract final boundary nodes
+	boundaryNodes := extractBoundaryNodes(firstKeyPath, lastKeyPath, allNodes)
+
+	return TrieRangeResult{
+		Pairs:         pairs,
+		BoundaryNodes: boundaryNodes,
+	}, nil
+}
+
+// extractBoundaryNodes creates a slice of boundary nodes from the given paths
+func extractBoundaryNodes(firstKeyPath, lastKeyPath []crypto.Hash, allNodes map[crypto.Hash]trie.Node) []trie.Node {
+	// Use a map to eliminate duplicates
+	nodeSet := make(map[crypto.Hash]struct{})
+
+	// Add nodes on the path to first key
+	for _, hash := range firstKeyPath {
+		nodeSet[hash] = struct{}{}
+	}
+
+	// Add nodes on the path to last key
+	for _, hash := range lastKeyPath {
+		nodeSet[hash] = struct{}{}
+	}
+
+	// Convert the node set to a slice, maintaining parent-before-child relationship
+	// To ensure this, we process the paths level by level from root to leaf
+	var result []trie.Node
+
+	// Find the max depth of either path
+	maxDepth := max(len(firstKeyPath), len(lastKeyPath))
+
+	// Process level by level
+	for depth := 0; depth < maxDepth; depth++ {
+		// Process first path at this depth
+		if depth < len(firstKeyPath) {
+			hash := firstKeyPath[depth]
+			// Check if we've already added this node
+			if _, exists := nodeSet[hash]; exists {
+				// Add the node and remove from set
+				if node, nodeExists := allNodes[hash]; nodeExists {
+					result = append(result, node)
+				}
+				delete(nodeSet, hash)
+			}
+		}
+
+		// Process last path at this depth
+		if depth < len(lastKeyPath) {
+			hash := lastKeyPath[depth]
+			// Check if we've already added this node
+			if _, exists := nodeSet[hash]; exists {
+				// Add the node and remove from set
+				if node, nodeExists := allNodes[hash]; nodeExists {
+					result = append(result, node)
+				}
+				delete(nodeSet, hash)
+			}
+		}
+	}
+
+	return result
+}
+
+// calculateResponseSize calculates the total size of the response in bytes, including key/value pairs and boundary nodes
+func calculateResponseSize(pairs []KeyValuePair, nodes []trie.Node) uint32 {
+	var size uint32 = 0
+
+	// Size of the boundary nodes
+	// Add 4 bytes for the length prefix of the nodes array
+	size += 4 // Array length prefix
+	for _, node := range nodes {
+		size += uint32(len(node))
+	}
+
+	// Size of the key/value pairs
+	// Add 4 bytes for the length prefix of the key/value array
+	size += 4 // Array length prefix
+	for _, pair := range pairs {
+		size += 31                      // Key size
+		size += 4                       // Value length prefix
+		size += uint32(len(pair.Value)) // Value size
+	}
+
+	return size
 }
