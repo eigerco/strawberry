@@ -15,7 +15,6 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
-	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
@@ -114,10 +113,9 @@ func TestHandleWorkPackage(t *testing.T) {
 		CoreAuthorizersPool: pool,
 	}
 
-	_, prv, _ := ed25519.GenerateKey(nil)
+	peerKey, prv, _ := ed25519.GenerateKey(nil)
 	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet())
 	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer)
-	peerKey, _, _ := ed25519.GenerateKey(nil)
 
 	// Prepare the message data
 	coreIndexBytes, err := jam.Marshal(coreIndex)
@@ -136,6 +134,7 @@ func TestHandleWorkPackage(t *testing.T) {
 	mockPeer := &peer.Peer{
 		ProtoConn:      conn,
 		ValidatorIndex: &validatorIndex,
+		Ed25519Key:     peerKey,
 	}
 
 	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
@@ -186,12 +185,14 @@ func TestHandleWorkPackage(t *testing.T) {
 	h, err := workReport.Hash()
 	require.NoError(t, err)
 
+	signature := ed25519.Sign(prv, h[:])
+
 	response := struct {
 		WorkReportHash crypto.Hash
 		Signature      crypto.Ed25519Signature
 	}{
 		WorkReportHash: h,
-		Signature:      testutils.RandomEd25519Signature(t),
+		Signature:      crypto.Ed25519Signature(signature),
 	}
 
 	responseBytes, err := jam.Marshal(response)
@@ -308,7 +309,7 @@ func TestHandleStream_Success(t *testing.T) {
 	mockStream := mocks.NewMockQuicStream()
 	mockFetcher := &MockFetcher{}
 	coreIndex := uint16(5)
-	_, prv, _ := ed25519.GenerateKey(nil)
+	peerKey, prv, _ := ed25519.GenerateKey(nil)
 
 	pool := state.CoreAuthorizersPool{}
 	pool[coreIndex] = []crypto.Hash{pkg.AuthCodeHash, crypto.HashData([]byte("another hash"))}
@@ -318,7 +319,6 @@ func TestHandleStream_Success(t *testing.T) {
 	}
 
 	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet())
-	peerKey, _, _ := ed25519.GenerateKey(nil)
 
 	coreIndexBytes, err := jam.Marshal(coreIndex)
 	require.NoError(t, err)
@@ -335,6 +335,7 @@ func TestHandleStream_Success(t *testing.T) {
 	mockPeer := &peer.Peer{
 		ProtoConn:      conn,
 		ValidatorIndex: &validatorIndex,
+		Ed25519Key:     peerKey,
 	}
 
 	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
@@ -374,12 +375,14 @@ func TestHandleStream_Success(t *testing.T) {
 	h, err := workReport.Hash()
 	require.NoError(t, err)
 
+	signature := ed25519.Sign(prv, h[:])
+
 	response := struct {
 		WorkReportHash crypto.Hash
 		Signature      crypto.Ed25519Signature
 	}{
 		WorkReportHash: h,
-		Signature:      testutils.RandomEd25519Signature(t),
+		Signature:      crypto.Ed25519Signature(signature),
 	}
 
 	responseBytes, err := jam.Marshal(response)
