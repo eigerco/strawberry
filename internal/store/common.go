@@ -11,6 +11,9 @@ const (
 	prefixTrieNode
 	prefixTrieNodeValue
 	prefixTrieNodeRefCount
+	prefixAvailabilityAuditShard
+	prefixAvailabilitySegmentsShard
+	prefixAvailabilityJustification
 )
 
 // PrefixToString converts a prefix byte to a string
