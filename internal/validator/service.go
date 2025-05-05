@@ -35,7 +35,8 @@ func (s *validatorService) ShardDistribution(ctx context.Context, erasureRoot cr
 	panic("implement me")
 }
 
-// AuditShardRequest gets the audit shards and justification from the availability store
+// AuditShardRequest gets the audit shards and justification from the availability store.
+// this method will be later used by the auditors to request and reconstruct the work-package bundle and execute it to assess the correctness of the guarantee.
 func (s *validatorService) AuditShardRequest(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, justification [][]byte, err error) {
 	bundleShard, err = s.availabilityStore.GetAuditShard(erasureRoot, shardIndex)
 	if err != nil {
@@ -51,6 +52,8 @@ func (s *validatorService) AuditShardRequest(ctx context.Context, erasureRoot cr
 }
 
 // SegmentShardRequest gets the segments shards from the store and filters so only the shard segments with provided indexes are returned
+// required for guarantors to reconstruct the segment shards from previous executions to be able to compute the work-packages and guarantee them.
+// this variant the assurer does not provide any justification for the returned segment.
 func (s *validatorService) SegmentShardRequest(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, err error) {
 	allSegmentsShards, err := s.availabilityStore.GetSegmentsShard(erasureRoot, shardIndex)
 	if err != nil {
@@ -66,11 +69,16 @@ func (s *validatorService) SegmentShardRequest(ctx context.Context, erasureRoot 
 }
 
 // SegmentShardRequestJustification similar to SegmentShardRequest gets the segments shards and filters them,
-// but also constructs the justification for each segment shard
+// required for guarantors to reconstruct the segment shards from previous executions to be able to compute the work-packages and guarantee them.
+// this variant the assurer provides the justification for the returned segment, allowing the guarantor to immediately asses the correctness of the response.
 func (s *validatorService) SegmentShardRequestJustification(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, justification [][][]byte, err error) {
 	allSegmentsShards, err := s.availabilityStore.GetSegmentsShard(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if len(segmentIndexes) == 0 || len(allSegmentsShards) == 0 {
+		return nil, nil, nil
 	}
 
 	// build the segment index map to be able to filter only the needed segments
@@ -82,11 +90,7 @@ func (s *validatorService) SegmentShardRequestJustification(ctx context.Context,
 		segmentIndexesMap[segmentIndex] = struct{}{}
 	}
 
-	if len(segmentShards) == 0 {
-		return nil, nil, nil
-	}
-
-	// ret audit shard from store, required for computing the audit shard hash for the segment justification
+	// return audit shard from store, required for computing the audit shard hash for the segment justification
 	auditShard, err := s.availabilityStore.GetAuditShard(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, err
@@ -98,7 +102,6 @@ func (s *validatorService) SegmentShardRequestJustification(ctx context.Context,
 		return nil, nil, err
 	}
 
-	// compute the justification for each segment shard
 	for segmentIndex, segmentShard := range allSegmentsShards {
 		_, ok := segmentIndexesMap[uint16(segmentIndex)]
 		if !ok {
@@ -106,8 +109,12 @@ func (s *validatorService) SegmentShardRequestJustification(ctx context.Context,
 		}
 
 		segmentShards = append(segmentShards, segmentShard)
+
+		// compute the path from the segment shard root to the specific segment
 		segmentShardJustification := binary_tree.ComputeTrace(allSegmentsShards, segmentIndex, crypto.HashData)
 
+		// the justification for a shard is the path from the erasure root to the shard concatenated with the
+		// path from the segment shard root to the specific segment
 		// j ⌢ [b] ⌢ T(s, i, H)
 		justification = append(justification, slices.Concat(baseJustification, [][]byte{auditShardHash[:]}, segmentShardJustification))
 	}
