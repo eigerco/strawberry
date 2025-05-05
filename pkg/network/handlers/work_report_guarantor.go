@@ -197,9 +197,14 @@ func (h *WorkReportGuarantor) processWorkPackage(
 		return fmt.Errorf("failed to collect signed work reports: %w", err)
 	}
 
+	err = h.processWorkReports(ctx, groupedWorkReports)
+	if err != nil {
+		return fmt.Errorf("failed to process work reports: %w", err)
+	}
+
 	wg.Wait()
 
-	return h.processWorkReports(ctx, groupedWorkReports)
+	return nil
 }
 
 // startLocalRefinement performs local refinement of a work-package in a separate goroutine.
@@ -602,7 +607,7 @@ func (h *WorkReportGuarantor) recipientValidators() []*peer.Peer {
 	// 2) all validators assigned for the upcoming epoch
 	next = h.convertValidatorsDataToPeers(h.state.ValidatorState.SafroleState.NextValidators)
 
-	return mergePeers(cur, next)
+	return peer.MergeValidators(cur, next)
 }
 
 // Transforms safrole.ValidatorsData to []*peer.Peer
@@ -617,23 +622,4 @@ func (h *WorkReportGuarantor) convertValidatorsDataToPeers(data safrole.Validato
 		}
 	}
 	return peers
-}
-
-// mergePeers returns the union of two peer slices ensuring no duplicate entries based on Ed25519 public keys
-func mergePeers(a, b []*peer.Peer) []*peer.Peer {
-	exists := make(map[string]struct{})
-	var merged []*peer.Peer
-
-	for _, p := range a {
-		merged = append(merged, p)
-		exists[string(p.Ed25519Key)] = struct{}{}
-	}
-	for _, p := range b {
-		if p.ValidatorIndex != nil {
-			if _, ok := exists[string(p.Ed25519Key)]; !ok {
-				merged = append(merged, p)
-			}
-		}
-	}
-	return merged
 }
