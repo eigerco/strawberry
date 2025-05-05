@@ -348,6 +348,11 @@ func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]by
 			var key31 [31]byte
 			copy(key31[:], leafKey[:31])
 
+			// Early termination: if we've passed the end key, we can stop
+			if bytes.Compare(key31[:], endKey[:]) > 0 {
+				break
+			}
+
 			// bytes.Compare(key31[:], startKey[:]) >= 0 ensures the key is either equal to or comes after our startKey
 			// bytes.Compare(key31[:], endKey[:]) <= 0 ensures the key is either equal to or comes before our endKey
 			// Together, these conditions verify the key falls within our inclusive range boundaries [startKey, endKey]
@@ -414,11 +419,6 @@ func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]by
 					// Break out of the loop - we've hit our size limit
 					break
 				}
-			}
-
-			// Early termination: if we've passed the end key, we can stop
-			if bytes.Compare(key31[:], endKey[:]) > 0 {
-				break
 			}
 
 			continue
