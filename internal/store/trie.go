@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -278,18 +279,30 @@ func (t *Trie) deleteNode(hash crypto.Hash, forceDelete bool) error {
 	return nil
 }
 
+// TrieRangeResult represents the result of a trie range query
+type TrieRangeResult struct {
+	Keys          [][31]byte  // The keys in the range
+	Values        [][]byte    // The values corresponding to the keys
+	BoundaryNodes []trie.Node // Boundary nodes covering the paths from root to the edges
+}
+
 // FetchStateTrieRange retrieves a range of key-value pairs from the trie starting at startKey and ending at or before endKey.
 // It also returns boundary nodes covering the paths from root to the start key and to the last key in the response.
 // The response size is limited to maxSize bytes, unless the response contains only a single key/value pair.
-func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]byte, maxSize uint32) (keys [][31]byte, values [][]byte, boundaryNodes []trie.Node, err error) {
+func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]byte, maxSize uint32) (TrieRangeResult, error) {
+	// Validate maxSize
+	if maxSize == 0 {
+		return TrieRangeResult{}, errors.New("maxSize must be greater than zero")
+	}
+
 	// Check if startKey > endKey, return empty result
-	if bytesGreaterThan(startKey[:], endKey[:]) {
-		return [][31]byte{}, [][]byte{}, []trie.Node{}, nil
+	if bytes.Compare(startKey[:], endKey[:]) > 0 {
+		return TrieRangeResult{}, nil
 	}
 
 	// Initialize result collections
-	keys = make([][31]byte, 0)
-	values = make([][]byte, 0)
+	keys := make([][31]byte, 0)
+	values := make([][]byte, 0)
 
 	// Map to store all nodes we encounter during traversal
 	allNodes := make(map[crypto.Hash]trie.Node)
@@ -320,7 +333,7 @@ func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]by
 		// Get the current node
 		node, err := t.GetNode(current.nodeHash)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to get node %x: %w", current.nodeHash, err)
+			return TrieRangeResult{}, fmt.Errorf("failed to get node %x: %w", current.nodeHash, err)
 		}
 
 		// Store the node
@@ -329,30 +342,32 @@ func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]by
 		if node.IsLeaf() {
 			leafKey, err := node.GetLeafKey()
 			if err != nil {
-				return nil, nil, nil, fmt.Errorf("failed to get leaf key: %w", err)
+				return TrieRangeResult{}, fmt.Errorf("failed to get leaf key: %w", err)
 			}
 
 			var key31 [31]byte
 			copy(key31[:], leafKey[:31])
 
-			// Check if key is in our range
-			if bytesGreaterOrEqual(key31[:], startKey[:]) && bytesLessOrEqual(key31[:], endKey[:]) {
+			// bytes.Compare(key31[:], startKey[:]) >= 0 ensures the key is either equal to or comes after our startKey
+			// bytes.Compare(key31[:], endKey[:]) <= 0 ensures the key is either equal to or comes before our endKey
+			// Together, these conditions verify the key falls within our inclusive range boundaries [startKey, endKey]
+			if bytes.Compare(key31[:], startKey[:]) >= 0 && bytes.Compare(key31[:], endKey[:]) <= 0 {
 				// Get the value
 				var valueData []byte
 
 				if node.IsEmbeddedLeaf() {
 					valueData, err = node.GetLeafValue()
 					if err != nil {
-						return nil, nil, nil, fmt.Errorf("failed to get embedded leaf value: %w", err)
+						return TrieRangeResult{}, fmt.Errorf("failed to get embedded leaf value: %w", err)
 					}
 				} else {
 					valueHash, err := node.GetLeafValueHash()
 					if err != nil {
-						return nil, nil, nil, fmt.Errorf("failed to get leaf value hash: %w", err)
+						return TrieRangeResult{}, fmt.Errorf("failed to get leaf value hash: %w", err)
 					}
 					valueData, err = t.getValue(valueHash)
 					if err != nil {
-						return nil, nil, nil, fmt.Errorf("failed to get value for hash %x: %w", valueHash, err)
+						return TrieRangeResult{}, fmt.Errorf("failed to get value for hash %x: %w", valueHash, err)
 					}
 				}
 
@@ -402,7 +417,7 @@ func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]by
 			}
 
 			// Early termination: if we've passed the end key, we can stop
-			if bytesGreaterThan(key31[:], endKey[:]) {
+			if bytes.Compare(key31[:], endKey[:]) > 0 {
 				break
 			}
 
@@ -412,7 +427,7 @@ func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]by
 		// For branch nodes
 		leftHash, rightHash, err := node.GetBranchHashes()
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to get branch hashes: %w", err)
+			return TrieRangeResult{}, fmt.Errorf("failed to get branch hashes: %w", err)
 		}
 
 		// Process right child first (will be processed after left since we're using a stack)
@@ -443,9 +458,13 @@ func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]by
 	}
 
 	// Extract final boundary nodes
-	boundaryNodes = extractBoundaryNodes(firstKeyPath, lastKeyPath, allNodes)
+	boundaryNodes := extractBoundaryNodes(firstKeyPath, lastKeyPath, allNodes)
 
-	return keys, values, boundaryNodes, nil
+	return TrieRangeResult{
+		Keys:          keys,
+		Values:        values,
+		BoundaryNodes: boundaryNodes,
+	}, nil
 }
 
 // extractBoundaryNodes creates a slice of boundary nodes from the given paths
@@ -523,47 +542,4 @@ func calculateResponseSize(keys [][31]byte, values [][]byte, nodes []trie.Node) 
 	}
 
 	return size
-}
-
-// bytesGreaterOrEqual returns true if a >= b
-func bytesGreaterOrEqual(a, b []byte) bool {
-	return bytesCompare(a, b) >= 0
-}
-
-// bytesLessOrEqual returns true if a <= b
-func bytesLessOrEqual(a, b []byte) bool {
-	return bytesCompare(a, b) <= 0
-}
-
-// bytesGreaterThan returns true if a > b
-func bytesGreaterThan(a, b []byte) bool {
-	return bytesCompare(a, b) > 0
-}
-
-// bytesLessThan returns true if a < b
-func bytesLessThan(a, b []byte) bool {
-	return bytesCompare(a, b) < 0
-}
-
-// bytesCompare compares two byte slices lexicographically
-func bytesCompare(a, b []byte) int {
-	length := len(a)
-	length = min(length, len(b))
-
-	for i := range length {
-		if a[i] < b[i] {
-			return -1
-		}
-		if a[i] > b[i] {
-			return 1
-		}
-	}
-
-	if len(a) < len(b) {
-		return -1
-	}
-	if len(a) > len(b) {
-		return 1
-	}
-	return 0
 }
