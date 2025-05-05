@@ -26,8 +26,8 @@ import (
 )
 
 const (
-	// The maximum amount of signatures we can obtain to guarantee work report
-	maxSignaturesRequiredToGuarantee = 3
+	// Total number of expected signed responses (local + 2 remote) to guarantee work report
+	maxExpectedResults = 3
 	// We need at least this amount of signatures to guarantee work report
 	minSignaturesRequiredToGuarantee = 2
 	// The third guarantor should be given a reasonable amount of time (e.g. two seconds) to produce
@@ -356,13 +356,14 @@ func (h *WorkReportGuarantor) processWorkReports(
 
 // collectSignedReports gathers signed work-report hashes from both local refinement and remote guarantors.
 //
-// - It waits for at least two successful responses (local or remote) that agree on the same hash
-// - Once two matching hashes are received, start a timer for a possible third response
-// - A general timeout of (maxWaitTimeForCollectingReports) is applied to the entire collection process
-// - All signatures are grouped by hash to identify the largest group with matching work-report hashes
-// - Local failures are tolerated as long as enough remote responses are collected
-// - If no matching quorum is found after timeout or all responses, the caller must handle the failure
-// - Context cancellation causes an immediate exit
+//   - It waits for at least two successful responses (local or remote) that agree on the same hash
+//   - Once two matching hashes are received, start a timer for a possible third response
+//   - A general timeout of (maxWaitTimeForCollectingReports) is applied to the entire collection process
+//   - All signatures are grouped by hash to identify the largest group with matching work-report hashes
+//   - Local failures are tolerated as long as enough remote responses are collected
+//   - The function never returns an error for “no quorum” it simply returns the collected signatures
+//     The caller must inspect the slice and decide whether a quorum exists
+//   - Context cancellation causes an immediate exit
 func (h *WorkReportGuarantor) collectSignedReports(
 	ctx context.Context,
 	remoteCh <-chan guaranteeResponse,
@@ -370,7 +371,7 @@ func (h *WorkReportGuarantor) collectSignedReports(
 ) ([]signedWorkReport, error) {
 	var timer *time.Timer
 	var signedReports []signedWorkReport
-	var totalResponses uint
+	var totalResults uint
 	var hashCounts = make(map[crypto.Hash]int)
 	var quorumReached bool
 
@@ -386,7 +387,7 @@ func (h *WorkReportGuarantor) collectSignedReports(
 	for {
 		select {
 		case r := <-remoteCh:
-			totalResponses++
+			totalResults++
 			if r.err != nil {
 				log.Printf("remote refinement failed: %v", r.err)
 				continue
@@ -400,7 +401,7 @@ func (h *WorkReportGuarantor) collectSignedReports(
 			})
 
 		case l := <-localCh:
-			totalResponses++
+			totalResults++
 			if l.err != nil {
 				log.Printf("local refinement failed: %v", l.err)
 				continue
@@ -421,8 +422,8 @@ func (h *WorkReportGuarantor) collectSignedReports(
 			return signedReports, nil
 		}
 
-		// if all responses arrived, return early
-		if totalResponses == maxSignaturesRequiredToGuarantee {
+		// if all results arrived, return early
+		if totalResults == maxExpectedResults {
 			return signedReports, nil
 		}
 
