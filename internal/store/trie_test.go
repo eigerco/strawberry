@@ -440,27 +440,24 @@ func TestCE129GetKeyValueRange(t *testing.T) {
 			startKey31 := toKey31(keys[tc.startKey])
 			endKey31 := toKey31(keys[tc.endKey])
 
-			// Run the query - updated to use the new return type
+			// Run the query with the new return type
 			result, err := tr.FetchStateTrieRange(root, startKey31, endKey31, tc.maxSize)
 			require.NoError(t, err)
 
-			// Verify key and value counts match
-			require.Equal(t, len(result.Keys), len(result.Values), "Keys and values counts should match")
-
 			// Check count of key-value pairs
-			require.Equal(t, tc.expectedPairs, len(result.Keys),
+			require.Equal(t, tc.expectedPairs, len(result.Pairs),
 				"Expected %d key-value pairs", tc.expectedPairs)
 
 			// Verify keys are ordered (if there are multiple keys)
-			if len(result.Keys) > 1 {
-				for i := 1; i < len(result.Keys); i++ {
-					require.True(t, bytes.Compare(result.Keys[i-1][:], result.Keys[i][:]) < 0,
+			if len(result.Pairs) > 1 {
+				for i := 1; i < len(result.Pairs); i++ {
+					require.True(t, bytes.Compare(result.Pairs[i-1].Key[:], result.Pairs[i].Key[:]) < 0,
 						"Keys not in ascending order")
 				}
 			}
 
 			// Calculate the total size of the response
-			totalSize := calculateResponseSize(result.Keys, result.Values, result.BoundaryNodes)
+			totalSize := calculateResponseSize(result.Pairs, result.BoundaryNodes)
 
 			if testing.Verbose() {
 				t.Logf("Response size: %d bytes (limit: %d)", totalSize, tc.maxSize)
@@ -471,14 +468,14 @@ func TestCE129GetKeyValueRange(t *testing.T) {
 				// Special case: single key-value pair can exceed the max size
 				require.Greater(t, totalSize, tc.maxSize,
 					"Expected size to exceed maxSize due to single-item exemption")
-			} else if len(result.Keys) > 0 {
+			} else if len(result.Pairs) > 0 {
 				// Normal case: response should not exceed max size
 				require.LessOrEqual(t, totalSize, tc.maxSize,
 					"Total size (%d) exceeds maxSize (%d)", totalSize, tc.maxSize)
 			}
 
 			// Verify boundary nodes are present and form valid paths
-			if len(result.Keys) > 0 {
+			if len(result.Pairs) > 0 {
 				require.NotEmpty(t, result.BoundaryNodes, "Boundary nodes should not be empty when keys are returned")
 			}
 		})
