@@ -42,11 +42,11 @@ type Pi struct {
 
 type PiData struct {
 	Blocks        uint32 `json:"blocks"`
-	Tickets       uint64 `json:"tickets"`
-	PreImages     uint64 `json:"pre_images"`
-	PreImagesSize uint64 `json:"pre_images_size"`
-	Guarantees    uint64 `json:"guarantees"`
-	Assurances    uint64 `json:"assurances"`
+	Tickets       uint32 `json:"tickets"`
+	PreImages     uint32 `json:"pre_images"`
+	PreImagesSize uint32 `json:"pre_images_size"`
+	Guarantees    uint32 `json:"guarantees"`
+	Assurances    uint32 `json:"assurances"`
 }
 
 type StatisticsInput struct {

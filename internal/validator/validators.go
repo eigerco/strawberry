@@ -27,11 +27,11 @@ type ActivityStatisticsState struct {
 
 type ValidatorStatistics struct {
 	NumOfBlocks                 uint32 // Number of blocks (b) - The number of blocks produced by the validator.
-	NumOfTickets                uint64 // Number of tickets (t) - The number of tickets introduced by the validator.
-	NumOfPreimages              uint64 // Number of preimages (p) - The number of preimages introduced by the validator.
-	NumOfBytesAllPreimages      uint64 // Number of bytes across all preimages (d) - The total number of octets across all preimages introduced by the validator.
-	NumOfGuaranteedReports      uint64 // Number of guaranteed reports (g) - The number of reports guaranteed by the validator.
-	NumOfAvailabilityAssurances uint64 // Number of availability assurances (a) - The number of assurances of availability made by the validator.
+	NumOfTickets                uint32 // Number of tickets (t) - The number of tickets introduced by the validator.
+	NumOfPreimages              uint32 // Number of preimages (p) - The number of preimages introduced by the validator.
+	NumOfBytesAllPreimages      uint32 // Number of bytes across all preimages (d) - The total number of octets across all preimages introduced by the validator.
+	NumOfGuaranteedReports      uint32 // Number of guaranteed reports (g) - The number of reports guaranteed by the validator.
+	NumOfAvailabilityAssurances uint32 // Number of availability assurances (a) - The number of assurances of availability made by the validator.
 }
 
 type CoreStatistics struct {

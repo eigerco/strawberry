@@ -2343,16 +2343,16 @@ func CalculateNewActivityStatistics(block block.Block, timeslot jamtime.Timeslot
 
 			// π′₀[v]t ≡ a[v]t + {|ET| if v = Hi
 			//                     0 otherwise
-			newStats.ValidatorsCurrent[v].NumOfTickets += uint64(len(block.Extrinsic.ET.TicketProofs))
+			newStats.ValidatorsCurrent[v].NumOfTickets += uint32(len(block.Extrinsic.ET.TicketProofs))
 
 			// π′₀[v]p ≡ a[v]p + {|EP| if v = Hi
 			//                     0 otherwise
-			newStats.ValidatorsCurrent[v].NumOfPreimages += uint64(len(block.Extrinsic.EP))
+			newStats.ValidatorsCurrent[v].NumOfPreimages += uint32(len(block.Extrinsic.EP))
 
 			// π′₀[v]d ≡ a[v]d + {Σd∈EP|d| if v = Hi
 			//                     0 otherwise
 			for _, preimage := range block.Extrinsic.EP {
-				newStats.ValidatorsCurrent[v].NumOfBytesAllPreimages += uint64(len(preimage.Data))
+				newStats.ValidatorsCurrent[v].NumOfBytesAllPreimages += uint32(len(preimage.Data))
 			}
 		}
 

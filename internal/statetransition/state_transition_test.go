@@ -935,9 +935,9 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 
 		// Check that stats were rotated correctly
 		assert.Equal(t, uint32(10), newStats.ValidatorsLast[0].NumOfBlocks, "Previous current stats should become history")
-		assert.Equal(t, uint64(6), newStats.ValidatorsLast[1].NumOfTickets, "Previous current stats should become history")
+		assert.Equal(t, uint32(6), newStats.ValidatorsLast[1].NumOfTickets, "Previous current stats should become history")
 		assert.Equal(t, uint32(0), newStats.ValidatorsCurrent[0].NumOfBlocks, "Current stats should be reset")
-		assert.Equal(t, uint64(0), newStats.ValidatorsCurrent[1].NumOfTickets, "Current stats should be reset")
+		assert.Equal(t, uint32(0), newStats.ValidatorsCurrent[1].NumOfTickets, "Current stats should be reset")
 	})
 
 	t.Run("block author statistics", func(t *testing.T) {
@@ -965,9 +965,9 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 
 		// Check block author stats
 		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[1].NumOfBlocks, "Block count should increment")
-		assert.Equal(t, uint64(3), newStats.ValidatorsCurrent[1].NumOfTickets, "Ticket count should match")
-		assert.Equal(t, uint64(2), newStats.ValidatorsCurrent[1].NumOfPreimages, "Preimage count should match")
-		assert.Equal(t, uint64(10), newStats.ValidatorsCurrent[1].NumOfBytesAllPreimages, "Preimage bytes should match")
+		assert.Equal(t, uint32(3), newStats.ValidatorsCurrent[1].NumOfTickets, "Ticket count should match")
+		assert.Equal(t, uint32(2), newStats.ValidatorsCurrent[1].NumOfPreimages, "Preimage count should match")
+		assert.Equal(t, uint32(10), newStats.ValidatorsCurrent[1].NumOfBytesAllPreimages, "Preimage bytes should match")
 
 		// Check non-author stats remained zero
 		assert.Equal(t, uint32(0), newStats.ValidatorsCurrent[0].NumOfBlocks, "Non-author stats should remain zero")
@@ -1012,10 +1012,10 @@ func TestCalculateNewValidatorStatistics(t *testing.T) {
 		newStats := CalculateNewActivityStatistics(block, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}})
 
 		// Check guarantees and assurances
-		assert.Equal(t, uint64(1), newStats.ValidatorsCurrent[0].NumOfGuaranteedReports, "Should count all guarantees for validator 0")
-		assert.Equal(t, uint64(1), newStats.ValidatorsCurrent[1].NumOfGuaranteedReports, "Should count all guarantees for validator 1")
-		assert.Equal(t, uint64(1), newStats.ValidatorsCurrent[0].NumOfAvailabilityAssurances, "Should count assurance for validator 0")
-		assert.Equal(t, uint64(1), newStats.ValidatorsCurrent[1].NumOfAvailabilityAssurances, "Should count assurance for validator 1")
+		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[0].NumOfGuaranteedReports, "Should count all guarantees for validator 0")
+		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[1].NumOfGuaranteedReports, "Should count all guarantees for validator 1")
+		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[0].NumOfAvailabilityAssurances, "Should count assurance for validator 0")
+		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[1].NumOfAvailabilityAssurances, "Should count assurance for validator 1")
 	})
 
 	t.Run("full block processing", func(t *testing.T) {
