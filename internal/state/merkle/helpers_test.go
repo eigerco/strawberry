@@ -228,11 +228,11 @@ func RandomValidatorState(t *testing.T) validator.ValidatorState {
 func RandomValidatorStatistics() validator.ValidatorStatistics {
 	return validator.ValidatorStatistics{
 		NumOfBlocks:                 testutils.RandomUint32(),
-		NumOfTickets:                testutils.RandomUint64(),
-		NumOfPreimages:              testutils.RandomUint64(),
-		NumOfBytesAllPreimages:      testutils.RandomUint64(),
-		NumOfGuaranteedReports:      testutils.RandomUint64(),
-		NumOfAvailabilityAssurances: testutils.RandomUint64(),
+		NumOfTickets:                testutils.RandomUint32(),
+		NumOfPreimages:              testutils.RandomUint32(),
+		NumOfBytesAllPreimages:      testutils.RandomUint32(),
+		NumOfGuaranteedReports:      testutils.RandomUint32(),
+		NumOfAvailabilityAssurances: testutils.RandomUint32(),
 	}
 }
 

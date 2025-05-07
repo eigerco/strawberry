@@ -533,11 +533,11 @@ func (as ActivityStatistics) To() validator.ActivityStatisticsState {
 	for i, v := range as.ValsCurrent {
 		valsCurrent[i] = validator.ValidatorStatistics{
 			NumOfBlocks:                 v.Blocks,
-			NumOfTickets:                uint64(v.Tickets),
-			NumOfPreimages:              uint64(v.PreImages),
-			NumOfBytesAllPreimages:      uint64(v.PreImagesSize),
-			NumOfGuaranteedReports:      uint64(v.Guarantees),
-			NumOfAvailabilityAssurances: uint64(v.Assurances),
+			NumOfTickets:                v.Tickets,
+			NumOfPreimages:              v.PreImages,
+			NumOfBytesAllPreimages:      v.PreImagesSize,
+			NumOfGuaranteedReports:      v.Guarantees,
+			NumOfAvailabilityAssurances: v.Assurances,
 		}
 	}
 
@@ -545,11 +545,11 @@ func (as ActivityStatistics) To() validator.ActivityStatisticsState {
 	for i, v := range as.ValsLast {
 		valsLast[i] = validator.ValidatorStatistics{
 			NumOfBlocks:                 v.Blocks,
-			NumOfTickets:                uint64(v.Tickets),
-			NumOfPreimages:              uint64(v.PreImages),
-			NumOfBytesAllPreimages:      uint64(v.PreImagesSize),
-			NumOfGuaranteedReports:      uint64(v.Guarantees),
-			NumOfAvailabilityAssurances: uint64(v.Assurances),
+			NumOfTickets:                v.Tickets,
+			NumOfPreimages:              v.PreImages,
+			NumOfBytesAllPreimages:      v.PreImagesSize,
+			NumOfGuaranteedReports:      v.Guarantees,
+			NumOfAvailabilityAssurances: v.Assurances,
 		}
 	}
 
