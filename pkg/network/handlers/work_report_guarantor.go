@@ -281,7 +281,7 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 	response, err := h.sendWorkPackage(ctx, g, coreIndex, segments, bundleBytes)
 	if err != nil {
 		guaranteeCh <- guaranteeResponse{err: err}
-		log.Printf("Failed to share WP with peer %v: %v", validatorIndex, err)
+		log.Printf("Failed to complete work package exchange with peer %v: %v", validatorIndex, err)
 		return
 	}
 
