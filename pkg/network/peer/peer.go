@@ -43,7 +43,7 @@ func (ps *PeerSet) AddPeer(peer *Peer) {
 	ps.byEd25519Key[string(peer.Ed25519Key)] = peer
 	ps.byAddress[peer.Address.String()] = peer
 
-	if peer.ValidatorIndex != nil {
+	if peer.IsValidator() {
 		ps.byValidatorIndex[*peer.ValidatorIndex] = peer
 	}
 }
@@ -53,7 +53,7 @@ func (ps *PeerSet) RemovePeer(peer *Peer) {
 	delete(ps.byEd25519Key, string(peer.Ed25519Key))
 	delete(ps.byAddress, peer.Address.String())
 
-	if peer.ValidatorIndex != nil {
+	if peer.IsValidator() {
 		delete(ps.byValidatorIndex, *peer.ValidatorIndex)
 	}
 }

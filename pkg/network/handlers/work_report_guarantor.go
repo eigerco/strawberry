@@ -269,7 +269,7 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 ) {
 	defer wg.Done()
 
-	if g.ValidatorIndex == nil {
+	if !g.IsValidator() {
 		guaranteeCh <- guaranteeResponse{
 			err: fmt.Errorf("missing validator index for peer %v", g),
 		}
@@ -563,7 +563,7 @@ func (h *WorkReportGuarantor) distributeGuaranteedWorkReport(
 			defer wg.Done()
 
 			var valIndex uint16
-			if v.ValidatorIndex != nil {
+			if v.IsValidator() {
 				valIndex = *v.ValidatorIndex
 			}
 
