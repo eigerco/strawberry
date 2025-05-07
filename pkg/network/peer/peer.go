@@ -108,6 +108,12 @@ func NewPeer(pConn *protocol.ProtocolConn) *Peer {
 	return p
 }
 
+// IsValidator returns true if the peer is a validator, false otherwise
+// A validator peer should have a non-nil ValidatorIndex field.
+func (p *Peer) IsValidator() bool {
+	return p != nil && p.ValidatorIndex != nil
+}
+
 // The first 18 bytes of validator metadata, with the first 16 bytes being the IPv6 address
 // and the latter 2 being a little endian representation of the port.
 func NewPeerAddressFromMetadata(metadata []byte) (*net.UDPAddr, error) {
@@ -121,12 +127,6 @@ func NewPeerAddressFromMetadata(metadata []byte) (*net.UDPAddr, error) {
 	}
 
 	return net.UDPAddrFromAddrPort(address), nil
-}
-
-// IsValidator returns true if the peer is a validator, false otherwise
-// A validator peer should have a non-nil ValidatorIndex field.
-func (p *Peer) IsValidator() bool {
-	return p != nil && p.ValidatorIndex != nil
 }
 
 // MergeValidators returns a deduplicated set of validator peers from slices a and b,
