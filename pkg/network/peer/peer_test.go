@@ -68,7 +68,7 @@ func TestMergeValidators(t *testing.T) {
 			name:     "all non-validators",
 			a:        []*peer.Peer{newTestPeer(k1, nil), newTestPeer(k2, nil)},
 			b:        []*peer.Peer{newTestPeer(k3, nil)},
-			expected: nil, // or []ed25519.PublicKey{}
+			expected: nil,
 		},
 		{
 			name:     "duplicates within A, B is empty",
