@@ -122,3 +122,43 @@ func NewPeerAddressFromMetadata(metadata []byte) (*net.UDPAddr, error) {
 
 	return net.UDPAddrFromAddrPort(address), nil
 }
+
+// IsValidator returns true if the peer is a validator, false otherwise
+// A validator peer should have a non-nil ValidatorIndex field.
+func (p *Peer) IsValidator() bool {
+	return p != nil && p.ValidatorIndex != nil
+}
+
+// MergeValidators returns a deduplicated set of validator peers from slices a and b,
+// including only peers that are validators (ValidatorIndex != nil)
+// Deduplication is performed based on Ed25519 public keys
+func MergeValidators(a, b []*Peer) []*Peer {
+	exists := make(map[string]struct{})
+	var merged []*Peer
+
+	// Include only valid peers from `a`
+	for _, p := range a {
+		if !p.IsValidator() {
+			continue
+		}
+		key := string(p.Ed25519Key)
+		if _, seen := exists[key]; !seen {
+			exists[key] = struct{}{}
+			merged = append(merged, p)
+		}
+	}
+
+	// Include only valid, non-duplicate peers from `b`
+	for _, p := range b {
+		if !p.IsValidator() {
+			continue
+		}
+		key := string(p.Ed25519Key)
+		if _, seen := exists[key]; !seen {
+			exists[key] = struct{}{}
+			merged = append(merged, p)
+		}
+	}
+
+	return merged
+}

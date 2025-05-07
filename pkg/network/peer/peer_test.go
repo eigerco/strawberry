@@ -57,6 +57,32 @@ func TestMergeValidators(t *testing.T) {
 			},
 		},
 		{
+			name: "inputs with nil peer entries",
+			a:    []*peer.Peer{newTestPeer(k1, &i1), nil, newTestPeer(k2, &i2)},
+			b:    []*peer.Peer{nil, newTestPeer(k3, &i3), newTestPeer(k1, &i1) /*duplicate*/},
+			expected: []ed25519.PublicKey{
+				k1, k2, k3,
+			},
+		},
+		{
+			name:     "all non-validators",
+			a:        []*peer.Peer{newTestPeer(k1, nil), newTestPeer(k2, nil)},
+			b:        []*peer.Peer{newTestPeer(k3, nil)},
+			expected: nil, // or []ed25519.PublicKey{}
+		},
+		{
+			name:     "duplicates within A, B is empty",
+			a:        []*peer.Peer{newTestPeer(k1, &i1), newTestPeer(k2, &i2), newTestPeer(k1, &i1)}, // k1 is duplicated
+			b:        nil,
+			expected: []ed25519.PublicKey{k1, k2},
+		},
+		{
+			name:     "duplicates within B, A is empty",
+			a:        nil,
+			b:        []*peer.Peer{newTestPeer(k1, &i1), newTestPeer(k2, &i2), newTestPeer(k1, &i1)}, // k1 is duplicated
+			expected: []ed25519.PublicKey{k1, k2},
+		},
+		{
 			name: "ignore non validators",
 			a: []*peer.Peer{
 				newTestPeer(k1, &i1),
