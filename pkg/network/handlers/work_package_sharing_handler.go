@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/quic-go/quic-go"
 
@@ -20,11 +21,19 @@ import (
 // WorkPackageSharingHandler processes incoming CE-134 streams
 // This handler is used by a guarantor who receives a work-package bundle from another guarantor.
 type WorkPackageSharingHandler struct {
+	mu                  sync.RWMutex
 	currentAssignedCore uint16
 	privateKey          ed25519.PrivateKey
 	auth                authorization.AuthPVMInvoker
 	refine              refine.RefinePVMInvoker
 	serviceState        service.ServiceState
+}
+
+// WorkPackageSharingResponse is the response payload of CE-134
+// <-- Work-Report Hash ++ Ed25519 Signature
+type workPackageSharingResponse struct {
+	WorkReportHash crypto.Hash
+	Signature      crypto.Ed25519Signature
 }
 
 // NewWorkPackageSharingHandler creates a new WorkPackageSharingHandler instance.
@@ -43,6 +52,9 @@ func NewWorkPackageSharingHandler(
 }
 
 func (h *WorkPackageSharingHandler) SetCurrentCore(core uint16) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	h.currentAssignedCore = core
 }
 
@@ -64,8 +76,12 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 		return fmt.Errorf("failed to unmarshal share header: %w", err)
 	}
 
-	if h.currentAssignedCore != coreIndex {
-		return fmt.Errorf("not assigned to core %d, the current node core %d", coreIndex, h.currentAssignedCore)
+	h.mu.RLock()
+	assigned := h.currentAssignedCore
+	h.mu.RUnlock()
+
+	if assigned != coreIndex {
+		return fmt.Errorf("not assigned to core %d, the current node core %d", coreIndex, assigned)
 	}
 
 	var rootMappings []SegmentRootMapping
@@ -110,16 +126,11 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 
 	signature := ed25519.Sign(h.privateKey, workReportHash[:])
 
-	// Prepare the response: Work-Report Hash ++ Ed25519 Signature.
-	response := struct {
-		WorkReportHash crypto.Hash
-		Signature      []byte
-	}{
+	resp := workPackageSharingResponse{
 		WorkReportHash: workReportHash,
-		Signature:      signature,
+		Signature:      crypto.Ed25519Signature(signature),
 	}
-
-	respBytes, err := jam.Marshal(response)
+	respBytes, err := jam.Marshal(resp)
 	if err != nil {
 		return fmt.Errorf("failed to marshal response: %w", err)
 	}

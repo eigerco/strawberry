@@ -8,4 +8,5 @@ const (
 	TimeslotsPerEpoch               = 12
 	EpochDuration                   = TimeslotsPerEpoch * TimeslotDuration
 	TicketSubmissionTimeSlots       = 10
+	ValidatorRotationPeriod         = Timeslot(4)
 )

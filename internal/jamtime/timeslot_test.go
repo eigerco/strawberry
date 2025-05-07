@@ -323,3 +323,12 @@ func TestIsWinningTicketMarkerPeriod(t *testing.T) {
 		})
 	}
 }
+
+func TestIsLastCoreRotation(t *testing.T) {
+	lastRotationStart := TimeslotsPerEpoch - ValidatorRotationPeriod
+
+	assert.False(t, Timeslot(0).IsLastCoreRotation())
+	assert.False(t, (lastRotationStart - 1).IsLastCoreRotation())
+	assert.True(t, lastRotationStart.IsLastCoreRotation())
+	assert.True(t, Timeslot(TimeslotsPerEpoch-1).IsLastCoreRotation())
+}

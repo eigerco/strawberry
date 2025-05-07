@@ -112,7 +112,7 @@ func TestHandleSharingStream_Success(t *testing.T) {
 
 	var response struct {
 		WorkReportHash crypto.Hash
-		Signature      []byte
+		Signature      crypto.Ed25519Signature
 	}
 	err = jam.Unmarshal(writtenResponse, &response)
 	require.NoError(t, err)
@@ -120,7 +120,7 @@ func TestHandleSharingStream_Success(t *testing.T) {
 	require.Len(t, response.Signature, ed25519.SignatureSize)
 	require.NotEmpty(t, response.WorkReportHash)
 
-	valid := ed25519.Verify(peerKey, response.WorkReportHash[:], response.Signature)
+	valid := ed25519.Verify(peerKey, response.WorkReportHash[:], response.Signature[:])
 	require.True(t, valid, "Signature must be valid")
 
 	mockStream.AssertExpectations(t)

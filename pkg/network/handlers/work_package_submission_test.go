@@ -14,8 +14,9 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
-	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/network/mocks"
 	"github.com/eigerco/strawberry/pkg/network/peer"
@@ -103,12 +104,20 @@ func TestSubmitWorkPackage(t *testing.T) {
 func TestHandleWorkPackage(t *testing.T) {
 	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
-	workPackageSharer := handlers.NewWorkPackageSharer(mockAuthorizationInvoker{}, mockRefineInvoker{}, getServiceState())
+	coreIndex := uint16(1)
+
+	pool := state.CoreAuthorizersPool{}
+	pool[coreIndex] = []crypto.Hash{pkg.AuthCodeHash}
+	currentState := state.State{
+		Services:            getServiceState(),
+		CoreAuthorizersPool: pool,
+	}
+
+	peerKey, prv, _ := ed25519.GenerateKey(nil)
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet())
 	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer)
-	peerKey, _, _ := ed25519.GenerateKey(nil)
 
 	// Prepare the message data
-	coreIndex := uint16(1)
 	coreIndexBytes, err := jam.Marshal(coreIndex)
 	require.NoError(t, err)
 	pkgBytes, err := jam.Marshal(pkg)
@@ -121,8 +130,11 @@ func TestHandleWorkPackage(t *testing.T) {
 
 	conn := protocol.NewProtocolConn(mockTConn, registry)
 
+	validatorIndex := uint16(1)
 	mockPeer := &peer.Peer{
-		ProtoConn: conn,
+		ProtoConn:      conn,
+		ValidatorIndex: &validatorIndex,
+		Ed25519Key:     peerKey,
 	}
 
 	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
@@ -166,12 +178,21 @@ func TestHandleWorkPackage(t *testing.T) {
 		}).
 		Return(len(extrinsics), nil).Once()
 
+	bundle := work.PackageBundle{Package: pkg}
+	workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
+	require.NoError(t, err)
+
+	h, err := workReport.Hash()
+	require.NoError(t, err)
+
+	signature := ed25519.Sign(prv, h[:])
+
 	response := struct {
 		WorkReportHash crypto.Hash
-		Signature      []byte
+		Signature      crypto.Ed25519Signature
 	}{
-		WorkReportHash: testutils.RandomHash(t),
-		Signature:      []byte("mock-signature"),
+		WorkReportHash: h,
+		Signature:      crypto.Ed25519Signature(signature),
 	}
 
 	responseBytes, err := jam.Marshal(response)
@@ -287,9 +308,17 @@ func TestHandleStream_Success(t *testing.T) {
 	ctx := context.Background()
 	mockStream := mocks.NewMockQuicStream()
 	mockFetcher := &MockFetcher{}
-	workPackageSharer := handlers.NewWorkPackageSharer(mockAuthorizationInvoker{}, mockRefineInvoker{}, getServiceState())
 	coreIndex := uint16(5)
-	peerKey, _, _ := ed25519.GenerateKey(nil)
+	peerKey, prv, _ := ed25519.GenerateKey(nil)
+
+	pool := state.CoreAuthorizersPool{}
+	pool[coreIndex] = []crypto.Hash{pkg.AuthCodeHash, crypto.HashData([]byte("another hash"))}
+	currentState := state.State{
+		Services:            getServiceState(),
+		CoreAuthorizersPool: pool,
+	}
+
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet())
 
 	coreIndexBytes, err := jam.Marshal(coreIndex)
 	require.NoError(t, err)
@@ -302,8 +331,11 @@ func TestHandleStream_Success(t *testing.T) {
 
 	conn := protocol.NewProtocolConn(mockTConn, registry)
 
+	validatorIndex := uint16(1)
 	mockPeer := &peer.Peer{
-		ProtoConn: conn,
+		ProtoConn:      conn,
+		ValidatorIndex: &validatorIndex,
+		Ed25519Key:     peerKey,
 	}
 
 	mockTConn.On("OpenStream", ctx).Return(mockStream, nil)
@@ -336,12 +368,21 @@ func TestHandleStream_Success(t *testing.T) {
 		copy(b, extrinsics)
 	}).Return(len(extrinsics), nil).Once()
 
+	bundle := work.PackageBundle{Package: pkg}
+	workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
+	require.NoError(t, err)
+
+	h, err := workReport.Hash()
+	require.NoError(t, err)
+
+	signature := ed25519.Sign(prv, h[:])
+
 	response := struct {
 		WorkReportHash crypto.Hash
-		Signature      []byte
+		Signature      crypto.Ed25519Signature
 	}{
-		WorkReportHash: testutils.RandomHash(t),
-		Signature:      []byte("mock-signature"),
+		WorkReportHash: h,
+		Signature:      crypto.Ed25519Signature(signature),
 	}
 
 	responseBytes, err := jam.Marshal(response)

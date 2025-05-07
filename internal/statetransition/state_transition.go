@@ -1230,7 +1230,7 @@ func CalculateNewCoreAssignments(
 		log.Printf("Processing guarantee for core %d", coreIndex)
 
 		// Check timeslot range: R(⌊τ′/R⌋ - 1) ≤ t ≤ τ′
-		previousRotationStart := (newTimeslot/common.ValidatorRotationPeriod - 1) * common.ValidatorRotationPeriod
+		previousRotationStart := (newTimeslot/jamtime.ValidatorRotationPeriod - 1) * jamtime.ValidatorRotationPeriod
 
 		if guarantee.Timeslot < previousRotationStart ||
 			guarantee.Timeslot > newTimeslot {
@@ -1599,8 +1599,8 @@ func determineValidatorsAndDataForPermutation(
 	currentValidators safrole.ValidatorsData,
 	archivedValidators safrole.ValidatorsData,
 ) (safrole.ValidatorsData, crypto.Hash, jamtime.Timeslot) {
-	currentRotation := currentTimeslot / common.ValidatorRotationPeriod
-	guaranteeRotation := guaranteeTimeslot / common.ValidatorRotationPeriod
+	currentRotation := currentTimeslot / jamtime.ValidatorRotationPeriod
+	guaranteeRotation := guaranteeTimeslot / jamtime.ValidatorRotationPeriod
 
 	var entropy crypto.Hash
 	var timeslotForPermutation jamtime.Timeslot
@@ -1612,7 +1612,7 @@ func determineValidatorsAndDataForPermutation(
 		timeslotForPermutation = currentTimeslot
 		validators = currentValidators
 	} else {
-		timeslotForPermutation = currentTimeslot - common.ValidatorRotationPeriod
+		timeslotForPermutation = currentTimeslot - jamtime.ValidatorRotationPeriod
 		currentEpochIndex := currentTimeslot / jamtime.TimeslotsPerEpoch
 		prevEpochIndex := timeslotForPermutation / jamtime.TimeslotsPerEpoch
 
@@ -1661,8 +1661,8 @@ func isAssignmentStale(currentAssignment *state.Assignment, newTimeslot jamtime.
 }
 
 func verifyGuaranteeAge(guarantee block.Guarantee, currentTimeslot jamtime.Timeslot) error {
-	guaranteeRotation := guarantee.Timeslot / common.ValidatorRotationPeriod
-	currentRotation := currentTimeslot / common.ValidatorRotationPeriod
+	guaranteeRotation := guarantee.Timeslot / jamtime.ValidatorRotationPeriod
+	currentRotation := currentTimeslot / jamtime.ValidatorRotationPeriod
 
 	// Guarantee must not be from future timeslot
 	if guarantee.Timeslot > currentTimeslot {
@@ -1786,7 +1786,7 @@ func PermuteAssignments(entropy crypto.Hash, timeslot jamtime.Timeslot) ([]uint3
 	}
 
 	// ⌊(t mod E) / R⌋
-	rotationAmount := uint32(timeslot % jamtime.TimeslotsPerEpoch / common.ValidatorRotationPeriod)
+	rotationAmount := uint32(timeslot % jamtime.TimeslotsPerEpoch / jamtime.ValidatorRotationPeriod)
 
 	// R(F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e), ⌊(t mod E)/R⌋)
 	rotatedSequence := RotateSequence(shuffledSequence, rotationAmount)

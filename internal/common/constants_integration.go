@@ -10,7 +10,6 @@ const (
 	TotalNumberOfCores                    uint16 = 2
 	ValidatorsSuperMajority                      = (2 * NumberOfValidators / 3) + 1
 	WorkReportTimeoutPeriod                      = jamtime.Timeslot(5)
-	ValidatorRotationPeriod                      = jamtime.Timeslot(4)
 	MaxTicketExtrinsicSize                       = 3
 	MaxTicketAttempts                            = 3
 	MaxHistoricalTimeslotsForPreimageMeta        = 3
