@@ -45,6 +45,7 @@ type BlockAnnouncementHandler struct {
 	mu                  sync.RWMutex               // Protects the Announcers map from concurrent access
 	Announcers          map[string]*BlockAnnouncer // Maps peer keys to their respective announcers
 	requestor           BlockRequestor             // Used to request blocks after announcements
+	onBlockReceiveHooks []BlockReceiveHook         // hooks that trigger on receiving a new block, needed to start processes like assurance and auditing
 }
 
 // NewBlockAnnouncementHandler creates a new handler with the provided block service
@@ -57,6 +58,8 @@ func NewBlockAnnouncementHandler(bs *chain.BlockService, requestor BlockRequesto
 		requestor:    requestor,
 	}
 }
+
+type BlockReceiveHook func(ctx context.Context, block block.Block)
 
 // BlockAnnouncer manages a single UP 0 block announcement stream with a peer.
 // It handles the initial handshake, tracking peer's chain state (finalized blocks and leaves),
@@ -78,6 +81,7 @@ type BlockAnnouncer struct {
 	receiveCh           chan []byte                      // Channel for incoming messages
 	requestor           BlockRequestor                   // Used to request blocks after announcements
 	peerKey             ed25519.PublicKey                // Ed25519 key of the connected peer
+	onBlockReceiveHooks []BlockReceiveHook               // hooks that trigger on receiving a new block, needed to start processes like assurance and auditing
 }
 
 // NewBlockAnnouncer creates a new announcer for a given stream and peer.
@@ -89,19 +93,20 @@ func (bh *BlockAnnouncementHandler) NewBlockAnnouncer(bs *chain.BlockService, ct
 	defer bh.mu.Unlock()
 
 	ba := &BlockAnnouncer{
-		BlockService: bs,
-		stream:       stream,
-		ctx:          announcerCtx,
-		cancel:       cancel,
-		state:        SendingHandshake,
-		handshakeCh:  make(chan struct{}),
-		readyCh:      make(chan struct{}),
-		sendCh:       make(chan []byte, 10),
-		receiveCh:    make(chan []byte, 10),
-		requestor:    bh.requestor,
-		peerKey:      peerKey,
-		announced:    make(map[crypto.Hash]*block.Header),
-		peerLeaves:   make(map[crypto.Hash]jamtime.Timeslot),
+		BlockService:        bs,
+		stream:              stream,
+		ctx:                 announcerCtx,
+		cancel:              cancel,
+		state:               SendingHandshake,
+		handshakeCh:         make(chan struct{}),
+		readyCh:             make(chan struct{}),
+		sendCh:              make(chan []byte, 10),
+		receiveCh:           make(chan []byte, 10),
+		requestor:           bh.requestor,
+		peerKey:             peerKey,
+		announced:           make(map[crypto.Hash]*block.Header),
+		peerLeaves:          make(map[crypto.Hash]jamtime.Timeslot),
+		onBlockReceiveHooks: bh.onBlockReceiveHooks,
 	}
 	bh.Announcers[string(peerKey)] = ba
 	return ba
@@ -137,6 +142,11 @@ func (bh *BlockAnnouncementHandler) HandleStream(ctx context.Context, stream qui
 	// If no announcer exists yet, create new one and start handshake process
 	handler := bh.NewBlockAnnouncer(bh.BlockService, ctx, stream, peerKey)
 	return handler.Start()
+}
+
+// AddOnBlockReceiveHook add on block received hook, required to kick off other processes like assurance and auditing
+func (bh *BlockAnnouncementHandler) AddOnBlockReceiveHook(hook BlockReceiveHook) {
+	bh.onBlockReceiveHooks = append(bh.onBlockReceiveHooks, hook)
 }
 
 // Start initiates the block announcement protocol by triggering the handshake process.
@@ -392,6 +402,11 @@ func (ba *BlockAnnouncer) processAnnouncement(content []byte) error {
 			if err := ba.Store.PutBlock(b); err != nil {
 				log.Printf("Warning: failed to store requested block %x: %v", h[:5], err)
 				network.LogBlockEvent(time.Now(), "imported", h, b.Header.TimeSlotIndex.ToEpoch(), b.Header.TimeSlotIndex)
+			}
+			// process custom logic when receiving a new block
+			// the hooks are being executed in separate go routines to not slow down the main block receiver
+			for _, onBlockReceiveHook := range ba.onBlockReceiveHooks {
+				go onBlockReceiveHook(ba.ctx, b)
 			}
 		}
 	}
