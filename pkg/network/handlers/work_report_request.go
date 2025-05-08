@@ -13,63 +13,6 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-// WorkReportRequester handles CE-136: requesting work-reports from peer
-//
-// # This client-side handler sends a hash to a peer and requests the full work-report
-//
-// Protocol flow:
-// Auditor -> Auditor
-//
-//	--> Work-Report Hash (32 bytes)
-//	--> FIN
-//	<-- Work-Report (full, encoded)
-//	<-- FIN
-//
-// This should be used by auditors to request missing work-reports which have been negatively judged by other auditors.
-// This protocol is also used when local refinement fails and a node needs to fetch
-// the body of the work-report from another peer that has already produced it.
-type WorkReportRequester struct {
-}
-
-func NewWorkReportRequester() *WorkReportRequester {
-	return &WorkReportRequester{}
-}
-
-// RequestWorkReport sends a CE-136 request over the given stream to fetch a work-report by its hash
-// It marshals the hash, sends it, reads the response, decodes it into a WorkReport, and returns it
-//
-// If the remote peer cannot fulfill the request, or if an error occurs during transmission, an error is returned
-func (r *WorkReportRequester) RequestWorkReport(
-	ctx context.Context,
-	stream quic.Stream,
-	hash crypto.Hash,
-) (block.WorkReport, error) {
-	reqBytes, err := jam.Marshal(hash)
-	if err != nil {
-		return block.WorkReport{}, fmt.Errorf("failed to marshal hash: %w", err)
-	}
-
-	if err := WriteMessageWithContext(ctx, stream, reqBytes); err != nil {
-		return block.WorkReport{}, fmt.Errorf("failed to send request: %w", err)
-	}
-
-	respMsg, err := ReadMessageWithContext(ctx, stream)
-	if err != nil {
-		return block.WorkReport{}, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if err := stream.Close(); err != nil {
-		return block.WorkReport{}, fmt.Errorf("failed to close stream: %w", err)
-	}
-
-	var report block.WorkReport
-	if err := jam.Unmarshal(respMsg.Content, &report); err != nil {
-		return block.WorkReport{}, fmt.Errorf("failed to decode work report: %w", err)
-	}
-
-	return report, nil
-}
-
 // WorkReportRequestHandler handles CE-136: inbound work-report requests.
 //
 // This handler responds to a peer's request for a work-report by its hash.
@@ -118,4 +61,61 @@ func (h *WorkReportRequestHandler) HandleStream(ctx context.Context, stream quic
 	}
 
 	return nil
+}
+
+// WorkReportRequester handles CE-136: requesting work-reports from peer
+//
+// # This client-side handler sends a hash to a peer and requests the full work-report
+//
+// Protocol flow:
+// Auditor -> Auditor
+//
+//	--> Work-Report Hash (32 bytes)
+//	--> FIN
+//	<-- Work-Report (full, encoded)
+//	<-- FIN
+//
+// This should be used by auditors to request missing work-reports which have been negatively judged by other auditors.
+// This protocol is also used when local refinement fails and a node needs to fetch
+// the body of the work-report from another peer that has already produced it.
+type WorkReportRequester struct {
+}
+
+func NewWorkReportRequester() *WorkReportRequester {
+	return &WorkReportRequester{}
+}
+
+// RequestWorkReport sends a CE-136 request over the given stream to fetch a work-report by its hash
+// It marshals the hash, sends it, reads the response, decodes it into a WorkReport, and returns it
+//
+// If the remote peer cannot fulfill the request, or if an error occurs during transmission, an error is returned
+func (r *WorkReportRequester) RequestWorkReport(
+	ctx context.Context,
+	stream quic.Stream,
+	hash crypto.Hash,
+) (block.WorkReport, error) {
+	reqBytes, err := jam.Marshal(hash)
+	if err != nil {
+		return block.WorkReport{}, fmt.Errorf("failed to marshal hash: %w", err)
+	}
+
+	if err := WriteMessageWithContext(ctx, stream, reqBytes); err != nil {
+		return block.WorkReport{}, fmt.Errorf("failed to send request: %w", err)
+	}
+
+	if err := stream.Close(); err != nil {
+		return block.WorkReport{}, fmt.Errorf("failed to close stream: %w", err)
+	}
+
+	respMsg, err := ReadMessageWithContext(ctx, stream)
+	if err != nil {
+		return block.WorkReport{}, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var report block.WorkReport
+	if err := jam.Unmarshal(respMsg.Content, &report); err != nil {
+		return block.WorkReport{}, fmt.Errorf("failed to decode work report: %w", err)
+	}
+
+	return report, nil
 }
