@@ -1,3 +1,5 @@
+//go:build integration
+
 package network_test
 
 import (
@@ -250,6 +252,7 @@ func (h *ExtendedWorkPackageSubmissionHandler) HandleStream(ctx context.Context,
 
 	return stream.Close()
 }
+
 func TestTwoNodesAnnounceBlocks(t *testing.T) {
 	// Create contexts for both nodes
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -890,4 +893,130 @@ func TestTwoNodesSegmentJustificationShard(t *testing.T) {
 	}
 
 	t.Log("Segments shards have been sent")
+}
+
+func connectPeer(t *testing.T, nodes []*node.Node, fromIndex, toIndex uint16) *peer.Peer {
+	t.Helper()
+	toAddr, err := peer.NewPeerAddressFromMetadata(nodes[fromIndex].ValidatorManager.State.CurrentValidators[toIndex].Metadata[:])
+	require.NoError(t, err)
+
+	err = nodes[fromIndex].ConnectToPeer(toAddr)
+	require.NoError(t, err)
+
+	// Wait for connection to be established
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify nodes are connected
+	fromPeer := nodes[fromIndex].PeersSet.GetByAddress(toAddr.String())
+	require.NotNil(t, fromPeer, "Node1 should have Node2 as a peer")
+
+	// Manually set the ValidatorIndex so that later we cat identify the peer using PeersSet.GetByValidatorIndex()
+	fromPeer.ValidatorIndex = &nodes[toIndex].ValidatorManager.Index
+
+	nodes[fromIndex].PeersSet.AddPeer(fromPeer)
+	return fromPeer
+}
+
+func TestAnnounceBlocksAndDistributeShards(t *testing.T) {
+	// Create contexts for both nodes
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	nodes := setupNodes(ctx, t, chainState.State{}, 3)
+	const (
+		node1Id      = 0
+		guarantor1Id = 1
+		assurer1Id   = 2
+	)
+
+	erasureRoot := testutils.RandomHash(t)
+
+	mockValidatorService := validator.NewValidatorServiceMock()
+
+	bundleShard := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	segmentsShards := [][]byte{
+		{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+		{13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
+	}
+
+	hash1 := testutils.RandomHash(t)
+	hash2 := testutils.RandomHash(t)
+
+	justification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
+
+	// TODO once shard distribution is implemented we should take the shards from the actual service instead of mocking it
+	mockValidatorService.On("ShardDistribution", mock.Anything, erasureRoot, nodes[assurer1Id].ValidatorManager.Index).
+		Return(bundleShard, segmentsShards, justification, nil).Once()
+
+	nodes[guarantor1Id].ProtocolManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(mockValidatorService))
+
+	err := nodes[node1Id].Start()
+	require.NoError(t, err)
+	defer stopNode(t, nodes[node1Id])
+
+	err = nodes[guarantor1Id].Start()
+	require.NoError(t, err)
+	defer stopNode(t, nodes[guarantor1Id])
+
+	err = nodes[assurer1Id].Start()
+	require.NoError(t, err)
+	defer stopNode(t, nodes[assurer1Id])
+
+	// Allow time for the nodes to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Connect node1 to assurer1
+	assurer1Peer := connectPeer(t, nodes, node1Id, assurer1Id)
+
+	// Connect the assurer to at least one guarantor
+	connectPeer(t, nodes, assurer1Id, guarantor1Id)
+
+	mockHeader := &block.Header{
+		ParentHash:       nodes[node1Id].BlockService.LatestFinalized.Hash,
+		TimeSlotIndex:    jamtime.Timeslot(2),
+		BlockAuthorIndex: 0,
+	}
+
+	mockBLock := &block.Block{
+		Header: *mockHeader,
+		Extrinsic: block.Extrinsic{
+			EG: block.GuaranteesExtrinsic{
+				Guarantees: []block.Guarantee{
+					{
+						WorkReport: block.WorkReport{
+							WorkPackageSpecification: block.WorkPackageSpecification{
+								ErasureRoot: erasureRoot,
+							},
+						},
+						Credentials: []block.CredentialSignature{{
+							ValidatorIndex: nodes[guarantor1Id].ValidatorManager.Index,
+						}},
+					},
+				},
+			},
+		},
+	}
+
+	err = nodes[node1Id].BlockService.Store.PutBlock(*mockBLock)
+	require.NoError(t, err)
+
+	// Announce the newly generated block, this block supposedly contains new guarantees that were executed previously
+	err = nodes[node1Id].AnnounceBlock(ctx, mockHeader, assurer1Peer)
+	require.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+
+	mockValidatorService.AssertExpectations(t)
+
+	// Assert that the assurer node now contains it's appropriate shard from the guarantor
+	actualSegmentsShards, err := nodes[assurer1Id].AvailabilityStore.GetSegmentsShard(erasureRoot, nodes[assurer1Id].ValidatorManager.Index)
+	require.NoError(t, err)
+	actualBundleShard, err := nodes[assurer1Id].AvailabilityStore.GetAuditShard(erasureRoot, nodes[assurer1Id].ValidatorManager.Index)
+	require.NoError(t, err)
+	actualJustification, err := nodes[assurer1Id].AvailabilityStore.GetJustification(erasureRoot, nodes[assurer1Id].ValidatorManager.Index)
+	require.NoError(t, err)
+
+	assert.Equal(t, segmentsShards, actualSegmentsShards)
+	assert.Equal(t, bundleShard, actualBundleShard)
+	assert.Equal(t, justification, actualJustification)
 }

@@ -50,7 +50,7 @@ type Node struct {
 	WorkPackageSharingHandler     *handlers.WorkPackageSharingHandler
 	currentCoreIndex              uint16
 	currentGuarantorPeers         []*peer.Peer
-	validatorService              validator.ValidatorService
+	ValidatorService              validator.ValidatorService
 
 	AvailabilityStore *store.Availability
 }
@@ -71,7 +71,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 		State:             state,
 		Context:           nodeCtx,
 		Cancel:            cancel,
-		validatorService:  validator.NewService(availabilityStore),
+		ValidatorService:  validator.NewService(availabilityStore),
 		AvailabilityStore: availabilityStore,
 	}
 	node.ValidatorManager = validator.NewValidatorManager(keys, state.ValidatorState, validatorIdx)
@@ -108,7 +108,24 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	// Register what type of streams the Node will support.
 	protoManager.Registry.RegisterHandler(protocol.StreamKindBlockRequest, handlers.NewBlockRequestHandler(bs))
-	protoManager.Registry.RegisterHandler(protocol.StreamKindBlockAnnouncement, handlers.NewBlockAnnouncementHandler(bs, node))
+	announcementHandler := handlers.NewBlockAnnouncementHandler(bs, node)
+
+	// Assurance hook, triggers the assurance process for the newly added guarantees from the block extrinsic (EG)
+	// iterates over each guarantee and requests the shards with self validator index
+	// from the validators identified in the guarantee extrinsic
+	announcementHandler.AddOnBlockReceiveHook(func(ctx context.Context, block block.Block) {
+		select {
+		case <-ctx.Done():
+			log.Printf("failed to get the shards for assurance: %s", ctx.Err())
+		default:
+			for _, guarantee := range block.Extrinsic.EG.Guarantees {
+				if err := node.GetGuaranteedShardsAndStore(nodeCtx, guarantee); err != nil {
+					log.Printf("failed get the shards and store: %s", err)
+				}
+			}
+		}
+	})
+	protoManager.Registry.RegisterHandler(protocol.StreamKindBlockAnnouncement, announcementHandler)
 
 	node.blockRequester = &handlers.BlockRequester{}
 
@@ -124,10 +141,10 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkReportDist, handlers.NewWorkReportDistributionHandler())
 
-	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(node.validatorService))
-	protoManager.Registry.RegisterHandler(protocol.StreamKindAuditShardRequest, handlers.NewAuditShardRequestHandler(node.validatorService))
-	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequest, handlers.NewSegmentShardRequestHandler(node.validatorService))
-	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequestJust, handlers.NewSegmentShardRequestJustificationHandler(node.validatorService))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(node.ValidatorService))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindAuditShardRequest, handlers.NewAuditShardRequestHandler(node.ValidatorService))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequest, handlers.NewSegmentShardRequestHandler(node.ValidatorService))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequestJust, handlers.NewSegmentShardRequestJustificationHandler(node.ValidatorService))
 
 	// Create transport
 	transportConfig := transport.Config{
@@ -494,7 +511,6 @@ func (n *Node) GetProtocols() []string {
 
 // GetGuaranteedShardsAndStore requests the shards from the appropriate guarantors,
 // if shard distribution request fails, will try again for the next guarantor, if unable to get shards from any guarantor will fail
-// TODO this method needs to be called upon receiving a new block
 func (n *Node) GetGuaranteedShardsAndStore(ctx context.Context, guarantee block.Guarantee) error {
 	for _, credential := range guarantee.Credentials {
 		peer := n.PeersSet.GetByValidatorIndex(credential.ValidatorIndex)
