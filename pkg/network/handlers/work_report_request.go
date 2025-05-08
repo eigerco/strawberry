@@ -93,29 +93,29 @@ func (r *WorkReportRequester) RequestWorkReport(
 	ctx context.Context,
 	stream quic.Stream,
 	hash crypto.Hash,
-) (block.WorkReport, error) {
+) (*block.WorkReport, error) {
 	reqBytes, err := jam.Marshal(hash)
 	if err != nil {
-		return block.WorkReport{}, fmt.Errorf("failed to marshal hash: %w", err)
+		return nil, fmt.Errorf("failed to marshal hash: %w", err)
 	}
 
 	if err := WriteMessageWithContext(ctx, stream, reqBytes); err != nil {
-		return block.WorkReport{}, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
 	if err := stream.Close(); err != nil {
-		return block.WorkReport{}, fmt.Errorf("failed to close stream: %w", err)
+		return nil, fmt.Errorf("failed to close stream: %w", err)
 	}
 
 	respMsg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
-		return block.WorkReport{}, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	var report block.WorkReport
 	if err := jam.Unmarshal(respMsg.Content, &report); err != nil {
-		return block.WorkReport{}, fmt.Errorf("failed to decode work report: %w", err)
+		return nil, fmt.Errorf("failed to decode work report: %w", err)
 	}
 
-	return report, nil
+	return &report, nil
 }

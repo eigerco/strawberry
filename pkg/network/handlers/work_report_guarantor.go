@@ -392,7 +392,7 @@ func (h *WorkReportGuarantor) fetchWorkReportByHash(ctx context.Context, hash cr
 			log.Printf("failed to fetch work report from validator : %v", err)
 			continue
 		}
-		return &fetched, nil
+		return fetched, nil
 	}
 
 	return nil, fmt.Errorf("failed to retrieve work report")

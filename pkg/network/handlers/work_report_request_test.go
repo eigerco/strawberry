@@ -58,7 +58,7 @@ func TestWorkReportRequester_RequestWorkReport_Success(t *testing.T) {
 	requester := handlers.NewWorkReportRequester()
 	got, err := requester.RequestWorkReport(ctx, stream, hash)
 	require.NoError(t, err)
-	require.Equal(t, workReport, got)
+	require.Equal(t, &workReport, got)
 
 	stream.AssertExpectations(t)
 }
