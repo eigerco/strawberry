@@ -333,7 +333,6 @@ func (h *WorkReportGuarantor) processWorkReports(
 	}
 
 	var report *block.WorkReport
-	reportSet := false
 
 	var creds []block.CredentialSignature
 	for _, s := range winningGroup {
@@ -342,12 +341,14 @@ func (h *WorkReportGuarantor) processWorkReports(
 			Signature:      s.Signature,
 		})
 		if s.Report != nil {
+			// The full report is only available from the local refinement
+			// remote responses only provide a hash + signature
+			// If local refinement failed or wasn't available, s.Report will be nil.
 			report = s.Report
-			reportSet = true
 		}
 	}
 
-	if !reportSet {
+	if report == nil {
 		log.Println("local refinement failed or ignored, fetching full work report from remote peer")
 
 		fetched, err := h.fetchWorkReportByHash(ctx, winningGroup[0].WorkReportHash)
