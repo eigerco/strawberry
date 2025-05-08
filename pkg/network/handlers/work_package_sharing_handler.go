@@ -13,6 +13,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -27,6 +28,7 @@ type WorkPackageSharingHandler struct {
 	auth                authorization.AuthPVMInvoker
 	refine              refine.RefinePVMInvoker
 	serviceState        service.ServiceState
+	store               *store.WorkReport
 }
 
 // WorkPackageSharingResponse is the response payload of CE-134
@@ -42,12 +44,14 @@ func NewWorkPackageSharingHandler(
 	refine refine.RefinePVMInvoker,
 	privateKey ed25519.PrivateKey,
 	serviceState service.ServiceState,
+	store *store.WorkReport,
 ) *WorkPackageSharingHandler {
 	return &WorkPackageSharingHandler{
 		privateKey:   privateKey,
 		auth:         auth,
 		refine:       refine,
 		serviceState: serviceState,
+		store:        store,
 	}
 }
 
@@ -117,6 +121,11 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 	workReport, err := results.ProduceWorkReport(h.refine, h.serviceState, authOutput, coreIndex, bundle, segmentRootLookup)
 	if err != nil {
 		return fmt.Errorf("failed to produce work report: %w", err)
+	}
+
+	err = h.store.PutWorkReport(workReport)
+	if err != nil {
+		return fmt.Errorf("failed to store work report: %w", err)
 	}
 
 	workReportHash, err := workReport.Hash()

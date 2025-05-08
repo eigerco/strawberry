@@ -18,6 +18,7 @@ import (
 	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/network/peer"
@@ -41,14 +42,16 @@ const (
 // - CE-134: share a work-package with other guarantors, run local refinement, collect wr hashes signatures
 // - CE-135: if enough signatures are gathered, broadcast the guaranteed work-report to validators
 type WorkReportGuarantor struct {
-	validatorIndex uint16
-	privateKey     ed25519.PrivateKey
-	guarantors     []*peer.Peer
-	mu             sync.RWMutex
-	auth           authorization.AuthPVMInvoker
-	refine         refine.RefinePVMInvoker
-	state          *state.State
-	peerSet        *peer.PeerSet
+	validatorIndex      uint16
+	privateKey          ed25519.PrivateKey
+	guarantors          []*peer.Peer
+	mu                  sync.RWMutex
+	auth                authorization.AuthPVMInvoker
+	refine              refine.RefinePVMInvoker
+	state               *state.State
+	peerSet             *peer.PeerSet
+	store               *store.WorkReport
+	workReportRequester *WorkReportRequester
 }
 
 // SegmentRootMapping It maps a work-package hash (h⊞) to the actual segment root (H).
@@ -89,14 +92,18 @@ func NewWorkReportGuarantor(
 	refine refine.RefinePVMInvoker,
 	state state.State,
 	peerSet *peer.PeerSet,
+	store *store.WorkReport,
+	requester *WorkReportRequester,
 ) *WorkReportGuarantor {
 	return &WorkReportGuarantor{
-		validatorIndex: validatorIndex,
-		privateKey:     privateKey,
-		auth:           auth,
-		refine:         refine,
-		state:          &state,
-		peerSet:        peerSet,
+		validatorIndex:      validatorIndex,
+		privateKey:          privateKey,
+		auth:                auth,
+		refine:              refine,
+		state:               &state,
+		peerSet:             peerSet,
+		store:               store,
+		workReportRequester: requester,
 	}
 }
 
@@ -221,6 +228,7 @@ func (h *WorkReportGuarantor) startLocalRefinement(
 	localResultCh chan<- localReportResult,
 ) {
 	defer wg.Done()
+
 	workReport, err := results.ProduceWorkReport(h.refine, h.state.Services, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
 	if err != nil {
 		localResultCh <- localReportResult{err: err}
@@ -229,6 +237,11 @@ func (h *WorkReportGuarantor) startLocalRefinement(
 	}
 
 	log.Println("local refinement finished")
+
+	err = h.store.PutWorkReport(workReport)
+	if err != nil {
+		log.Printf("failed to store work report: %v", err)
+	}
 
 	wrHash, err := workReport.Hash()
 	if err != nil {
@@ -319,7 +332,7 @@ func (h *WorkReportGuarantor) processWorkReports(
 		return fmt.Errorf("not enough matching signatures for any work-report hash")
 	}
 
-	var report block.WorkReport
+	var report *block.WorkReport
 	reportSet := false
 
 	var creds []block.CredentialSignature
@@ -329,14 +342,23 @@ func (h *WorkReportGuarantor) processWorkReports(
 			Signature:      s.Signature,
 		})
 		if s.Report != nil {
-			report = *s.Report
+			report = s.Report
 			reportSet = true
 		}
 	}
 
 	if !reportSet {
-		log.Println("fetching full work report from remote peer")
-		// TODO Need to fetch full work report by hash from remote peer CE-136
+		log.Println("local refinement failed or ignored, fetching full work report from remote peer")
+
+		fetched, err := h.fetchWorkReportByHash(ctx, winningGroup[0].WorkReportHash)
+		if err != nil {
+			return err
+		}
+		report = fetched
+	}
+
+	if report == nil {
+		return fmt.Errorf("failed to retrieve work report")
 	}
 
 	// sort by validator index (required by 11.25)
@@ -347,12 +369,32 @@ func (h *WorkReportGuarantor) processWorkReports(
 	log.Printf("total number of credentials gathered to guarantee work report: %d", len(creds))
 
 	guarantee := block.Guarantee{
-		WorkReport:  report,
+		WorkReport:  *report,
 		Timeslot:    jamtime.CurrentTimeslot(),
 		Credentials: creds,
 	}
 
 	return h.distributeGuaranteedWorkReport(ctx, guarantee)
+}
+
+// fetchWorkReportByHash attempts to retrieve a full work-report from any available co-guarantor.
+// It iterates over the known guarantors and sends a CE-136 request using the provided hash.
+func (h *WorkReportGuarantor) fetchWorkReportByHash(ctx context.Context, hash crypto.Hash) (*block.WorkReport, error) {
+	for _, p := range h.guarantors {
+		stream, err := p.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkReportRequest)
+		if err != nil {
+			log.Printf("failed to open stream to validator: %v", err)
+			continue
+		}
+		fetched, err := h.workReportRequester.RequestWorkReport(ctx, stream, hash)
+		if err != nil {
+			log.Printf("failed to fetch work report from validator : %v", err)
+			continue
+		}
+		return &fetched, nil
+	}
+
+	return nil, fmt.Errorf("failed to retrieve work report")
 }
 
 // collectSignedReports gathers signed work-report hashes from both local refinement and remote guarantors.
@@ -422,6 +464,7 @@ func (h *WorkReportGuarantor) collectSignedReports(
 			return grouped, ctx.Err()
 
 		case <-safeTimerC(timer):
+			log.Println("timer expired")
 			// Timer expired
 			return grouped, nil
 		}

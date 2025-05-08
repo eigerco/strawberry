@@ -11,7 +11,9 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/pkg/db/pebble"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/network/mocks"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -98,11 +100,16 @@ func TestHandleSharingStream_Success(t *testing.T) {
 		},
 	}
 
+	kvStore, err := pebble.NewKVStore()
+	require.NoError(t, err)
+	s := store.NewWorkReport(kvStore)
+
 	handler := handlers.NewWorkPackageSharingHandler(
 		mockAuthorizationInvoker{},
 		mockRefineInvoker{},
 		privKey,
 		serviceState,
+		s,
 	)
 
 	handler.SetCurrentCore(coreIndex)

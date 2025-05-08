@@ -15,8 +15,10 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/internal/work/results"
+	"github.com/eigerco/strawberry/pkg/db/pebble"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/network/mocks"
 	"github.com/eigerco/strawberry/pkg/network/peer"
@@ -114,7 +116,11 @@ func TestHandleWorkPackage(t *testing.T) {
 	}
 
 	peerKey, prv, _ := ed25519.GenerateKey(nil)
-	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet())
+	kvStore, err := pebble.NewKVStore()
+	require.NoError(t, err)
+	s := store.NewWorkReport(kvStore)
+
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil)
 	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer)
 
 	// Prepare the message data
@@ -318,7 +324,11 @@ func TestHandleStream_Success(t *testing.T) {
 		CoreAuthorizersPool: pool,
 	}
 
-	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet())
+	kvStore, err := pebble.NewKVStore()
+	require.NoError(t, err)
+	s := store.NewWorkReport(kvStore)
+
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil)
 
 	coreIndexBytes, err := jam.Marshal(coreIndex)
 	require.NoError(t, err)

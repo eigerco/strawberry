@@ -8,6 +8,7 @@ const (
 const (
 	prefixHeader byte = iota + 1
 	prefixBlock
+	prefixWorkReport
 	prefixTrieNode
 	prefixTrieNodeValue
 	prefixTrieNodeRefCount
@@ -23,6 +24,8 @@ func PrefixToString(p byte) string {
 		return "header"
 	case prefixBlock:
 		return "block"
+	case prefixWorkReport:
+		return "workReport"
 	case prefixTrieNode:
 		return "trieNode"
 	case prefixTrieNodeValue:
