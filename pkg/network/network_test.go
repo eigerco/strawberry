@@ -589,6 +589,8 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	peer5.ValidatorIndex = &index5
 	peerSet.AddPeer(peer5)
 
+	mainGuarantor.PeersSet = peerSet
+
 	// Set current + next validators in state (needed for distribution step)
 	var validators safrole.ValidatorsData
 	validators[4] = &crypto.ValidatorKey{
@@ -674,7 +676,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 		require.NoError(t, iter.Close())
 
-		report, err := reportStore.GetWorkReport(crypto.Hash(workReportHash))
+		report, err := mainGuarantor.RequestWorkReport(ctx, crypto.Hash(workReportHash), peer2.Ed25519Key)
 		require.NoError(t, err)
 
 		require.Equal(t, coreIndex, report.CoreIndex)
@@ -751,7 +753,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 		require.NoError(t, iter.Close())
 
-		report, err := reportStore.GetWorkReport(crypto.Hash(workReportHash))
+		report, err := mainGuarantor.RequestWorkReport(ctx, crypto.Hash(workReportHash), peer3.Ed25519Key)
 		require.NoError(t, err)
 
 		require.Equal(t, coreIndex, report.CoreIndex)
