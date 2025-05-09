@@ -309,11 +309,11 @@ func (n *Node) RequestWorkReport(ctx context.Context, hash crypto.Hash, peerKey 
 			return nil, fmt.Errorf("failed to open stream: %w", err)
 		}
 
-		blocks, err := n.workReportRequester.RequestWorkReport(ctx, stream, hash)
+		report, err := n.workReportRequester.RequestWorkReport(ctx, stream, hash)
 		if err != nil {
 			return nil, fmt.Errorf("failed to request work report from peer: %w", err)
 		}
-		return blocks, nil
+		return report, nil
 	}
 	return nil, fmt.Errorf("no peers available to request work report from")
 }
