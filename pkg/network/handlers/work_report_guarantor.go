@@ -42,17 +42,18 @@ const (
 // - CE-134: share a work-package with other guarantors, run local refinement, collect wr hashes signatures
 // - CE-135: if enough signatures are gathered, broadcast the guaranteed work-report to validators
 type WorkReportGuarantor struct {
-	validatorIndex              uint16
-	privateKey                  ed25519.PrivateKey
-	guarantors                  []*peer.Peer
-	mu                          sync.RWMutex
-	auth                        authorization.AuthPVMInvoker
-	refine                      refine.RefinePVMInvoker
-	state                       *state.State
-	peerSet                     *peer.PeerSet
-	store                       *store.WorkReport
-	workReportRequester         *WorkReportRequester
-	workPackageSharingRequester *WorkPackageSharingRequester
+	validatorIndex               uint16
+	privateKey                   ed25519.PrivateKey
+	guarantors                   []*peer.Peer
+	mu                           sync.RWMutex
+	auth                         authorization.AuthPVMInvoker
+	refine                       refine.RefinePVMInvoker
+	state                        *state.State
+	peerSet                      *peer.PeerSet
+	store                        *store.WorkReport
+	workReportRequester          *WorkReportRequester
+	workPackageSharingRequester  *WorkPackageSharingRequester
+	workReportDistributionSender *WorkReportDistributionSender
 }
 
 // SegmentRootMapping It maps a work-package hash (h⊞) to the actual segment root (H).
@@ -96,17 +97,19 @@ func NewWorkReportGuarantor(
 	store *store.WorkReport,
 	requester *WorkReportRequester,
 	workPackageSharingRequester *WorkPackageSharingRequester,
+	workReportDistributionSender *WorkReportDistributionSender,
 ) *WorkReportGuarantor {
 	return &WorkReportGuarantor{
-		validatorIndex:              validatorIndex,
-		privateKey:                  privateKey,
-		auth:                        auth,
-		refine:                      refine,
-		state:                       &state,
-		peerSet:                     peerSet,
-		store:                       store,
-		workReportRequester:         requester,
-		workPackageSharingRequester: workPackageSharingRequester,
+		validatorIndex:               validatorIndex,
+		privateKey:                   privateKey,
+		auth:                         auth,
+		refine:                       refine,
+		state:                        &state,
+		peerSet:                      peerSet,
+		store:                        store,
+		workReportRequester:          requester,
+		workPackageSharingRequester:  workPackageSharingRequester,
+		workReportDistributionSender: workReportDistributionSender,
 	}
 }
 
@@ -503,17 +506,8 @@ func (h *WorkReportGuarantor) buildSegmentRootMapping(pkg work.PackageBundle) []
 	return []SegmentRootMapping{}
 }
 
-// CE-135:
-// distribute guarantee to all current validators.
+// distribute guarantee to all current validators (CE-135)
 // If it’s the last core rotation in the epoch, also send it to next epoch validators.
-//
-// Guaranteed Work-Report = Work-Report ++ Slot ++ len++[Validator Index ++ Ed25519 Signature] (As in GP)
-//
-// Guarantor -> Validator
-//
-// --> Guaranteed Work-Report
-// --> FIN
-// <-- FIN
 func (h *WorkReportGuarantor) distributeGuaranteedWorkReport(
 	ctx context.Context,
 	guarantee block.Guarantee,
@@ -541,14 +535,11 @@ func (h *WorkReportGuarantor) distributeGuaranteedWorkReport(
 				return
 			}
 
-			if err := WriteMessageWithContext(ctx, stream, data); err != nil {
+			err = h.workReportDistributionSender.SendGuarantee(ctx, stream, valIndex, data)
+
+			if err != nil {
 				log.Printf("failed to send guarantee to validator %v: %v", valIndex, err)
 				return
-			}
-
-			err = stream.Close()
-			if err != nil {
-				log.Printf("failed to close stream to validator %v: %v", valIndex, err)
 			}
 
 			log.Printf("Sent guarantee to validator %v", valIndex)

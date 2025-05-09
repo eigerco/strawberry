@@ -206,7 +206,7 @@ func NewExtendedWorkPackageSubmissionHandler(fetcher *MockImportSegmentsFetcher)
 	return &ExtendedWorkPackageSubmissionHandler{
 		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(
 			fetcher,
-			handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, NewMockRefine([]byte("out")), chainState.State{Services: make(service.ServiceState)}, peer.NewPeerSet(), nil, nil, nil)),
+			handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, NewMockRefine([]byte("out")), chainState.State{Services: make(service.ServiceState)}, peer.NewPeerSet(), nil, nil, nil, nil)),
 		MockFetcher: fetcher,
 	}
 }
@@ -631,7 +631,18 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 		remoteGuarantor3.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkReportRequest, handlers.NewWorkReportRequestHandler(reportStore))
 
 		// TODO: remove mocks in this e2e test
-		mainGuarantor.WorkReportGuarantor = handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, NewMockRefine([]byte("out")), currentState, peerSet, reportStore, requester, handlers.NewWorkPackageSharingRequester())
+		mainGuarantor.WorkReportGuarantor = handlers.NewWorkReportGuarantor(
+			uint16(1),
+			prv,
+			mockAuthorizationInvoker{},
+			NewMockRefine([]byte("out")),
+			currentState,
+			peerSet,
+			reportStore,
+			requester,
+			handlers.NewWorkPackageSharingRequester(),
+			handlers.NewWorkReportDistributionSender(),
+		)
 
 		submissionHandler := handlers.NewWorkPackageSubmissionHandler(
 			&MockImportSegmentsFetcher{},
@@ -696,7 +707,18 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 		// produce different work report/hash locally, this will result to fetch and use remote work report
 		// TODO: remove mocks in this e2e test
-		mainGuarantor.WorkReportGuarantor = handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, NewMockRefine([]byte("different output")), currentState, peerSet, reportStore, requester, handlers.NewWorkPackageSharingRequester())
+		mainGuarantor.WorkReportGuarantor = handlers.NewWorkReportGuarantor(
+			uint16(1),
+			prv,
+			mockAuthorizationInvoker{},
+			NewMockRefine([]byte("different output")),
+			currentState,
+			peerSet,
+			reportStore,
+			requester,
+			handlers.NewWorkPackageSharingRequester(),
+			handlers.NewWorkReportDistributionSender(),
+		)
 
 		submissionHandler := handlers.NewWorkPackageSubmissionHandler(
 			&MockImportSegmentsFetcher{},

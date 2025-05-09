@@ -127,7 +127,9 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 		peerSet,
 		wrStore,
 		workReportRequester,
-		handlers.NewWorkPackageSharingRequester())
+		handlers.NewWorkPackageSharingRequester(),
+		handlers.NewWorkReportDistributionSender(),
+	)
 	node.WorkReportGuarantor = wpSharerHandler
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}, wpSharerHandler))
