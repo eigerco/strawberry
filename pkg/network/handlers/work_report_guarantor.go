@@ -42,16 +42,17 @@ const (
 // - CE-134: share a work-package with other guarantors, run local refinement, collect wr hashes signatures
 // - CE-135: if enough signatures are gathered, broadcast the guaranteed work-report to validators
 type WorkReportGuarantor struct {
-	validatorIndex      uint16
-	privateKey          ed25519.PrivateKey
-	guarantors          []*peer.Peer
-	mu                  sync.RWMutex
-	auth                authorization.AuthPVMInvoker
-	refine              refine.RefinePVMInvoker
-	state               *state.State
-	peerSet             *peer.PeerSet
-	store               *store.WorkReport
-	workReportRequester *WorkReportRequester
+	validatorIndex              uint16
+	privateKey                  ed25519.PrivateKey
+	guarantors                  []*peer.Peer
+	mu                          sync.RWMutex
+	auth                        authorization.AuthPVMInvoker
+	refine                      refine.RefinePVMInvoker
+	state                       *state.State
+	peerSet                     *peer.PeerSet
+	store                       *store.WorkReport
+	workReportRequester         *WorkReportRequester
+	workPackageSharingRequester *WorkPackageSharingRequester
 }
 
 // SegmentRootMapping It maps a work-package hash (h⊞) to the actual segment root (H).
@@ -94,16 +95,18 @@ func NewWorkReportGuarantor(
 	peerSet *peer.PeerSet,
 	store *store.WorkReport,
 	requester *WorkReportRequester,
+	workPackageSharingRequester *WorkPackageSharingRequester,
 ) *WorkReportGuarantor {
 	return &WorkReportGuarantor{
-		validatorIndex:      validatorIndex,
-		privateKey:          privateKey,
-		auth:                auth,
-		refine:              refine,
-		state:               &state,
-		peerSet:             peerSet,
-		store:               store,
-		workReportRequester: requester,
+		validatorIndex:              validatorIndex,
+		privateKey:                  privateKey,
+		auth:                        auth,
+		refine:                      refine,
+		state:                       &state,
+		peerSet:                     peerSet,
+		store:                       store,
+		workReportRequester:         requester,
+		workPackageSharingRequester: workPackageSharingRequester,
 	}
 }
 
@@ -286,7 +289,7 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 	}
 	validatorIndex := *g.ValidatorIndex
 
-	response, err := h.sendWorkPackage(ctx, g, coreIndex, segments, bundleBytes)
+	response, err := h.workPackageSharingRequester.SendRequest(ctx, g, coreIndex, segments, bundleBytes)
 	if err != nil {
 		guaranteeCh <- guaranteeResponse{err: err}
 		log.Printf("Failed to complete work package exchange with peer %v: %v", validatorIndex, err)
@@ -498,82 +501,6 @@ func safeTimerC(t *time.Timer) <-chan time.Time {
 // TODO: Build segment-root mappings based on historical data
 func (h *WorkReportGuarantor) buildSegmentRootMapping(pkg work.PackageBundle) []SegmentRootMapping {
 	return []SegmentRootMapping{}
-}
-
-// CE 134: sendWorkPackage sends 2 messages to another guarantor and closes the stream:
-//
-// --> Core Index ++ Segments-Root Mappings
-//   - Informs the receiving guarantor which core this work-package belongs to.
-//   - Provides the mapping between imported segment hashes and their Merkle roots.
-//   - This mapping is used during refinement to validate imported segments.
-//
-// --> Work-Package Bundle
-//   - Contains the actual work-package bundle and any associated extrinsics.
-//
-// --> FIN
-//   - Closes the stream after sending both messages. The response is expected before finalization.
-//
-// <-- Work-Report Hash ++ Ed25519 Signature
-//   - The receiving guarantor performs refinement and responds with:
-//   - The hash of the resulting work-report.
-//   - Their Ed25519 signature over the hash.
-//   - This response is used to help assemble a guaranteed work-report.
-//
-// <-- FIN
-//   - The stream is closed after the response is read and decoded.
-//
-// Returns:
-// - A `workPackageSharingResponse` containing the signed hash of the refined work-report.
-// - An error if sending, receiving, decoding, or stream closure fails.
-func (h *WorkReportGuarantor) sendWorkPackage(
-	ctx context.Context,
-	g *peer.Peer,
-	coreIndex uint16,
-	imported []SegmentRootMapping,
-	bundleBytes []byte,
-) (*workPackageSharingResponse, error) {
-	msg1, err := jam.Marshal(struct {
-		CoreIndex          uint16
-		SegmentRootMapping []SegmentRootMapping
-	}{
-		CoreIndex:          coreIndex,
-		SegmentRootMapping: imported,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal first message: %w", err)
-	}
-
-	stream, err := g.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageShare)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open stream: %v", err)
-	}
-
-	// 1st: “CoreIndex ++ Segments-Root Mappings”
-	if err = WriteMessageWithContext(ctx, stream, msg1); err != nil {
-		return nil, fmt.Errorf("failed to send first message: %w", err)
-	}
-
-	// 2nd: “Work-Package Bundle”
-	if err = WriteMessageWithContext(ctx, stream, bundleBytes); err != nil {
-		return nil, fmt.Errorf("failed to send WP bundle: %w", err)
-	}
-
-	if err := stream.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close stream: %w", err)
-	}
-
-	// Handle CE-134 response from the receiving guarantor
-	msg, err := ReadMessageWithContext(ctx, stream)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var response workPackageSharingResponse
-	if err := jam.Unmarshal(msg.Content, &response); err != nil {
-		return nil, fmt.Errorf("failed to decode CE-134 response: %w", err)
-	}
-
-	return &response, nil
 }
 
 // CE-135:

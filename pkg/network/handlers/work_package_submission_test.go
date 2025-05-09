@@ -120,7 +120,7 @@ func TestHandleWorkPackage(t *testing.T) {
 	require.NoError(t, err)
 	s := store.NewWorkReport(kvStore)
 
-	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil)
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil, nil)
 	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer)
 
 	// Prepare the message data
@@ -328,7 +328,7 @@ func TestHandleStream_Success(t *testing.T) {
 	require.NoError(t, err)
 	s := store.NewWorkReport(kvStore)
 
-	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil)
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil, nil)
 
 	coreIndexBytes, err := jam.Marshal(coreIndex)
 	require.NoError(t, err)
