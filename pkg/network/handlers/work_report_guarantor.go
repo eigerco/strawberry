@@ -238,11 +238,6 @@ func (h *WorkReportGuarantor) startLocalRefinement(
 
 	log.Println("local refinement finished")
 
-	err = h.store.PutWorkReport(workReport)
-	if err != nil {
-		log.Printf("failed to store work report: %v", err)
-	}
-
 	wrHash, err := workReport.Hash()
 	if err != nil {
 		localResultCh <- localReportResult{err: err}
@@ -358,8 +353,10 @@ func (h *WorkReportGuarantor) processWorkReports(
 		report = fetched
 	}
 
-	if report == nil {
-		return fmt.Errorf("failed to retrieve work report")
+	// at this point we have a valid work-report and we should store it
+	err := h.store.PutWorkReport(*report)
+	if err != nil {
+		log.Printf("failed to store work report: %v", err)
 	}
 
 	// sort by validator index (required by 11.25)
