@@ -11,7 +11,7 @@ import (
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 )
 
-func TestPutAndGetWorkReport(t *testing.T) {
+func TestWorkReportStore(t *testing.T) {
 	db, err := pebble.NewKVStore()
 	require.NoError(t, err)
 
@@ -53,4 +53,11 @@ func TestPutAndGetWorkReport(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, workReport, actual)
+
+	err = reportStore.DeleteWorkReport(hash)
+	require.NoError(t, err)
+
+	_, err = reportStore.GetWorkReport(hash)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrWorkReportNotFound)
 }

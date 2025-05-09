@@ -11,6 +11,8 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
+var ErrWorkReportNotFound = errors.New("work-report not found")
+
 // WorkReport manages work reports storage using a key-value store
 type WorkReport struct {
 	db.KVStore
@@ -41,7 +43,7 @@ func (c *WorkReport) GetWorkReport(h crypto.Hash) (block.WorkReport, error) {
 	b, err := c.Get(makeKey(prefixWorkReport, h[:]))
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return block.WorkReport{}, errors.New("work-report not found")
+			return block.WorkReport{}, ErrWorkReportNotFound
 		}
 		return block.WorkReport{}, err
 	}
@@ -53,4 +55,8 @@ func (c *WorkReport) GetWorkReport(h crypto.Hash) (block.WorkReport, error) {
 	}
 
 	return report, nil
+}
+
+func (c *WorkReport) DeleteWorkReport(h crypto.Hash) error {
+	return c.Delete(makeKey(prefixWorkReport, h[:]))
 }
