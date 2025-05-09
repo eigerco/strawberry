@@ -42,3 +42,36 @@ func (h *WorkReportDistributionHandler) HandleStream(ctx context.Context, stream
 
 	return nil
 }
+
+type WorkReportDistributionSender struct{}
+
+func NewWorkReportDistributionSender() *WorkReportDistributionSender {
+	return &WorkReportDistributionSender{}
+}
+
+// SendGuarantee handles CE-135 and sends guaranteed work report to validator
+//
+// Guaranteed Work-Report = Work-Report ++ Slot ++ len++[Validator Index ++ Ed25519 Signature] (As in GP)
+//
+// Guarantor -> Validator
+//
+// --> Guaranteed Work-Report
+// --> FIN
+// <-- FIN
+func (s *WorkReportDistributionSender) SendGuarantee(
+	ctx context.Context,
+	stream quic.Stream,
+	validatorIndex uint16,
+	guaranteeData []byte,
+) error {
+	if err := WriteMessageWithContext(ctx, stream, guaranteeData); err != nil {
+		return fmt.Errorf("failed to send guarantee to validator %v: %w", validatorIndex, err)
+	}
+
+	err := stream.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close stream to validator %v: %w", validatorIndex, err)
+	}
+
+	return nil
+}
