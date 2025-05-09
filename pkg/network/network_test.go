@@ -17,6 +17,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -606,6 +607,13 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 	requester := handlers.NewWorkReportRequester()
 
+	mockRefine := NewMockRefine([]byte("out"))
+	expectedWorkReport, err := results.ProduceWorkReport(mockRefine, getServiceState(), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
+	require.NoError(t, err)
+
+	expectedWorkReportHash, err := expectedWorkReport.Hash()
+	require.NoError(t, err)
+
 	t.Run("success", func(t *testing.T) {
 		// start with an empty store
 		kvStore, err := pebble.NewKVStore()
@@ -615,7 +623,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 		// TODO: remove mocks in this e2e test
 		mockPVMSharingHandler := handlers.NewWorkPackageSharingHandler(
 			mockAuthorizationInvoker{},
-			NewMockRefine([]byte("out")),
+			mockRefine,
 			prv,
 			serviceState,
 			reportStore,
@@ -637,7 +645,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 			uint16(1),
 			prv,
 			mockAuthorizationInvoker{},
-			NewMockRefine([]byte("out")),
+			mockRefine,
 			currentState,
 			peerSet,
 			reportStore,
@@ -661,25 +669,10 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 		time.Sleep(500 * time.Millisecond)
 
-		// make sure that work report stored
-		iter, err := kvStore.NewIterator(nil, nil)
+		report, err := mainGuarantor.RequestWorkReport(ctx, expectedWorkReportHash, peer2.Ed25519Key)
 		require.NoError(t, err)
 
-		// move iterator
-		require.True(t, iter.Next())
-
-		key := iter.Key()
-		require.Len(t, key, 1+crypto.HashSize) // 1+HashSize because of the prefix byte
-
-		// remove the prefix byte
-		workReportHash := key[1:]
-
-		require.NoError(t, iter.Close())
-
-		report, err := mainGuarantor.RequestWorkReport(ctx, crypto.Hash(workReportHash), peer2.Ed25519Key)
-		require.NoError(t, err)
-
-		require.Equal(t, coreIndex, report.CoreIndex)
+		require.Equal(t, &expectedWorkReport, report)
 	})
 	t.Run("success_local_ignored", func(t *testing.T) {
 		// start with an empty store
@@ -690,7 +683,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 		// TODO: remove mocks in this e2e test
 		mockPVMSharingHandler := handlers.NewWorkPackageSharingHandler(
 			mockAuthorizationInvoker{},
-			NewMockRefine([]byte("out")),
+			mockRefine,
 			prv,
 			serviceState,
 			reportStore,
@@ -713,7 +706,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 			uint16(1),
 			prv,
 			mockAuthorizationInvoker{},
-			NewMockRefine([]byte("different output")),
+			NewMockRefine([]byte("different output")), // produce different hash in local refinement
 			currentState,
 			peerSet,
 			reportStore,
@@ -738,27 +731,11 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 		time.Sleep(500 * time.Millisecond)
 
-		// make sure that work report stored
-		iter, err := kvStore.NewIterator(nil, nil)
+		report, err := mainGuarantor.RequestWorkReport(ctx, expectedWorkReportHash, peer2.Ed25519Key)
 		require.NoError(t, err)
 
-		// move iterator
-		require.True(t, iter.Next())
-
-		key := iter.Key()
-		require.Len(t, key, 1+crypto.HashSize) // 1+HashSize because of the prefix byte
-
-		// remove the prefix byte
-		workReportHash := key[1:]
-
-		require.NoError(t, iter.Close())
-
-		report, err := mainGuarantor.RequestWorkReport(ctx, crypto.Hash(workReportHash), peer3.Ed25519Key)
-		require.NoError(t, err)
-
-		require.Equal(t, coreIndex, report.CoreIndex)
+		require.Equal(t, &expectedWorkReport, report)
 	})
-
 }
 
 func getServiceState() service.ServiceState {
