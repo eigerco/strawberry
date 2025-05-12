@@ -1,10 +1,10 @@
 //go:build integration
+
 // Genesis state, block and keys adapted from: https://github.com/jam-duna/jamtestnet
 package simulation
 
 import (
 	"bytes"
-	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -16,7 +16,6 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
@@ -24,6 +23,7 @@ import (
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/testutils"
+	jsonutils "github.com/eigerco/strawberry/internal/testutils/json"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 )
@@ -36,18 +36,17 @@ func TestSimulateSAFROLE(t *testing.T) {
 	var keys []ValidatorKeys
 	err = json.Unmarshal(data, &keys)
 	require.NoError(t, err)
-	data, err = os.ReadFile("genesis-state-tiny.json")
-	require.NoError(t, err)
 
 	// Genesis state.
-	var simState SimulationState
-	err = json.Unmarshal(data, &simState)
+	data, err = os.ReadFile("genesis-state-tiny.json")
 	require.NoError(t, err)
-	currentState := toState(t, simState)
-	data, err = os.ReadFile("genesis-block-tiny.json")
-	require.NoError(t, err)
+	var currentState *state.State
+	restoredState := jsonutils.RestoreStateSnapshot(data)
+	currentState = &restoredState
 
 	// Gensesis block.
+	data, err = os.ReadFile("genesis-block-tiny.json")
+	require.NoError(t, err)
 	var genesisSimBlock SimulationBlock
 	err = json.Unmarshal(data, &genesisSimBlock)
 	currentBlock := toBlock(t, genesisSimBlock)
@@ -60,7 +59,10 @@ func TestSimulateSAFROLE(t *testing.T) {
 		err := db.Close()
 		require.NoError(t, err, "failed to close db")
 	}()
-	trie := store.NewTrie(db)
+	trieDB := store.NewTrie(db)
+	require.NoError(t, err)
+
+	chainDB := store.NewChain(db)
 	require.NoError(t, err)
 
 	initialTimeslot := 12
@@ -151,7 +153,7 @@ func TestSimulateSAFROLE(t *testing.T) {
 			currentTimeslot,
 			headerHash,
 			currentState,
-			trie,
+			trieDB,
 			slotLeaderKey,
 			ticketProofs,
 		)
@@ -160,35 +162,12 @@ func TestSimulateSAFROLE(t *testing.T) {
 		t.Logf("block prior state root: %v", hex.EncodeToString(newBlock.Header.PriorStateRoot[:]))
 		t.Logf("block parent hash: %v", hex.EncodeToString(newBlock.Header.ParentHash[:]))
 
-		// Update the SAFROLE state.
-		entropyHash, err := bandersnatch.OutputHash(newBlock.Header.VRFSignature)
-		require.NoError(t, err)
-
-		safroleInput := statetransition.SafroleInput{
-			TimeSlot: currentTimeslot,
-			Entropy:  entropyHash,
-			Tickets:  newBlock.Extrinsic.ET.TicketProofs,
-		}
-
-		newEntropyPool, newValidatorState, safroleOutput, err := statetransition.UpdateSafroleState(
-			safroleInput,
-			currentState.TimeslotIndex,
-			currentState.EntropyPool,
-			currentState.ValidatorState,
-			currentState.PastJudgements.OffendingValidators,
+		// Update state
+		statetransition.UpdateState(
+			currentState,
+			newBlock,
+			chainDB,
 		)
-		require.NoError(t, err)
-
-		// Verify that the epoch marker is correct.
-		require.Equal(t, safroleOutput.EpochMark, newBlock.Header.EpochMarker)
-
-		// Verify that the winning ticket marker is correct.
-		require.Equal(t, safroleOutput.WinningTicketMark, newBlock.Header.WinningTicketsMarker)
-
-		// Update the current state and block.
-		currentState.TimeslotIndex = currentTimeslot
-		currentState.EntropyPool = newEntropyPool
-		currentState.ValidatorState = newValidatorState
 
 		currentBlock = newBlock
 	}
@@ -436,142 +415,6 @@ func toBlock(t *testing.T, simBlock SimulationBlock) block.Block {
 	}
 
 	return b
-}
-
-// Helper too convert a SimulationState to a State.
-func toState(t *testing.T, s SimulationState) *state.State {
-	currentValidators := safrole.ValidatorsData{}
-	for i, vd := range s.Kappa {
-		currentValidators[i] = &crypto.ValidatorKey{
-			Bandersnatch: crypto.BandersnatchPublicKey(testutils.MustFromHex(t, vd.Bandersnatch)),
-			Ed25519:      ed25519.PublicKey(testutils.MustFromHex(t, vd.Ed25519)),
-			Bls:          crypto.BlsKey(testutils.MustFromHex(t, vd.Bls)),
-			Metadata:     crypto.MetadataKey(testutils.MustFromHex(t, vd.Metadata)),
-		}
-	}
-
-	archivedValidators := safrole.ValidatorsData{}
-	for i, vd := range s.Lambda {
-		archivedValidators[i] = &crypto.ValidatorKey{
-			Bandersnatch: crypto.BandersnatchPublicKey(testutils.MustFromHex(t, vd.Bandersnatch)),
-			Ed25519:      ed25519.PublicKey(testutils.MustFromHex(t, vd.Ed25519)),
-			Bls:          crypto.BlsKey(testutils.MustFromHex(t, vd.Bls)),
-			Metadata:     crypto.MetadataKey(testutils.MustFromHex(t, vd.Metadata)),
-		}
-	}
-
-	queuedValidators := safrole.ValidatorsData{}
-	for i, vd := range s.Iota {
-		queuedValidators[i] = &crypto.ValidatorKey{
-			Bandersnatch: crypto.BandersnatchPublicKey(testutils.MustFromHex(t, vd.Bandersnatch)),
-			Ed25519:      ed25519.PublicKey(testutils.MustFromHex(t, vd.Ed25519)),
-			Bls:          crypto.BlsKey(testutils.MustFromHex(t, vd.Bls)),
-			Metadata:     crypto.MetadataKey(testutils.MustFromHex(t, vd.Metadata)),
-		}
-	}
-
-	nextValidators := safrole.ValidatorsData{}
-	for i, vd := range s.Gamma.GammaK {
-		nextValidators[i] = &crypto.ValidatorKey{
-			Bandersnatch: crypto.BandersnatchPublicKey(testutils.MustFromHex(t, vd.Bandersnatch)),
-			Ed25519:      ed25519.PublicKey(testutils.MustFromHex(t, vd.Ed25519)),
-			Bls:          crypto.BlsKey(testutils.MustFromHex(t, vd.Bls)),
-			Metadata:     crypto.MetadataKey(testutils.MustFromHex(t, vd.Metadata)),
-		}
-	}
-
-	ticketAccumulator := make([]block.Ticket, len(s.Gamma.GammaA))
-	for i, tb := range s.Gamma.GammaA {
-		ticketAccumulator[i] = block.Ticket{
-			Identifier: crypto.BandersnatchOutputHash(testutils.MustFromHex(t, tb.ID)),
-			EntryIndex: tb.Attempt,
-		}
-	}
-
-	ticketOrKeys := safrole.SealingKeys{}
-	if len(s.Gamma.GammaS.Keys) > 0 {
-		keys := crypto.EpochKeys{}
-		for i, k := range s.Gamma.GammaS.Keys {
-			keys[i] = crypto.BandersnatchPublicKey(testutils.MustFromHex(t, k))
-		}
-		ticketOrKeys.SetValue(keys)
-	} else if len(s.Gamma.GammaS.Tickets) > 0 {
-		tickets := safrole.TicketsBodies{}
-		for i, tb := range s.Gamma.GammaS.Tickets {
-			tickets[i] = block.Ticket{
-				Identifier: crypto.BandersnatchOutputHash(testutils.MustFromHex(t, tb.ID)),
-				EntryIndex: tb.Attempt,
-			}
-		}
-		ticketOrKeys.SetValue(tickets)
-	} else {
-		t.Fatal("missing tickets or keys for gamma_s")
-	}
-
-	entropyPool := state.EntropyPool{}
-	for i, e := range s.Eta {
-		entropyPool[i] = crypto.Hash(testutils.MustFromHex(t, e))
-	}
-
-	return &state.State{
-		TimeslotIndex: jamtime.Timeslot(s.Tau),
-		EntropyPool:   entropyPool,
-		ValidatorState: validator.ValidatorState{
-			CurrentValidators:  currentValidators,
-			ArchivedValidators: archivedValidators,
-			QueuedValidators:   queuedValidators,
-			SafroleState: safrole.State{
-				NextValidators:    nextValidators,
-				TicketAccumulator: ticketAccumulator,
-				SealingKeySeries:  ticketOrKeys,
-				RingCommitment:    crypto.RingCommitment(testutils.MustFromHex(t, s.Gamma.GammaZ)),
-			},
-		},
-	}
-}
-
-// Only these fields are needed for now. To be expanded as our test add more of the state.
-type SimulationState struct {
-	Gamma struct {
-		GammaK []struct {
-			Bandersnatch string `json:"bandersnatch"`
-			Ed25519      string `json:"ed25519"`
-			Bls          string `json:"bls"`
-			Metadata     string `json:"metadata"`
-		} `json:"gamma_k"`
-		GammaZ string `json:"gamma_z"`
-		GammaS struct {
-			Keys    []string `json:"keys"`
-			Tickets []struct {
-				ID      string `json:"id"`
-				Attempt uint8  `json:"attempt"`
-			} `json:"tickets"`
-		} `json:"gamma_s"`
-		GammaA []struct {
-			ID      string `json:"id"`
-			Attempt uint8  `json:"attempt"`
-		} `json:"gamma_a"`
-	} `json:"gamma"`
-	Eta  []string `json:"eta"`
-	Iota []struct {
-		Bandersnatch string `json:"bandersnatch"`
-		Ed25519      string `json:"ed25519"`
-		Bls          string `json:"bls"`
-		Metadata     string `json:"metadata"`
-	} `json:"iota"`
-	Kappa []struct {
-		Bandersnatch string `json:"bandersnatch"`
-		Ed25519      string `json:"ed25519"`
-		Bls          string `json:"bls"`
-		Metadata     string `json:"metadata"`
-	} `json:"kappa"`
-	Lambda []struct {
-		Bandersnatch string `json:"bandersnatch"`
-		Ed25519      string `json:"ed25519"`
-		Bls          string `json:"bls"`
-		Metadata     string `json:"metadata"`
-	} `json:"lambda"`
-	Tau int `json:"tau"`
 }
 
 // Only these fields are needed for now. Extrinsics will be added as we need them.
