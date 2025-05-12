@@ -113,18 +113,8 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	// Assurance hook, triggers the assurance process for the newly added guarantees from the block extrinsic (EG)
 	// iterates over each guarantee and requests the shards with self validator index
 	// from the validators identified in the guarantee extrinsic
-	announcementHandler.AddOnBlockReceiveHook(func(ctx context.Context, block block.Block) {
-		select {
-		case <-ctx.Done():
-			log.Printf("failed to get the shards for assurance: %s", ctx.Err())
-		default:
-			for _, guarantee := range block.Extrinsic.EG.Guarantees {
-				if err := node.GetGuaranteedShardsAndStore(nodeCtx, guarantee); err != nil {
-					log.Printf("failed get the shards and store: %s", err)
-				}
-			}
-		}
-	})
+	announcementHandler.AddOnBlockReceiveHook(node.onBlockReceivedDistributeShards)
+
 	protoManager.Registry.RegisterHandler(protocol.StreamKindBlockAnnouncement, announcementHandler)
 
 	node.blockRequester = &handlers.BlockRequester{}
@@ -507,6 +497,19 @@ func (n *Node) ValidateConnection(tlsState tls.ConnectionState) error {
 // versions and variants for this node.
 func (n *Node) GetProtocols() []string {
 	return n.ProtocolManager.GetProtocols()
+}
+
+func (n *Node) onBlockReceivedDistributeShards(ctx context.Context, block block.Block) {
+	select {
+	case <-ctx.Done():
+		log.Printf("failed to get the shards for assurance: %s", ctx.Err())
+	default:
+		for _, guarantee := range block.Extrinsic.EG.Guarantees {
+			if err := n.GetGuaranteedShardsAndStore(n.Context, guarantee); err != nil {
+				log.Printf("failed get the shards and store: %s", err)
+			}
+		}
+	}
 }
 
 // GetGuaranteedShardsAndStore requests the shards from the appropriate guarantors,

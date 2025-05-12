@@ -1,5 +1,3 @@
-//go:build integration
-
 package network_test
 
 import (
@@ -910,7 +908,7 @@ func connectPeer(t *testing.T, nodes []*node.Node, fromIndex, toIndex uint16) *p
 	fromPeer := nodes[fromIndex].PeersSet.GetByAddress(toAddr.String())
 	require.NotNil(t, fromPeer, "Node1 should have Node2 as a peer")
 
-	// Manually set the ValidatorIndex so that later we cat identify the peer using PeersSet.GetByValidatorIndex()
+	// Manually set the ValidatorIndex so that later we can identify the peer using PeersSet.GetByValidatorIndex()
 	fromPeer.ValidatorIndex = &nodes[toIndex].ValidatorManager.Index
 
 	nodes[fromIndex].PeersSet.AddPeer(fromPeer)
