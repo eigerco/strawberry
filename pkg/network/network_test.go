@@ -705,8 +705,17 @@ func TestTwoNodesDistributeShard(t *testing.T) {
 	node2Peer := node1.PeersSet.GetByAddress(node2Addr.String())
 	require.NotNil(t, node2Peer, "Node1 should have Node2 as a peer")
 
+	report := block.WorkReport{
+		CoreIndex: 3,
+		WorkPackageSpecification: block.WorkPackageSpecification{
+			ErasureRoot: erasureRoot,
+		},
+	}
+
+	node1.ValidatorManager.Index = 1
+
 	// Send shards and justification
-	bundleShard, segmentShard, justification, err := node1.ShardDistributionSend(ctx, node2Peer.Ed25519Key, erasureRoot, shardIndex)
+	bundleShard, segmentShard, justification, err := node1.ShardDistributionSend(ctx, node2Peer.Ed25519Key, report)
 	require.NoError(t, err)
 	assert.Equal(t, expectedBundleShard, bundleShard)
 	assert.Equal(t, expectedSegmentShard, segmentShard)
