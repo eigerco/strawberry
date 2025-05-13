@@ -1,10 +1,12 @@
 package network_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -890,4 +892,119 @@ func TestTwoNodesSegmentJustificationShard(t *testing.T) {
 	}
 
 	t.Log("Segments shards have been sent")
+}
+
+// TestTwoNodesStateRequest tests the state request functionality between two nodes
+func TestTwoNodesStateRequest(t *testing.T) {
+	// Create contexts for both nodes
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	nodes := setupNodes(ctx, t, chainState.State{}, 2)
+	node1 := nodes[0]
+	node2 := nodes[1]
+
+	// Create trie with keys and values
+	keys, values := setupTestKeys()
+	pairs := make([][2][]byte, len(keys))
+	for i := range keys {
+		pairs[i] = [2][]byte{keys[i], values[i]}
+	}
+	// Store the trie in node2's state trie
+	hash, err := node2.StateTrieStore.MerklizeAndCommit(pairs)
+	require.NoError(t, err)
+
+	// Start both nodes
+	err = node1.Start()
+	require.NoError(t, err)
+	defer stopNode(t, node1)
+
+	err = node2.Start()
+	require.NoError(t, err)
+	defer stopNode(t, node2)
+
+	// Allow time for the nodes to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Connect node1 to node2
+	node2Addr, err := peer.NewPeerAddressFromMetadata(nodes[1].ValidatorManager.State.CurrentValidators[1].Metadata[:])
+	require.NoError(t, err)
+	err = node1.ConnectToPeer(node2Addr)
+	require.NoError(t, err)
+
+	// Wait for connection to be established
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify nodes are connected
+	node2Peer := node1.PeersSet.GetByAddress(node2Addr.String())
+	require.NotNil(t, node2Peer, "Node1 should have Node2 as a peer")
+
+	// Node 1 requests state from Node 2
+	// Send state request with start key = 3, end key = 4
+	// This should return keys 3 and 4, with their values and 5 boundary nodes
+	stateResponse, err := node1.RequestState(ctx, hash, toFixed31Byte(keys[2]), toFixed31Byte(keys[3]), uint32(10000000), node2Peer.Ed25519Key)
+	require.NoError(t, err)
+	require.Len(t, stateResponse.Pairs, 2)
+	require.Equal(t, stateResponse.Pairs[0].Key, toFixed31Byte(keys[2]))
+	require.Equal(t, stateResponse.Pairs[0].Value, values[2])
+	require.Equal(t, stateResponse.Pairs[1].Key, toFixed31Byte(keys[3]))
+	require.Equal(t, stateResponse.Pairs[1].Value, values[3])
+	require.Equal(t, len(stateResponse.BoundaryNodes), 5)
+}
+
+// setupTestKeys creates test keys and values with a predictable binary trie structure
+func toFixed31Byte(slice []byte) [31]byte {
+	var fixed [31]byte
+	copy(fixed[:], slice)
+	return fixed
+}
+
+// setupTestKeys creates test keys and values with a predictable binary trie structure
+/*
+                          			  ROOT
+                 	   /           	             \
+           LEFT BRANCH(0)    		    		 RIGHT BRANCH(1)
+            /        \       		         /       			   \
+      0x01(00)      0x41(01) 		 LEFT BRANCH(10) 			RIGHT RIGHT BRANCH(11)
+                      		         /          \    			    /          \
+                      		   0x81(100)     0xA1(101) 		0xC1(110)  RIGHT RIGHT RIGHT BRANCH(111)
+                      		                             		         /          \
+                      		                       	     		  0xE1(1110)     0xFF(1111)
+
+Keys:
+0x01 - 0000 0001 - Key 1 - Path: 00 (Left, Left)
+0x41 - 0100 0001 - Key 2 - Path: 01 (Left, Right)
+0x81 - 1000 0001 - Key 3 - Path: 100 (Right, Left, Left)
+0xA1 - 1010 0001 - Key 4 - Path: 101 (Right, Left, Right)
+0xC1 - 1100 0001 - Key 5 - Path: 110 (Right, Right, Left)
+0xE1 - 1110 0001 - Key 6 - Path: 1110 (Right, Right, Right, Left)
+0xFF - 1111 1111 - Key 7 - Path: 1111 (Right, Right, Right, Right)
+*/
+
+func setupTestKeys() ([][]byte, [][]byte) {
+	// Create keys with a structure that ensures a binary tree with various depths
+	// Keys are designed to create a deeper structure on the right side
+	keys := [][]byte{
+		{0x01, 0x01, 0x01}, // 0000 0001 ... - Path starts with 0 (Left, Left branch)
+		{0x41, 0x01, 0x01}, // 0100 0001 ... - Path starts with 0 (Left, Right branch)
+		{0x81, 0x01, 0x01}, // 1000 0001 ... - Path starts with 1 (Right, Left branch)
+		{0xA1, 0x01, 0x01}, // 1010 0001 ... - Path starts with 1 (Right, Left, Right branch)
+		{0xC1, 0x01, 0x01}, // 1100 0001 ... - Path starts with 1 (Right, Right, Left branch)
+		{0xE1, 0x01, 0x01}, // 1110 0001 ... - Path starts with 1 (Right. Right, Right, Left branch)
+		{0xFF, 0x01, 0x01}, // 1111 1111 ... - Path starts with 1 (Right, Right, Right, Right branch)
+	}
+
+	// Pad keys to full length (31 bytes for the trie)
+	for i := range keys {
+		keys[i] = append(keys[i], bytes.Repeat([]byte{0x00}, 32-len(keys[i]))...)
+	}
+
+	// Create values with known sizes
+	fixedValueSize := 16
+	values := make([][]byte, len(keys))
+	for i := range values {
+		values[i] = fmt.Appendf(nil, "Value-%d-%s", i, strings.Repeat("X", fixedValueSize-8))
+	}
+
+	return keys, values
 }

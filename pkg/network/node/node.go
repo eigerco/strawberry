@@ -46,13 +46,14 @@ type Node struct {
 	shardDistributor              *handlers.ShardDistributionSender
 	segmentShardRequestSender     *handlers.SegmentShardRequestSender
 	segmentShardRequestJustSender *handlers.SegmentShardRequestJustificationSender
+	stateReqester                 *handlers.StateRequester
 	WorkReportGuarantor           *handlers.WorkReportGuarantor
 	WorkPackageSharingHandler     *handlers.WorkPackageSharingHandler
 	currentCoreIndex              uint16
 	currentGuarantorPeers         []*peer.Peer
 	validatorService              validator.ValidatorService
-
-	AvailabilityStore *store.Availability
+	StateTrieStore                *store.Trie
+	AvailabilityStore             *store.Availability
 }
 
 // NewNode creates a new Node instance with the specified configuration.
@@ -73,6 +74,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 		Cancel:            cancel,
 		validatorService:  validator.NewService(availabilityStore),
 		AvailabilityStore: availabilityStore,
+		StateTrieStore:    store.NewTrie(kvStore),
 	}
 	node.ValidatorManager = validator.NewValidatorManager(keys, state.ValidatorState, validatorIdx)
 
@@ -128,6 +130,9 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	protoManager.Registry.RegisterHandler(protocol.StreamKindAuditShardRequest, handlers.NewAuditShardRequestHandler(node.validatorService))
 	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequest, handlers.NewSegmentShardRequestHandler(node.validatorService))
 	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequestJust, handlers.NewSegmentShardRequestJustificationHandler(node.validatorService))
+
+	node.stateReqester = &handlers.StateRequester{}
+	protoManager.Registry.RegisterHandler(protocol.StreamKindStateRequest, handlers.NewStateRequestHandler(node.StateTrieStore))
 
 	// Create transport
 	transportConfig := transport.Config{
@@ -462,6 +467,66 @@ func (n *Node) AnnounceBlock(ctx context.Context, header *block.Header, peer *pe
 		}
 		return peer.BAnnouncer.SendAnnouncement(header)
 	}
+}
+
+// RequestState implements the client side of the CE 129 State Request protocol from the JAMNP.
+// It requests a range of key-value pairs from a block's posterior state from a peer node.
+//
+// The method finds the specified peer by its Ed25519 public key, opens a stream for a state request,
+// and uses the StateRequester to fetch the state data. The response includes boundary nodes
+// (which form a Merkle proof path) and the requested key-value pairs from the state trie.
+//
+// Parameters:
+//   - ctx: Context for the request, used for cancellation and timeouts
+//   - headerHash: Hash of the block header whose state is being requested
+//   - keyStart: First key in the requested range (inclusive, 31 bytes)
+//   - keyEnd: Last key in the requested range (inclusive, 31 bytes)
+//   - maxSize: Maximum size in bytes for the response
+//   - peerKey: Ed25519 public key of the peer to request state from
+//
+// Returns:
+//   - A TrieRangeResult containing boundary nodes (for Merkle verification) and key-value pairs
+//   - An error if the request fails or no peer is found with the given key
+//
+// Key = [u8; 31] (First 31 bytes of key only)
+// Maximum Size = u32
+// Boundary Node = As returned by B/L, defined in the State Merklization appendix of the GP
+// Value = len++[u8]
+// Node -> Node
+// --> Header Hash ++ Key (Start) ++ Key (End) ++ Maximum Size
+// --> FIN
+// <-- [Boundary Node]
+// <-- [Key ++ Value]
+// <-- FIN
+func (n *Node) RequestState(ctx context.Context, headerHash crypto.Hash, keyStart [31]byte, keyEnd [31]byte, maxSize uint32, peerKey ed25519.PublicKey) (store.TrieRangeResult, error) {
+	// Acquire read lock to safely access the peer set
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
+
+	// Find the peer with the specified Ed25519 public key
+	if existingPeer := n.PeersSet.GetByEd25519Key(peerKey); existingPeer != nil {
+		// Open a new stream of the StateRequest kind to the peer
+		stream, err := existingPeer.ProtoConn.OpenStream(ctx, protocol.StreamKindStateRequest)
+		if err != nil {
+			return store.TrieRangeResult{}, fmt.Errorf("state request: open stream: %w", err)
+		}
+
+		// Ensure the stream is closed when the function returns
+		defer stream.Close()
+
+		// Use the StateRequester to perform the actual request
+		// This sends the request message and processes the response
+		result, err := n.stateReqester.RequestState(ctx, stream, headerHash, keyStart, keyEnd, maxSize)
+		if err != nil {
+			return store.TrieRangeResult{}, fmt.Errorf("state request: request state from peer: %w", err)
+		}
+
+		// Return the result containing boundary nodes and key-value pairs
+		return result, nil
+	}
+
+	// Return an error if no peer was found with the specified key
+	return store.TrieRangeResult{}, fmt.Errorf("state request: no peer available with the specified Ed25519 key")
 }
 
 // Start begins the node's network operations, including listening for incoming connections.
