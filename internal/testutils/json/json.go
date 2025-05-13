@@ -235,7 +235,7 @@ func (tk TicketsOrKeys) To() safrole.SealingKeys {
 	sealingKeys := safrole.SealingKeys{}
 
 	if len(tk.Keys) > 0 {
-		keys := make([]crypto.BandersnatchPublicKey, len(tk.Keys))
+		keys := crypto.EpochKeys{}
 		for i, keyStr := range tk.Keys {
 			keys[i] = hexToBandersnatch(keyStr)
 		}
