@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
@@ -100,9 +99,8 @@ func TestSerializeStateCoreAuthorizersPool(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(1)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStatePendingAuthorizersQueues checks the serialization of the PendingAuthorizersQueues field.
@@ -112,9 +110,8 @@ func TestSerializeStatePendingAuthorizersQueues(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(2)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStateRecentBlocks checks the serialization of the RecentBlocks field.
@@ -124,9 +121,8 @@ func TestSerializeStateRecentBlocks(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(3)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStateValidatorState checks the serialization of the ValidatorState fields.
@@ -136,9 +132,8 @@ func TestSerializeStateValidatorState(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(4)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStatePastJudgements checks the serialization of the PastJudgements field.
@@ -147,8 +142,7 @@ func TestSerializeStatePastJudgements(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(5)
-	hashKey := crypto.Hash(stateKey)
+	hashKey := generateStateKeyBasic(5)
 	assert.Contains(t, serializedState, hashKey)
 	assert.NotEmpty(t, serializedState[hashKey])
 }
@@ -160,9 +154,8 @@ func TestSerializeStateEntropyPool(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(6)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStateFutureValidators checks the serialization of the FutureValidators field.
@@ -172,9 +165,8 @@ func TestSerializeStateFutureValidators(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(7)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStateCurrentValidators checks the serialization of the CurrentValidators field.
@@ -184,9 +176,8 @@ func TestSerializeStateCurrentValidators(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(8)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStatePreviousValidators checks the serialization of the PreviousValidators field.
@@ -195,8 +186,7 @@ func TestSerializeStatePreviousValidators(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(9)
-	hashKey := crypto.Hash(stateKey)
+	hashKey := generateStateKeyBasic(9)
 	assert.Contains(t, serializedState, hashKey)
 	assert.NotEmpty(t, serializedState[hashKey])
 }
@@ -208,9 +198,8 @@ func TestSerializeStateCoreAssignments(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(10)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStateTimeslotIndex checks the serialization of the TimeslotIndex field.
@@ -220,9 +209,8 @@ func TestSerializeStateTimeslotIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(11)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStatePrivilegedServices checks the serialization of the PrivilegedServices field.
@@ -232,9 +220,8 @@ func TestSerializeStatePrivilegedServices(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(12)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStateValidatorStatistics checks the serialization of the ValidatorStatistics field.
@@ -244,9 +231,8 @@ func TestSerializeStateValidatorStatistics(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(13)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStateAccumulatedQueue checks the serialization of the AccumulatedQueue field.
@@ -255,8 +241,7 @@ func TestSerializeStateAccumulatedQueue(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(14)
-	hashKey := crypto.Hash(stateKey)
+	hashKey := generateStateKeyBasic(14)
 	assert.Contains(t, serializedState, hashKey)
 	assert.NotEmpty(t, serializedState[hashKey])
 }
@@ -268,9 +253,8 @@ func TestSerializeStateAccumulatedHistory(t *testing.T) {
 	require.NoError(t, err)
 
 	stateKey := generateStateKeyBasic(15)
-	hashKey := crypto.Hash(stateKey)
-	assert.Contains(t, serializedState, hashKey)
-	assert.NotEmpty(t, serializedState[hashKey])
+	assert.Contains(t, serializedState, stateKey)
+	assert.NotEmpty(t, serializedState[stateKey])
 }
 
 // TestSerializeStateServices checks the serialization of the Services field.
@@ -280,9 +264,8 @@ func TestSerializeStateServices(t *testing.T) {
 	require.NoError(t, err)
 
 	for serviceId := range state.Services {
-		stateKey, err := generateStateKeyInterleavedBasic(255, serviceId)
+		hashKey, err := generateStateKeyInterleavedBasic(255, serviceId)
 		require.NoError(t, err)
-		hashKey := crypto.Hash(stateKey)
 		assert.Contains(t, serializedState, hashKey)
 		assert.NotEmpty(t, serializedState[hashKey])
 	}

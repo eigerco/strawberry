@@ -10,10 +10,10 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-// SerializeState serializes the given state into a map of crypto.Hash to byte arrays, for merklization.
+// SerializeState serializes the given state into a map of state keys to byte arrays, for merklization.
 // Graypaper 0.5.4.
-func SerializeState(state state.State) (map[crypto.Hash][]byte, error) {
-	serializedState := make(map[crypto.Hash][]byte)
+func SerializeState(s state.State) (map[state.StateKey][]byte, error) {
+	serializedState := make(map[state.StateKey][]byte)
 
 	// Helper function to serialize individual fields
 	serializeField := func(key uint8, value interface{}) error {
@@ -31,19 +31,19 @@ func SerializeState(state state.State) (map[crypto.Hash][]byte, error) {
 		key   uint8
 		value interface{}
 	}{
-		{1, state.CoreAuthorizersPool},
-		{2, state.PendingAuthorizersQueues},
-		{3, state.RecentBlocks},
-		{6, state.EntropyPool},
-		{7, state.ValidatorState.QueuedValidators},
-		{8, state.ValidatorState.CurrentValidators},
-		{9, state.ValidatorState.ArchivedValidators},
-		{10, state.CoreAssignments},
-		{11, state.TimeslotIndex},
-		{12, state.PrivilegedServices},
-		{13, state.ActivityStatistics},
-		{14, state.AccumulationQueue},
-		{15, state.AccumulationHistory},
+		{1, s.CoreAuthorizersPool},
+		{2, s.PendingAuthorizersQueues},
+		{3, s.RecentBlocks},
+		{6, s.EntropyPool},
+		{7, s.ValidatorState.QueuedValidators},
+		{8, s.ValidatorState.CurrentValidators},
+		{9, s.ValidatorState.ArchivedValidators},
+		{10, s.CoreAssignments},
+		{11, s.TimeslotIndex},
+		{12, s.PrivilegedServices},
+		{13, s.ActivityStatistics},
+		{14, s.AccumulationQueue},
+		{15, s.AccumulationHistory},
 	}
 
 	for _, field := range basicFields {
@@ -53,17 +53,17 @@ func SerializeState(state state.State) (map[crypto.Hash][]byte, error) {
 	}
 
 	// Serialize SafroleState specific fields
-	if err := serializeSafroleState(state, serializedState); err != nil {
+	if err := serializeSafroleState(s, serializedState); err != nil {
 		return nil, err
 	}
 
 	// Serialize Past Judgements
-	if err := serializeJudgements(state, serializedState); err != nil {
+	if err := serializeJudgements(s, serializedState); err != nil {
 		return nil, err
 	}
 
 	// Serialize Services
-	for serviceId, serviceAccount := range state.Services {
+	for serviceId, serviceAccount := range s.Services {
 		if err := serializeServiceAccount(serviceId, serviceAccount, serializedState); err != nil {
 			return nil, err
 		}
@@ -72,7 +72,7 @@ func SerializeState(state state.State) (map[crypto.Hash][]byte, error) {
 	return serializedState, nil
 }
 
-func serializeSafroleState(state state.State, serializedState map[crypto.Hash][]byte) error {
+func serializeSafroleState(state state.State, serializedState map[state.StateKey][]byte) error {
 	encodedSafroleState, err := jam.Marshal(state.ValidatorState.SafroleState)
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func serializeSafroleState(state state.State, serializedState map[crypto.Hash][]
 	return nil
 }
 
-func serializeJudgements(state state.State, serializedState map[crypto.Hash][]byte) error {
+func serializeJudgements(state state.State, serializedState map[state.StateKey][]byte) error {
 	sortedGoodWorkReports := sortByteSlicesCopy(state.PastJudgements.GoodWorkReports)
 	encodedGoodWorkReports, err := jam.Marshal(sortedGoodWorkReports)
 	if err != nil {
@@ -113,7 +113,7 @@ func serializeJudgements(state state.State, serializedState map[crypto.Hash][]by
 	return nil
 }
 
-func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[crypto.Hash][]byte) error {
+func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[state.StateKey][]byte) error {
 	encodedCodeHash, err := jam.Marshal(serviceAccount.CodeHash)
 	if err != nil {
 		return err
@@ -165,7 +165,7 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 	return nil
 }
 
-func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[crypto.Hash][]byte) error {
+func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[state.StateKey][]byte) error {
 	encodedMaxUint32, err := jam.Marshal(math.MaxUint32)
 	if err != nil {
 		return err
@@ -176,7 +176,7 @@ func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount servi
 			return err
 		}
 
-		var combined [32]byte
+		var combined stateConstructorHashComponent
 		copy(combined[:4], encodedMaxUint32)
 		copy(combined[4:], hash[:28])
 		stateKey, err := generateStateKeyInterleaved(serviceId, combined)
@@ -196,7 +196,7 @@ func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount servi
 			return err
 		}
 
-		var combined [32]byte
+		var combined stateConstructorHashComponent
 		copy(combined[:4], encodedMaxUint32MinusOne)
 		copy(combined[4:], hash[1:29])
 		stateKey, err := generateStateKeyInterleaved(serviceId, combined)
@@ -217,10 +217,10 @@ func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount servi
 		}
 		hashedPreImageHistoricalTimeslots := crypto.HashData(encodedPreImageHistoricalTimeslots)
 
-		var combined [32]byte
+		var combined stateConstructorHashComponent
 		copy(combined[:4], encodedLength)
 		copy(combined[4:], hashedPreImageHistoricalTimeslots[2:30])
-		stateKey, err := generateStateKeyInterleaved(serviceId, key.Hash)
+		stateKey, err := generateStateKeyInterleaved(serviceId, combined)
 		if err != nil {
 			return err
 		}
