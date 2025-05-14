@@ -282,7 +282,7 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 
 // ShardDistributionSend implements the sending side of the CE 137, it opens a connection to the provided peer
 // allowing the assurers request shards from the guarantor
-func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.PublicKey, report block.WorkReport) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.PublicKey, coreIndex uint16, erasureRoot crypto.Hash) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
 	n.peersLock.RLock()
 	defer n.peersLock.RUnlock()
 
@@ -296,9 +296,9 @@ func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.Public
 		return nil, nil, nil, fmt.Errorf("failed to open shard distribution stream: %w", err)
 	}
 
-	shardIndex := n.assignedShardIndex(report.CoreIndex, n.ValidatorManager.Index)
+	shardIndex := n.assignedShardIndex(coreIndex, n.ValidatorManager.Index)
 
-	bundleShard, segmentShard, justification, err = n.shardDistributor.ShardDistribution(ctx, stream, report.WorkPackageSpecification.ErasureRoot, shardIndex)
+	bundleShard, segmentShard, justification, err = n.shardDistributor.ShardDistribution(ctx, stream, erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to request shards: %w", err)
 	}
@@ -524,7 +524,7 @@ func (n *Node) GetGuaranteedShardsAndStore(ctx context.Context, guarantee block.
 		erasureRoot := guarantee.WorkReport.WorkPackageSpecification.ErasureRoot
 		validatorIndex := n.ValidatorManager.Index
 
-		bundleShard, segmentsShard, justification, err := n.ShardDistributionSend(ctx, peer.Ed25519Key, guarantee.WorkReport)
+		bundleShard, segmentsShard, justification, err := n.ShardDistributionSend(ctx, peer.Ed25519Key, guarantee.WorkReport.CoreIndex, erasureRoot)
 		if err != nil {
 			log.Printf("Error getting shards from guarantor with index %d; trying again with other guarantor", credential.ValidatorIndex)
 			continue
