@@ -48,9 +48,6 @@ func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
 			encodedServiceId, err := jam.Marshal(tt.serviceId)
 			require.NoError(t, err)
 
-			// Verify length is 32 bytes
-			assert.Equal(t, 32, len(stateKey), "key length should be 32 bytes")
-
 			// Verify first byte is i
 			assert.Equal(t, tt.i, stateKey[0], "first byte should be i")
 
@@ -66,13 +63,13 @@ func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
 			assert.Equal(t, byte(0), stateKey[8], "zero should be at position 8")
 
 			// Verify remaining bytes are zero
-			for i := 9; i < 32; i++ {
+			for i := 9; i < 31; i++ {
 				assert.Equal(t, byte(0), stateKey[i],
 					fmt.Sprintf("byte at position %d should be zero", i))
 			}
 
 			// Verify we can extract the service ID back
-			extractedServiceId, err := extractServiceIdFromKey(crypto.Hash(stateKey))
+			extractedServiceId, err := extractServiceIdFromKey(stateKey)
 			require.NoError(t, err)
 			assert.Equal(t, tt.serviceId, extractedServiceId)
 		})
@@ -82,7 +79,7 @@ func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
 // TestGenerateStateKeyInterleaved verifies that the interleaving function works as expected.
 func TestGenerateStateKeyInterleaved(t *testing.T) {
 	serviceId := block.ServiceId(1234)
-	hash := crypto.Hash{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+	hash := stateConstructorHashComponent{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 
 	// Get encoded service ID for verification
 	encodedServiceId, err := jam.Marshal(serviceId)
@@ -91,9 +88,6 @@ func TestGenerateStateKeyInterleaved(t *testing.T) {
 	// Generate the interleaved state key
 	stateKey, err := generateStateKeyInterleaved(serviceId, hash)
 	require.NoError(t, err)
-
-	// Verify the length is 32 bytes
-	assert.Equal(t, 32, len(stateKey))
 
 	// Verify that the first 8 bytes are interleaved between serviceId and hash
 	assert.Equal(t, encodedServiceId[0], stateKey[0])
