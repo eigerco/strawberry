@@ -13,6 +13,7 @@ import (
 	"github.com/eigerco/strawberry/internal/authorization"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/state"
@@ -281,7 +282,7 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 
 // ShardDistributionSend implements the sending side of the CE 137, it opens a connection to the provided peer
 // allowing the assurers request shards from the guarantor
-func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.PublicKey, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.PublicKey, coreIndex uint16, erasureRoot crypto.Hash) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
 	n.peersLock.RLock()
 	defer n.peersLock.RUnlock()
 
@@ -294,6 +295,8 @@ func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.Public
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to open shard distribution stream: %w", err)
 	}
+
+	shardIndex := n.assignedShardIndex(coreIndex, n.ValidatorManager.Index)
 
 	bundleShard, segmentShard, justification, err = n.shardDistributor.ShardDistribution(ctx, stream, erasureRoot, shardIndex)
 	if err != nil {
@@ -412,6 +415,22 @@ func (n *Node) UpdateCoreAssignments() error {
 	return nil
 }
 
+// assignedShardIndex computes the shard index `i` assigned to a validator `v` for a given core `c`.
+//
+// Based on the network spec the shard assignment is defined as:
+//
+//	i = (c * R + v) mod V
+//
+// Where:
+//   - v = index of a validator
+//   - i = shard index assigned to the validator
+//   - c = core index that produced the work-report
+//   - R = recovery threshold: the minimum number of EC shards required to recover the original data
+//   - V = total number of validators
+func (n *Node) assignedShardIndex(coreIndex, validatorIndex uint16) uint16 {
+	return (coreIndex*uint16(common.ErasureCodingOriginalShards) + validatorIndex) % common.NumberOfValidators
+}
+
 // AnnounceBlock implements the UP 0 block announcement protocol from the JAM spec.
 // It announces a new block to a peer by sending the block header. The announcement
 // also includes the latest finalized block information as required by the protocol.
@@ -505,7 +524,7 @@ func (n *Node) GetGuaranteedShardsAndStore(ctx context.Context, guarantee block.
 		erasureRoot := guarantee.WorkReport.WorkPackageSpecification.ErasureRoot
 		validatorIndex := n.ValidatorManager.Index
 
-		bundleShard, segmentsShard, justification, err := n.ShardDistributionSend(ctx, peer.Ed25519Key, erasureRoot, validatorIndex)
+		bundleShard, segmentsShard, justification, err := n.ShardDistributionSend(ctx, peer.Ed25519Key, guarantee.WorkReport.CoreIndex, erasureRoot)
 		if err != nil {
 			log.Printf("Error getting shards from guarantor with index %d; trying again with other guarantor", credential.ValidatorIndex)
 			continue
