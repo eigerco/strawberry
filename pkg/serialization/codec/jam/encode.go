@@ -10,6 +10,12 @@ import (
 	"strconv"
 )
 
+// Marshaler is the interface implemented by types that can marshal themselves
+// into valid JAM encoded data.
+type Marshaler interface {
+	MarshalJAM() ([]byte, error)
+}
+
 func Marshal(v interface{}) ([]byte, error) {
 	buffer := bytes.NewBuffer(nil)
 	es := byteWriter{
@@ -30,6 +36,18 @@ type byteWriter struct {
 }
 
 func (bw *byteWriter) marshal(in interface{}) error {
+	// Check if the input implements the Marshaler interface and do custom
+	// encoding in that case.
+	marshaler, ok := in.(Marshaler)
+	if ok {
+		b, err := marshaler.MarshalJAM()
+		if err != nil {
+			return err
+		}
+		_, err = bw.Write(b)
+		return err
+	}
+
 	if v, ok := in.(EncodeEnum); ok {
 		return bw.encodeEnumType(v)
 	}
