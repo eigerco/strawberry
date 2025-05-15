@@ -24,23 +24,23 @@ func NewWorkReport(db db.KVStore) *WorkReport {
 }
 
 // PutWorkReport stores a work report in the chain store
-func (c *WorkReport) PutWorkReport(r block.WorkReport) error {
-	h, err := r.Hash()
+func (r *WorkReport) PutWorkReport(report block.WorkReport) error {
+	h, err := report.Hash()
 	if err != nil {
 		return fmt.Errorf("hash work-report: %w", err)
 	}
 
-	b, err := r.Encode()
+	b, err := report.Encode()
 	if err != nil {
 		return fmt.Errorf("marshal work-report: %w", err)
 	}
 
-	return c.Put(makeKey(prefixWorkReport, h[:]), b)
+	return r.Put(makeKey(prefixWorkReport, h[:]), b)
 }
 
 // GetWorkReport fetches a work-report by hash.
-func (c *WorkReport) GetWorkReport(h crypto.Hash) (block.WorkReport, error) {
-	b, err := c.Get(makeKey(prefixWorkReport, h[:]))
+func (r *WorkReport) GetWorkReport(h crypto.Hash) (block.WorkReport, error) {
+	b, err := r.Get(makeKey(prefixWorkReport, h[:]))
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
 			return block.WorkReport{}, ErrWorkReportNotFound
@@ -57,6 +57,6 @@ func (c *WorkReport) GetWorkReport(h crypto.Hash) (block.WorkReport, error) {
 	return report, nil
 }
 
-func (c *WorkReport) DeleteWorkReport(h crypto.Hash) error {
-	return c.Delete(makeKey(prefixWorkReport, h[:]))
+func (r *WorkReport) DeleteWorkReport(h crypto.Hash) error {
+	return r.Delete(makeKey(prefixWorkReport, h[:]))
 }
