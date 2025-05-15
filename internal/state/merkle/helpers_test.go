@@ -304,8 +304,8 @@ func RandomState(t *testing.T) state.State {
 	}
 }
 
-// DeserializeState deserializes the given map of crypto.Hash to byte slices into a State object. Not possible to restore the full state.
-func DeserializeState(serializedState map[crypto.Hash][]byte) (state.State, error) {
+// DeserializeState deserializes the given map of state keys to byte slices into a State object. Not possible to restore the full state.
+func DeserializeState(serializedState map[state.StateKey][]byte) (state.State, error) {
 	deserializedState := state.State{}
 
 	// Helper function to deserialize individual fields
@@ -362,7 +362,7 @@ func DeserializeState(serializedState map[crypto.Hash][]byte) (state.State, erro
 	return deserializedState, nil
 }
 
-func deserializeSafroleState(state *state.State, serializedState map[crypto.Hash][]byte) error {
+func deserializeSafroleState(state *state.State, serializedState map[state.StateKey][]byte) error {
 	stateKey := generateStateKeyBasic(4)
 	encodedSafroleState, ok := serializedState[stateKey]
 	if !ok {
@@ -380,7 +380,7 @@ func deserializeSafroleState(state *state.State, serializedState map[crypto.Hash
 	return nil
 }
 
-func deserializeJudgements(state *state.State, serializedState map[crypto.Hash][]byte) error {
+func deserializeJudgements(state *state.State, serializedState map[state.StateKey][]byte) error {
 	stateKey := generateStateKeyBasic(5)
 	encodedValue, ok := serializedState[stateKey]
 	if !ok {
@@ -406,7 +406,7 @@ func deserializeJudgements(state *state.State, serializedState map[crypto.Hash][
 	return nil
 }
 
-func deserializeServices(state *state.State, serializedState map[crypto.Hash][]byte) error {
+func deserializeServices(state *state.State, serializedState map[state.StateKey][]byte) error {
 	state.Services = make(service.ServiceState)
 
 	// Iterate over serializedState and look for service entries (identified by prefix 255)
@@ -450,12 +450,12 @@ func deserializeServices(state *state.State, serializedState map[crypto.Hash][]b
 	return nil
 }
 
-func isServiceAccountKey(stateKey crypto.Hash) bool {
+func isServiceAccountKey(stateKey state.StateKey) bool {
 	// Check if the first byte of the state key is 255 (which identifies service keys)
 	return stateKey[0] == 255
 }
 
-func extractServiceIdFromKey(stateKey crypto.Hash) (block.ServiceId, error) {
+func extractServiceIdFromKey(stateKey state.StateKey) (block.ServiceId, error) {
 	// Collect service ID bytes from positions 1,3,5,7 into a slice
 	encodedServiceId := []byte{
 		stateKey[1],

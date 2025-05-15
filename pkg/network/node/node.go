@@ -13,6 +13,7 @@ import (
 	"github.com/eigerco/strawberry/internal/authorization"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/state"
@@ -46,13 +47,14 @@ type Node struct {
 	shardDistributor              *handlers.ShardDistributionSender
 	segmentShardRequestSender     *handlers.SegmentShardRequestSender
 	segmentShardRequestJustSender *handlers.SegmentShardRequestJustificationSender
+	stateReqester                 *handlers.StateRequester
 	WorkReportGuarantor           *handlers.WorkReportGuarantor
 	WorkPackageSharingHandler     *handlers.WorkPackageSharingHandler
 	currentCoreIndex              uint16
 	currentGuarantorPeers         []*peer.Peer
 	ValidatorService              validator.ValidatorService
-
-	AvailabilityStore *store.Availability
+	StateTrieStore                *store.Trie
+	AvailabilityStore             *store.Availability
 }
 
 // NewNode creates a new Node instance with the specified configuration.
@@ -73,6 +75,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 		Cancel:            cancel,
 		ValidatorService:  validator.NewService(availabilityStore),
 		AvailabilityStore: availabilityStore,
+		StateTrieStore:    store.NewTrie(kvStore),
 	}
 	node.ValidatorManager = validator.NewValidatorManager(keys, state.ValidatorState, validatorIdx)
 
@@ -135,6 +138,9 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	protoManager.Registry.RegisterHandler(protocol.StreamKindAuditShardRequest, handlers.NewAuditShardRequestHandler(node.ValidatorService))
 	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequest, handlers.NewSegmentShardRequestHandler(node.ValidatorService))
 	protoManager.Registry.RegisterHandler(protocol.StreamKindSegmentRequestJust, handlers.NewSegmentShardRequestJustificationHandler(node.ValidatorService))
+
+	node.stateReqester = &handlers.StateRequester{}
+	protoManager.Registry.RegisterHandler(protocol.StreamKindStateRequest, handlers.NewStateRequestHandler(node.StateTrieStore))
 
 	// Create transport
 	transportConfig := transport.Config{
@@ -288,7 +294,7 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 
 // ShardDistributionSend implements the sending side of the CE 137, it opens a connection to the provided peer
 // allowing the assurers request shards from the guarantor
-func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.PublicKey, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.PublicKey, coreIndex uint16, erasureRoot crypto.Hash) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
 	n.peersLock.RLock()
 	defer n.peersLock.RUnlock()
 
@@ -301,6 +307,8 @@ func (n *Node) ShardDistributionSend(ctx context.Context, peerKey ed25519.Public
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to open shard distribution stream: %w", err)
 	}
+
+	shardIndex := n.assignedShardIndex(coreIndex, n.ValidatorManager.Index)
 
 	bundleShard, segmentShard, justification, err = n.shardDistributor.ShardDistribution(ctx, stream, erasureRoot, shardIndex)
 	if err != nil {
@@ -419,6 +427,22 @@ func (n *Node) UpdateCoreAssignments() error {
 	return nil
 }
 
+// assignedShardIndex computes the shard index `i` assigned to a validator `v` for a given core `c`.
+//
+// Based on the network spec the shard assignment is defined as:
+//
+//	i = (c * R + v) mod V
+//
+// Where:
+//   - v = index of a validator
+//   - i = shard index assigned to the validator
+//   - c = core index that produced the work-report
+//   - R = recovery threshold: the minimum number of EC shards required to recover the original data
+//   - V = total number of validators
+func (n *Node) assignedShardIndex(coreIndex, validatorIndex uint16) uint16 {
+	return (coreIndex*uint16(common.ErasureCodingOriginalShards) + validatorIndex) % common.NumberOfValidators
+}
+
 // AnnounceBlock implements the UP 0 block announcement protocol from the JAM spec.
 // It announces a new block to a peer by sending the block header. The announcement
 // also includes the latest finalized block information as required by the protocol.
@@ -469,6 +493,66 @@ func (n *Node) AnnounceBlock(ctx context.Context, header *block.Header, peer *pe
 		}
 		return peer.BAnnouncer.SendAnnouncement(header)
 	}
+}
+
+// RequestState implements the client side of the CE 129 State Request protocol from the JAMNP.
+// It requests a range of key-value pairs from a block's posterior state from a peer node.
+//
+// The method finds the specified peer by its Ed25519 public key, opens a stream for a state request,
+// and uses the StateRequester to fetch the state data. The response includes boundary nodes
+// (which form a Merkle proof path) and the requested key-value pairs from the state trie.
+//
+// Parameters:
+//   - ctx: Context for the request, used for cancellation and timeouts
+//   - headerHash: Hash of the block header whose state is being requested
+//   - keyStart: First key in the requested range (inclusive, 31 bytes)
+//   - keyEnd: Last key in the requested range (inclusive, 31 bytes)
+//   - maxSize: Maximum size in bytes for the response
+//   - peerKey: Ed25519 public key of the peer to request state from
+//
+// Returns:
+//   - A TrieRangeResult containing boundary nodes (for Merkle verification) and key-value pairs
+//   - An error if the request fails or no peer is found with the given key
+//
+// Key = [u8; 31] (First 31 bytes of key only)
+// Maximum Size = u32
+// Boundary Node = As returned by B/L, defined in the State Merklization appendix of the GP
+// Value = len++[u8]
+// Node -> Node
+// --> Header Hash ++ Key (Start) ++ Key (End) ++ Maximum Size
+// --> FIN
+// <-- [Boundary Node]
+// <-- [Key ++ Value]
+// <-- FIN
+func (n *Node) RequestState(ctx context.Context, headerHash crypto.Hash, keyStart [31]byte, keyEnd [31]byte, maxSize uint32, peerKey ed25519.PublicKey) (store.TrieRangeResult, error) {
+	// Acquire read lock to safely access the peer set
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
+
+	// Find the peer with the specified Ed25519 public key
+	if existingPeer := n.PeersSet.GetByEd25519Key(peerKey); existingPeer != nil {
+		// Open a new stream of the StateRequest kind to the peer
+		stream, err := existingPeer.ProtoConn.OpenStream(ctx, protocol.StreamKindStateRequest)
+		if err != nil {
+			return store.TrieRangeResult{}, fmt.Errorf("state request: open stream: %w", err)
+		}
+
+		// Ensure the stream is closed when the function returns
+		defer stream.Close()
+
+		// Use the StateRequester to perform the actual request
+		// This sends the request message and processes the response
+		result, err := n.stateReqester.RequestState(ctx, stream, headerHash, keyStart, keyEnd, maxSize)
+		if err != nil {
+			return store.TrieRangeResult{}, fmt.Errorf("state request: request state from peer: %w", err)
+		}
+
+		// Return the result containing boundary nodes and key-value pairs
+		return result, nil
+	}
+
+	// Return an error if no peer was found with the specified key
+	return store.TrieRangeResult{}, fmt.Errorf("state request: no peer available with the specified Ed25519 key")
 }
 
 // Start begins the node's network operations, including listening for incoming connections.
@@ -524,7 +608,7 @@ func (n *Node) GetGuaranteedShardsAndStore(ctx context.Context, guarantee block.
 		erasureRoot := guarantee.WorkReport.WorkPackageSpecification.ErasureRoot
 		validatorIndex := n.ValidatorManager.Index
 
-		bundleShard, segmentsShard, justification, err := n.ShardDistributionSend(ctx, peer.Ed25519Key, erasureRoot, validatorIndex)
+		bundleShard, segmentsShard, justification, err := n.ShardDistributionSend(ctx, peer.Ed25519Key, guarantee.WorkReport.CoreIndex, erasureRoot)
 		if err != nil {
 			log.Printf("Error getting shards from guarantor with index %d; trying again with other guarantor", credential.ValidatorIndex)
 			continue

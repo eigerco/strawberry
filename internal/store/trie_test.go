@@ -229,7 +229,7 @@ func TestNodeRefCountAndDelete(t *testing.T) {
 
 func TestCE129GetKeyValueRange(t *testing.T) {
 	// Setup test data
-	keys, values := setupTestKeys(7)
+	keys, values := setupTestKeys()
 
 	// Setup DB and Trie
 	db, err := pebble.NewKVStore()
@@ -483,27 +483,43 @@ func TestCE129GetKeyValueRange(t *testing.T) {
 }
 
 // setupTestKeys creates test keys and values with a predictable binary trie structure
-func setupTestKeys(count int) ([][]byte, [][]byte) {
+/*
+                          			  ROOT
+                 	   /           	             \
+           LEFT BRANCH(0)    		    		 RIGHT BRANCH(1)
+            /        \       		         /       			   \
+      0x01(00)      0x41(01) 		 LEFT BRANCH(10) 			RIGHT RIGHT BRANCH(11)
+                      		         /          \    			    /          \
+                      		   0x81(100)     0xA1(101) 		0xC1(110)  RIGHT RIGHT RIGHT BRANCH(111)
+                      		                             		         /          \
+                      		                       	     		  0xE1(1110)     0xFF(1111)
+
+Keys:
+0x01 - 0000 0001 - Key 1 - Path: 00 (Left, Left)
+0x41 - 0100 0001 - Key 2 - Path: 01 (Left, Right)
+0x81 - 1000 0001 - Key 3 - Path: 100 (Right, Left, Left)
+0xA1 - 1010 0001 - Key 4 - Path: 101 (Right, Left, Right)
+0xC1 - 1100 0001 - Key 5 - Path: 110 (Right, Right, Left)
+0xE1 - 1110 0001 - Key 6 - Path: 1110 (Right, Right, Right, Left)
+0xFF - 1111 1111 - Key 7 - Path: 1111 (Right, Right, Right, Right)
+*/
+
+func setupTestKeys() ([][]byte, [][]byte) {
 	// Create keys with a structure that ensures a binary tree with various depths
 	// Keys are designed to create a deeper structure on the right side
 	keys := [][]byte{
-		{0x01, 0x01, 0x01}, // 0000 0001 ... - Path starts with 0 (Left branch)
-		{0x41, 0x01, 0x01}, // 0100 0001 ... - Path starts with 0 (Left branch)
-		{0x81, 0x01, 0x01}, // 1000 0001 ... - Path starts with 1 (Right branch)
-		{0xA1, 0x01, 0x01}, // 1010 0001 ... - Path starts with 1 (Right branch)
-		{0xC1, 0x01, 0x01}, // 1100 0001 ... - Path starts with 1 (Right branch)
-		{0xE1, 0x01, 0x01}, // 1110 0001 ... - Path starts with 1 (Right branch)
-		{0xFF, 0x01, 0x01}, // 1111 1111 ... - Path starts with 1 (Right branch)
-	}
-
-	// Trim or extend to the requested count
-	if len(keys) > count {
-		keys = keys[:count]
+		{0x01, 0x01, 0x01}, // 0000 0001 ... - Path starts with 0 (Left, Left branch)
+		{0x41, 0x01, 0x01}, // 0100 0001 ... - Path starts with 0 (Left, Right branch)
+		{0x81, 0x01, 0x01}, // 1000 0001 ... - Path starts with 1 (Right, Left branch)
+		{0xA1, 0x01, 0x01}, // 1010 0001 ... - Path starts with 1 (Right, Left, Right branch)
+		{0xC1, 0x01, 0x01}, // 1100 0001 ... - Path starts with 1 (Right, Right, Left branch)
+		{0xE1, 0x01, 0x01}, // 1110 0001 ... - Path starts with 1 (Right. Right, Right, Left branch)
+		{0xFF, 0x01, 0x01}, // 1111 1111 ... - Path starts with 1 (Right, Right, Right, Right branch)
 	}
 
 	// Pad keys to full length (31 bytes for the trie)
 	for i := range keys {
-		keys[i] = append(keys[i], bytes.Repeat([]byte{0x00}, 29-len(keys[i]))...)
+		keys[i] = append(keys[i], bytes.Repeat([]byte{0x00}, 32-len(keys[i]))...)
 	}
 
 	// Create values with known sizes
@@ -514,4 +530,132 @@ func setupTestKeys(count int) ([][]byte, [][]byte) {
 	}
 
 	return keys, values
+}
+
+func TestTrieStateRangeKeysAndBoundaryNodes(t *testing.T) {
+	// Setup test data
+	keys, values := setupTestKeys()
+
+	// Setup DB and Trie
+	db, err := pebble.NewKVStore()
+	require.NoError(t, err)
+	defer func() {
+		err := db.Close()
+		require.NoError(t, err)
+	}()
+
+	tr := NewTrie(db)
+
+	// Prepare key-value pairs
+	pairs := make([][2][]byte, len(keys))
+	for i := range keys {
+		pairs[i] = [2][]byte{keys[i], values[i]}
+	}
+
+	// Merklize and commit
+	root, err := tr.MerklizeAndCommit(pairs)
+	require.NoError(t, err)
+
+	// Convert to 31-byte keys
+	toKey31 := func(b []byte) [31]byte {
+		var key [31]byte
+		copy(key[:], b[:31])
+		return key
+	}
+
+	// Test cases with expected exact key indices
+	testCases := []struct {
+		name               string
+		startKey           []byte
+		endKey             []byte
+		maxSize            uint32
+		expectedKeyIndices []int // Indices into the keys array
+		expectedBNodes     int
+	}{
+		{
+			name:               "Full range",
+			startKey:           keys[0],
+			endKey:             keys[6],
+			maxSize:            1000000000,
+			expectedKeyIndices: []int{0, 1, 2, 3, 4, 5, 6},
+			expectedBNodes:     7,
+		},
+		{
+			name:               "Left branch only",
+			startKey:           keys[0],
+			endKey:             keys[1],
+			maxSize:            1000000000,
+			expectedKeyIndices: []int{0, 1},
+			expectedBNodes:     4,
+		},
+		{
+			name:               "Right branch only",
+			startKey:           keys[2],
+			endKey:             keys[6],
+			maxSize:            1000000000,
+			expectedKeyIndices: []int{2, 3, 4, 5, 6},
+			expectedBNodes:     7,
+		},
+		{
+			name:               "Middle subset",
+			startKey:           keys[1],
+			endKey:             keys[4],
+			maxSize:            1000000000,
+			expectedKeyIndices: []int{1, 2, 3, 4},
+			expectedBNodes:     6,
+		},
+		{
+			name:               "Single key (exact match)",
+			startKey:           keys[3],
+			endKey:             keys[3],
+			maxSize:            1000000000,
+			expectedKeyIndices: []int{3},
+			expectedBNodes:     4,
+		},
+		{
+			name:               "Deep right branch only",
+			startKey:           keys[5],
+			endKey:             keys[6],
+			maxSize:            1000000000,
+			expectedKeyIndices: []int{5, 6},
+			expectedBNodes:     6,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := tr.FetchStateTrieRange(root, toKey31(tc.startKey), toKey31(tc.endKey), tc.maxSize)
+			require.NoError(t, err)
+
+			// Verify the number of key-value pairs
+			require.Equal(t, len(tc.expectedKeyIndices), len(result.Pairs),
+				"Expected %d key-value pairs, got %d", len(tc.expectedKeyIndices), len(result.Pairs))
+
+			// Verify the number of boundary nodes
+			require.Equal(t, tc.expectedBNodes, len(result.BoundaryNodes),
+				"Expected %d boundary nodes, got %d", tc.expectedBNodes, len(result.BoundaryNodes))
+
+			// Verify exact keys and values in order
+			for i, expectedIdx := range tc.expectedKeyIndices {
+				// Convert pair key to slice for comparison
+				keySlice := result.Pairs[i].Key[:]
+
+				// Compare with expected key
+				require.Equal(t, keys[expectedIdx][:31], keySlice,
+					"Key at position %d doesn't match expected key %d", i, expectedIdx)
+
+				// Compare with expected value
+				require.Equal(t, values[expectedIdx], result.Pairs[i].Value,
+					"Value at position %d doesn't match expected value %d", i, expectedIdx)
+			}
+
+			// Verify keys are in ascending order
+			for i := 1; i < len(result.Pairs); i++ {
+				prevKeySlice := result.Pairs[i-1].Key[:]
+				keySlice := result.Pairs[i].Key[:]
+				require.Less(t, bytes.Compare(prevKeySlice, keySlice), 1,
+					"Keys are not in ascending order at index %d", i)
+			}
+		})
+	}
 }
