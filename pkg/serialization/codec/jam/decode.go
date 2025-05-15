@@ -13,6 +13,12 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 )
 
+// Unmarshaler is the interface implemented by types that can unmarshal a
+// JAM-encoded description of themselves.
+type Unmarshaler interface {
+	UnmarshalJAM(io.Reader) error
+}
+
 type BitSequence []bool
 
 func Unmarshal(data []byte, dst interface{}) error {
@@ -80,6 +86,24 @@ type byteReader struct {
 }
 
 func (br *byteReader) unmarshal(value reflect.Value) error {
+	// Get the reflection type for the unmarshaler interface.
+	unmarshalerType := reflect.TypeOf((*Unmarshaler)(nil)).Elem()
+	// Make sure the reflection value is not a temporary value and that it
+	// implements the unmarshaler interface.
+	if value.CanAddr() && value.Addr().Type().Implements(unmarshalerType) {
+		// Get the unmarshal method.
+		methodValue := value.Addr().MethodByName("UnmarshalJAM")
+		// Call it and get the returned values.
+		values := methodValue.Call([]reflect.Value{reflect.ValueOf(br.Reader)})
+		// Check for errors, ie the first value is not nil.
+		if !values[0].IsNil() {
+			errValue := values[0].Interface()
+			err := errValue.(error)
+			return err
+		}
+		return nil
+	}
+
 	if value.CanAddr() {
 		addr := value.Addr()
 		if vdt, ok := addr.Interface().(EnumType); ok {

@@ -2,6 +2,7 @@ package jam_test
 
 import (
 	"crypto/ed25519"
+	"io"
 	"math"
 	"testing"
 
@@ -155,4 +156,71 @@ func TestLengthTag(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, original, unmarshaled)
+}
+
+// Struct for testing custom marshalling.
+type CustomStruct struct {
+	First uint32
+	Last  uint32
+}
+
+func (c CustomStruct) MarshalJAM() ([]byte, error) {
+	// Swap the fields order for custom marshalling.
+	custom := struct {
+		Last  uint32
+		First uint32
+	}{
+		Last:  c.Last,
+		First: c.First,
+	}
+	return jam.Marshal(custom)
+}
+
+func (c *CustomStruct) UnmarshalJAM(reader io.Reader) error {
+	custom := struct {
+		Last  uint32
+		First uint32
+	}{}
+
+	decoder := jam.NewDecoder(reader)
+	err := decoder.Decode(&custom)
+	if err != nil {
+		return err
+	}
+
+	c.First = custom.First
+	c.Last = custom.Last
+
+	return nil
+}
+
+func TestCustomMarshalUnmarshal(t *testing.T) {
+	original := CustomStruct{
+		First: 10,
+		Last:  20,
+	}
+	// Marshalled data will have the fields order swapped, Last then First.
+	marshaledData, err := jam.Marshal(original)
+	require.NoError(t, err)
+
+	var unmarshaled CustomStruct
+	err = jam.Unmarshal(marshaledData, &unmarshaled)
+	require.NoError(t, err)
+
+	// Unmarshalled data should get the order right.
+	assert.Equal(t, original, unmarshaled)
+
+	wrong := struct {
+		First uint32
+		Last  uint32
+	}{}
+	err = jam.Unmarshal(marshaledData, &wrong)
+	require.NoError(t, err)
+
+	// Simply decoding into another struct with the original order should swap
+	// the fields.
+	assert.NotEqual(t, original.First, wrong.First)
+	assert.NotEqual(t, original.Last, wrong.Last)
+	assert.Equal(t, original.First, wrong.Last)
+	assert.Equal(t, original.Last, wrong.First)
 }
