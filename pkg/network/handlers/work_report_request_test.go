@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"testing"
@@ -107,7 +108,7 @@ func TestWorkReportRequestHandler_HandleStream_Success(t *testing.T) {
 	})).Return(4, nil).Once()
 
 	stream.On("Write", mock.MatchedBy(func(data []byte) bool {
-		return len(data) > 0
+		return bytes.Equal(data, respBody)
 	})).Return(len(respBody), nil).Once()
 
 	stream.On("Close").Return(nil).Once()
