@@ -32,7 +32,7 @@ func NewWorkReportRequestHandler(store *store.WorkReport) *WorkReportRequestHand
 func (h *WorkReportRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
-		return fmt.Errorf("failed to read message 1: %w", err)
+		return fmt.Errorf("failed to read message: %w", err)
 	}
 
 	if len(msg.Content) != crypto.HashSize {
