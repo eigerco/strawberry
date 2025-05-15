@@ -35,7 +35,12 @@ func (r *WorkReport) PutWorkReport(report block.WorkReport) error {
 		return fmt.Errorf("marshal work-report: %w", err)
 	}
 
-	return r.Put(makeKey(prefixWorkReport, h[:]), b)
+	err = r.Put(makeKey(prefixWorkReport, h[:]), b)
+	if err != nil {
+		return fmt.Errorf("put work-report: %w", err)
+	}
+
+	return nil
 }
 
 // GetWorkReport fetches a work-report by hash.
@@ -45,7 +50,7 @@ func (r *WorkReport) GetWorkReport(h crypto.Hash) (block.WorkReport, error) {
 		if errors.Is(err, pebble.ErrNotFound) {
 			return block.WorkReport{}, ErrWorkReportNotFound
 		}
-		return block.WorkReport{}, err
+		return block.WorkReport{}, fmt.Errorf("get work-report: %w", err)
 	}
 
 	var report block.WorkReport
