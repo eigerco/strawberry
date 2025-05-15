@@ -27,6 +27,8 @@ func NewWorkReportRequestHandler(store *store.WorkReport) *WorkReportRequestHand
 	return &WorkReportRequestHandler{store: store}
 }
 
+// HandleStream processes an incoming CE-136 Work-Report Request
+// This handler assumes that the node has previously stored the requested work report during the guarantee process
 func (h *WorkReportRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
