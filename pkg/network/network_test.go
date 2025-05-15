@@ -620,6 +620,8 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 		// start with an empty store
 		kvStore, err := pebble.NewKVStore()
 		require.NoError(t, err)
+		defer kvStore.Close()
+
 		reportStore := store.NewWorkReport(kvStore)
 
 		// TODO: remove mocks in this e2e test
@@ -680,6 +682,8 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 		// start with an empty store
 		kvStore, err := pebble.NewKVStore()
 		require.NoError(t, err)
+		defer kvStore.Close()
+
 		reportStore := store.NewWorkReport(kvStore)
 
 		// TODO: remove mocks in this e2e test
