@@ -28,6 +28,15 @@ func NewWorkReportRequestHandler(store *store.WorkReport) *WorkReportRequestHand
 }
 
 // HandleStream processes an incoming CE-136 Work-Report Request
+//
+// Protocol flow:
+// Auditor -> Auditor
+//
+//	--> Work-Report Hash (32 bytes)
+//	--> FIN
+//	<-- Work-Report (full, encoded)
+//	<-- FIN
+//
 // This handler assumes that the node has previously stored the requested work report during the guarantee process
 func (h *WorkReportRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
 	msg, err := ReadMessageWithContext(ctx, stream)
@@ -66,16 +75,7 @@ func (h *WorkReportRequestHandler) HandleStream(ctx context.Context, stream quic
 }
 
 // WorkReportRequester handles CE-136: requesting work-reports from peer
-//
-// # This client-side handler sends a hash to a peer and requests the full work-report
-//
-// Protocol flow:
-// Auditor -> Auditor
-//
-//	--> Work-Report Hash (32 bytes)
-//	--> FIN
-//	<-- Work-Report (full, encoded)
-//	<-- FIN
+// This client-side handler sends a hash to a peer and requests the full work-report
 //
 // This should be used by auditors to request missing work-reports which have been negatively judged by other auditors.
 // This protocol is also used when local refinement fails and a node needs to fetch
