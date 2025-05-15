@@ -122,11 +122,14 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkReportRequest, handlers.NewWorkReportRequestHandler(wrStore))
 
+	authInvocation := authorization.New(state)
+	refineInvocation := refine.New(state)
+
 	wpSharerHandler := handlers.NewWorkReportGuarantor(
 		validatorIdx,
 		keys.EdPrv,
-		authorization.New(state),
-		refine.New(state),
+		authInvocation,
+		refineInvocation,
 		state,
 		peerSet,
 		wrStore,
@@ -140,7 +143,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	submitter := &handlers.WorkPackageSubmitter{}
 	node.workPackageSubmitter = submitter
 
-	node.WorkPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authorization.New(state), refine.New(state), keys.EdPrv, state.Services, wrStore)
+	node.WorkPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authInvocation, refineInvocation, keys.EdPrv, state.Services, wrStore)
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, node.WorkPackageSharingHandler)
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkReportDist, handlers.NewWorkReportDistributionHandler())
