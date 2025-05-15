@@ -362,7 +362,7 @@ func (h *WorkReportGuarantor) processWorkReports(
 	// at this point we have a valid work-report and we should store it
 	err := h.store.PutWorkReport(*report)
 	if err != nil {
-		log.Printf("failed to store work report: %v", err)
+		return fmt.Errorf("failed to store work report: %w", err)
 	}
 
 	// sort by validator index (required by 11.25)
