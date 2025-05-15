@@ -1,7 +1,10 @@
 package state
 
 import (
+	"bytes"
 	"crypto/ed25519"
+	"io"
+	"sort"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -9,6 +12,7 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 type StateKey [31]byte
@@ -18,11 +22,84 @@ type Assignment struct {
 	Time       jamtime.Timeslot  // time at which work-report was reported but not yet accumulated (t)
 }
 
+// TODO remove this when we refactor Assigment's WorkReport to not be a pointer.
+func (a *Assignment) MarshalJAM() ([]byte, error) {
+	if a == nil {
+		// Return the nil pointer marker.
+		return []byte{0x00}, nil
+	}
+
+	assignment := struct {
+		WorkReport block.WorkReport
+		Time       jamtime.Timeslot
+	}{
+		WorkReport: *a.WorkReport,
+		Time:       a.Time,
+	}
+
+	// Make sure to write a pointer back.
+	return jam.Marshal(&assignment)
+}
+
+// TODO remove this when we refactor Assigment's WorkReport to not be a pointer.
+func (a *Assignment) UnmarshalJAM(reader io.Reader) error {
+	var assignment struct {
+		WorkReport block.WorkReport
+		Time       jamtime.Timeslot
+	}
+	decoder := jam.NewDecoder(reader)
+	if err := decoder.Decode(&assignment); err != nil {
+		return err
+	}
+	a.WorkReport = &assignment.WorkReport
+	a.Time = assignment.Time
+
+	return nil
+}
+
 type Judgements struct {
-	BadWorkReports      []crypto.Hash       //  Bad work-reports (ψb) - Work-reports judged to be incorrect.
 	GoodWorkReports     []crypto.Hash       //  Good work-reports (ψg) - Work-reports judged to be correct.
+	BadWorkReports      []crypto.Hash       //  Bad work-reports (ψb) - Work-reports judged to be incorrect.
 	WonkyWorkReports    []crypto.Hash       //  Wonky work-reports (ψw) - Work-reports whose validity is judged to be unknowable.
 	OffendingValidators []ed25519.PublicKey //  Offending validators (ψp) - CurrentValidators who made a judgement found to be incorrect.
+}
+
+// Note that unmarshaling is not implemented given that we sort when serializing.
+func (j Judgements) MarshalJAM() ([]byte, error) {
+	encodedCopy := struct {
+		GoodWorkReports     []crypto.Hash
+		BadWorkReports      []crypto.Hash
+		WonkyWorkReports    []crypto.Hash
+		OffendingValidators []ed25519.PublicKey
+	}{
+		GoodWorkReports:     make([]crypto.Hash, len(j.GoodWorkReports)),
+		BadWorkReports:      make([]crypto.Hash, len(j.BadWorkReports)),
+		WonkyWorkReports:    make([]crypto.Hash, len(j.WonkyWorkReports)),
+		OffendingValidators: make([]ed25519.PublicKey, len(j.OffendingValidators)),
+	}
+
+	// Copy and sort each of the slices.
+	copy(encodedCopy.GoodWorkReports, j.GoodWorkReports)
+	sort.Slice(encodedCopy.GoodWorkReports, func(i, j int) bool {
+		return bytes.Compare(encodedCopy.GoodWorkReports[i][:], encodedCopy.GoodWorkReports[j][:]) < 0
+	})
+
+	copy(encodedCopy.BadWorkReports, j.BadWorkReports)
+	sort.Slice(encodedCopy.BadWorkReports, func(i, j int) bool {
+		return bytes.Compare(encodedCopy.BadWorkReports[i][:], encodedCopy.BadWorkReports[j][:]) < 0
+	})
+
+	copy(encodedCopy.WonkyWorkReports, j.WonkyWorkReports)
+	sort.Slice(encodedCopy.WonkyWorkReports, func(i, j int) bool {
+		return bytes.Compare(encodedCopy.WonkyWorkReports[i][:], encodedCopy.WonkyWorkReports[j][:]) < 0
+	})
+
+	copy(encodedCopy.OffendingValidators, j.OffendingValidators)
+	sort.Slice(encodedCopy.OffendingValidators, func(i, j int) bool {
+		return bytes.Compare(encodedCopy.OffendingValidators[i], encodedCopy.OffendingValidators[j]) < 0
+	})
+
+	return jam.Marshal(encodedCopy)
 }
 
 type CoreAssignments [common.TotalNumberOfCores]*Assignment

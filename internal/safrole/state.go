@@ -14,9 +14,9 @@ import (
 // State relevant to Safrole protocol
 type State struct {
 	NextValidators    ValidatorsData        // (γk) Validator keys for the following epoch.
-	TicketAccumulator []block.Ticket        // (γa) Sealing-key contest ticket accumulator.
-	SealingKeySeries  SealingKeys           // (γs) Sealing-key series of the current epoch.
 	RingCommitment    crypto.RingCommitment // (γz) Bandersnatch ring commitment.
+	SealingKeySeries  SealingKeys           // (γs) Sealing-key series of the current epoch.
+	TicketAccumulator []block.Ticket        // (γa) Sealing-key contest ticket accumulator.
 }
 
 type ValidatorsData [common.NumberOfValidators]crypto.ValidatorKey

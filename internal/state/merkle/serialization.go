@@ -34,6 +34,8 @@ func SerializeState(s state.State) (map[state.StateKey][]byte, error) {
 		{1, s.CoreAuthorizersPool},
 		{2, s.PendingAuthorizersQueues},
 		{3, s.RecentBlocks},
+		{4, s.ValidatorState.SafroleState},
+		{5, s.PastJudgements},
 		{6, s.EntropyPool},
 		{7, s.ValidatorState.QueuedValidators},
 		{8, s.ValidatorState.CurrentValidators},
@@ -52,16 +54,6 @@ func SerializeState(s state.State) (map[state.StateKey][]byte, error) {
 		}
 	}
 
-	// Serialize SafroleState specific fields
-	if err := serializeSafroleState(s, serializedState); err != nil {
-		return nil, err
-	}
-
-	// Serialize Past Judgements
-	if err := serializeJudgements(s, serializedState); err != nil {
-		return nil, err
-	}
-
 	// Serialize Services
 	for serviceId, serviceAccount := range s.Services {
 		if err := serializeServiceAccount(serviceId, serviceAccount, serializedState); err != nil {
@@ -70,47 +62,6 @@ func SerializeState(s state.State) (map[state.StateKey][]byte, error) {
 	}
 
 	return serializedState, nil
-}
-
-func serializeSafroleState(state state.State, serializedState map[state.StateKey][]byte) error {
-	encodedSafroleState, err := jam.Marshal(state.ValidatorState.SafroleState)
-	if err != nil {
-		return err
-	}
-
-	stateKey := generateStateKeyBasic(4)
-	serializedState[stateKey] = encodedSafroleState
-	return nil
-}
-
-func serializeJudgements(state state.State, serializedState map[state.StateKey][]byte) error {
-	sortedGoodWorkReports := sortByteSlicesCopy(state.PastJudgements.GoodWorkReports)
-	encodedGoodWorkReports, err := jam.Marshal(sortedGoodWorkReports)
-	if err != nil {
-		return err
-	}
-	encodedBadWorkReports, err := jam.Marshal(sortByteSlicesCopy(state.PastJudgements.BadWorkReports))
-	if err != nil {
-		return err
-	}
-	encodedWonkyWorkReports, err := jam.Marshal(sortByteSlicesCopy(state.PastJudgements.WonkyWorkReports))
-	if err != nil {
-		return err
-	}
-	encodedOffendingValidators, err := jam.Marshal(sortByteSlicesCopy(state.PastJudgements.OffendingValidators))
-	if err != nil {
-		return err
-	}
-
-	combined := combineEncoded(
-		encodedGoodWorkReports,
-		encodedBadWorkReports,
-		encodedWonkyWorkReports,
-		encodedOffendingValidators,
-	)
-	stateKey := generateStateKeyBasic(5)
-	serializedState[stateKey] = combined
-	return nil
 }
 
 func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[state.StateKey][]byte) error {
