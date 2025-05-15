@@ -222,5 +222,5 @@ func TestCustomMarshalUnmarshal(t *testing.T) {
 	assert.NotEqual(t, original.First, wrong.First)
 	assert.NotEqual(t, original.Last, wrong.Last)
 	assert.Equal(t, original.First, wrong.Last)
-        assert.Equal(t, original.Last, wrong.First)
+	assert.Equal(t, original.Last, wrong.First)
 }
