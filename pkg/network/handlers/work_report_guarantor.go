@@ -18,6 +18,7 @@ import (
 	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/network/peer"
@@ -41,14 +42,18 @@ const (
 // - CE-134: share a work-package with other guarantors, run local refinement, collect wr hashes signatures
 // - CE-135: if enough signatures are gathered, broadcast the guaranteed work-report to validators
 type WorkReportGuarantor struct {
-	validatorIndex uint16
-	privateKey     ed25519.PrivateKey
-	guarantors     []*peer.Peer
-	mu             sync.RWMutex
-	auth           authorization.AuthPVMInvoker
-	refine         refine.RefinePVMInvoker
-	state          *state.State
-	peerSet        *peer.PeerSet
+	validatorIndex               uint16
+	privateKey                   ed25519.PrivateKey
+	guarantors                   []*peer.Peer
+	mu                           sync.RWMutex
+	auth                         authorization.AuthPVMInvoker
+	refine                       refine.RefinePVMInvoker
+	state                        *state.State
+	peerSet                      *peer.PeerSet
+	store                        *store.WorkReport
+	workReportRequester          *WorkReportRequester
+	workPackageSharingRequester  *WorkPackageSharingRequester
+	workReportDistributionSender *WorkReportDistributionSender
 }
 
 // SegmentRootMapping It maps a work-package hash (h⊞) to the actual segment root (H).
@@ -89,14 +94,22 @@ func NewWorkReportGuarantor(
 	refine refine.RefinePVMInvoker,
 	state state.State,
 	peerSet *peer.PeerSet,
+	store *store.WorkReport,
+	requester *WorkReportRequester,
+	workPackageSharingRequester *WorkPackageSharingRequester,
+	workReportDistributionSender *WorkReportDistributionSender,
 ) *WorkReportGuarantor {
 	return &WorkReportGuarantor{
-		validatorIndex: validatorIndex,
-		privateKey:     privateKey,
-		auth:           auth,
-		refine:         refine,
-		state:          &state,
-		peerSet:        peerSet,
+		validatorIndex:               validatorIndex,
+		privateKey:                   privateKey,
+		auth:                         auth,
+		refine:                       refine,
+		state:                        &state,
+		peerSet:                      peerSet,
+		store:                        store,
+		workReportRequester:          requester,
+		workPackageSharingRequester:  workPackageSharingRequester,
+		workReportDistributionSender: workReportDistributionSender,
 	}
 }
 
@@ -221,6 +234,7 @@ func (h *WorkReportGuarantor) startLocalRefinement(
 	localResultCh chan<- localReportResult,
 ) {
 	defer wg.Done()
+
 	workReport, err := results.ProduceWorkReport(h.refine, h.state.Services, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
 	if err != nil {
 		localResultCh <- localReportResult{err: err}
@@ -278,7 +292,7 @@ func (h *WorkReportGuarantor) shareWorkPackage(
 	}
 	validatorIndex := *g.ValidatorIndex
 
-	response, err := h.sendWorkPackage(ctx, g, coreIndex, segments, bundleBytes)
+	response, err := h.workPackageSharingRequester.SendRequest(ctx, g, coreIndex, segments, bundleBytes)
 	if err != nil {
 		guaranteeCh <- guaranteeResponse{err: err}
 		log.Printf("Failed to complete work package exchange with peer %v: %v", validatorIndex, err)
@@ -319,8 +333,7 @@ func (h *WorkReportGuarantor) processWorkReports(
 		return fmt.Errorf("not enough matching signatures for any work-report hash")
 	}
 
-	var report block.WorkReport
-	reportSet := false
+	var report *block.WorkReport
 
 	var creds []block.CredentialSignature
 	for _, s := range winningGroup {
@@ -329,14 +342,27 @@ func (h *WorkReportGuarantor) processWorkReports(
 			Signature:      s.Signature,
 		})
 		if s.Report != nil {
-			report = *s.Report
-			reportSet = true
+			// The full report is only available from the local refinement
+			// remote responses only provide a hash + signature
+			// If local refinement failed or wasn't available, s.Report will be nil.
+			report = s.Report
 		}
 	}
 
-	if !reportSet {
-		log.Println("fetching full work report from remote peer")
-		// TODO Need to fetch full work report by hash from remote peer CE-136
+	if report == nil {
+		log.Println("local refinement failed or ignored, fetching full work report from remote peer")
+
+		fetched, err := h.fetchWorkReportByHash(ctx, winningGroup[0].WorkReportHash)
+		if err != nil {
+			return err
+		}
+		report = fetched
+	}
+
+	// at this point we have a valid work-report and we should store it
+	err := h.store.PutWorkReport(*report)
+	if err != nil {
+		return fmt.Errorf("failed to store work report: %w", err)
 	}
 
 	// sort by validator index (required by 11.25)
@@ -347,12 +373,32 @@ func (h *WorkReportGuarantor) processWorkReports(
 	log.Printf("total number of credentials gathered to guarantee work report: %d", len(creds))
 
 	guarantee := block.Guarantee{
-		WorkReport:  report,
+		WorkReport:  *report,
 		Timeslot:    jamtime.CurrentTimeslot(),
 		Credentials: creds,
 	}
 
 	return h.distributeGuaranteedWorkReport(ctx, guarantee)
+}
+
+// fetchWorkReportByHash attempts to retrieve a full work-report from any available co-guarantor.
+// It iterates over the known guarantors and sends a CE-136 request using the provided hash.
+func (h *WorkReportGuarantor) fetchWorkReportByHash(ctx context.Context, hash crypto.Hash) (*block.WorkReport, error) {
+	for _, p := range h.guarantors {
+		stream, err := p.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkReportRequest)
+		if err != nil {
+			log.Printf("failed to open stream to validator: %v", err)
+			continue
+		}
+		fetched, err := h.workReportRequester.RequestWorkReport(ctx, stream, hash)
+		if err != nil {
+			log.Printf("failed to fetch work report from validator : %v", err)
+			continue
+		}
+		return fetched, nil
+	}
+
+	return nil, fmt.Errorf("failed to retrieve work report")
 }
 
 // collectSignedReports gathers signed work-report hashes from both local refinement and remote guarantors.
@@ -422,6 +468,7 @@ func (h *WorkReportGuarantor) collectSignedReports(
 			return grouped, ctx.Err()
 
 		case <-safeTimerC(timer):
+			log.Println("timer expired")
 			// Timer expired
 			return grouped, nil
 		}
@@ -459,93 +506,8 @@ func (h *WorkReportGuarantor) buildSegmentRootMapping(pkg work.PackageBundle) []
 	return []SegmentRootMapping{}
 }
 
-// CE 134: sendWorkPackage sends 2 messages to another guarantor and closes the stream:
-//
-// --> Core Index ++ Segments-Root Mappings
-//   - Informs the receiving guarantor which core this work-package belongs to.
-//   - Provides the mapping between imported segment hashes and their Merkle roots.
-//   - This mapping is used during refinement to validate imported segments.
-//
-// --> Work-Package Bundle
-//   - Contains the actual work-package bundle and any associated extrinsics.
-//
-// --> FIN
-//   - Closes the stream after sending both messages. The response is expected before finalization.
-//
-// <-- Work-Report Hash ++ Ed25519 Signature
-//   - The receiving guarantor performs refinement and responds with:
-//   - The hash of the resulting work-report.
-//   - Their Ed25519 signature over the hash.
-//   - This response is used to help assemble a guaranteed work-report.
-//
-// <-- FIN
-//   - The stream is closed after the response is read and decoded.
-//
-// Returns:
-// - A `workPackageSharingResponse` containing the signed hash of the refined work-report.
-// - An error if sending, receiving, decoding, or stream closure fails.
-func (h *WorkReportGuarantor) sendWorkPackage(
-	ctx context.Context,
-	g *peer.Peer,
-	coreIndex uint16,
-	imported []SegmentRootMapping,
-	bundleBytes []byte,
-) (*workPackageSharingResponse, error) {
-	msg1, err := jam.Marshal(struct {
-		CoreIndex          uint16
-		SegmentRootMapping []SegmentRootMapping
-	}{
-		CoreIndex:          coreIndex,
-		SegmentRootMapping: imported,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal first message: %w", err)
-	}
-
-	stream, err := g.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkPackageShare)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open stream: %v", err)
-	}
-
-	// 1st: “CoreIndex ++ Segments-Root Mappings”
-	if err = WriteMessageWithContext(ctx, stream, msg1); err != nil {
-		return nil, fmt.Errorf("failed to send first message: %w", err)
-	}
-
-	// 2nd: “Work-Package Bundle”
-	if err = WriteMessageWithContext(ctx, stream, bundleBytes); err != nil {
-		return nil, fmt.Errorf("failed to send WP bundle: %w", err)
-	}
-
-	if err := stream.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close stream: %w", err)
-	}
-
-	// Handle CE-134 response from the receiving guarantor
-	msg, err := ReadMessageWithContext(ctx, stream)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var response workPackageSharingResponse
-	if err := jam.Unmarshal(msg.Content, &response); err != nil {
-		return nil, fmt.Errorf("failed to decode CE-134 response: %w", err)
-	}
-
-	return &response, nil
-}
-
-// CE-135:
-// distribute guarantee to all current validators.
+// distribute guarantee to all current validators (CE-135)
 // If it’s the last core rotation in the epoch, also send it to next epoch validators.
-//
-// Guaranteed Work-Report = Work-Report ++ Slot ++ len++[Validator Index ++ Ed25519 Signature] (As in GP)
-//
-// Guarantor -> Validator
-//
-// --> Guaranteed Work-Report
-// --> FIN
-// <-- FIN
 func (h *WorkReportGuarantor) distributeGuaranteedWorkReport(
 	ctx context.Context,
 	guarantee block.Guarantee,
@@ -573,14 +535,11 @@ func (h *WorkReportGuarantor) distributeGuaranteedWorkReport(
 				return
 			}
 
-			if err := WriteMessageWithContext(ctx, stream, data); err != nil {
+			err = h.workReportDistributionSender.SendGuarantee(ctx, stream, valIndex, data)
+
+			if err != nil {
 				log.Printf("failed to send guarantee to validator %v: %v", valIndex, err)
 				return
-			}
-
-			err = stream.Close()
-			if err != nil {
-				log.Printf("failed to close stream to validator %v: %v", valIndex, err)
 			}
 
 			log.Printf("Sent guarantee to validator %v", valIndex)

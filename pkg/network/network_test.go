@@ -14,10 +14,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/eigerco/strawberry/internal/testutils"
-
 	"github.com/quic-go/quic-go"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eigerco/strawberry/internal/store"
+	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/eigerco/strawberry/internal/work/results"
+	"github.com/eigerco/strawberry/pkg/db/pebble"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -172,20 +175,27 @@ func (m mockAuthorizationInvoker) InvokePVM(workPackage work.Package, coreIndex 
 	return []byte("Authorized"), nil
 }
 
-type mockRefineInvoker struct{}
+type MockRefineInvoker struct {
+	out []byte
+}
 
-func (m mockRefineInvoker) InvokePVM(
+func (m MockRefineInvoker) InvokePVM(
 	itemIndex uint32,
 	workPackage work.Package,
 	authorizerHashOutput []byte,
 	importedSegments []work.Segment,
 	exportOffset uint64,
 ) ([]byte, []work.Segment, error) {
-	out := []byte("RefineOutput")
 	exported := []work.Segment{
 		{},
 	}
-	return out, exported, nil
+	return m.out, exported, nil
+}
+
+func NewMockRefine(out []byte) *MockRefineInvoker {
+	return &MockRefineInvoker{
+		out: out,
+	}
 }
 
 // ExtendedWorkPackageSubmissionHandler extends the original handler to record the received package
@@ -199,7 +209,7 @@ func NewExtendedWorkPackageSubmissionHandler(fetcher *MockImportSegmentsFetcher)
 	return &ExtendedWorkPackageSubmissionHandler{
 		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(
 			fetcher,
-			handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, chainState.State{Services: make(service.ServiceState)}, peer.NewPeerSet())),
+			handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, NewMockRefine([]byte("out")), chainState.State{Services: make(service.ServiceState)}, peer.NewPeerSet(), nil, nil, nil, nil)),
 		MockFetcher: fetcher,
 	}
 }
@@ -453,7 +463,7 @@ func TestTwoNodesSubmitWorkPackage(t *testing.T) {
 }
 
 func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	coreIndex := uint16(1)
@@ -582,6 +592,8 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	peer5.ValidatorIndex = &index5
 	peerSet.AddPeer(peer5)
 
+	mainGuarantor.PeersSet = peerSet
+
 	// Set current + next validators in state (needed for distribution step)
 	var validators safrole.ValidatorsData
 	validators[4] = crypto.ValidatorKey{
@@ -594,43 +606,142 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	currentState.ValidatorState.SafroleState = safrole.State{
 		NextValidators: validators,
 	}
-	// TODO: remove mocks in this e2e test
-	mainGuarantor.WorkReportGuarantor = handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peerSet)
 
-	submissionHandler := handlers.NewWorkPackageSubmissionHandler(
-		&MockImportSegmentsFetcher{},
-		mainGuarantor.WorkReportGuarantor)
-	mainGuarantor.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, submissionHandler)
+	requester := handlers.NewWorkReportRequester()
 
-	mainGuarantor.WorkReportGuarantor.SetGuarantors([]*peer.Peer{
-		peer2,
-		peer3,
-	})
-
-	// TODO: remove mocks in this e2e test
-	mockPVMSharingHandler := handlers.NewWorkPackageSharingHandler(
-		mockAuthorizationInvoker{},
-		mockRefineInvoker{},
-		prv,
-		serviceState,
-	)
-
-	// override handlers in order to mock pvm invocations
-	remoteGuarantor2.WorkPackageSharingHandler = mockPVMSharingHandler
-	remoteGuarantor2.WorkPackageSharingHandler.SetCurrentCore(coreIndex)
-	remoteGuarantor2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, remoteGuarantor2.WorkPackageSharingHandler)
-
-	remoteGuarantor3.WorkPackageSharingHandler = mockPVMSharingHandler
-	remoteGuarantor3.WorkPackageSharingHandler.SetCurrentCore(coreIndex)
-	remoteGuarantor3.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, remoteGuarantor3.WorkPackageSharingHandler)
-
-	// send work package builder->guarantor to initiate the flow (CE-133 → CE-134 → CE-135)
-	err = builderNode.SubmitWorkPackage(ctx, coreIndex, bundle.Package, []byte{}, mainGuarantor.ValidatorManager.Keys.EdPub)
+	mockRefine := NewMockRefine([]byte("out"))
+	expectedWorkReport, err := results.ProduceWorkReport(mockRefine, getServiceState(), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
 	require.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond)
+	expectedWorkReportHash, err := expectedWorkReport.Hash()
+	require.NoError(t, err)
 
-	// TODO improve this test by checking the results after we store the guarantee
+	t.Run("success", func(t *testing.T) {
+		// start with an empty store
+		kvStore, err := pebble.NewKVStore()
+		require.NoError(t, err)
+		defer kvStore.Close()
+
+		reportStore := store.NewWorkReport(kvStore)
+
+		// TODO: remove mocks in this e2e test
+		mockPVMSharingHandler := handlers.NewWorkPackageSharingHandler(
+			mockAuthorizationInvoker{},
+			mockRefine,
+			prv,
+			serviceState,
+			reportStore,
+		)
+
+		// override handlers in order to mock pvm invocations
+		remoteGuarantor2.WorkPackageSharingHandler = mockPVMSharingHandler
+		remoteGuarantor2.WorkPackageSharingHandler.SetCurrentCore(coreIndex)
+		remoteGuarantor2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, remoteGuarantor2.WorkPackageSharingHandler)
+		remoteGuarantor2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkReportRequest, handlers.NewWorkReportRequestHandler(reportStore))
+
+		remoteGuarantor3.WorkPackageSharingHandler = mockPVMSharingHandler
+		remoteGuarantor3.WorkPackageSharingHandler.SetCurrentCore(coreIndex)
+		remoteGuarantor3.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, remoteGuarantor3.WorkPackageSharingHandler)
+		remoteGuarantor3.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkReportRequest, handlers.NewWorkReportRequestHandler(reportStore))
+
+		// TODO: remove mocks in this e2e test
+		mainGuarantor.WorkReportGuarantor = handlers.NewWorkReportGuarantor(
+			uint16(1),
+			prv,
+			mockAuthorizationInvoker{},
+			mockRefine,
+			currentState,
+			peerSet,
+			reportStore,
+			requester,
+			handlers.NewWorkPackageSharingRequester(),
+			handlers.NewWorkReportDistributionSender(),
+		)
+
+		submissionHandler := handlers.NewWorkPackageSubmissionHandler(
+			&MockImportSegmentsFetcher{},
+			mainGuarantor.WorkReportGuarantor)
+		mainGuarantor.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, submissionHandler)
+
+		mainGuarantor.WorkReportGuarantor.SetGuarantors([]*peer.Peer{
+			peer2,
+			peer3,
+		})
+		// send work package builder->guarantor to initiate the flow (CE-133 → CE-134 → CE-135)
+		err = builderNode.SubmitWorkPackage(ctx, coreIndex, bundle.Package, []byte{}, mainGuarantor.ValidatorManager.Keys.EdPub)
+		require.NoError(t, err)
+
+		time.Sleep(500 * time.Millisecond)
+
+		report, err := mainGuarantor.RequestWorkReport(ctx, expectedWorkReportHash, peer2.Ed25519Key)
+		require.NoError(t, err)
+
+		require.Equal(t, &expectedWorkReport, report)
+	})
+	t.Run("success_local_ignored", func(t *testing.T) {
+		// start with an empty store
+		kvStore, err := pebble.NewKVStore()
+		require.NoError(t, err)
+		defer kvStore.Close()
+
+		reportStore := store.NewWorkReport(kvStore)
+
+		// TODO: remove mocks in this e2e test
+		mockPVMSharingHandler := handlers.NewWorkPackageSharingHandler(
+			mockAuthorizationInvoker{},
+			mockRefine,
+			prv,
+			serviceState,
+			reportStore,
+		)
+
+		// override handlers in order to mock pvm invocations
+		remoteGuarantor2.WorkPackageSharingHandler = mockPVMSharingHandler
+		remoteGuarantor2.WorkPackageSharingHandler.SetCurrentCore(coreIndex)
+		remoteGuarantor2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, remoteGuarantor2.WorkPackageSharingHandler)
+		remoteGuarantor2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkReportRequest, handlers.NewWorkReportRequestHandler(reportStore))
+
+		remoteGuarantor3.WorkPackageSharingHandler = mockPVMSharingHandler
+		remoteGuarantor3.WorkPackageSharingHandler.SetCurrentCore(coreIndex)
+		remoteGuarantor3.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, remoteGuarantor3.WorkPackageSharingHandler)
+		remoteGuarantor3.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkReportRequest, handlers.NewWorkReportRequestHandler(reportStore))
+
+		// produce different work report/hash locally, this will result to fetch and use remote work report
+		// TODO: remove mocks in this e2e test
+		mainGuarantor.WorkReportGuarantor = handlers.NewWorkReportGuarantor(
+			uint16(1),
+			prv,
+			mockAuthorizationInvoker{},
+			NewMockRefine([]byte("different output")), // produce different hash in local refinement
+			currentState,
+			peerSet,
+			reportStore,
+			requester,
+			handlers.NewWorkPackageSharingRequester(),
+			handlers.NewWorkReportDistributionSender(),
+		)
+
+		submissionHandler := handlers.NewWorkPackageSubmissionHandler(
+			&MockImportSegmentsFetcher{},
+			mainGuarantor.WorkReportGuarantor)
+		mainGuarantor.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, submissionHandler)
+
+		mainGuarantor.WorkReportGuarantor.SetGuarantors([]*peer.Peer{
+			peer2,
+			peer3,
+		})
+
+		// send work package builder->guarantor to initiate the flow (CE-133 → CE-134 → CE-135)
+		err = builderNode.SubmitWorkPackage(ctx, coreIndex, bundle.Package, []byte{}, mainGuarantor.ValidatorManager.Keys.EdPub)
+		require.NoError(t, err)
+
+		time.Sleep(500 * time.Millisecond)
+
+		report, err := mainGuarantor.RequestWorkReport(ctx, expectedWorkReportHash, peer2.Ed25519Key)
+		require.NoError(t, err)
+
+		require.Equal(t, &expectedWorkReport, report)
+	})
 }
 
 func getServiceState() service.ServiceState {
