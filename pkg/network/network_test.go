@@ -49,7 +49,7 @@ func setupNodes(ctx context.Context, t *testing.T, state chainState.State, numNo
 
 		addr := "127.0.0.1"
 		port := 10000 + i
-		key := &crypto.ValidatorKey{}
+		key := crypto.ValidatorKey{}
 		key.Ed25519 = pub
 		key.Metadata = crypto.MetadataKey(createMockMetadata(t, addr, uint16(port)))
 		validatorsData[i] = key
@@ -584,10 +584,10 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 	// Set current + next validators in state (needed for distribution step)
 	var validators safrole.ValidatorsData
-	validators[4] = &crypto.ValidatorKey{
+	validators[4] = crypto.ValidatorKey{
 		Ed25519: peer4.Ed25519Key,
 	}
-	validators[5] = &crypto.ValidatorKey{
+	validators[5] = crypto.ValidatorKey{
 		Ed25519: peer5.Ed25519Key,
 	}
 	currentState.ValidatorState.CurrentValidators = validators

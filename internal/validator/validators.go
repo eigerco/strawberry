@@ -78,7 +78,7 @@ func NullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed255
 	}
 	for i, validator := range queuedValidators {
 		if offenderMap.Has(validator.Ed25519) {
-			queuedValidators[i] = &crypto.ValidatorKey{
+			queuedValidators[i] = crypto.ValidatorKey{
 				// Ensure these 32 bytes are zero'd out, and not just nil.  TODO
 				// - maybe use a custom wrapper type for [32]byte ?
 				Ed25519: make([]byte, 32),

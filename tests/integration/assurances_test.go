@@ -115,7 +115,7 @@ func mapCoreAssignments(availAssignments []*Assignment) state.CoreAssignments {
 
 func mapCurrValidators(currValidators []ValidatorKey) safrole.ValidatorsData {
 	validators := mapSlice(currValidators, mapKey)
-	validatorsArray := make([]*crypto.ValidatorKey, common.NumberOfValidators)
+	validatorsArray := make([]crypto.ValidatorKey, common.NumberOfValidators)
 	copy(validatorsArray, validators)
 	return safrole.ValidatorsData(validatorsArray)
 }

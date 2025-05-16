@@ -23,7 +23,7 @@ import (
 func RandomValidatorsData(t *testing.T) safrole.ValidatorsData {
 	var validatorsData safrole.ValidatorsData
 	for i := 0; i < len(validatorsData); i++ {
-		validatorsData[i] = &crypto.ValidatorKey{
+		validatorsData[i] = crypto.ValidatorKey{
 			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
 			Ed25519:      testutils.RandomED25519PublicKey(t),
 			Bls:          testutils.RandomBlsKey(t),
