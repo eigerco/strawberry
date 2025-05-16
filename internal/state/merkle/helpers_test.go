@@ -2,8 +2,6 @@ package merkle
 
 import (
 	"crypto/ed25519"
-	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/state"
@@ -17,13 +15,12 @@ import (
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 func RandomValidatorsData(t *testing.T) safrole.ValidatorsData {
 	var validatorsData safrole.ValidatorsData
 	for i := 0; i < len(validatorsData); i++ {
-		validatorsData[i] = &crypto.ValidatorKey{
+		validatorsData[i] = crypto.ValidatorKey{
 			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
 			Ed25519:      testutils.RandomED25519PublicKey(t),
 			Bls:          testutils.RandomBlsKey(t),
@@ -302,172 +299,4 @@ func RandomState(t *testing.T) state.State {
 		AccumulationQueue:        RandomAccumulationQueue(t),
 		AccumulationHistory:      RandomAccumulationHistory(t),
 	}
-}
-
-// DeserializeState deserializes the given map of state keys to byte slices into a State object. Not possible to restore the full state.
-func DeserializeState(serializedState map[state.StateKey][]byte) (state.State, error) {
-	deserializedState := state.State{}
-
-	// Helper function to deserialize individual fields
-	deserializeField := func(key uint8, target interface{}) error {
-		stateKey := generateStateKeyBasic(key)
-		encodedValue, ok := serializedState[stateKey]
-		if !ok {
-			return errors.New("missing state key")
-		}
-		return jam.Unmarshal(encodedValue, target)
-	}
-
-	// Deserialize basic fields
-	basicFields := []struct {
-		key   uint8
-		value interface{}
-	}{
-		{1, &deserializedState.CoreAuthorizersPool},
-		{2, &deserializedState.PendingAuthorizersQueues},
-		{3, &deserializedState.RecentBlocks},
-		{6, &deserializedState.EntropyPool},
-		{7, &deserializedState.ValidatorState.QueuedValidators},
-		{8, &deserializedState.ValidatorState.CurrentValidators},
-		{9, &deserializedState.ValidatorState.ArchivedValidators},
-		{10, &deserializedState.CoreAssignments},
-		{11, &deserializedState.TimeslotIndex},
-		{12, &deserializedState.PrivilegedServices},
-		{13, &deserializedState.ActivityStatistics},
-		{14, &deserializedState.AccumulationQueue},
-		{15, &deserializedState.AccumulationHistory},
-	}
-
-	for _, field := range basicFields {
-		if err := deserializeField(field.key, field.value); err != nil {
-			return deserializedState, err
-		}
-	}
-
-	// Deserialize SafroleState specific fields
-	if err := deserializeSafroleState(&deserializedState, serializedState); err != nil {
-		return deserializedState, err
-	}
-
-	// Deserialize Past Judgements
-	if err := deserializeJudgements(&deserializedState, serializedState); err != nil {
-		return deserializedState, err
-	}
-
-	// Deserialize Services
-	if err := deserializeServices(&deserializedState, serializedState); err != nil {
-		return deserializedState, err
-	}
-
-	return deserializedState, nil
-}
-
-func deserializeSafroleState(state *state.State, serializedState map[state.StateKey][]byte) error {
-	stateKey := generateStateKeyBasic(4)
-	encodedSafroleState, ok := serializedState[stateKey]
-	if !ok {
-		return fmt.Errorf("missing the state key for safrole state %v", stateKey)
-	}
-
-	decodedSafroleState := safrole.State{}
-
-	if err := jam.Unmarshal(encodedSafroleState, &decodedSafroleState); err != nil {
-		return err
-	}
-
-	state.ValidatorState.SafroleState = decodedSafroleState
-
-	return nil
-}
-
-func deserializeJudgements(state *state.State, serializedState map[state.StateKey][]byte) error {
-	stateKey := generateStateKeyBasic(5)
-	encodedValue, ok := serializedState[stateKey]
-	if !ok {
-		return errors.New("missing PastJudgements key")
-	}
-
-	// Deserialize the combined Judgements fields
-	var combined struct {
-		GoodWorkReports     []crypto.Hash
-		BadWorkReports      []crypto.Hash
-		WonkyWorkReports    []crypto.Hash
-		OffendingValidators []ed25519.PublicKey
-	}
-	if err := jam.Unmarshal(encodedValue, &combined); err != nil {
-		return err
-	}
-
-	state.PastJudgements.GoodWorkReports = combined.GoodWorkReports
-	state.PastJudgements.BadWorkReports = combined.BadWorkReports
-	state.PastJudgements.WonkyWorkReports = combined.WonkyWorkReports
-	state.PastJudgements.OffendingValidators = combined.OffendingValidators
-
-	return nil
-}
-
-func deserializeServices(state *state.State, serializedState map[state.StateKey][]byte) error {
-	state.Services = make(service.ServiceState)
-
-	// Iterate over serializedState and look for service entries (identified by prefix 255)
-	for stateKey, encodedValue := range serializedState {
-		// Check if this is a service account entry (state key starts with 255)
-		if isServiceAccountKey(stateKey) {
-			// Extract service ID from the key
-			serviceId, err := extractServiceIdFromKey(stateKey)
-			if err != nil {
-				return err
-			}
-
-			// Deserialize the combined fields (CodeHash, Balance, etc.)
-			var combined struct {
-				CodeHash               crypto.Hash
-				Balance                uint64
-				GasLimitForAccumulator uint64
-				GasLimitOnTransfer     uint64
-				FootprintSize          uint64
-				FootprintItems         int
-			}
-			if err := jam.Unmarshal(encodedValue, &combined); err != nil {
-				return err
-			}
-
-			// Create and populate the ServiceAccount from the deserialized data
-			serviceAccount := service.ServiceAccount{
-				CodeHash:               combined.CodeHash,
-				Balance:                combined.Balance,
-				GasLimitForAccumulator: combined.GasLimitForAccumulator,
-				GasLimitOnTransfer:     combined.GasLimitOnTransfer,
-			}
-
-			// We cannot completely deserialize storage and preimage items. That's why they are not here.
-
-			// Add the deserialized service account to the state
-			state.Services[serviceId] = serviceAccount
-		}
-	}
-
-	return nil
-}
-
-func isServiceAccountKey(stateKey state.StateKey) bool {
-	// Check if the first byte of the state key is 255 (which identifies service keys)
-	return stateKey[0] == 255
-}
-
-func extractServiceIdFromKey(stateKey state.StateKey) (block.ServiceId, error) {
-	// Collect service ID bytes from positions 1,3,5,7 into a slice
-	encodedServiceId := []byte{
-		stateKey[1],
-		stateKey[3],
-		stateKey[5],
-		stateKey[7],
-	}
-
-	var serviceId block.ServiceId
-	if err := jam.Unmarshal(encodedServiceId, &serviceId); err != nil {
-		return 0, err
-	}
-
-	return serviceId, nil
 }

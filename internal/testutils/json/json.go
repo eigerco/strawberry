@@ -207,7 +207,7 @@ func (vd ValidatorsData) To() safrole.ValidatorsData {
 	validators := safrole.ValidatorsData{}
 	for i, validatorData := range vd {
 		vk := validatorData.To()
-		validators[i] = &vk
+		validators[i] = vk
 	}
 
 	return validators
@@ -216,7 +216,7 @@ func (vd ValidatorsData) To() safrole.ValidatorsData {
 func NewValidatorsData(validators safrole.ValidatorsData) ValidatorsData {
 	validatorsData := make(ValidatorsData, len(validators))
 	for i, validator := range validators {
-		validatorsData[i] = NewValidatorData(*validator)
+		validatorsData[i] = NewValidatorData(validator)
 	}
 
 	return validatorsData
@@ -674,29 +674,29 @@ type ValidatorStatistics struct {
 }
 
 type CoreStatistics struct {
-	DALoad         uint32 `json:"da_load"`
-	Popularity     uint16 `json:"popularity"`
-	Imports        uint16 `json:"imports"`
-	Exports        uint16 `json:"exports"`
-	ExtrinsicSize  uint32 `json:"extrinsic_size"`
-	ExtrinsicCount uint16 `json:"extrinsic_count"`
-	BundleSize     uint32 `json:"bundle_size"`
-	GasUsed        uint64 `json:"gas_used"`
+	DALoad         uint `json:"da_load"`
+	Popularity     uint `json:"popularity"`
+	Imports        uint `json:"imports"`
+	Exports        uint `json:"exports"`
+	ExtrinsicSize  uint `json:"extrinsic_size"`
+	ExtrinsicCount uint `json:"extrinsic_count"`
+	BundleSize     uint `json:"bundle_size"`
+	GasUsed        uint `json:"gas_used"`
 }
 
 type ServiceStatisticsRecord struct {
-	ProvidedCount      uint16 `json:"provided_count"`
-	ProvidedSize       uint32 `json:"provided_size"`
-	RefinementCount    uint32 `json:"refinement_count"`
-	RefinementGasUsed  uint64 `json:"refinement_gas_used"`
-	Imports            uint32 `json:"imports"`
-	Exports            uint32 `json:"exports"`
-	ExtrinsicSize      uint32 `json:"extrinsic_size"`
-	ExtrinsicCount     uint32 `json:"extrinsic_count"`
-	AccumulateCount    uint32 `json:"accumulate_count"`
-	AccumulateGasUsed  uint64 `json:"accumulate_gas_used"`
-	OnTransfersCount   uint32 `json:"on_transfers_count"`
-	OnTransfersGasUsed uint64 `json:"on_transfers_gas_used"`
+	ProvidedCount      uint `json:"provided_count"`
+	ProvidedSize       uint `json:"provided_size"`
+	RefinementCount    uint `json:"refinement_count"`
+	RefinementGasUsed  uint `json:"refinement_gas_used"`
+	Imports            uint `json:"imports"`
+	Exports            uint `json:"exports"`
+	ExtrinsicSize      uint `json:"extrinsic_size"`
+	ExtrinsicCount     uint `json:"extrinsic_count"`
+	AccumulateCount    uint `json:"accumulate_count"`
+	AccumulateGasUsed  uint `json:"accumulate_gas_used"`
+	OnTransfersCount   uint `json:"on_transfers_count"`
+	OnTransfersGasUsed uint `json:"on_transfers_gas_used"`
 }
 
 type ServiceStatistics struct {

@@ -39,14 +39,14 @@ func NewGridMapper(state ValidatorState) GridMapper {
 // - All grid neighbors from the current epoch (same row or column)
 // - The validator with the same index from the previous epoch
 // - The validator with the same index from the next epoch
-func (m GridMapper) GetAllEpochsNeighborValidators(index uint16) ([]*crypto.ValidatorKey, error) {
+func (m GridMapper) GetAllEpochsNeighborValidators(index uint16) ([]crypto.ValidatorKey, error) {
 	neighborsSameEpoch, err := m.GetCurrentEpochNeighborValidators(index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current epoch neighbor validators: %w", err)
 	}
 
 	// Initialize with capacity for same epoch neighbors plus potentially two more
-	neighbors := make([]*crypto.ValidatorKey, 0, len(neighborsSameEpoch)+2)
+	neighbors := make([]crypto.ValidatorKey, 0, len(neighborsSameEpoch)+2)
 
 	// Add previous epoch validator if index exists
 	if index < uint16(len(m.archivedValidators)) {
@@ -67,9 +67,9 @@ func (m GridMapper) GetAllEpochsNeighborValidators(index uint16) ([]*crypto.Vali
 // GetCurrentEpochNeighborValidators returns all grid neighbors for a validator
 // within the current epoch. Grid neighbors are validators that share either
 // the same row or column in the grid structure.
-func (m GridMapper) GetCurrentEpochNeighborValidators(index uint16) ([]*crypto.ValidatorKey, error) {
+func (m GridMapper) GetCurrentEpochNeighborValidators(index uint16) ([]crypto.ValidatorKey, error) {
 	neighborIndices := getCurrentEpochNeighborIndices(index)
-	neighbors := make([]*crypto.ValidatorKey, 0, len(neighborIndices))
+	neighbors := make([]crypto.ValidatorKey, 0, len(neighborIndices))
 
 	for _, idx := range neighborIndices {
 		neighbors = append(neighbors, m.currentValidators[idx])
@@ -161,7 +161,7 @@ func (m GridMapper) getValidatorIndices(key ed25519.PublicKey) map[uint16]bool {
 // in the grid structure.
 func findValidatorIndexInSlice(validators safrole.ValidatorsData, key ed25519.PublicKey) (uint16, bool) {
 	for i, validator := range validators {
-		if validator != nil && ed25519.PublicKey.Equal(validator.Ed25519, key) {
+		if !validator.IsEmpty() && ed25519.PublicKey.Equal(validator.Ed25519, key) {
 			return uint16(i), true
 		}
 	}

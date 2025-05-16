@@ -39,7 +39,7 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 
 	currentValidators := safrole.ValidatorsData{}
 	for i := range currentValidators {
-		currentValidators[i] = &crypto.ValidatorKey{
+		currentValidators[i] = crypto.ValidatorKey{
 			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
 		}
 	}
@@ -47,7 +47,7 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 	// Add our public key to the current validators set.
 	publicKey, err := bandersnatch.Public(privateKey)
 	require.NoError(t, err)
-	currentValidators[1] = &crypto.ValidatorKey{
+	currentValidators[1] = crypto.ValidatorKey{
 		Bandersnatch: publicKey,
 	}
 
@@ -176,7 +176,7 @@ func TestVerfyBlockInvalidVRFSignature(t *testing.T) {
 
 	currentValidators := safrole.ValidatorsData{}
 	for i := range currentValidators {
-		currentValidators[i] = &crypto.ValidatorKey{
+		currentValidators[i] = crypto.ValidatorKey{
 			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
 		}
 	}
@@ -184,7 +184,7 @@ func TestVerfyBlockInvalidVRFSignature(t *testing.T) {
 	// Add our public key to the current validators set.
 	publicKey, err := bandersnatch.Public(privateKey)
 	require.NoError(t, err)
-	currentValidators[1] = &crypto.ValidatorKey{
+	currentValidators[1] = crypto.ValidatorKey{
 		Bandersnatch: publicKey,
 	}
 

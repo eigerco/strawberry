@@ -139,7 +139,7 @@ func main() {
 			Ed25519:  ed25519.PublicKey(pub),
 			Metadata: crypto.MetadataKey(meta),
 		}
-		validatorsData[i] = &vk
+		validatorsData[i] = vk
 	}
 
 	vstate := validator.ValidatorState{

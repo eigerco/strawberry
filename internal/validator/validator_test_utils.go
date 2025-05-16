@@ -40,7 +40,7 @@ func RandomTicket(t *testing.T) block.Ticket {
 
 func RandomListOfValidators(t *testing.T) safrole.ValidatorsData {
 	var validators safrole.ValidatorsData
-	for i := uint16(0); i < 2; i++ {
+	for i := uint16(0); i < 1023; i++ {
 		validators[i] = testutils.RandomValidatorKey(t)
 	}
 	return validators
