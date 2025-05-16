@@ -2171,7 +2171,7 @@ func CalculateIntermediateCoreFromAssurances(validators safrole.ValidatorsData, 
 // validateAssurancesSignature (127) ∀a ∈ EA ∶ as ∈ Eκ′[av ]e ⟨XA ⌢ H(E(Hp, af ))⟩
 func validateAssurancesSignature(validators safrole.ValidatorsData, header block.Header, assurances block.AssurancesExtrinsic) error {
 	for _, assurance := range assurances {
-		if int(assurance.ValidatorIndex) >= common.NumberOfValidators || validators[assurance.ValidatorIndex] == nil {
+		if int(assurance.ValidatorIndex) >= common.NumberOfValidators || validators[assurance.ValidatorIndex].IsEmpty() {
 			return ErrBadValidatorIndex
 		}
 		// ∀a ∈ EA ∶ a_a = Hp (eq. 11.11)
@@ -2359,7 +2359,7 @@ func CalculateNewActivityStatistics(block block.Block, timeslot jamtime.Timeslot
 		// π′₀[v]g ≡ a[v]g + (κ′v ∈ R)
 		// Where R is the set of reporter keys defined in 11.26 0.6.2
 		for reporter := range reporters {
-			if currValidators[v] != nil && slices.Equal(currValidators[v].Ed25519, reporter[:]) {
+			if !currValidators[v].IsEmpty() && slices.Equal(currValidators[v].Ed25519, reporter[:]) {
 				newStats.ValidatorsCurrent[v].NumOfGuaranteedReports++
 			}
 		}

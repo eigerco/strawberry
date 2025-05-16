@@ -614,7 +614,7 @@ func (h *WorkReportGuarantor) recipientValidators() []*peer.Peer {
 func (h *WorkReportGuarantor) convertValidatorsDataToPeers(data safrole.ValidatorsData) []*peer.Peer {
 	var peers []*peer.Peer
 	for _, v := range data {
-		if v == nil {
+		if v.IsEmpty() {
 			continue
 		}
 		if p := h.peerSet.GetByEd25519Key(v.Ed25519); p != nil {

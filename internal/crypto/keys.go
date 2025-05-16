@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -30,4 +31,14 @@ type ValidatorKey struct {
 	Ed25519      ed25519.PublicKey
 	Bls          BlsKey
 	Metadata     MetadataKey
+}
+
+func (vk ValidatorKey) IsEmpty() bool {
+	// Check if Ed25519 is empty slice or all zeros
+	edKeyEmpty := len(vk.Ed25519) == 0 || bytes.Equal(vk.Ed25519, make([]byte, len(vk.Ed25519)))
+
+	return vk.Bandersnatch == BandersnatchPublicKey{} &&
+		edKeyEmpty &&
+		vk.Bls == BlsKey{} &&
+		vk.Metadata == MetadataKey{}
 }

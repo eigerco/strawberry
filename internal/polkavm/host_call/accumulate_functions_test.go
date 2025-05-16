@@ -953,7 +953,7 @@ func hash2bytes(s crypto.Hash) []byte {
 	return s[:]
 }
 
-func validatorKey2bytes(v *crypto.ValidatorKey) []byte {
+func validatorKey2bytes(v crypto.ValidatorKey) []byte {
 	return slices.Concat(v.Bandersnatch[:], v.Ed25519, v.Bls[:], v.Metadata[:])
 }
 

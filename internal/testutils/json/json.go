@@ -207,7 +207,7 @@ func (vd ValidatorsData) To() safrole.ValidatorsData {
 	validators := safrole.ValidatorsData{}
 	for i, validatorData := range vd {
 		vk := validatorData.To()
-		validators[i] = &vk
+		validators[i] = vk
 	}
 
 	return validators
@@ -216,7 +216,7 @@ func (vd ValidatorsData) To() safrole.ValidatorsData {
 func NewValidatorsData(validators safrole.ValidatorsData) ValidatorsData {
 	validatorsData := make(ValidatorsData, len(validators))
 	for i, validator := range validators {
-		validatorsData[i] = NewValidatorData(*validator)
+		validatorsData[i] = NewValidatorData(validator)
 	}
 
 	return validatorsData

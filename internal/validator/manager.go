@@ -45,7 +45,7 @@ func NewValidatorManager(keys ValidatorKeys, state ValidatorState, validatorIdx 
 // - Validators in the same row or column in the current epoch
 // - Validators with the same index in the previous and next epochs
 // The function filters out this validator's own key from the returned list.
-func (vm *ValidatorManager) GetNeighbors() ([]*crypto.ValidatorKey, error) {
+func (vm *ValidatorManager) GetNeighbors() ([]crypto.ValidatorKey, error) {
 	all, err := vm.GridMapper.GetAllEpochsNeighborValidators(vm.Index)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (vm *ValidatorManager) IsSlotLeader(fallbackKeys crypto.EpochKeys) bool {
 // filterOutSelfFromValidators removes the validator's own key from the list of validators.
 // This is used when determining which validators to connect to, as a validator doesn't
 // need to establish a connection with itself.
-func filterOutSelfFromValidators(validators []*crypto.ValidatorKey, selfKey ed25519.PublicKey) []*crypto.ValidatorKey {
+func filterOutSelfFromValidators(validators []crypto.ValidatorKey, selfKey ed25519.PublicKey) []crypto.ValidatorKey {
 	j := 0
 	for i := 0; i < len(validators); i++ {
 		if !validators[i].Ed25519.Equal(selfKey) {

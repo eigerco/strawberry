@@ -19,7 +19,7 @@ type State struct {
 	RingCommitment    crypto.RingCommitment // (γz) Bandersnatch ring commitment.
 }
 
-type ValidatorsData [common.NumberOfValidators]*crypto.ValidatorKey
+type ValidatorsData [common.NumberOfValidators]crypto.ValidatorKey
 
 // Returns a new RingVrfVerifier for this these validators.
 func (vsd ValidatorsData) RingVerifier() (*bandersnatch.RingVrfVerifier, error) {
