@@ -88,7 +88,7 @@ func DeserializeState(serializedState map[state.StateKey][]byte) (state.State, e
 // DeserializeService deserializes a service account from the given state key and encoded value.
 func deserializeService(state *state.State, stateKey state.StateKey, encodedValue []byte) error {
 	if !IsServiceAccountKey(stateKey) {
-		return fmt.Errorf("deserialize service: expected service account key, got %v", hex.EncodeToString(stateKey[:]))
+		return fmt.Errorf("deserialize service: expected service account key, got %x", stateKey[:])
 	}
 
 	if state.Services == nil {
