@@ -39,15 +39,12 @@ func TestStateSerialization(t *testing.T) {
 		// Check only the keys we're currently able to serialize.
 		// We are missing storage and preimage meta dicts for now.
 		originalValue, ok := serializedState[key]
-		if !ok {
-			continue
-		}
+		require.True(t, ok, "missed key %s", hex.EncodeToString(key[:]))
 
-		// We aren't deserializing storage and preimate meta dicts yet, so the
-		// total storage / total items fields are incorrect for now. Those
-		// values are the last 12 bytes of the encoded value, so we remove that
-		// for now to be able to test the rest of the service fields in the
-		// meantime.
+		// We aren't deserializing storage dicts yet, so the total storage and
+		// total items fields are incorrect for now. Those values are the last
+		// 12 bytes of the encoded value, so we remove that for now to be able
+		// to test the rest of the service fields in the meantime.
 		if merkle.IsServiceAccountKey(key) {
 			originalValue = originalValue[:len(originalValue)-12]
 			value = value[:len(value)-12]

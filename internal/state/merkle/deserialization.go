@@ -1,6 +1,7 @@
 package merkle
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 
@@ -181,7 +182,7 @@ func IsChapterKey(stateKey state.StateKey) bool {
 }
 
 // Checks if the given state key is a service account key of the format: [255, n0, 0, n1, 0, n2, 0, n3, 0, 0,...]
-// Where n is the server ID uint32 little endian encoded.
+// Where n is the service ID (uint32) little endian encoded.
 func IsServiceAccountKey(stateKey state.StateKey) bool {
 	if !(stateKey[0] == ChapterServiceIndex && // Service account keys start with 255.
 		stateKey[2] == 0 && stateKey[4] == 0 && stateKey[6] == 0) {
@@ -198,22 +199,20 @@ func IsServiceAccountKey(stateKey state.StateKey) bool {
 	return true
 }
 
-// Checks if the given state key is a preimage lookup key of the format: [n0, 0xFE, n1, 0xFF, n2, 0xFF, n3, 0xFF, h4, h5,...]
-// Where n is the server ID uint32 little endian encoded, and h is the hash component.
+// Checks if the given state key is a preimage lookup key of the format: [n0, 0xFD, n1, 0xFF, n2, 0xFF, n3, 0xFF, h4, h5,...]
+// Where n is the service ID (uint32) little endian encoded, and h is the hash component.
 func IsPreimageLookupKey(stateKey state.StateKey) bool {
-	// The preimage lookup keys hash component starts with max(uint32) - 1,
-	// little endian encoded, which is 0xFEFFFFFF. This is interleaved with the
+	// The preimage lookup keys hash component starts with max(uint32) - 2
+	// little endian encoded, which is 0xFDFFFFFF. This is interleaved with the
 	// service ID.
-	return stateKey[1] == 0xFE &&
-		stateKey[3] == 0xFF &&
-		stateKey[5] == 0xFF &&
-		stateKey[7] == 0xFF
+	encodedHashIndex := []byte{stateKey[1], stateKey[3], stateKey[5], stateKey[7]}
+	return binary.LittleEndian.Uint32(encodedHashIndex) == HashPreimageLookupIndex
 
 }
 
 // Extracts the chapter and service ID components from a state key of airty 2.
 // State key is the format: [i, n0, 0, n1, 0, n2, 0, n3, 0, 0,...]
-// where i is an uint8, and n is the server ID uint32 little endian encoded.
+// where i is an uint8, and n is the service ID (uint32) little endian encoded.
 func extractStateKeyChapterServiceID(stateKey state.StateKey) (uint8,
 	block.ServiceId, error) {
 	if !(stateKey[2] == 0 && stateKey[4] == 0 && stateKey[6] == 0) {

@@ -11,9 +11,12 @@ import (
 )
 
 const (
-	ChapterServiceIndex        = 255
-	ChapterStorageIndex        = math.MaxUint32
-	ChapterPreimageLookupIndex = math.MaxUint32 - 1
+	// Chapter component for service account state keys.
+	ChapterServiceIndex = 255
+	// Hash component for storage state keys begins this this value little endian encoded.
+	HashStorageIndex = math.MaxUint32 - 1
+	// Hash component for preimage lookup state keys begins this this value little endian encoded.
+	HashPreimageLookupIndex = math.MaxUint32 - 2
 )
 
 // SerializeState serializes the given state into a map of state keys to byte arrays, for merklization.
@@ -128,7 +131,7 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 }
 
 func serializeStorage(serviceId block.ServiceId, storage map[crypto.Hash][]byte, serializedState map[state.StateKey][]byte) error {
-	chapterIndex, err := jam.Marshal(ChapterStorageIndex)
+	hashIndex, err := jam.Marshal(HashStorageIndex)
 	if err != nil {
 		return err
 	}
@@ -140,8 +143,8 @@ func serializeStorage(serviceId block.ServiceId, storage map[crypto.Hash][]byte,
 		}
 
 		var hashComponent stateConstructorHashComponent
-		copy(hashComponent[:4], chapterIndex)
-		copy(hashComponent[4:], hash[:28])
+		copy(hashComponent[:4], hashIndex)
+		copy(hashComponent[4:], hash[:24])
 		stateKey, err := generateStateKeyInterleaved(serviceId, hashComponent)
 		if err != nil {
 			return err
@@ -153,7 +156,7 @@ func serializeStorage(serviceId block.ServiceId, storage map[crypto.Hash][]byte,
 }
 
 func serializePreimageLookup(serviceId block.ServiceId, preimages map[crypto.Hash][]byte, serializedState map[state.StateKey][]byte) error {
-	chapterIndex, err := jam.Marshal(ChapterPreimageLookupIndex)
+	hashIndex, err := jam.Marshal(HashPreimageLookupIndex)
 	if err != nil {
 		return err
 	}
@@ -165,8 +168,8 @@ func serializePreimageLookup(serviceId block.ServiceId, preimages map[crypto.Has
 		}
 
 		var hashComponent stateConstructorHashComponent
-		copy(hashComponent[:4], chapterIndex)
-		copy(hashComponent[4:], hash[1:29])
+		copy(hashComponent[:4], hashIndex)
+		copy(hashComponent[4:], hash[1:25])
 		stateKey, err := generateStateKeyInterleaved(serviceId, hashComponent)
 		if err != nil {
 			return err
@@ -191,7 +194,7 @@ func serializePreimageMeta(serviceId block.ServiceId, preimageMeta map[service.P
 
 		var hashComponent stateConstructorHashComponent
 		copy(hashComponent[:4], encodedLength)
-		copy(hashComponent[4:], hashedPreImageHistoricalTimeslots[2:30])
+		copy(hashComponent[4:], hashedPreImageHistoricalTimeslots[2:26])
 		stateKey, err := generateStateKeyInterleaved(serviceId, hashComponent)
 		if err != nil {
 			return err
