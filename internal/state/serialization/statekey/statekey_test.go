@@ -1,4 +1,4 @@
-package merkle
+package statekey
 
 import (
 	"fmt"
@@ -12,26 +12,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestGenerateStateKeyInterleavedBasic verifies that the state key generation works as expected.
-func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
+// TestNewService verifies that the state key generation works as expected for services.
+func TestNewService(t *testing.T) {
 	tests := []struct {
 		name      string
-		i         uint8
 		serviceId block.ServiceId
 	}{
 		{
 			name:      "basic case",
-			i:         1,
 			serviceId: 100,
 		},
 		{
 			name:      "max values",
-			i:         255,
 			serviceId: block.ServiceId(math.MaxUint32),
 		},
 		{
 			name:      "zero values",
-			i:         0,
 			serviceId: 0,
 		},
 	}
@@ -39,15 +35,15 @@ func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Generate the state key
-			stateKey, err := generateStateKeyInterleavedBasic(tt.i, tt.serviceId)
+			stateKey, err := NewService(tt.serviceId)
 			require.NoError(t, err)
 
 			// Get encoded service ID for verification
 			encodedServiceId, err := jam.Marshal(tt.serviceId)
 			require.NoError(t, err)
 
-			// Verify first byte is i
-			assert.Equal(t, tt.i, stateKey[0], "first byte should be i")
+			// Verify first byte is 255
+			assert.Equal(t, uint8(255), stateKey[0], "first byte should be 255")
 
 			// Verify the interleaved pattern:
 			// [i, s0, 0, s1, 0, s2, 0, s3, 0, 0, ...]
@@ -67,24 +63,24 @@ func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
 			}
 
 			// Verify we can extract the service ID back
-			_, extractedServiceId, err := extractStateKeyChapterServiceID(stateKey)
+			_, extractedServiceId, err := stateKey.ExtractChapterServiceID()
 			require.NoError(t, err)
 			assert.Equal(t, tt.serviceId, extractedServiceId)
 		})
 	}
 }
 
-// TestGenerateStateKeyInterleaved verifies that the interleaving function works as expected.
-func TestGenerateStateKeyInterleaved(t *testing.T) {
+// TestNewServiceDict verifies that the interleaving function works as expected.
+func TestNewServiceDict(t *testing.T) {
 	serviceId := block.ServiceId(1234)
-	hash := stateConstructorHashComponent{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+	hash := HashComponent{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 
 	// Get encoded service ID for verification
 	encodedServiceId, err := jam.Marshal(serviceId)
 	require.NoError(t, err)
 
 	// Generate the interleaved state key
-	stateKey, err := generateStateKeyInterleaved(serviceId, hash)
+	stateKey, err := NewServiceDict(serviceId, hash)
 	require.NoError(t, err)
 
 	// Verify that the first 8 bytes are interleaved between serviceId and hash
@@ -106,16 +102,4 @@ func TestGenerateStateKeyInterleaved(t *testing.T) {
 			assert.Equal(t, byte(0), rest[i], "should be zero at position %d", i)
 		}
 	}
-}
-
-// TestCombineEncoded verifies that combining multiple encoded fields works as expected.
-func TestCombineEncoded(t *testing.T) {
-	field1 := []byte{0x01, 0x02}
-	field2 := []byte{0x03, 0x04}
-
-	// Combine the fields
-	combined := combineEncoded(field1, field2)
-
-	// Verify the combined result
-	assert.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, combined)
 }

@@ -1,32 +1,27 @@
-package merkle
+package serialization
 
 import (
-	"math"
+	"bytes"
+	"crypto/ed25519"
+	"slices"
+	"sort"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-)
-
-const (
-	// Chapter component for service account state keys.
-	ChapterServiceIndex = 255
-	// Hash component for storage state keys begins this this value little endian encoded.
-	HashStorageIndex = math.MaxUint32 - 1
-	// Hash component for preimage lookup state keys begins this this value little endian encoded.
-	HashPreimageLookupIndex = math.MaxUint32 - 2
 )
 
 // SerializeState serializes the given state into a map of state keys to byte arrays, for merklization.
 // Graypaper 0.5.4.
-func SerializeState(s state.State) (map[state.StateKey][]byte, error) {
-	serializedState := make(map[state.StateKey][]byte)
+func SerializeState(s state.State) (map[statekey.StateKey][]byte, error) {
+	serializedState := make(map[statekey.StateKey][]byte)
 
 	// Helper function to serialize individual fields
 	serializeField := func(key uint8, value interface{}) error {
-		stateKey := generateStateKeyBasic(key)
+		stateKey := statekey.NewBasic(key)
 		encodedValue, err := jam.Marshal(value)
 		if err != nil {
 			return err
@@ -73,7 +68,7 @@ func SerializeState(s state.State) (map[state.StateKey][]byte, error) {
 	return serializedState, nil
 }
 
-func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[state.StateKey][]byte) error {
+func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[statekey.StateKey][]byte) error {
 	encodedCodeHash, err := jam.Marshal(serviceAccount.CodeHash)
 	if err != nil {
 		return err
@@ -109,7 +104,7 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 		encodedTotalStorageSize,
 		encodedTotalItems,
 	)
-	stateKey, err := generateStateKeyInterleavedBasic(ChapterServiceIndex, serviceId)
+	stateKey, err := statekey.NewService(serviceId)
 	if err != nil {
 		return err
 	}
@@ -130,36 +125,25 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 	return nil
 }
 
-func serializeStorage(serviceId block.ServiceId, storage map[crypto.Hash][]byte, serializedState map[state.StateKey][]byte) error {
-	hashIndex, err := jam.Marshal(HashStorageIndex)
-	if err != nil {
-		return err
-	}
-
+func serializeStorage(serviceId block.ServiceId, storage map[crypto.Hash][]byte, serializedState map[statekey.StateKey][]byte) error {
 	for hash, value := range storage {
 		encodedValue, err := jam.Marshal(value)
 		if err != nil {
 			return err
 		}
 
-		var hashComponent stateConstructorHashComponent
-		copy(hashComponent[:4], hashIndex)
-		copy(hashComponent[4:], hash[:24])
-		stateKey, err := generateStateKeyInterleaved(serviceId, hashComponent)
+		stateKey, err := statekey.NewStorage(serviceId, hash)
 		if err != nil {
 			return err
 		}
+
 		serializedState[stateKey] = encodedValue
 	}
 
 	return nil
 }
 
-func serializePreimageLookup(serviceId block.ServiceId, preimages map[crypto.Hash][]byte, serializedState map[state.StateKey][]byte) error {
-	hashIndex, err := jam.Marshal(HashPreimageLookupIndex)
-	if err != nil {
-		return err
-	}
+func serializePreimageLookup(serviceId block.ServiceId, preimages map[crypto.Hash][]byte, serializedState map[statekey.StateKey][]byte) error {
 
 	for hash, value := range preimages {
 		encodedValue, err := jam.Marshal(value)
@@ -167,35 +151,25 @@ func serializePreimageLookup(serviceId block.ServiceId, preimages map[crypto.Has
 			return err
 		}
 
-		var hashComponent stateConstructorHashComponent
-		copy(hashComponent[:4], hashIndex)
-		copy(hashComponent[4:], hash[1:25])
-		stateKey, err := generateStateKeyInterleaved(serviceId, hashComponent)
+		stateKey, err := statekey.NewPreimageLookup(serviceId, hash)
 		if err != nil {
 			return err
 		}
+
 		serializedState[stateKey] = encodedValue
 	}
 
 	return nil
 }
 
-func serializePreimageMeta(serviceId block.ServiceId, preimageMeta map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots, serializedState map[state.StateKey][]byte) error {
+func serializePreimageMeta(serviceId block.ServiceId, preimageMeta map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots, serializedState map[statekey.StateKey][]byte) error {
 	for key, preImageHistoricalTimeslots := range preimageMeta {
-		encodedLength, err := jam.Marshal(key.Length)
-		if err != nil {
-			return err
-		}
 		encodedPreImageHistoricalTimeslots, err := jam.Marshal(preImageHistoricalTimeslots)
 		if err != nil {
 			return err
 		}
-		hashedPreImageHistoricalTimeslots := crypto.HashData(encodedPreImageHistoricalTimeslots)
 
-		var hashComponent stateConstructorHashComponent
-		copy(hashComponent[:4], encodedLength)
-		copy(hashComponent[4:], hashedPreImageHistoricalTimeslots[2:26])
-		stateKey, err := generateStateKeyInterleaved(serviceId, hashComponent)
+		stateKey, err := statekey.NewPreimageMeta(serviceId, key.Hash, uint32(key.Length))
 		if err != nil {
 			return err
 		}
@@ -203,4 +177,37 @@ func serializePreimageMeta(serviceId block.ServiceId, preimageMeta map[service.P
 	}
 
 	return nil
+}
+
+// combineEncoded takes multiple encoded byte arrays and concatenates them into a single byte array.
+func combineEncoded(components ...[]byte) []byte {
+	var buffer bytes.Buffer
+
+	for _, component := range components {
+		buffer.Write(component)
+	}
+
+	return buffer.Bytes()
+}
+
+// sortByteSlicesCopy returns a sorted copy of a slice of some byte-based types
+func sortByteSlicesCopy(slice interface{}) interface{} {
+	switch v := slice.(type) {
+	case []crypto.Hash:
+		// Clone the slice to avoid modifying the original
+		copySlice := slices.Clone(v)
+		sort.Slice(copySlice, func(i, j int) bool {
+			return bytes.Compare(copySlice[i][:], copySlice[j][:]) < 0
+		})
+		return copySlice
+	case []ed25519.PublicKey:
+		// Clone the slice to avoid modifying the original
+		copySlice := slices.Clone(v)
+		sort.Slice(copySlice, func(i, j int) bool {
+			return bytes.Compare(copySlice[i], copySlice[j]) < 0
+		})
+		return copySlice
+	default:
+		panic("unsupported type for sorting")
+	}
 }

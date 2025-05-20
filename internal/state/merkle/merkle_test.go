@@ -3,6 +3,7 @@ package merkle
 import (
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/state/serialization"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 
@@ -31,7 +32,7 @@ func TestMerklizeState_ConsistentRoot(t *testing.T) {
 	store2 := store.NewTrie(kv2)
 
 	// Generate identical states
-	state1 := RandomState(t)
+	state1 := serialization.RandomState(t)
 	state2 := state1
 
 	// Test
@@ -72,8 +73,8 @@ func TestMerklizeState_DifferentState(t *testing.T) {
 	store2 := store.NewTrie(kv2)
 
 	// Generate random states
-	state1 := RandomState(t)
-	state2 := RandomState(t)
+	state1 := serialization.RandomState(t)
+	state2 := serialization.RandomState(t)
 
 	// Ensure states are different
 	require.NotEqual(t, state1, state2, "Test setup failed: Generated states are identical")
