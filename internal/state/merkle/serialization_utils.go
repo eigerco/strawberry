@@ -10,7 +10,6 @@ import (
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 )
 
@@ -77,23 +76,6 @@ func generateStateKeyInterleaved(s block.ServiceId, h stateConstructorHashCompon
 	copy(result[8:], h[4:])
 
 	return result, nil
-}
-
-// calculateFootprintSize calculates the storage footprint size (al) based on Equation 94.
-func calculateFootprintSize(storage map[crypto.Hash][]byte, preimageMeta map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots) uint64 {
-	var totalSize uint64 = 0
-
-	// Calculate the footprint size for the preimage metadata
-	for key := range preimageMeta {
-		totalSize += uint64(81 + key.Length)
-	}
-
-	// Calculate the footprint size for the storage items
-	for _, value := range storage {
-		totalSize += uint64(32 + len(value))
-	}
-
-	return totalSize
 }
 
 // combineEncoded takes multiple encoded byte arrays and concatenates them into a single byte array.

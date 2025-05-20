@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"testing"
@@ -34,10 +35,23 @@ func TestStateSerialization(t *testing.T) {
 	newSerializedState, err := merkle.SerializeState(decodedState)
 	require.NoError(t, err)
 
-	// Check only the keys we're currently able to serialize.
-	// We are missing storage, preimage, and preimage lookup dicts for now.
 	for key, value := range newSerializedState {
-		require.Equal(t, value, newSerializedState[key])
+		// Check only the keys we're currently able to serialize.
+		// We are missing storage and preimage meta dicts for now.
+		originalValue, ok := serializedState[key]
+		require.True(t, ok, "missed key %s", hex.EncodeToString(key[:]))
+
+		// We aren't deserializing storage dicts yet, so the total storage and
+		// total items fields are incorrect for now. Those values are the last
+		// 12 bytes of the encoded value, so we remove that for now to be able
+		// to test the rest of the service fields in the meantime.
+		if merkle.IsServiceAccountKey(key) {
+			originalValue = originalValue[:len(originalValue)-12]
+			value = value[:len(value)-12]
+		}
+
+		require.Equal(t, hex.EncodeToString(originalValue), hex.EncodeToString(value),
+			"key %s", hex.EncodeToString(key[:]))
 	}
 
 }
