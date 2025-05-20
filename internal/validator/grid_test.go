@@ -40,11 +40,11 @@ func TestGetAllEpochsNeighborValidators(t *testing.T) {
 func TestFindValidatorIndex(t *testing.T) {
 	key := ed25519.PublicKey("key")
 	validators := safrole.ValidatorsData{}
-	validators[42] = &crypto.ValidatorKey{Ed25519: key}
+	validators[1] = crypto.ValidatorKey{Ed25519: key}
 	mapper := GridMapper{currentValidators: validators}
 	index, found := mapper.FindValidatorIndex(key)
 	assert.True(t, found)
-	assert.Equal(t, uint16(42), index)
+	assert.Equal(t, uint16(1), index)
 
 	_, found = mapper.FindValidatorIndex(ed25519.PublicKey("missing"))
 	assert.False(t, found)
@@ -75,15 +75,15 @@ func TestIsNeighbor(t *testing.T) {
 	crossEpochIdx := uint16(42)
 
 	// Setup validators in current epoch
-	currentValidators[sameRowIdx1] = &crypto.ValidatorKey{Ed25519: key1}
-	currentValidators[sameRowIdx2] = &crypto.ValidatorKey{Ed25519: key2}
-	currentValidators[sameColIdx2] = &crypto.ValidatorKey{Ed25519: key3}
-	currentValidators[differentIdx] = &crypto.ValidatorKey{Ed25519: key4}
-	currentValidators[crossEpochIdx] = &crypto.ValidatorKey{Ed25519: key5}
+	currentValidators[sameRowIdx1] = crypto.ValidatorKey{Ed25519: key1}
+	currentValidators[sameRowIdx2] = crypto.ValidatorKey{Ed25519: key2}
+	currentValidators[sameColIdx2] = crypto.ValidatorKey{Ed25519: key3}
+	currentValidators[differentIdx] = crypto.ValidatorKey{Ed25519: key4}
+	currentValidators[crossEpochIdx] = crypto.ValidatorKey{Ed25519: key5}
 
 	// Setup validators in archived and queued epochs
-	archivedValidators[crossEpochIdx] = &crypto.ValidatorKey{Ed25519: key1}
-	queuedValidators[crossEpochIdx] = &crypto.ValidatorKey{Ed25519: key2}
+	archivedValidators[crossEpochIdx] = crypto.ValidatorKey{Ed25519: key1}
+	queuedValidators[crossEpochIdx] = crypto.ValidatorKey{Ed25519: key2}
 
 	mapper := GridMapper{
 		currentValidators:  currentValidators,

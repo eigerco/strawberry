@@ -1,0 +1,70 @@
+//go:build integration
+
+package integration_test
+
+import (
+	"encoding/hex"
+	"encoding/json"
+	"os"
+	"testing"
+
+	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/state/merkle"
+	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/stretchr/testify/require"
+)
+
+func TestStateSerialization(t *testing.T) {
+	b, err := os.ReadFile("vectors_community/state_serialization/trace.json")
+	require.NoError(t, err)
+
+	tv := TraceVector{}
+	err = json.Unmarshal(b, &tv)
+	require.NoError(t, err)
+
+	serializedState := map[state.StateKey][]byte{}
+	for _, kv := range tv.PostState.KeyVals {
+		key := testutils.MustFromHex(t, kv.Key)
+		value := testutils.MustFromHex(t, kv.Value)
+		serializedState[state.StateKey(key)] = value
+	}
+
+	decodedState, err := merkle.DeserializeState(serializedState)
+	require.NoError(t, err)
+
+	newSerializedState, err := merkle.SerializeState(decodedState)
+	require.NoError(t, err)
+
+	for key, value := range newSerializedState {
+		// Check only the keys we're currently able to serialize.
+		// We are missing storage and preimage meta dicts for now.
+		originalValue, ok := serializedState[key]
+		require.True(t, ok, "missed key %s", hex.EncodeToString(key[:]))
+
+		// We aren't deserializing storage dicts yet, so the total storage and
+		// total items fields are incorrect for now. Those values are the last
+		// 12 bytes of the encoded value, so we remove that for now to be able
+		// to test the rest of the service fields in the meantime.
+		if merkle.IsServiceAccountKey(key) {
+			originalValue = originalValue[:len(originalValue)-12]
+			value = value[:len(value)-12]
+		}
+
+		require.Equal(t, hex.EncodeToString(originalValue), hex.EncodeToString(value),
+			"key %s", hex.EncodeToString(key[:]))
+	}
+
+}
+
+type TraceVector struct {
+	PostState TraceVectorState `json:"post_state"`
+	PreState  TraceVectorState `json:"pre_state"`
+}
+
+type TraceVectorState struct {
+	StateRoot string `json:"state_root"`
+	KeyVals   []struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	} `json:"keyvals"`
+}

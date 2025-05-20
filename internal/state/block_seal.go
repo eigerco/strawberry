@@ -325,7 +325,7 @@ func VerifyBlockSignatures(
 		// currentValidators and seeing which validator's bandersnatch public
 		// key is able to verify the seal signature.
 		for _, keys := range currentValidators {
-			if keys == nil {
+			if keys.IsEmpty() {
 				continue
 			}
 

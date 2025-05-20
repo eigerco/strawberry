@@ -10,6 +10,15 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
+const (
+	// Chapter component for service account state keys.
+	ChapterServiceIndex = 255
+	// Hash component for storage state keys begins this this value little endian encoded.
+	HashStorageIndex = math.MaxUint32 - 1
+	// Hash component for preimage lookup state keys begins this this value little endian encoded.
+	HashPreimageLookupIndex = math.MaxUint32 - 2
+)
+
 // SerializeState serializes the given state into a map of state keys to byte arrays, for merklization.
 // Graypaper 0.5.4.
 func SerializeState(s state.State) (map[state.StateKey][]byte, error) {
@@ -34,6 +43,8 @@ func SerializeState(s state.State) (map[state.StateKey][]byte, error) {
 		{1, s.CoreAuthorizersPool},
 		{2, s.PendingAuthorizersQueues},
 		{3, s.RecentBlocks},
+		{4, s.ValidatorState.SafroleState},
+		{5, s.PastJudgements},
 		{6, s.EntropyPool},
 		{7, s.ValidatorState.QueuedValidators},
 		{8, s.ValidatorState.CurrentValidators},
@@ -52,16 +63,6 @@ func SerializeState(s state.State) (map[state.StateKey][]byte, error) {
 		}
 	}
 
-	// Serialize SafroleState specific fields
-	if err := serializeSafroleState(s, serializedState); err != nil {
-		return nil, err
-	}
-
-	// Serialize Past Judgements
-	if err := serializeJudgements(s, serializedState); err != nil {
-		return nil, err
-	}
-
 	// Serialize Services
 	for serviceId, serviceAccount := range s.Services {
 		if err := serializeServiceAccount(serviceId, serviceAccount, serializedState); err != nil {
@@ -70,47 +71,6 @@ func SerializeState(s state.State) (map[state.StateKey][]byte, error) {
 	}
 
 	return serializedState, nil
-}
-
-func serializeSafroleState(state state.State, serializedState map[state.StateKey][]byte) error {
-	encodedSafroleState, err := jam.Marshal(state.ValidatorState.SafroleState)
-	if err != nil {
-		return err
-	}
-
-	stateKey := generateStateKeyBasic(4)
-	serializedState[stateKey] = encodedSafroleState
-	return nil
-}
-
-func serializeJudgements(state state.State, serializedState map[state.StateKey][]byte) error {
-	sortedGoodWorkReports := sortByteSlicesCopy(state.PastJudgements.GoodWorkReports)
-	encodedGoodWorkReports, err := jam.Marshal(sortedGoodWorkReports)
-	if err != nil {
-		return err
-	}
-	encodedBadWorkReports, err := jam.Marshal(sortByteSlicesCopy(state.PastJudgements.BadWorkReports))
-	if err != nil {
-		return err
-	}
-	encodedWonkyWorkReports, err := jam.Marshal(sortByteSlicesCopy(state.PastJudgements.WonkyWorkReports))
-	if err != nil {
-		return err
-	}
-	encodedOffendingValidators, err := jam.Marshal(sortByteSlicesCopy(state.PastJudgements.OffendingValidators))
-	if err != nil {
-		return err
-	}
-
-	combined := combineEncoded(
-		encodedGoodWorkReports,
-		encodedBadWorkReports,
-		encodedWonkyWorkReports,
-		encodedOffendingValidators,
-	)
-	stateKey := generateStateKeyBasic(5)
-	serializedState[stateKey] = combined
-	return nil
 }
 
 func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[state.StateKey][]byte) error {
@@ -131,82 +91,97 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 		return err
 	}
 
-	totalFootprintSize := calculateFootprintSize(serviceAccount.Storage, serviceAccount.PreimageMeta) // ao graypaper 0.5.4
-	encodedFootprintSize, err := jam.Marshal(totalFootprintSize)
+	encodedTotalStorageSize, err := jam.Marshal(serviceAccount.TotalStorageSize())
 	if err != nil {
 		return err
 	}
 
-	footprintItems := 2*len(serviceAccount.PreimageMeta) + len(serviceAccount.Storage)
-	encodedFootprintItems, err := jam.Marshal(footprintItems)
+	encodedTotalItems, err := jam.Marshal(serviceAccount.TotalItems())
 	if err != nil {
 		return err
 	}
 
-	combined := combineEncoded(
+	encodedServiceValue := combineEncoded(
 		encodedCodeHash,
 		encodedBalance,
 		encodedGasLimitForAccumulator,
 		encodedGasLimitOnTransfer,
-		encodedFootprintSize,
-		encodedFootprintItems,
+		encodedTotalStorageSize,
+		encodedTotalItems,
 	)
-	stateKey, err := generateStateKeyInterleavedBasic(255, serviceId)
+	stateKey, err := generateStateKeyInterleavedBasic(ChapterServiceIndex, serviceId)
 	if err != nil {
 		return err
 	}
-	serializedState[stateKey] = combined
+	serializedState[stateKey] = encodedServiceValue
 
-	// Serialize storage and preimage items
-	if err := serializeStorageAndPreimage(serviceId, serviceAccount, serializedState); err != nil {
+	if err := serializeStorage(serviceId, serviceAccount.Storage, serializedState); err != nil {
+		return err
+	}
+
+	if err := serializePreimageLookup(serviceId, serviceAccount.PreimageLookup, serializedState); err != nil {
+		return err
+	}
+
+	if err := serializePreimageMeta(serviceId, serviceAccount.PreimageMeta, serializedState); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[state.StateKey][]byte) error {
-	encodedMaxUint32, err := jam.Marshal(math.MaxUint32)
+func serializeStorage(serviceId block.ServiceId, storage map[crypto.Hash][]byte, serializedState map[state.StateKey][]byte) error {
+	hashIndex, err := jam.Marshal(HashStorageIndex)
 	if err != nil {
 		return err
 	}
-	for hash, value := range serviceAccount.Storage {
+
+	for hash, value := range storage {
 		encodedValue, err := jam.Marshal(value)
 		if err != nil {
 			return err
 		}
 
-		var combined stateConstructorHashComponent
-		copy(combined[:4], encodedMaxUint32)
-		copy(combined[4:], hash[:28])
-		stateKey, err := generateStateKeyInterleaved(serviceId, combined)
+		var hashComponent stateConstructorHashComponent
+		copy(hashComponent[:4], hashIndex)
+		copy(hashComponent[4:], hash[:24])
+		stateKey, err := generateStateKeyInterleaved(serviceId, hashComponent)
 		if err != nil {
 			return err
 		}
 		serializedState[stateKey] = encodedValue
 	}
 
-	encodedMaxUint32MinusOne, err := jam.Marshal(math.MaxUint32 - 1)
+	return nil
+}
+
+func serializePreimageLookup(serviceId block.ServiceId, preimages map[crypto.Hash][]byte, serializedState map[state.StateKey][]byte) error {
+	hashIndex, err := jam.Marshal(HashPreimageLookupIndex)
 	if err != nil {
 		return err
 	}
-	for hash, value := range serviceAccount.PreimageLookup {
+
+	for hash, value := range preimages {
 		encodedValue, err := jam.Marshal(value)
 		if err != nil {
 			return err
 		}
 
-		var combined stateConstructorHashComponent
-		copy(combined[:4], encodedMaxUint32MinusOne)
-		copy(combined[4:], hash[1:29])
-		stateKey, err := generateStateKeyInterleaved(serviceId, combined)
+		var hashComponent stateConstructorHashComponent
+		copy(hashComponent[:4], hashIndex)
+		copy(hashComponent[4:], hash[1:25])
+		stateKey, err := generateStateKeyInterleaved(serviceId, hashComponent)
 		if err != nil {
 			return err
 		}
 		serializedState[stateKey] = encodedValue
 	}
 
-	for key, preImageHistoricalTimeslots := range serviceAccount.PreimageMeta {
+	return nil
+}
+
+func serializePreimageMeta(serviceId block.ServiceId, preimageMeta map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots, serializedState map[state.StateKey][]byte) error {
+	for key, preImageHistoricalTimeslots := range preimageMeta {
 		encodedLength, err := jam.Marshal(key.Length)
 		if err != nil {
 			return err
@@ -217,14 +192,15 @@ func serializeStorageAndPreimage(serviceId block.ServiceId, serviceAccount servi
 		}
 		hashedPreImageHistoricalTimeslots := crypto.HashData(encodedPreImageHistoricalTimeslots)
 
-		var combined stateConstructorHashComponent
-		copy(combined[:4], encodedLength)
-		copy(combined[4:], hashedPreImageHistoricalTimeslots[2:30])
-		stateKey, err := generateStateKeyInterleaved(serviceId, combined)
+		var hashComponent stateConstructorHashComponent
+		copy(hashComponent[:4], encodedLength)
+		copy(hashComponent[4:], hashedPreImageHistoricalTimeslots[2:26])
+		stateKey, err := generateStateKeyInterleaved(serviceId, hashComponent)
 		if err != nil {
 			return err
 		}
 		serializedState[stateKey] = encodedPreImageHistoricalTimeslots
 	}
+
 	return nil
 }

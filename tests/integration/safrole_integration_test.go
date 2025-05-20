@@ -197,7 +197,7 @@ func TestSafrole(t *testing.T) {
 func toValidatorState(t *testing.T, s SafroleTestVectorState) validator.ValidatorState {
 	currentValidators := safrole.ValidatorsData{}
 	for i, vd := range s.Kappa {
-		currentValidators[i] = &crypto.ValidatorKey{
+		currentValidators[i] = crypto.ValidatorKey{
 			Bandersnatch: crypto.BandersnatchPublicKey(testutils.MustFromHex(t, vd.Bandersnatch)),
 			Ed25519:      ed25519.PublicKey(testutils.MustFromHex(t, vd.Ed25519)),
 			Bls:          crypto.BlsKey(testutils.MustFromHex(t, vd.Bls)),
@@ -207,7 +207,7 @@ func toValidatorState(t *testing.T, s SafroleTestVectorState) validator.Validato
 
 	archivedValidators := safrole.ValidatorsData{}
 	for i, vd := range s.Lambda {
-		archivedValidators[i] = &crypto.ValidatorKey{
+		archivedValidators[i] = crypto.ValidatorKey{
 			Bandersnatch: crypto.BandersnatchPublicKey(testutils.MustFromHex(t, vd.Bandersnatch)),
 			Ed25519:      ed25519.PublicKey(testutils.MustFromHex(t, vd.Ed25519)),
 			Bls:          crypto.BlsKey(testutils.MustFromHex(t, vd.Bls)),
@@ -217,7 +217,7 @@ func toValidatorState(t *testing.T, s SafroleTestVectorState) validator.Validato
 
 	queuedValidators := safrole.ValidatorsData{}
 	for i, vd := range s.Iota {
-		queuedValidators[i] = &crypto.ValidatorKey{
+		queuedValidators[i] = crypto.ValidatorKey{
 			Bandersnatch: crypto.BandersnatchPublicKey(testutils.MustFromHex(t, vd.Bandersnatch)),
 			Ed25519:      ed25519.PublicKey(testutils.MustFromHex(t, vd.Ed25519)),
 			Bls:          crypto.BlsKey(testutils.MustFromHex(t, vd.Bls)),
@@ -227,7 +227,7 @@ func toValidatorState(t *testing.T, s SafroleTestVectorState) validator.Validato
 
 	nextValidators := safrole.ValidatorsData{}
 	for i, vd := range s.GammaK {
-		nextValidators[i] = &crypto.ValidatorKey{
+		nextValidators[i] = crypto.ValidatorKey{
 			Bandersnatch: crypto.BandersnatchPublicKey(testutils.MustFromHex(t, vd.Bandersnatch)),
 			Ed25519:      ed25519.PublicKey(testutils.MustFromHex(t, vd.Ed25519)),
 			Bls:          crypto.BlsKey(testutils.MustFromHex(t, vd.Bls)),

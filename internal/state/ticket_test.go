@@ -17,7 +17,7 @@ func TestCreateVerifyTicketProof(t *testing.T) {
 
 	pendingValidators := safrole.ValidatorsData{}
 	for i := range pendingValidators {
-		pendingValidators[i] = &crypto.ValidatorKey{
+		pendingValidators[i] = crypto.ValidatorKey{
 			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
 		}
 	}
@@ -25,7 +25,7 @@ func TestCreateVerifyTicketProof(t *testing.T) {
 	// Add our public key to the current validators set.
 	publicKey, err := bandersnatch.Public(privateKey)
 	require.NoError(t, err)
-	pendingValidators[1] = &crypto.ValidatorKey{
+	pendingValidators[1] = crypto.ValidatorKey{
 		Bandersnatch: publicKey,
 	}
 
@@ -49,7 +49,7 @@ func TestCreateTicketProofInvalidValidators(t *testing.T) {
 
 	pendingValidators := safrole.ValidatorsData{}
 	for i := range pendingValidators {
-		pendingValidators[i] = &crypto.ValidatorKey{
+		pendingValidators[i] = crypto.ValidatorKey{
 			// Invalid public keys. Can't be all zero'd out.
 			Bandersnatch: crypto.BandersnatchPublicKey{},
 		}
@@ -64,7 +64,7 @@ func TestCreateTicketProofInvalidPrivateKey(t *testing.T) {
 
 	pendingValidators := safrole.ValidatorsData{}
 	for i := range pendingValidators {
-		pendingValidators[i] = &crypto.ValidatorKey{
+		pendingValidators[i] = crypto.ValidatorKey{
 			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
 		}
 	}
@@ -78,7 +78,7 @@ func TestVerifyTicketProofInvalidValidators(t *testing.T) {
 
 	pendingValidators := safrole.ValidatorsData{}
 	for i := range pendingValidators {
-		pendingValidators[i] = &crypto.ValidatorKey{
+		pendingValidators[i] = crypto.ValidatorKey{
 			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
 		}
 	}
@@ -86,7 +86,7 @@ func TestVerifyTicketProofInvalidValidators(t *testing.T) {
 	// Add our public key to the current validators set.
 	publicKey, err := bandersnatch.Public(privateKey)
 	require.NoError(t, err)
-	pendingValidators[1] = &crypto.ValidatorKey{
+	pendingValidators[1] = crypto.ValidatorKey{
 		Bandersnatch: publicKey,
 	}
 
@@ -102,7 +102,7 @@ func TestVerifyTicketProofInvalidValidators(t *testing.T) {
 func TestVerifyTicketProofInvalidTicketProof(t *testing.T) {
 	pendingValidators := safrole.ValidatorsData{}
 	for i := range pendingValidators {
-		pendingValidators[i] = &crypto.ValidatorKey{
+		pendingValidators[i] = crypto.ValidatorKey{
 			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
 		}
 	}

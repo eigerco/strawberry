@@ -191,8 +191,8 @@ func mapPsi(psi Psi) state.Judgements {
 	}
 }
 
-func mapKey(kappa ValidatorKey) *crypto.ValidatorKey {
-	return &crypto.ValidatorKey{
+func mapKey(kappa ValidatorKey) crypto.ValidatorKey {
+	return crypto.ValidatorKey{
 		Bandersnatch: crypto.BandersnatchPublicKey(mustStringToHex(kappa.Bandersnatch)),
 		Ed25519:      ed25519.PublicKey(mustStringToHex(kappa.Ed25519)),
 		Bls:          crypto.BlsKey(mustStringToHex(kappa.BLS)),

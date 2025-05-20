@@ -49,6 +49,7 @@ type Node struct {
 	segmentShardRequestJustSender *handlers.SegmentShardRequestJustificationSender
 	stateReqester                 *handlers.StateRequester
 	WorkReportGuarantor           *handlers.WorkReportGuarantor
+	workReportRequester           *handlers.WorkReportRequester
 	WorkPackageSharingHandler     *handlers.WorkPackageSharingHandler
 	currentCoreIndex              uint16
 	currentGuarantorPeers         []*peer.Peer
@@ -122,14 +123,34 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	node.blockRequester = &handlers.BlockRequester{}
 
-	wpSharerHandler := handlers.NewWorkReportGuarantor(validatorIdx, keys.EdPrv, authorization.New(state), refine.New(state), state, peerSet)
+	wrStore := store.NewWorkReport(kvStore)
+
+	node.workReportRequester = handlers.NewWorkReportRequester()
+
+	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkReportRequest, handlers.NewWorkReportRequestHandler(wrStore))
+
+	authInvocation := authorization.New(state)
+	refineInvocation := refine.New(state)
+
+	wpSharerHandler := handlers.NewWorkReportGuarantor(
+		validatorIdx,
+		keys.EdPrv,
+		authInvocation,
+		refineInvocation,
+		state,
+		peerSet,
+		wrStore,
+		node.workReportRequester,
+		handlers.NewWorkPackageSharingRequester(),
+		handlers.NewWorkReportDistributionSender(),
+	)
 	node.WorkReportGuarantor = wpSharerHandler
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(&handlers.ImportSegments{}, wpSharerHandler))
 	submitter := &handlers.WorkPackageSubmitter{}
 	node.workPackageSubmitter = submitter
 
-	node.WorkPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authorization.New(state), refine.New(state), keys.EdPrv, state.Services)
+	node.WorkPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authInvocation, refineInvocation, keys.EdPrv, state.Services, wrStore)
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, node.WorkPackageSharingHandler)
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkReportDist, handlers.NewWorkReportDistributionHandler())
@@ -290,6 +311,27 @@ func (n *Node) SubmitWorkPackage(ctx context.Context, coreIndex uint16, pkg work
 	}
 
 	return nil
+}
+
+// RequestWorkReport implements the CE 136 work-report request protocol from the JAM spec.
+// It requests a work report from a peer identified by the given hash.
+func (n *Node) RequestWorkReport(ctx context.Context, hash crypto.Hash, peerKey ed25519.PublicKey) (*block.WorkReport, error) {
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
+
+	if existingPeer := n.PeersSet.GetByEd25519Key(peerKey); existingPeer != nil {
+		stream, err := existingPeer.ProtoConn.OpenStream(ctx, protocol.StreamKindWorkReportRequest)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open stream: %w", err)
+		}
+
+		report, err := n.workReportRequester.RequestWorkReport(ctx, stream, hash)
+		if err != nil {
+			return nil, fmt.Errorf("failed to request work report from peer: %w", err)
+		}
+		return report, nil
+	}
+	return nil, fmt.Errorf("no peers available to request work report from")
 }
 
 // ShardDistributionSend implements the sending side of the CE 137, it opens a connection to the provided peer

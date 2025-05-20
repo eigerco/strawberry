@@ -9,8 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/service"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -69,7 +67,7 @@ func TestGenerateStateKeyInterleavedBasic(t *testing.T) {
 			}
 
 			// Verify we can extract the service ID back
-			extractedServiceId, err := extractServiceIdFromKey(stateKey)
+			_, extractedServiceId, err := extractStateKeyChapterServiceID(stateKey)
 			require.NoError(t, err)
 			assert.Equal(t, tt.serviceId, extractedServiceId)
 		})
@@ -108,23 +106,6 @@ func TestGenerateStateKeyInterleaved(t *testing.T) {
 			assert.Equal(t, byte(0), rest[i], "should be zero at position %d", i)
 		}
 	}
-}
-
-// TestCalculateFootprintSize checks if the footprint size calculation is correct.
-func TestCalculateFootprintSize(t *testing.T) {
-	storage := map[crypto.Hash][]byte{
-		{0x01}: {0x01, 0x02, 0x03},
-	}
-	preimageMeta := map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-		{Hash: crypto.Hash{0x02}, Length: 32}: {},
-	}
-
-	// Calculate footprint size
-	footprintSize := calculateFootprintSize(storage, preimageMeta)
-
-	// Verify the calculation
-	expectedSize := uint64(81+32) + uint64(32+3)
-	assert.Equal(t, expectedSize, footprintSize)
 }
 
 // TestCombineEncoded verifies that combining multiple encoded fields works as expected.

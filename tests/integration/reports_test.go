@@ -189,8 +189,8 @@ type MMRPeaks struct {
 	Peaks []string `json:"peaks"`
 }
 
-func mapKey(v ValidatorKey) *crypto.ValidatorKey {
-	return &crypto.ValidatorKey{
+func mapKey(v ValidatorKey) crypto.ValidatorKey {
+	return crypto.ValidatorKey{
 		Bandersnatch: crypto.BandersnatchPublicKey(mustStringToHex(v.Bandersnatch)),
 		Ed25519:      ed25519.PublicKey(mustStringToHex(v.Ed25519)),
 		Bls:          crypto.BlsKey(mustStringToHex(v.BLS)),
