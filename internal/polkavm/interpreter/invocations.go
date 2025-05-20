@@ -13,7 +13,7 @@ import (
 // - ErrOutOfGas (∞)
 // - ErrPanic (☇)
 // - ErrPageFault (F)
-func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas uint64, args []byte, hostFunc polkavm.HostCall[X], x X) (polkavm.Gas, []byte, X, error) {
+func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.Gas, args []byte, hostFunc polkavm.HostCall[X], x X) (polkavm.Gas, []byte, X, error) {
 	program, err := polkavm.ParseBlob(p)
 	if err != nil {
 		return 0, nil, x, polkavm.ErrPanicf(err.Error())
@@ -22,7 +22,7 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas uint64, a
 	if err != nil {
 		return 0, nil, x, polkavm.ErrPanicf(err.Error())
 	}
-	i, err := Instantiate(program.CodeAndJumpTable, entryPoint, polkavm.Gas(initialGas), regs, ram)
+	i, err := Instantiate(program.CodeAndJumpTable, entryPoint, initialGas, regs, ram)
 	if err != nil {
 		return 0, nil, x, polkavm.ErrPanicf(err.Error())
 	}
@@ -47,7 +47,9 @@ func InvokeHostCall[X any](
 	for {
 		hostCallIndex, err := Invoke(i)
 		if err != nil && errors.Is(err, polkavm.ErrHostCall) {
-			i.gasRemaining, i.regs, i.memory, x, err = hostCall(hostCallIndex, i.gasRemaining, i.regs, i.memory, x)
+			var gasRemaining polkavm.Gas
+			gasRemaining, i.regs, i.memory, x, err = hostCall(hostCallIndex, polkavm.Gas(i.gasRemaining), i.regs, i.memory, x)
+			i.gasRemaining = int64(gasRemaining)
 			if err != nil {
 				return x, err
 			}
@@ -71,5 +73,5 @@ func Invoke(i *Instance) (uint64, error) {
 }
 
 func (i *Instance) Results() (uint64, polkavm.Gas, polkavm.Registers, polkavm.Memory) {
-	return i.instructionCounter, i.gasRemaining, i.regs, i.memory
+	return i.instructionCounter, polkavm.Gas(i.gasRemaining), i.regs, i.memory
 }

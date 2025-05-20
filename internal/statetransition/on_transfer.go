@@ -49,7 +49,7 @@ func InvokePVMOnTransfer(serviceState service.ServiceState, serviceIndex block.S
 		return gasCounter, regs, mem, serviceAccount, err
 	}
 
-	_, _, newServiceAccount, err := interpreter.InvokeWholeProgram(serviceCode, 10, gas, args, hostCallFunc, serviceAccount)
+	_, _, newServiceAccount, err := interpreter.InvokeWholeProgram(serviceCode, 10, polkavm.Gas(gas), args, hostCallFunc, serviceAccount)
 	if err != nil {
 		// TODO handle errors appropriately
 		log.Println("the virtual machine exited with an error", err)

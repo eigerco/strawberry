@@ -437,12 +437,12 @@ func (m mockRefineInvoker) InvokePVM(
 	authorizerHashOutput []byte,
 	importedSegments []work.Segment,
 	exportOffset uint64,
-) ([]byte, []work.Segment, error) {
+) ([]byte, []work.Segment, uint64, error) {
 	out := []byte("RefineOutput")
 	exported := []work.Segment{
 		{},
 	}
-	return out, exported, nil
+	return out, exported, 0, nil
 }
 
 func getServiceState() service.ServiceState {

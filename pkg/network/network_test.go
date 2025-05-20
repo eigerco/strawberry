@@ -185,11 +185,11 @@ func (m MockRefineInvoker) InvokePVM(
 	authorizerHashOutput []byte,
 	importedSegments []work.Segment,
 	exportOffset uint64,
-) ([]byte, []work.Segment, error) {
+) ([]byte, []work.Segment, uint64, error) {
 	exported := []work.Segment{
 		{},
 	}
-	return m.out, exported, nil
+	return m.out, exported, 0, nil
 }
 
 func NewMockRefine(out []byte) *MockRefineInvoker {
