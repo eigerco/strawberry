@@ -30,7 +30,7 @@ type RefinePVMInvoker interface {
 		authorizerHashOutput []byte,
 		importedSegments []work.Segment,
 		exportOffset uint64,
-	) ([]byte, []work.Segment, error)
+	) ([]byte, []work.Segment, uint64, error)
 }
 
 type Refine struct {
@@ -41,20 +41,20 @@ func New(state state.State) *Refine {
 	return &Refine{state: state}
 }
 
-// InvokePVM ΨR(N,P,Y, ⟦⟦G⟧⟧, N) → (Y ∪ J, ⟦G⟧)
+// InvokePVM ΨR(N,P,Y, ⟦⟦G⟧⟧, N) → (Y ∪ J, ⟦G⟧, N_G)
 func (r *Refine) InvokePVM(
 	itemIndex uint32, // i
 	workPackage work.Package, // p
 	authorizerHashOutput []byte, // o
 	importedSegments []work.Segment, // i
 	exportOffset uint64, // ς
-) ([]byte, []work.Segment, error) {
+) ([]byte, []work.Segment, uint64, error) {
 	// w = p_w[i]
 	w := workPackage.WorkItems[itemIndex]
 
 	packageBytes, err := jam.Marshal(workPackage)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	// let a = E(ws, wy, H(p), px, pu)
@@ -75,24 +75,24 @@ func (r *Refine) InvokePVM(
 	// if s ∉ K(δ) ∨ Λ(δ[s], ct, c) = ∅ then (BAD, [])
 	s, ok := r.state.Services[w.ServiceId]
 	if !ok {
-		return nil, nil, ErrBad
+		return nil, nil, 0, ErrBad
 	}
 
 	// E(↕m, c) = Λ(δ[ws], (px)t, wc)
 	encodedCodeWithMeta := s.LookupPreimage(workPackage.Context.LookupAnchor.Timeslot, w.CodeHash)
 	if encodedCodeWithMeta == nil {
-		return nil, nil, ErrBad
+		return nil, nil, 0, ErrBad
 	}
 
 	var pvmCode service.CodeWithMetadata
 	err = jam.Unmarshal(encodedCodeWithMeta, &pvmCode)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	// if |Λ(δ[s], ct, c)| > W_C then (BIG, [])
 	if len(pvmCode.Code) > work.MaxSizeServiceCode {
-		return nil, nil, ErrBig
+		return nil, nil, 0, ErrBig
 	}
 
 	// F ∈ Ω⟨(D⟨N → M⟩, ⟦G⟧)⟩∶ (n, ϱ, ω, μ, (m, e))
@@ -129,7 +129,7 @@ func (r *Refine) InvokePVM(
 	}
 
 	// (g, r, (m, e)) = ΨM(Λ(δ[w_s], (p_x)t, w_c), 0, w_g, a, F, (∅, []))∶
-	_, result, ctxPair, err := interpreter.InvokeWholeProgram(pvmCode.Code, 0, w.GasLimitRefine, args, hostCall, polkavm.RefineContextPair{
+	remainingGas, result, ctxPair, err := interpreter.InvokeWholeProgram(pvmCode.Code, 0, polkavm.Gas(w.GasLimitRefine), args, hostCall, polkavm.RefineContextPair{
 		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
 		Segments:         []work.Segment{},
 	})
@@ -138,9 +138,9 @@ func (r *Refine) InvokePVM(
 	if err != nil {
 		panicErr := &polkavm.ErrPanic{}
 		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &panicErr) {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 	}
 
-	return result, ctxPair.Segments, err
+	return result, ctxPair.Segments, uint64(remainingGas), err
 }

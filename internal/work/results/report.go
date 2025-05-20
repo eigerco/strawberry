@@ -26,7 +26,7 @@ func ProduceWorkReport(
 	var segments []work.Segment
 
 	for index, item := range bundle.Package.WorkItems {
-		refineOut, _, refineErr := refine.InvokePVM(
+		refineOut, _, gasUsed, refineErr := refine.InvokePVM(
 			uint32(index),
 			bundle.Package,
 			authOutput,
@@ -42,7 +42,7 @@ func ProduceWorkReport(
 			out = block.WorkResultOutputOrError{Inner: refineOut}
 		}
 
-		wr := item.ToWorkResult(out)
+		wr := item.ToWorkResult(out, gasUsed)
 		allWorkResults = append(allWorkResults, wr)
 		exportOffset += uint64(item.ExportedSegments)
 	}

@@ -80,6 +80,7 @@ const (
 type ServiceId uint32
 
 // WorkResult is the data conduit by which services’ states may be altered through the computation done within a work-package.
+// L ≡ (s ∈ NS, c ∈ H, y ∈ H, g ∈ NG, d ∈ Y ∪ J, u ∈ NG, i ∈ N, x ∈ N, z ∈ N, e ∈ N) (equation 11.6)
 type WorkResult struct {
 	ServiceId              ServiceId               // Service ID (s) - The index of the service whose state is to be altered and thus whose refine code was already executed.
 	ServiceHashCode        crypto.Hash             // Hash of the service code (c) - The hash of the code of the service at the time of being reported.

@@ -26,7 +26,7 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.Gas,
 		memory:                 memory,
 		regs:                   regs,
 		instructionCounter:     instructionOffset,
-		gasRemaining:           gasLimit,
+		gasRemaining:           int64(gasLimit),
 		code:                   append(code, 0), // ζ ≡ c ⌢ [0, 0, ... ]
 		jumpTable:              jumpTable,
 		bitmask:                append(bitmask, true), // k ⌢ [1, 1, ... ]
@@ -38,7 +38,7 @@ type Instance struct {
 	memory                 polkavm.Memory      // The memory sequence; a member of the set M (μ)
 	regs                   polkavm.Registers   // The registers (ω)
 	instructionCounter     uint64              // The instruction counter (ı)
-	gasRemaining           polkavm.Gas         // The gas counter (ϱ)
+	gasRemaining           int64               // The gas counter (ϱ). For single step and basic invocation use Z_G (int64) according to GP the gas result can be negative
 	code                   []byte              // ζ
 	jumpTable              []uint64            // j
 	bitmask                jam.BitSequence     // k
@@ -50,10 +50,10 @@ func (i *Instance) skip() {
 }
 
 func (i *Instance) deductGas(cost polkavm.Gas) error {
-	if i.gasRemaining < cost {
+	if i.gasRemaining < int64(cost) {
 		return polkavm.ErrOutOfGas
 	}
-	i.gasRemaining -= cost
+	i.gasRemaining -= int64(cost)
 	return nil
 }
 

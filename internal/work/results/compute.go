@@ -291,7 +291,7 @@ func (c *Computation) EvaluateWorkPackage(
 		}
 
 		// ΨR(j, p, o, i, ℓ) (14.11 v0.6.0)
-		refineOut, exported, refineErr := c.Refine.InvokePVM(
+		refineOut, exported, gasUsed, refineErr := c.Refine.InvokePVM(
 			uint32(index),
 			wp,
 			authOutput,
@@ -321,7 +321,7 @@ func (c *Computation) EvaluateWorkPackage(
 			}
 		}
 
-		wr := item.ToWorkResult(out)
+		wr := item.ToWorkResult(out, gasUsed)
 		allWorkResults = append(allWorkResults, wr)
 		allExportedSegments = append(allExportedSegments, finalExported...)
 		exportOffset += uint64(item.ExportedSegments)

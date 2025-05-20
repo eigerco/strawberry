@@ -164,7 +164,7 @@ func (m *Memory) GetAccess(pageIndex uint64) MemoryAccess {
 
 type Registers [13]uint64
 
-type Gas int64
+type Gas uint64
 
 // HostCall the generic Ω function definition Ωx(n, ϱ, ω, μ, x) defined in section A.6
 type HostCall[X any] func(hostCall uint64, gasCounter Gas, regs Registers, mem Memory, x X) (Gas, Registers, Memory, X, error)
