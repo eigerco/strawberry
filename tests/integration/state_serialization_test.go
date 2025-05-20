@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/state"
-	"github.com/eigerco/strawberry/internal/state/merkle"
+	"github.com/eigerco/strawberry/internal/state/serialization"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/stretchr/testify/require"
 )
@@ -22,17 +22,17 @@ func TestStateSerialization(t *testing.T) {
 	err = json.Unmarshal(b, &tv)
 	require.NoError(t, err)
 
-	serializedState := map[state.StateKey][]byte{}
+	serializedState := map[statekey.StateKey][]byte{}
 	for _, kv := range tv.PostState.KeyVals {
 		key := testutils.MustFromHex(t, kv.Key)
 		value := testutils.MustFromHex(t, kv.Value)
-		serializedState[state.StateKey(key)] = value
+		serializedState[statekey.StateKey(key)] = value
 	}
 
-	decodedState, err := merkle.DeserializeState(serializedState)
+	decodedState, err := serialization.DeserializeState(serializedState)
 	require.NoError(t, err)
 
-	newSerializedState, err := merkle.SerializeState(decodedState)
+	newSerializedState, err := serialization.SerializeState(decodedState)
 	require.NoError(t, err)
 
 	for key, value := range newSerializedState {
@@ -45,7 +45,7 @@ func TestStateSerialization(t *testing.T) {
 		// total items fields are incorrect for now. Those values are the last
 		// 12 bytes of the encoded value, so we remove that for now to be able
 		// to test the rest of the service fields in the meantime.
-		if merkle.IsServiceAccountKey(key) {
+		if key.IsServiceKey() {
 			originalValue = originalValue[:len(originalValue)-12]
 			value = value[:len(value)-12]
 		}

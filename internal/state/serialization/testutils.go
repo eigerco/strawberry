@@ -1,4 +1,4 @@
-package merkle
+package serialization
 
 import (
 	"crypto/ed25519"

@@ -1,4 +1,4 @@
-package merkle
+package serialization
 
 import (
 	"testing"
@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/safrole"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -98,7 +99,7 @@ func TestSerializeStateCoreAuthorizersPool(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(1)
+	stateKey := statekey.NewBasic(1)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -109,7 +110,7 @@ func TestSerializeStatePendingAuthorizersQueues(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(2)
+	stateKey := statekey.NewBasic(2)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -120,7 +121,7 @@ func TestSerializeStateRecentBlocks(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(3)
+	stateKey := statekey.NewBasic(3)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -131,7 +132,7 @@ func TestSerializeStateValidatorState(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(4)
+	stateKey := statekey.NewBasic(4)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -142,7 +143,7 @@ func TestSerializeStatePastJudgements(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	hashKey := generateStateKeyBasic(5)
+	hashKey := statekey.NewBasic(5)
 	assert.Contains(t, serializedState, hashKey)
 	assert.NotEmpty(t, serializedState[hashKey])
 }
@@ -153,7 +154,7 @@ func TestSerializeStateEntropyPool(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(6)
+	stateKey := statekey.NewBasic(6)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -164,7 +165,7 @@ func TestSerializeStateFutureValidators(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(7)
+	stateKey := statekey.NewBasic(7)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -175,7 +176,7 @@ func TestSerializeStateCurrentValidators(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(8)
+	stateKey := statekey.NewBasic(8)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -186,7 +187,7 @@ func TestSerializeStatePreviousValidators(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	hashKey := generateStateKeyBasic(9)
+	hashKey := statekey.NewBasic(9)
 	assert.Contains(t, serializedState, hashKey)
 	assert.NotEmpty(t, serializedState[hashKey])
 }
@@ -197,7 +198,7 @@ func TestSerializeStateCoreAssignments(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(10)
+	stateKey := statekey.NewBasic(10)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -208,7 +209,7 @@ func TestSerializeStateTimeslotIndex(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(11)
+	stateKey := statekey.NewBasic(11)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -219,7 +220,7 @@ func TestSerializeStatePrivilegedServices(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(12)
+	stateKey := statekey.NewBasic(12)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -230,7 +231,7 @@ func TestSerializeStateValidatorStatistics(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(13)
+	stateKey := statekey.NewBasic(13)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -241,7 +242,7 @@ func TestSerializeStateAccumulatedQueue(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	hashKey := generateStateKeyBasic(14)
+	hashKey := statekey.NewBasic(14)
 	assert.Contains(t, serializedState, hashKey)
 	assert.NotEmpty(t, serializedState[hashKey])
 }
@@ -252,7 +253,7 @@ func TestSerializeStateAccumulatedHistory(t *testing.T) {
 	serializedState, err := SerializeState(state)
 	require.NoError(t, err)
 
-	stateKey := generateStateKeyBasic(15)
+	stateKey := statekey.NewBasic(15)
 	assert.Contains(t, serializedState, stateKey)
 	assert.NotEmpty(t, serializedState[stateKey])
 }
@@ -264,9 +265,21 @@ func TestSerializeStateServices(t *testing.T) {
 	require.NoError(t, err)
 
 	for serviceId := range state.Services {
-		hashKey, err := generateStateKeyInterleavedBasic(255, serviceId)
+		hashKey, err := statekey.NewService(serviceId)
 		require.NoError(t, err)
 		assert.Contains(t, serializedState, hashKey)
 		assert.NotEmpty(t, serializedState[hashKey])
 	}
+}
+
+// TestCombineEncoded verifies that combining multiple encoded fields works as expected.
+func TestCombineEncoded(t *testing.T) {
+	field1 := []byte{0x01, 0x02}
+	field2 := []byte{0x03, 0x04}
+
+	// Combine the fields
+	combined := combineEncoded(field1, field2)
+
+	// Verify the combined result
+	assert.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, combined)
 }

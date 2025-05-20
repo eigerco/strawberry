@@ -15,8 +15,6 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-type StateKey [31]byte
-
 type Assignment struct {
 	WorkReport *block.WorkReport // Work-Report (w)
 	Time       jamtime.Timeslot  // time at which work-report was reported but not yet accumulated (t)

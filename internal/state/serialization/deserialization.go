@@ -1,24 +1,23 @@
-package merkle
+package serialization
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 
-	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 // DeserializeState deserializes the given map of state keys to byte slices into a State object.
-func DeserializeState(serializedState map[state.StateKey][]byte) (state.State, error) {
+func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State, error) {
 	deserializedState := state.State{}
 
 	// Helper function to deserialize individual fields for chapter state keys.
 	deserializeField := func(key uint8, target interface{}) error {
-		stateKey := generateStateKeyBasic(key)
+		stateKey := statekey.NewBasic(key)
 		encodedValue, ok := serializedState[stateKey]
 		if !ok {
 			return fmt.Errorf("deserialize state: missing state key %v", key)
@@ -56,14 +55,14 @@ func DeserializeState(serializedState map[state.StateKey][]byte) (state.State, e
 	}
 
 	// Sort keys into service account keys and preimage lookup keys.
-	var serviceKeys, preimageLookupKeys []state.StateKey
-	for stateKey := range serializedState {
-		if IsChapterKey(stateKey) {
+	var serviceKeys, preimageLookupKeys []statekey.StateKey
+	for sk := range serializedState {
+		if sk.IsChapterKey() {
 			continue
-		} else if IsServiceAccountKey(stateKey) {
-			serviceKeys = append(serviceKeys, stateKey)
-		} else if IsPreimageLookupKey(stateKey) {
-			preimageLookupKeys = append(preimageLookupKeys, stateKey)
+		} else if sk.IsServiceKey() {
+			serviceKeys = append(serviceKeys, sk)
+		} else if sk.IsPreimageLookupKey() {
+			preimageLookupKeys = append(preimageLookupKeys, sk)
 		}
 
 		// TODO storage and preimage meta keys.
@@ -87,16 +86,16 @@ func DeserializeState(serializedState map[state.StateKey][]byte) (state.State, e
 }
 
 // DeserializeService deserializes a service account from the given state key and encoded value.
-func deserializeService(state *state.State, stateKey state.StateKey, encodedValue []byte) error {
-	if !IsServiceAccountKey(stateKey) {
-		return fmt.Errorf("deserialize service: expected service account key, got %x", stateKey[:])
+func deserializeService(state *state.State, sk statekey.StateKey, encodedValue []byte) error {
+	if !sk.IsServiceKey() {
+		return fmt.Errorf("deserialize service: expected service account key, got %x", sk[:])
 	}
 
 	if state.Services == nil {
 		state.Services = make(service.ServiceState)
 	}
 
-	_, serviceId, err := extractStateKeyChapterServiceID(stateKey)
+	_, serviceId, err := sk.ExtractChapterServiceID()
 	if err != nil {
 		return err
 	}
@@ -129,12 +128,12 @@ func deserializeService(state *state.State, stateKey state.StateKey, encodedValu
 
 // DeserializePreimageLookup deserializes a preimage lookup from the given state key and encoded value.
 // The original preimage lookup hash is found by simply hashing the decoded value.
-func deserializePreimageLookup(state *state.State, stateKey state.StateKey, encodedValue []byte) error {
-	if !IsPreimageLookupKey(stateKey) {
-		return fmt.Errorf("deserialize preimage lookup: expected preimage lookup key, got '%v'", hex.EncodeToString(stateKey[:]))
+func deserializePreimageLookup(state *state.State, sk statekey.StateKey, encodedValue []byte) error {
+	if !sk.IsPreimageLookupKey() {
+		return fmt.Errorf("deserialize preimage lookup: expected preimage lookup key, got '%v'", hex.EncodeToString(sk[:]))
 	}
 
-	serviceId, _, err := extractStateKeyServiceIDHash(stateKey)
+	serviceId, _, err := sk.ExtractServiceIDHash()
 	if err != nil {
 		return err
 	}
@@ -163,99 +162,4 @@ func deserializePreimageLookup(state *state.State, stateKey state.StateKey, enco
 	state.Services[serviceId] = serviceAccount
 
 	return nil
-}
-
-// Checks if the given state key is a chapter key of the format: [i, 0, 0,...]
-func IsChapterKey(stateKey state.StateKey) bool {
-	// Chapter keys start with 1-15.
-	if !(stateKey[0] > 0 && stateKey[0] < 16) {
-		return false
-	}
-
-	// And then the rest of the bytes must be 0.
-	for _, byte := range stateKey[1:] {
-		if byte != 0 {
-			return false
-		}
-	}
-	return true
-}
-
-// Checks if the given state key is a service account key of the format: [255, n0, 0, n1, 0, n2, 0, n3, 0, 0,...]
-// Where n is the service ID (uint32) little endian encoded.
-func IsServiceAccountKey(stateKey state.StateKey) bool {
-	if !(stateKey[0] == ChapterServiceIndex && // Service account keys start with 255.
-		stateKey[2] == 0 && stateKey[4] == 0 && stateKey[6] == 0) {
-		return false
-	}
-
-	// And then the rest of the bytes must be 0.
-	for _, byte := range stateKey[8:] {
-		if byte != 0 {
-			return false
-		}
-	}
-
-	return true
-}
-
-// Checks if the given state key is a preimage lookup key of the format: [n0, 0xFD, n1, 0xFF, n2, 0xFF, n3, 0xFF, h4, h5,...]
-// Where n is the service ID (uint32) little endian encoded, and h is the hash component.
-func IsPreimageLookupKey(stateKey state.StateKey) bool {
-	// The preimage lookup keys hash component starts with max(uint32) - 2
-	// little endian encoded, which is 0xFDFFFFFF. This is interleaved with the
-	// service ID.
-	encodedHashIndex := []byte{stateKey[1], stateKey[3], stateKey[5], stateKey[7]}
-	return binary.LittleEndian.Uint32(encodedHashIndex) == HashPreimageLookupIndex
-
-}
-
-// Extracts the chapter and service ID components from a state key of airty 2.
-// State key is the format: [i, n0, 0, n1, 0, n2, 0, n3, 0, 0,...]
-// where i is an uint8, and n is the service ID (uint32) little endian encoded.
-func extractStateKeyChapterServiceID(stateKey state.StateKey) (uint8,
-	block.ServiceId, error) {
-	if !(stateKey[2] == 0 && stateKey[4] == 0 && stateKey[6] == 0) {
-		return 0, 0, fmt.Errorf("extracting chapter and service id: not an airty 2 state key")
-	}
-
-	// Collect service ID bytes from positions 1,3,5,7 into a slice
-	encodedServiceId := []byte{
-		stateKey[1],
-		stateKey[3],
-		stateKey[5],
-		stateKey[7],
-	}
-
-	var serviceId block.ServiceId
-	if err := jam.Unmarshal(encodedServiceId, &serviceId); err != nil {
-		return 0, 0, err
-	}
-
-	return stateKey[0], serviceId, nil
-}
-
-// Extracts the service ID and hash components from a state key of airty 3.
-// The state key is the format: [n0, h0, n1, h1, n2, h2, n3, h3, h4, h5,...]
-// Where n is the server ID uint32 little endian encoded, and h is the hash component.
-func extractStateKeyServiceIDHash(stateKey state.StateKey) (block.ServiceId, stateConstructorHashComponent, error) {
-	encodedServiceId := []byte{
-		stateKey[0],
-		stateKey[2],
-		stateKey[4],
-		stateKey[6],
-	}
-
-	var serviceId block.ServiceId
-	if err := jam.Unmarshal(encodedServiceId, &serviceId); err != nil {
-		return 0, stateConstructorHashComponent{}, err
-	}
-
-	hash := stateConstructorHashComponent{}
-	hash[0] = stateKey[1]
-	hash[1] = stateKey[3]
-	hash[2] = stateKey[5]
-	copy(hash[3:], stateKey[7:])
-
-	return serviceId, hash, nil
 }
