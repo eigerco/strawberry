@@ -11,6 +11,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/work"
 )
 
@@ -88,7 +89,7 @@ func Test_ComputeAuthorizerHashes(t *testing.T) {
 
 	h := crypto.HashData(preimage)
 	sa := service.ServiceAccount{
-		Storage:        make(map[crypto.Hash][]byte),
+		Storage:        make(map[statekey.StateKey][]byte),
 		PreimageLookup: make(map[crypto.Hash][]byte),
 		PreimageMeta:   make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 	}

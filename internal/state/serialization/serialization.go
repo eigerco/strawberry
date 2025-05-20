@@ -110,7 +110,7 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 	}
 	serializedState[stateKey] = encodedServiceValue
 
-	if err := serializeStorage(serviceId, serviceAccount.Storage, serializedState); err != nil {
+	if err := serializeStorage(serviceAccount.Storage, serializedState); err != nil {
 		return err
 	}
 
@@ -125,19 +125,14 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 	return nil
 }
 
-func serializeStorage(serviceId block.ServiceId, storage map[crypto.Hash][]byte, serializedState map[statekey.StateKey][]byte) error {
-	for hash, value := range storage {
-		encodedValue, err := jam.Marshal(value)
-		if err != nil {
-			return err
-		}
+func serializeStorage(storage map[statekey.StateKey][]byte, serializedState map[statekey.StateKey][]byte) error {
+	for stateKey, value := range storage {
 
-		stateKey, err := statekey.NewStorage(serviceId, hash)
-		if err != nil {
-			return err
-		}
-
-		serializedState[stateKey] = encodedValue
+		// Storage keys are state keys. This allows deserialization
+		// later since state key creation for them is lossy. The PVM code knows
+		// the actual key it wants, as long as we always "hash" it into a state
+		// key in the same way we can always retrieve it again.
+		serializedState[stateKey] = value
 	}
 
 	return nil
@@ -146,17 +141,12 @@ func serializeStorage(serviceId block.ServiceId, storage map[crypto.Hash][]byte,
 func serializePreimageLookup(serviceId block.ServiceId, preimages map[crypto.Hash][]byte, serializedState map[statekey.StateKey][]byte) error {
 
 	for hash, value := range preimages {
-		encodedValue, err := jam.Marshal(value)
-		if err != nil {
-			return err
-		}
-
 		stateKey, err := statekey.NewPreimageLookup(serviceId, hash)
 		if err != nil {
 			return err
 		}
 
-		serializedState[stateKey] = encodedValue
+		serializedState[stateKey] = value
 	}
 
 	return nil

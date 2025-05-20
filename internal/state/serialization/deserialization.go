@@ -1,7 +1,6 @@
 package serialization
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -55,17 +54,19 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 	}
 
 	// Sort keys into service account keys and preimage lookup keys.
-	var serviceKeys, preimageLookupKeys []statekey.StateKey
+	var serviceKeys, storageKeys, preimageLookupKeys []statekey.StateKey
 	for sk := range serializedState {
 		if sk.IsChapterKey() {
 			continue
 		} else if sk.IsServiceKey() {
 			serviceKeys = append(serviceKeys, sk)
+		} else if sk.IsStorageKey() {
+			storageKeys = append(storageKeys, sk)
 		} else if sk.IsPreimageLookupKey() {
 			preimageLookupKeys = append(preimageLookupKeys, sk)
 		}
 
-		// TODO storage and preimage meta keys.
+		// TODO preimage meta keys.
 	}
 
 	// Deserialize Services
@@ -78,6 +79,13 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 	// Deserialize Preimage Lookups
 	for _, preimageLookupKey := range preimageLookupKeys {
 		if err := deserializePreimageLookup(&deserializedState, preimageLookupKey, serializedState[preimageLookupKey]); err != nil {
+			return deserializedState, err
+		}
+	}
+
+	/// Deserialize Storage
+	for _, storageKey := range storageKeys {
+		if err := deserializeStorage(&deserializedState, storageKey, serializedState[storageKey]); err != nil {
 			return deserializedState, err
 		}
 	}
@@ -126,11 +134,42 @@ func deserializeService(state *state.State, sk statekey.StateKey, encodedValue [
 	return nil
 }
 
-// DeserializePreimageLookup deserializes a preimage lookup from the given state key and encoded value.
+// deserializeStorage deserializes a storage account from the given state key and encoded value.
+func deserializeStorage(state *state.State, sk statekey.StateKey, encodedValue []byte) error {
+	if !sk.IsStorageKey() {
+		return fmt.Errorf("deserialize storage: expected storage key, got '%x'", sk[:])
+	}
+
+	serviceId, _, err := sk.ExtractServiceIDHash()
+	if err != nil {
+		return err
+	}
+
+	if state.Services == nil {
+		return fmt.Errorf("deserializing storage: services map empty")
+	}
+
+	serviceAccount, ok := state.Services[serviceId]
+	if !ok {
+		return fmt.Errorf("deserializing storage: service ID '%v' does not exist", serviceId)
+	}
+
+	if serviceAccount.Storage == nil {
+		serviceAccount.Storage = map[statekey.StateKey][]byte{}
+	}
+
+	serviceAccount.Storage[sk] = encodedValue
+
+	state.Services[serviceId] = serviceAccount
+
+	return nil
+}
+
+// deserializePreimageLookup deserializes a preimage lookup from the given state key and encoded value.
 // The original preimage lookup hash is found by simply hashing the decoded value.
 func deserializePreimageLookup(state *state.State, sk statekey.StateKey, encodedValue []byte) error {
 	if !sk.IsPreimageLookupKey() {
-		return fmt.Errorf("deserialize preimage lookup: expected preimage lookup key, got '%v'", hex.EncodeToString(sk[:]))
+		return fmt.Errorf("deserialize preimage lookup: expected preimage lookup key, got '%x'", sk[:])
 	}
 
 	serviceId, _, err := sk.ExtractServiceIDHash()
@@ -147,17 +186,12 @@ func deserializePreimageLookup(state *state.State, sk statekey.StateKey, encoded
 		return fmt.Errorf("deserializing preimage lookup: service ID '%v' does not exist", serviceId)
 	}
 
-	preimageBlob := []byte{}
-	if err := jam.Unmarshal(encodedValue, &preimageBlob); err != nil {
-		return fmt.Errorf("deserializing preimage lookup: error unmarshalling: %w", err)
-	}
-
 	if serviceAccount.PreimageLookup == nil {
 		serviceAccount.PreimageLookup = map[crypto.Hash][]byte{}
 	}
 
-	key := crypto.HashData(preimageBlob)
-	serviceAccount.PreimageLookup[key] = preimageBlob
+	key := crypto.HashData(encodedValue)
+	serviceAccount.PreimageLookup[key] = encodedValue
 
 	state.Services[serviceId] = serviceAccount
 

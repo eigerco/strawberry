@@ -2,9 +2,11 @@ package serialization
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 
 	"github.com/stretchr/testify/require"
 
@@ -54,9 +56,16 @@ func RandomEpochKeys(t *testing.T) crypto.EpochKeys {
 	return epochKeys
 }
 
+func RandomStateKey(t *testing.T) statekey.StateKey {
+	hash := make([]byte, 31)
+	_, err := rand.Read(hash)
+	require.NoError(t, err)
+	return statekey.StateKey(hash)
+}
+
 func RandomServiceAccount(t *testing.T) service.ServiceAccount {
 	return service.ServiceAccount{
-		Storage:                map[crypto.Hash][]byte{testutils.RandomHash(t): []byte("data")},
+		Storage:                map[statekey.StateKey][]byte{RandomStateKey(t): []byte("data")},
 		PreimageLookup:         map[crypto.Hash][]byte{testutils.RandomHash(t): []byte("preimage")},
 		PreimageMeta:           map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{{Hash: testutils.RandomHash(t), Length: 32}: {testutils.RandomTimeslot()}},
 		CodeHash:               testutils.RandomHash(t),

@@ -5,6 +5,7 @@ import (
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 )
 
 const (
@@ -19,7 +20,14 @@ type ServiceState map[block.ServiceId]ServiceAccount
 
 // ServiceAccount represents a service account in the JAM state
 type ServiceAccount struct {
-	Storage                map[crypto.Hash][]byte                          // Dictionary of key-value pairs for storage (s)
+	// Storage uses a state key for it's key. We have to use the state key
+	// representation as the key because serializing storage keys is lossy and
+	// we'd like to be able to deserialize the storage dictionary later. Host
+	// calls are called by PVM code code with the original storage key. The key
+	// we end up using is merely an implementation detail. As long as we can
+	// store and retrieve the key we are fine, we don't need to know the
+	// original key here.
+	Storage                map[statekey.StateKey][]byte                    // Dictionary of key-value pairs for storage (s)
 	PreimageLookup         map[crypto.Hash][]byte                          // Dictionary of preimage lookups (p)
 	PreimageMeta           map[PreImageMetaKey]PreimageHistoricalTimeslots // Metadata for preimageLookup (l) Graypaper 0.6.3 - TODO: There is a MaxTimeslotsForPreimage.
 	CodeHash               crypto.Hash                                     // Hash of the service code (c)

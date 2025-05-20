@@ -11,6 +11,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -113,10 +114,11 @@ func TestRead(t *testing.T) {
 	hashInput := make([]byte, 0, len(serviceIdBytes)+len(keyData))
 	hashInput = append(hashInput, serviceIdBytes...)
 	hashInput = append(hashInput, keyData...)
-	k := crypto.HashData(hashInput)
+	k, err := statekey.NewStorage(serviceId, crypto.HashData(hashInput))
+	require.NoError(t, err)
 
 	sa := service.ServiceAccount{
-		Storage: map[crypto.Hash][]byte{
+		Storage: map[statekey.StateKey][]byte{
 			k: value,
 		},
 	}
@@ -171,11 +173,12 @@ func TestWrite(t *testing.T) {
 	require.NoError(t, err)
 
 	hashInput := append(serviceIdBytes, keyData...)
-	k := crypto.HashData(hashInput)
+	k, err := statekey.NewStorage(serviceId, crypto.HashData(hashInput))
+	require.NoError(t, err)
 
 	sa := service.ServiceAccount{
 		Balance: 200,
-		Storage: map[crypto.Hash][]byte{
+		Storage: map[statekey.StateKey][]byte{
 			k: value,
 		},
 	}
@@ -236,12 +239,12 @@ func TestInfo(t *testing.T) {
 		Balance:                1000,
 		GasLimitForAccumulator: 5000,
 		GasLimitOnTransfer:     2000,
-		Storage:                make(map[crypto.Hash][]byte),
+		Storage:                make(map[statekey.StateKey][]byte),
 		PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 	}
 
-	sampleAccount.Storage[crypto.Hash{0xAA}] = []byte("value1")
-	sampleAccount.Storage[crypto.Hash{0xBB}] = []byte("value2")
+	sampleAccount.Storage[statekey.StateKey{0xAA}] = []byte("value1")
+	sampleAccount.Storage[statekey.StateKey{0xBB}] = []byte("value2")
 
 	serviceState := service.ServiceState{
 		serviceId: sampleAccount,
