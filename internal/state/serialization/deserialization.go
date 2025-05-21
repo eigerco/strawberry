@@ -105,7 +105,7 @@ func deserializeService(state *state.State, sk statekey.StateKey, encodedValue [
 
 	_, serviceId, err := sk.ExtractChapterServiceID()
 	if err != nil {
-		return err
+		return fmt.Errorf("deserialize service: error extracting service ID: %w", err)
 	}
 
 	// Deserialize the combined fields (CodeHash, Balance, etc.)
@@ -142,7 +142,7 @@ func deserializeStorage(state *state.State, sk statekey.StateKey, encodedValue [
 
 	serviceId, _, err := sk.ExtractServiceIDHash()
 	if err != nil {
-		return err
+		return fmt.Errorf("deserialize storage: error extracting service ID: %w", err)
 	}
 
 	if state.Services == nil {
@@ -174,7 +174,7 @@ func deserializePreimageLookup(state *state.State, sk statekey.StateKey, encoded
 
 	serviceId, _, err := sk.ExtractServiceIDHash()
 	if err != nil {
-		return err
+		return fmt.Errorf("deserialize preimage lookup: error extracting service ID: %w", err)
 	}
 
 	if state.Services == nil {
