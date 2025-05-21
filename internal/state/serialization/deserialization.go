@@ -208,6 +208,18 @@ func deserializePreimageLookup(state *state.State, sk statekey.StateKey, encoded
 	}
 
 	key := crypto.HashData(encodedValue)
+	// Check that the incoming state key matches one constructed from this key.
+	// I.e we are checking that the incoming partial hash in the state key
+	// h1..24 matches ours. If not then the state key is invalid even though it
+	// might have had a valid blob.
+	newSk, err := statekey.NewPreimageLookup(serviceId, key)
+	if err != nil {
+		return fmt.Errorf("deserializing preimage lookup: error creating preimage lookup key: %w", err)
+	}
+	if sk != newSk {
+		return fmt.Errorf("deserializing preimage lookup: preimage hash does not match original hash")
+	}
+
 	serviceAccount.PreimageLookup[key] = encodedValue
 
 	state.Services[serviceId] = serviceAccount
