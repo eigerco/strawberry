@@ -74,8 +74,6 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 		} else if isPreimageLookupKey {
 			preimageLookupKeys = append(preimageLookupKeys, sk)
 		}
-
-		// TODO preimage meta keys.
 	}
 
 	// Deserialize Services
@@ -97,6 +95,12 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 		if err := deserializeStorage(&deserializedState, storageKey, serializedState[storageKey]); err != nil {
 			return deserializedState, err
 		}
+	}
+
+	// Deserialize Preimage Meta
+	err := deserializePreimageMeta(&deserializedState, serializedState)
+	if err != nil {
+		return deserializedState, err
 	}
 
 	return deserializedState, nil
@@ -130,7 +134,6 @@ func deserializeService(state *state.State, sk statekey.StateKey, encodedValue [
 		return fmt.Errorf("deserialize service: error unmarshalling: %w", err)
 	}
 
-	// Create and populate the ServiceAccount from the deserialized data
 	serviceAccount := service.ServiceAccount{
 		CodeHash:               combined.CodeHash,
 		Balance:                combined.Balance,
@@ -223,6 +226,58 @@ func deserializePreimageLookup(state *state.State, sk statekey.StateKey, encoded
 	serviceAccount.PreimageLookup[key] = encodedValue
 
 	state.Services[serviceId] = serviceAccount
+
+	return nil
+}
+
+// desserializePreimageMeta deserializes the preimage meta from the given serialized state.
+// PreimageMeta is a special case. We know that for each preimage in a service,
+// there should be a corresponding preimage meta entry (See equation 9.6 of the
+// GP v0.6.6). Knowing that we loop through each preimage and create a preimage
+// meta state key for it using it's length and hash. We can then look that key
+// up in the serialized state, and fetch it's value, and use that to rebuild the
+// preimage meta entry.
+func deserializePreimageMeta(state *state.State, serializedState map[statekey.StateKey][]byte) error {
+	if state.Services == nil {
+		return fmt.Errorf("deserialize preimage meta: services map empty")
+	}
+
+	for serviceId, serviceAccount := range state.Services {
+		if serviceAccount.PreimageLookup == nil {
+			return fmt.Errorf("deserializing preimage meta: service account '%v' empty preimage meta map", serviceId)
+		}
+
+		for preimageHash, preimageBlob := range serviceAccount.PreimageLookup {
+			preimageLength := uint32(len(preimageBlob))
+			sk, err := statekey.NewPreimageMeta(serviceId, preimageHash, preimageLength)
+			if err != nil {
+				return fmt.Errorf("deserialize preimage meta: error creating preimage meta state key: %w", err)
+			}
+
+			encodedValue, ok := serializedState[sk]
+			if !ok {
+				return fmt.Errorf("deserialize preimage meta: missing preimage meta state key %v", sk)
+			}
+
+			key := service.PreImageMetaKey{
+				Hash:   preimageHash,
+				Length: service.PreimageLength(preimageLength),
+			}
+
+			historicalPreimageMeta := service.PreimageHistoricalTimeslots{}
+			if err := jam.Unmarshal(encodedValue, &historicalPreimageMeta); err != nil {
+				return fmt.Errorf("deserialize preimage meta: error unmarshalling historical timeslots: %w", err)
+			}
+
+			if serviceAccount.PreimageMeta == nil {
+				serviceAccount.PreimageMeta = make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots)
+			}
+
+			serviceAccount.PreimageMeta[key] = historicalPreimageMeta
+		}
+
+		state.Services[serviceId] = serviceAccount
+	}
 
 	return nil
 }
