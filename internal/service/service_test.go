@@ -9,12 +9,13 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/testutils"
 )
 
 func TestServiceAccount_AddAndLookupPreimage(t *testing.T) {
 	serviceAccount := service.ServiceAccount{
-		Storage:                make(map[crypto.Hash][]byte),
+		Storage:                make(map[statekey.StateKey][]byte),
 		PreimageLookup:         make(map[crypto.Hash][]byte),
 		PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 		CodeHash:               testutils.RandomHash(t),

@@ -7,6 +7,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -121,8 +122,12 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 	hashInput = append(hashInput, serviceIdBytes...)
 	hashInput = append(hashInput, keyData...)
 
-	// Compute the hash H(E4(s) + keyData)
-	k := crypto.HashData(hashInput)
+	// Compute the hash H(E4(s) + keyData) and create a state key from it to use
+	// as the storage key.
+	k, err := statekey.NewStorage(ss, crypto.HashData(hashInput))
+	if err != nil {
+		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
+	}
 
 	v, exists := a.Storage[k]
 	if !exists {
@@ -159,8 +164,12 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 	if err != nil {
 		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 	}
+
 	hashInput := append(serviceIdBytes, keyData...)
-	k := crypto.HashData(hashInput)
+	k, err := statekey.NewStorage(serviceId, crypto.HashData(hashInput))
+	if err != nil {
+		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
+	}
 
 	a := s
 	if vz == 0 {

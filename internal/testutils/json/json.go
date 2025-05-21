@@ -26,6 +26,7 @@ import (
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
@@ -385,10 +386,11 @@ type AccountData struct {
 }
 
 func (ad AccountData) To() service.ServiceAccount {
-	storage := map[crypto.Hash][]byte{}
+	storage := map[statekey.StateKey][]byte{}
 	if ad.Storage != nil {
 		for k, v := range *ad.Storage {
-			storage[hexToHash(k)] = hexToBytes(v)
+			stateKey := hexToBytes(k)
+			storage[statekey.StateKey(stateKey)] = hexToBytes(v)
 		}
 	}
 
@@ -425,8 +427,9 @@ func NewAccountData(account service.ServiceAccount) AccountData {
 	var storage *Storage
 	if len(account.Storage) > 0 {
 		s := Storage{}
-		for hash, blob := range account.Storage {
-			s[hashToHex(hash)] = bytesToHex(blob)
+		for sk, blob := range account.Storage {
+			k := bytesToHex(sk[:])
+			s[k] = bytesToHex(blob)
 		}
 		storage = &s
 	}

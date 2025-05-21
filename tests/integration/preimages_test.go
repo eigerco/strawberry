@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 
@@ -149,7 +150,7 @@ func mapServiceState(t *testing.T, state PreimageState) service.ServiceState {
 	for _, account := range state.Accounts {
 		serviceId := block.ServiceId(account.ID)
 		serviceAccount := service.ServiceAccount{
-			Storage:                make(map[crypto.Hash][]byte),
+			Storage:                make(map[statekey.StateKey][]byte),
 			PreimageLookup:         make(map[crypto.Hash][]byte),
 			PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 			Balance:                1000, // Default values for fields not in test vector

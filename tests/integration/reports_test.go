@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
@@ -418,7 +419,7 @@ func mapServices(services []ServiceInfo) service.ServiceState {
 
 	for _, s := range services {
 		serviceState[block.ServiceId(s.ID)] = service.ServiceAccount{
-			Storage:                make(map[crypto.Hash][]byte),
+			Storage:                make(map[statekey.StateKey][]byte),
 			PreimageLookup:         make(map[crypto.Hash][]byte),
 			PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 			CodeHash:               crypto.Hash(mustStringToHex(s.Data.Service.CodeHash)),
