@@ -264,7 +264,7 @@ func deserializePreimageMeta(state *state.State, serializedState map[statekey.St
 				Length: service.PreimageLength(preimageLength),
 			}
 
-			historialPreimageMeta := service.PreimageHistoricalTimeslots{}
+			historicalPreimageMeta := service.PreimageHistoricalTimeslots{}
 			if err := jam.Unmarshal(encodedValue, &historialPreimageMeta); err != nil {
 				return fmt.Errorf("deserialize preimage meta: error unmarshalling historical timeslots: %w", err)
 			}
