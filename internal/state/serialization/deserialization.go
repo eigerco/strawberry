@@ -265,7 +265,7 @@ func deserializePreimageMeta(state *state.State, serializedState map[statekey.St
 			}
 
 			historicalPreimageMeta := service.PreimageHistoricalTimeslots{}
-			if err := jam.Unmarshal(encodedValue, &historialPreimageMeta); err != nil {
+			if err := jam.Unmarshal(encodedValue, &historicalPreimageMeta); err != nil {
 				return fmt.Errorf("deserialize preimage meta: error unmarshalling historical timeslots: %w", err)
 			}
 
@@ -273,10 +273,10 @@ func deserializePreimageMeta(state *state.State, serializedState map[statekey.St
 				serviceAccount.PreimageMeta = make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots)
 			}
 
-			serviceAccount.PreimageMeta[key] = historialPreimageMeta
-
-			state.Services[serviceId] = serviceAccount
+			serviceAccount.PreimageMeta[key] = historicalPreimageMeta
 		}
+
+		state.Services[serviceId] = serviceAccount
 	}
 
 	return nil
