@@ -35,10 +35,8 @@ func TestStateSerialization(t *testing.T) {
 	newSerializedState, err := serialization.SerializeState(decodedState)
 	require.NoError(t, err)
 
-	for key, value := range newSerializedState {
-		// Check only the keys we're currently able to serialize.  We are
-		// missing preimage meta dicts for now.
-		originalValue, ok := serializedState[key]
+	for key, originalValue := range serializedState {
+		value, ok := newSerializedState[key]
 		require.True(t, ok, "missed key %s", hex.EncodeToString(key[:]))
 
 		require.Equal(t, hex.EncodeToString(originalValue), hex.EncodeToString(value),
