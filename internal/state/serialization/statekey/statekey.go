@@ -1,7 +1,6 @@
 package statekey
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math"
 
@@ -172,24 +171,33 @@ func (s StateKey) IsServiceKey() bool {
 
 // Checks if the given state key is a storage key of the format: [n0, 0xFF, n1, 0xFF, n2, 0xFF, n3, 0xFF, h4, h5,...]
 // Where n is the service ID (uint32) little endian encoded, and h is the hash component.
-func (s StateKey) IsStorageKey() bool {
+func (s StateKey) IsStorageKey() (bool, error) {
 	// The preimage lookup keys hash component starts with max(uint32)
 	// little endian encoded, which is 0xFFFFFFFF. This is interleaved with the
 	// service ID.
 	encodedHashIndex := []byte{s[1], s[3], s[5], s[7]}
-	return binary.LittleEndian.Uint32(encodedHashIndex) == HashStorageIndex
+	var index uint32
+	if err := jam.Unmarshal(encodedHashIndex, &index); err != nil {
+		return false, err
+	}
+
+	return index == HashStorageIndex, nil
 
 }
 
 // Checks if the given state key is a preimage lookup key of the format: [n0, 0xFE, n1, 0xFF, n2, 0xFF, n3, 0xFF, h4, h5,...]
 // Where n is the service ID (uint32) little endian encoded, and h is the hash component.
-func (s StateKey) IsPreimageLookupKey() bool {
+func (s StateKey) IsPreimageLookupKey() (bool, error) {
 	// The preimage lookup keys hash component starts with max(uint32) - 1
 	// little endian encoded, which is 0xFEFFFFFF. This is interleaved with the
 	// service ID.
 	encodedHashIndex := []byte{s[1], s[3], s[5], s[7]}
-	return binary.LittleEndian.Uint32(encodedHashIndex) == HashPreimageLookupIndex
+	var index uint32
+	if err := jam.Unmarshal(encodedHashIndex, &index); err != nil {
+		return false, err
+	}
 
+	return index == HashPreimageLookupIndex, nil
 }
 
 // Extracts the chapter and service ID components from a state key of airty 2.

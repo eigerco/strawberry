@@ -56,13 +56,22 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 	// Sort keys into service account keys and preimage lookup keys.
 	var serviceKeys, storageKeys, preimageLookupKeys []statekey.StateKey
 	for sk := range serializedState {
+		isStorageKey, err := sk.IsStorageKey()
+		if err != nil {
+			return deserializedState, fmt.Errorf("error checking if key is storage key: %w", err)
+		}
+		isPreimageLookupKey, err := sk.IsPreimageLookupKey()
+		if err != nil {
+			return deserializedState, fmt.Errorf("error checking if key is preimage lookup key: %w", err)
+		}
+
 		if sk.IsChapterKey() {
 			continue
 		} else if sk.IsServiceKey() {
 			serviceKeys = append(serviceKeys, sk)
-		} else if sk.IsStorageKey() {
+		} else if isStorageKey {
 			storageKeys = append(storageKeys, sk)
-		} else if sk.IsPreimageLookupKey() {
+		} else if isPreimageLookupKey {
 			preimageLookupKeys = append(preimageLookupKeys, sk)
 		}
 
@@ -136,7 +145,11 @@ func deserializeService(state *state.State, sk statekey.StateKey, encodedValue [
 
 // deserializeStorage deserializes a storage account from the given state key and encoded value.
 func deserializeStorage(state *state.State, sk statekey.StateKey, encodedValue []byte) error {
-	if !sk.IsStorageKey() {
+	ok, err := sk.IsStorageKey()
+	if err != nil {
+		return fmt.Errorf("deserialize storage: error checking if key is storage key: %w", err)
+	}
+	if !ok {
 		return fmt.Errorf("deserialize storage: expected storage key, got '%x'", sk[:])
 	}
 
@@ -168,7 +181,11 @@ func deserializeStorage(state *state.State, sk statekey.StateKey, encodedValue [
 // deserializePreimageLookup deserializes a preimage lookup from the given state key and encoded value.
 // The original preimage lookup hash is found by simply hashing the decoded value.
 func deserializePreimageLookup(state *state.State, sk statekey.StateKey, encodedValue []byte) error {
-	if !sk.IsPreimageLookupKey() {
+	ok, err := sk.IsPreimageLookupKey()
+	if err != nil {
+		return fmt.Errorf("deserialize preimage lookup: error checking if key is preimage lookup key: %w", err)
+	}
+	if !ok {
 		return fmt.Errorf("deserialize preimage lookup: expected preimage lookup key, got '%x'", sk[:])
 	}
 
