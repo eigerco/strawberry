@@ -12,32 +12,44 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-// ImportedSegmentsFetcher defines an interface for fetching imported segments from the availability system
-type ImportedSegmentsFetcher interface {
-	FetchImportedSegment(hash crypto.Hash) ([]byte, error)
+// SegmentsFetcher defines an interface for fetching imported segments from the availability system
+type SegmentsFetcher interface {
+
+	// Fetch fetches enough segment shards from the availability system to reconstructs the requested segments
+	// the availability system expects to request the shards by the erasure-root
+	// however we request the segments by segment-root,
+	// to tackle this problem the SegmentsFetcher keeps internally a dictionary of segment-root to erasure-root mappings
+	Fetch(segmentRoot crypto.Hash, segmentIndexes ...uint16) ([]work.Segment, error)
 }
 
-// ImportSegments implements ImportedSegmentsFetcher
-type ImportSegments struct{}
+// NewSegmentsFetcher creates a basic segments fetcher
+func NewSegmentsFetcher() SegmentsFetcher {
+	return &segmentsFetcher{}
+}
 
-func (m *ImportSegments) FetchImportedSegment(hash crypto.Hash) ([]byte, error) {
-	fmt.Printf("fetching imported segment for hash %x\n", hash)
+// segmentsFetcher implements SegmentsFetcher
+type segmentsFetcher struct{}
+
+func (m *segmentsFetcher) Fetch(segmentRoot crypto.Hash, segmentIndexes ...uint16) ([]work.Segment, error) {
+	fmt.Printf("fetching imported segment for hash %x indexes: %v\n", segmentRoot, segmentIndexes)
 	// TODO implement
 
-	return []byte{}, nil
+	return []work.Segment{}, nil
 }
 
 // WorkPackageSubmissionHandler processes incoming CE-133 submission streams
 type WorkPackageSubmissionHandler struct {
 	// Fetcher is used to retrieve imported segments referenced in the work-package.
-	Fetcher ImportedSegmentsFetcher
+	Fetcher SegmentsFetcher
 	// workReportGuarantor handles the rest of the flow after submission:
 	// running validation + auth + refinement (CE-134) and distributing guarantees (CE-135).
 	workReportGuarantor *WorkReportGuarantor
+
+	segmentRootLookup work.SegmentRootLookup
 }
 
 // NewWorkPackageSubmissionHandler creates a new handler instance with the given fetcher.
-func NewWorkPackageSubmissionHandler(fetcher ImportedSegmentsFetcher, wpSharingHandler *WorkReportGuarantor) *WorkPackageSubmissionHandler {
+func NewWorkPackageSubmissionHandler(fetcher SegmentsFetcher, wpSharingHandler *WorkReportGuarantor) *WorkPackageSubmissionHandler {
 	return &WorkPackageSubmissionHandler{
 		Fetcher:             fetcher,
 		workReportGuarantor: wpSharingHandler,
@@ -85,20 +97,18 @@ func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream 
 	fmt.Printf("received submission with coreIndex=%d, work package with %d work items, extrinsics=%d bytes\n",
 		coreIndex, len(pkg.WorkItems), len(extrinsics))
 
-	for _, item := range pkg.WorkItems {
-		for _, imp := range item.ImportedSegments {
-			_, err = h.Fetcher.FetchImportedSegment(imp.Hash)
-			if err != nil {
-				// retry or reject package
-				continue
-			}
-			// Process or store segment data
-		}
+	importedSegments, err := h.fetchAllImportSegments(pkg)
+	if err != nil {
+		return err
 	}
 
-	bundle := work.PackageBundle{
-		Package:    pkg,
-		Extrinsics: extrinsics,
+	builder, err := work.NewPackageBundleBuilder(pkg, h.segmentRootLookup, importedSegments, extrinsics)
+	if err != nil {
+		return fmt.Errorf("failed to build work package bundle: %w", err)
+	}
+	bundle, err := builder.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build work package bundle: %w", err)
 	}
 
 	if err = stream.Close(); err != nil {
@@ -106,6 +116,28 @@ func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream 
 	}
 
 	return h.workReportGuarantor.ValidateAndProcessWorkPackage(ctx, coreIndex, bundle)
+}
+
+func (h *WorkPackageSubmissionHandler) fetchAllImportSegments(pkg work.Package) (map[crypto.Hash][]work.Segment, error) {
+	// build a map of segment-root to segment indexes dictionary to request multiple segment indexes at a time if necessary
+	segmentRootAndIndexes := make(map[crypto.Hash][]uint16)
+	for _, item := range pkg.WorkItems {
+		for _, imp := range item.ImportedSegments {
+			segmentRoot := h.segmentRootLookup.Lookup(imp.Hash)
+			segmentRootAndIndexes[segmentRoot] = append(segmentRootAndIndexes[segmentRoot], imp.Index)
+		}
+	}
+
+	importedSegments := make(map[crypto.Hash][]work.Segment)
+	for segmentRoot, indexes := range segmentRootAndIndexes {
+		segments, err := h.Fetcher.Fetch(segmentRoot, indexes...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch imported segments: %w", err)
+		}
+		importedSegments[segmentRoot] = segments
+	}
+
+	return importedSegments, nil
 }
 
 // WorkPackageSubmitter handles outgoing CE-133 submissions (builder side).

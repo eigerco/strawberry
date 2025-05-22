@@ -99,10 +99,10 @@ func createMockMetadata(t *testing.T, ipStr string, port uint16) []byte {
 	return metadata
 }
 
-// MockImportSegmentsFetcher implements handlers.ImportedSegmentsFetcher for testing
+// MockImportSegmentsFetcher implements handlers.SegmentsFetcher for testing
 type MockImportSegmentsFetcher struct {
 	mu                 sync.Mutex
-	fetchedSegments    map[string]struct{}
+	fetchedSegments    map[crypto.Hash]struct{}
 	receivedWorkItems  []work.Item
 	receivedExtrinsics []byte
 	receivedCoreIndex  uint16
@@ -110,17 +110,19 @@ type MockImportSegmentsFetcher struct {
 
 func NewMockImportSegmentsFetcher() *MockImportSegmentsFetcher {
 	return &MockImportSegmentsFetcher{
-		fetchedSegments: make(map[string]struct{}),
+		fetchedSegments: make(map[crypto.Hash]struct{}),
 	}
 }
 
-func (m *MockImportSegmentsFetcher) FetchImportedSegment(hash crypto.Hash) ([]byte, error) {
+func (m *MockImportSegmentsFetcher) Fetch(segmentRoot crypto.Hash, segmentIndexes ...uint16) ([]work.Segment, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.fetchedSegments[string(hash[:])] = struct{}{}
+	m.fetchedSegments[segmentRoot] = struct{}{}
 	// Return mock segment data
-	return []byte("mock_segment_data"), nil
+	seg := work.Segment{}
+	copy(seg[:], "mock_segment_data")
+	return []work.Segment{seg}, nil
 }
 
 func (m *MockImportSegmentsFetcher) RecordWorkPackage(coreIndex uint16, items []work.Item, extrinsics []byte) {
@@ -253,7 +255,7 @@ func (h *ExtendedWorkPackageSubmissionHandler) HandleStream(ctx context.Context,
 	// Process imported segments as in the original handler
 	for _, item := range pkg.WorkItems {
 		for _, imp := range item.ImportedSegments {
-			_, err = h.Fetcher.FetchImportedSegment(imp.Hash)
+			_, err = h.Fetcher.Fetch(imp.Hash)
 			if err != nil {
 				continue
 			}
@@ -472,27 +474,31 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	// Create a mock work package bundle with authorization
 	authCode := []byte("auth token")
 	authHash := crypto.HashData(authCode)
-	bundle := work.PackageBundle{
-		Package: work.Package{
-			AuthorizationToken: authCode,
-			AuthorizerService:  1,
-			AuthCodeHash:       authHash,
-			Parameterization:   []byte("params"),
-			Context: block.RefinementContext{
-				LookupAnchor: block.RefinementContextLookupAnchor{
-					Timeslot: jamtime.Timeslot(0),
-				},
+	pkg := work.Package{
+		AuthorizationToken: authCode,
+		AuthorizerService:  1,
+		AuthCodeHash:       authHash,
+		Parameterization:   []byte("params"),
+		Context: block.RefinementContext{
+			LookupAnchor: block.RefinementContextLookupAnchor{
+				Timeslot: jamtime.Timeslot(0),
 			},
-			WorkItems: []work.Item{
-				{
-					ServiceId:        1,
-					CodeHash:         crypto.Hash{},
-					Payload:          []byte("payload"),
-					ExportedSegments: 1,
-				},
+		},
+		WorkItems: []work.Item{
+			{
+				ServiceId:        1,
+				CodeHash:         crypto.Hash{},
+				Payload:          []byte("payload"),
+				ExportedSegments: 1,
 			},
 		},
 	}
+
+	builder, err := work.NewPackageBundleBuilder(pkg, make(map[crypto.Hash]crypto.Hash), make(map[crypto.Hash][]work.Segment), []byte{})
+	require.NoError(t, err)
+
+	bundle, err := builder.Build()
+	require.NoError(t, err)
 
 	// Generate validator key for mainGuarantor
 	pub, prv, _ := ed25519.GenerateKey(nil)
@@ -500,7 +506,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 	// Add the auth hash to the core's authorization pool
 	pool := chainState.CoreAuthorizersPool{}
-	pool[coreIndex] = []crypto.Hash{bundle.Package.AuthCodeHash}
+	pool[coreIndex] = []crypto.Hash{bundle.Package().AuthCodeHash}
 	currentState := chainState.State{
 		Services:            serviceState,
 		CoreAuthorizersPool: pool,
@@ -611,8 +617,9 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	requester := handlers.NewWorkReportRequester()
 
 	mockRefine := NewMockRefine([]byte("out"))
-	expectedWorkReport, err := results.ProduceWorkReport(mockRefine, getServiceState(), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
+	shardData, expectedWorkReport, err := results.ProduceWorkReport(mockRefine, getServiceState(), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
 	require.NoError(t, err)
+	require.NotNil(t, shardData)
 
 	expectedWorkReportHash, err := expectedWorkReport.Hash()
 	require.NoError(t, err)
@@ -669,7 +676,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 			peer3,
 		})
 		// send work package builder->guarantor to initiate the flow (CE-133 → CE-134 → CE-135)
-		err = builderNode.SubmitWorkPackage(ctx, coreIndex, bundle.Package, []byte{}, mainGuarantor.ValidatorManager.Keys.EdPub)
+		err = builderNode.SubmitWorkPackage(ctx, coreIndex, bundle.Package(), []byte{}, mainGuarantor.ValidatorManager.Keys.EdPub)
 		require.NoError(t, err)
 
 		time.Sleep(500 * time.Millisecond)
@@ -733,7 +740,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 		})
 
 		// send work package builder->guarantor to initiate the flow (CE-133 → CE-134 → CE-135)
-		err = builderNode.SubmitWorkPackage(ctx, coreIndex, bundle.Package, []byte{}, mainGuarantor.ValidatorManager.Keys.EdPub)
+		err = builderNode.SubmitWorkPackage(ctx, coreIndex, bundle.Package(), []byte{}, mainGuarantor.ValidatorManager.Keys.EdPub)
 		require.NoError(t, err)
 
 		time.Sleep(500 * time.Millisecond)

@@ -101,29 +101,27 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 		return fmt.Errorf("failed to read work package bundle: %w", err)
 	}
 
-	var bundle work.PackageBundle
-	if err := jam.Unmarshal(msg2.Content, &bundle); err != nil {
+	bundle := &work.PackageBundle{}
+	if err := jam.Unmarshal(msg2.Content, bundle); err != nil {
 		return fmt.Errorf("failed to unmarshal work package bundle: %w", err)
 	}
 
-	log.Printf("Received work package bundle with %d work item(s) and %d extrinsic byte(s)",
-		len(bundle.Package.WorkItems), len(bundle.Extrinsics))
+	log.Printf("Received work package bundle with %d work item(s)", len(bundle.Package().WorkItems))
 
 	segmentRootLookup := buildSegmentRootLookup(rootMappings)
 
-	if err := h.verifySegmentRootMappings(segmentRootLookup, bundle); err != nil {
-		return fmt.Errorf("mappings verification failed: %w", err)
-	}
-
-	authOutput, err := h.auth.InvokePVM(bundle.Package, coreIndex)
+	authOutput, err := h.auth.InvokePVM(bundle.Package(), coreIndex)
 	if err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
 	}
 
-	workReport, err := results.ProduceWorkReport(h.refine, h.serviceState, authOutput, coreIndex, bundle, segmentRootLookup)
+	shardData, workReport, err := results.ProduceWorkReport(h.refine, h.serviceState, authOutput, coreIndex, bundle, segmentRootLookup)
 	if err != nil {
 		return fmt.Errorf("failed to produce work report: %w", err)
 	}
+
+	// TODO store shards in the shard store
+	_ = shardData
 
 	err = h.store.PutWorkReport(workReport)
 	if err != nil {
@@ -241,26 +239,10 @@ func (r *WorkPackageSharingRequester) SendRequest(
 	return &response, nil
 }
 
-func buildSegmentRootLookup(mappings []SegmentRootMapping) map[crypto.Hash]crypto.Hash {
+func buildSegmentRootLookup(mappings []SegmentRootMapping) work.SegmentRootLookup {
 	lookup := make(map[crypto.Hash]crypto.Hash)
 	for _, m := range mappings {
 		lookup[m.WorkPackageHash] = m.SegmentRoot
 	}
 	return lookup
-}
-
-// simple verification (wp hash -> segment root)
-func (h *WorkPackageSharingHandler) verifySegmentRootMappings(lookup map[crypto.Hash]crypto.Hash, bundle work.PackageBundle) error {
-	for _, item := range bundle.Package.WorkItems {
-		for _, imp := range item.ImportedSegments {
-			if _, exists := lookup[imp.Hash]; !exists {
-				log.Printf("Missing mapping for imported segment hash %x", imp.Hash)
-				return fmt.Errorf("missing segment-root mapping for hash: %x", imp.Hash)
-			}
-		}
-	}
-
-	log.Print("Segment-root mappings verified")
-
-	return nil
 }
