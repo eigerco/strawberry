@@ -40,10 +40,13 @@ func TestHandleSharingStream_Success(t *testing.T) {
 		},
 	}
 
-	bundle := work.PackageBundle{
-		Package:    pkg,
-		Extrinsics: []byte("extrinsics"),
-	}
+	segmentRootLookup := make(work.SegmentRootLookup)
+
+	builder, err := work.NewPackageBundleBuilder(pkg, segmentRootLookup, make(map[crypto.Hash][]work.Segment), []byte{})
+	require.NoError(t, err)
+
+	bundle, err := builder.Build()
+	require.NoError(t, err)
 
 	coreIndex := uint16(1)
 	var rootMappings []handlers.SegmentRootMapping

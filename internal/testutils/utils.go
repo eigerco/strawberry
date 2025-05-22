@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"iter"
 	mathRand "math/rand"
 	"strings"
 	"testing"
@@ -141,4 +142,23 @@ func MustFromHex(t *testing.T, s string) []byte {
 	b, err := hex.DecodeString(strings.TrimPrefix(s, "0x"))
 	require.NoError(t, err)
 	return b
+}
+
+func RandomBytes(t *testing.T, ln uint32) []byte {
+	t.Helper()
+	bb := make([]byte, ln)
+	_, err := rand.Read(bb)
+	require.NoError(t, err)
+	return bb
+}
+
+// RandomSlice creates a slice of type T using generator function generatorFn between 1 and 100
+func RandomSlice[T any](t *testing.T, start, end int32, generatorFn func(t *testing.T) T) iter.Seq[T] {
+	t.Helper()
+	return func(yield func(T) bool) {
+		// range between 1 and maxRandomSliceLength, cases with zero items should be tested separately
+		for range mathRand.Int31n(end-start) + start {
+			yield(generatorFn(t))
+		}
+	}
 }

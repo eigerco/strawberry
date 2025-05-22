@@ -30,8 +30,10 @@ type MockFetcher struct {
 	mock.Mock
 }
 
-func (m *MockFetcher) FetchImportedSegment(hash crypto.Hash) ([]byte, error) {
-	return []byte("mock segment data"), nil
+func (m *MockFetcher) Fetch(segmentRoot crypto.Hash, segmentIndexes ...uint16) ([]work.Segment, error) {
+	seg := work.Segment{}
+	copy(seg[:], "mock segment data")
+	return []work.Segment{seg}, nil
 }
 
 var pkg = work.Package{
@@ -47,13 +49,9 @@ var pkg = work.Package{
 			Payload:            []byte("payload data"),
 			GasLimitRefine:     1000,
 			GasLimitAccumulate: 2000,
-			ImportedSegments: []work.ImportedSegment{
-				{Hash: crypto.Hash{0x01}, Index: 0},
-			},
-			Extrinsics: []work.Extrinsic{
-				{Hash: crypto.Hash{0x01}, Length: 12},
-			},
-			ExportedSegments: 2,
+			ImportedSegments:   []work.ImportedSegment{}, // TODO add proper imported segments
+			Extrinsics:         []work.Extrinsic{},       // TODO add proper extrinsics
+			ExportedSegments:   2,
 		},
 	},
 }
@@ -184,9 +182,17 @@ func TestHandleWorkPackage(t *testing.T) {
 		}).
 		Return(len(extrinsics), nil).Once()
 
-	bundle := work.PackageBundle{Package: pkg}
-	workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
+	segmentRootLookup := make(work.SegmentRootLookup)
+
+	builder, err := work.NewPackageBundleBuilder(pkg, segmentRootLookup, make(map[crypto.Hash][]work.Segment), []byte{})
 	require.NoError(t, err)
+
+	bundle, err := builder.Build()
+	require.NoError(t, err)
+
+	shards, workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(), []byte("Authorized"), coreIndex, bundle, segmentRootLookup)
+	require.NoError(t, err)
+	assert.NotNil(t, shards)
 
 	h, err := workReport.Hash()
 	require.NoError(t, err)
@@ -378,9 +384,16 @@ func TestHandleStream_Success(t *testing.T) {
 		copy(b, extrinsics)
 	}).Return(len(extrinsics), nil).Once()
 
-	bundle := work.PackageBundle{Package: pkg}
-	workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
+	segmentRootLookup := make(map[crypto.Hash]crypto.Hash)
+	builder, err := work.NewPackageBundleBuilder(pkg, segmentRootLookup, make(map[crypto.Hash][]work.Segment), []byte{})
 	require.NoError(t, err)
+
+	bundle, err := builder.Build()
+	require.NoError(t, err)
+
+	shards, workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(), []byte("Authorized"), coreIndex, bundle, segmentRootLookup)
+	require.NoError(t, err)
+	assert.NotNil(t, shards)
 
 	h, err := workReport.Hash()
 	require.NoError(t, err)
