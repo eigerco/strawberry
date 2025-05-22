@@ -32,13 +32,13 @@ func TestSimulateGuarantee(t *testing.T) {
 	require.NoError(t, err)
 
 	// Genesis state
-	data, err = os.ReadFile("genesis-state-guarantee-tiny.json")
+	data, err = os.ReadFile("genesis-state-tiny.json")
 	require.NoError(t, err)
 	var currentState *state.State
 	restoredState := jsonutils.RestoreStateSnapshot(data)
 	currentState = &restoredState
 
-	// Gensesis block
+	// Genesis block
 	data, err = os.ReadFile("block-with-guarantee-tiny.json")
 	require.NoError(t, err)
 	var genesisSimBlock Block
