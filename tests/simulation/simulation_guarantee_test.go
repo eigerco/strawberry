@@ -39,7 +39,7 @@ func TestSimulateGuarantee(t *testing.T) {
 	currentState = &restoredState
 
 	// Genesis block
-	data, err = os.ReadFile("block-with-guarantee-tiny.json")
+	data, err = os.ReadFile("guarantee_block_01.json")
 	require.NoError(t, err)
 	var genesisSimBlock Block
 	err = json.Unmarshal(data, &genesisSimBlock)
