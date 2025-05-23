@@ -16,8 +16,8 @@ const (
 	// CE (Common Ephemeral) streams start from 128
 	StreamKindBlockRequest        StreamKind = 128
 	StreamKindStateRequest        StreamKind = 129
-	StreamKindTicketDistP2P       StreamKind = 131
-	StreamKindTicketDistBroadcast StreamKind = 132
+	StreamKindSafroleTicketSubmit StreamKind = 131
+	StreamKindSafroleTicketDist   StreamKind = 132
 	StreamKindWorkPackageSubmit   StreamKind = 133
 	StreamKindWorkPackageShare    StreamKind = 134
 	StreamKindWorkReportDist      StreamKind = 135

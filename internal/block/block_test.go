@@ -211,8 +211,8 @@ func TestExtrinsicHashEmpty(t *testing.T) {
 	require.Equal(t, "189d15af832dfe4f67744008b62c334b569fcbb4c261e0f065655697306ca252", hex.EncodeToString(hash[:]))
 }
 
-func randomTicketProof(t *testing.T) [ticketProofSize]byte {
-	var hash [ticketProofSize]byte
+func randomTicketProof(t *testing.T) [TicketProofSize]byte {
+	var hash [TicketProofSize]byte
 	_, err := rand.Read(hash[:])
 	require.NoError(t, err)
 

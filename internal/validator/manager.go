@@ -2,7 +2,9 @@ package validator
 
 import (
 	"crypto/ed25519"
+	"encoding/binary"
 
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
@@ -76,6 +78,26 @@ func (vm *ValidatorManager) IsSlotLeader(fallbackKeys crypto.EpochKeys) bool {
 
 	slotKey := fallbackKeys[slotInEpoch]
 	return slotKey == vm.Keys.BanderPub
+}
+
+func (vm *ValidatorManager) IsProxyValidatorFor(hash crypto.BandersnatchOutputHash) bool {
+	// TODO: Deal with epoch change.
+	proxyIndex := vm.DetermineProxyValidatorIndex(hash)
+	return vm.State.SafroleState.NextValidators[proxyIndex].Bandersnatch == vm.Keys.BanderPub
+}
+
+// DetermineProxyValidatorIndex calculates which validator will serve as the proxy
+// for distributing a Safrole ticket based on the VRF output
+func (vm *ValidatorManager) DetermineProxyValidatorIndex(hash crypto.BandersnatchOutputHash) uint32 {
+	// Take the last 4 bytes of the VRF output
+	lastFourBytes := hash[len(hash)-4:]
+
+	// Convert the last 4 bytes to a big-endian uint32 using the binary package
+	proxyIndex := binary.BigEndian.Uint32(lastFourBytes)
+	// Convert the uint32 to an int
+
+	// Modulo the number of validators to get the final index
+	return proxyIndex % uint32(common.NumberOfValidators)
 }
 
 // filterOutSelfFromValidators removes the validator's own key from the list of validators.
