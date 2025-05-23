@@ -13,16 +13,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-
-	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 	"github.com/quic-go/quic-go"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -63,8 +61,13 @@ func setupNodes(ctx context.Context, t *testing.T, s state.State, numNodes int) 
 		key.Metadata = crypto.MetadataKey(createMockMetadata(t, addr, uint16(port)))
 		validatorsData[i] = key
 	}
+
+	ringCommitment, err := validatorsData.RingCommitment()
+	require.NoError(t, err)
+
 	safroleState := safrole.State{
 		NextValidators: validatorsData,
+		RingCommitment: ringCommitment,
 	}
 
 	vstate := validator.ValidatorState{
@@ -1265,72 +1268,54 @@ func TestTwoNodesSendAndDistributeSafroleTicket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	nodes := setupNodes(ctx, t, state.State{}, 2)
-	node1 := nodes[0]
-	node2 := nodes[1]
-
-	// Randomization on ValidatorManager.State.SafroleState.NextValidators is used to determine the proxy validator
-	// that should receive the ticket. The receiver checks if they are the proxy validator for the ticket and returns an error if not.
-	// We set the NextValidators to all be his own key, so he will always be the proxy validator for the ticket.
-	vd := safrole.ValidatorsData{}
-	for i := range common.NumberOfValidators {
-		vd[i] = crypto.ValidatorKey{
-			Bandersnatch: node2.ValidatorManager.Keys.BanderPub,
-		}
+	nodes := setupNodes(ctx, t, state.State{}, 6)
+	for _, node := range nodes {
+		node.Start()
+		defer stopNode(t, node)
 	}
-	node2.ValidatorManager.State.SafroleState.NextValidators = vd
 
-	// Start both nodes
-	err := node1.Start()
-	require.NoError(t, err)
-	defer stopNode(t, node1)
-
-	err = node2.Start()
-	require.NoError(t, err)
-	defer stopNode(t, node2)
-
+	sender := nodes[0]
 	// Allow time for the nodes to start
 	time.Sleep(100 * time.Millisecond)
-
-	// Connect node1 to node2
-	node2Addr, err := peer.NewPeerAddressFromMetadata(nodes[1].ValidatorManager.State.CurrentValidators[1].Metadata[:])
+	ticket, err := state.CreateTicketProof(sender.State.ValidatorState.SafroleState.NextValidators, sender.State.EntropyPool[2], sender.ValidatorManager.Keys.BanderPrv, 0)
 	require.NoError(t, err)
-	err = node1.ConnectToPeer(node2Addr)
+	hash, err := state.VerifyTicketProof(sender.State.ValidatorState.SafroleState.RingCommitment, sender.State.EntropyPool[2], ticket)
+	require.NoError(t, err)
+	// This is randomly chosen from the list of validators
+	proxyValidatorIndex := sender.ValidatorManager.DetermineProxyValidatorIndex(hash)
+	// if == 0, skip the test
+	if proxyValidatorIndex == 0 {
+		t.Skip("Proxy validator happens to be the same as the sender. We just don't send ticket in such case")
+	}
+	proxyAddress, err := peer.NewPeerAddressFromMetadata(nodes[proxyValidatorIndex].ValidatorManager.State.CurrentValidators[proxyValidatorIndex].Metadata[:])
+	require.NoError(t, err)
+	err = sender.ConnectToPeer(proxyAddress)
 	require.NoError(t, err)
 
 	// Wait for connection to be established
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify nodes are connected
-	node2Peer := node1.PeersSet.GetByAddress(node2Addr.String())
+	node2Peer := sender.PeersSet.GetByAddress(proxyAddress.String())
 	require.NotNil(t, node2Peer, "Node1 should have Node2 as a peer")
-	ticket, err := state.CreateTicketProof(node1.State.ValidatorState.SafroleState.NextValidators, node1.State.EntropyPool[2], node1.ValidatorManager.Keys.BanderPrv, 0)
 
-	node1.SubmitTicket(ctx, ticket, node2Peer.Ed25519Key)
+	sender.SubmitTicket(ctx, ticket, node2Peer.Ed25519Key)
 	require.NoError(t, err)
 	// Wait for the ticket to be processed
 	time.Sleep(500 * time.Millisecond)
 
-	// Get the hash of the ticket
-	ringCommitment, err := node2.State.ValidatorState.SafroleState.NextValidators.RingCommitment()
-	require.NoError(t, err)
-	hash, err := state.VerifyTicketProof(ringCommitment, node2.State.EntropyPool[2], ticket)
-	require.NoError(t, err)
-
-	// Check if Node2 has verified the ticket and stored it
-	nextEpoch, err := jamtime.CurrentEpoch().NextEpoch()
-	require.NoError(t, err)
-	resultTicket, err := node2.TicketStore.GetTicket(uint32(nextEpoch), hash)
+	// Check if ProxyValidator has verified the ticket and stored it
+	resultTicket, err := nodes[proxyValidatorIndex].TicketStore.GetTicket(uint32(jamtime.CurrentEpoch()), hash)
 	require.NoError(t, err)
 	require.Equal(t, ticket, resultTicket)
 
-	err = node2.DistributeTicketToPeer(ctx, ticket, node1.ValidatorManager.Keys.EdPub)
+	err = nodes[proxyValidatorIndex].DistributeTicketToPeer(ctx, ticket, sender.ValidatorManager.Keys.EdPub)
 	require.NoError(t, err)
 
 	time.Sleep(5000 * time.Millisecond)
-	// Check if Node2 has distributed the ticket to all validators
+	// Check if ProxyValidator has distributed the ticket to all validators
 	// Check if Node1 has received the ticket
-	resultTicket, err = node1.TicketStore.GetTicket(uint32(nextEpoch), hash)
+	resultTicket, err = sender.TicketStore.GetTicket(uint32(jamtime.CurrentEpoch()), hash)
 	require.NoError(t, err)
 	require.Equal(t, ticket, resultTicket)
 }

@@ -610,7 +610,7 @@ func (n *Node) RequestState(ctx context.Context, headerHash crypto.Hash, keyStar
 
 // SubmitTicket implements the CE 131 Safrole ticket submission protocol.
 // CE 131 Protocol Flow (Generating Validator -> Proxy Validator):
-//  1. A validator generates a Safrole ticket for the next epoch
+//  1. A validator generates a Safrole ticket for the current epoch
 //  2. The ticket is sent to a deterministically-selected "proxy" validator
 //  3. The proxy validator index is determined by: last 4 bytes of ticket's VRF output
 //     as big-endian uint32, modulo number of validators

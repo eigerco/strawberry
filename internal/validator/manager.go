@@ -82,13 +82,13 @@ func (vm *ValidatorManager) IsSlotLeader(fallbackKeys crypto.EpochKeys) bool {
 
 func (vm *ValidatorManager) IsProxyValidatorFor(hash crypto.BandersnatchOutputHash) bool {
 	// TODO: Deal with epoch change.
-	proxyIndex := determineProxyValidatorIndex(hash)
+	proxyIndex := vm.DetermineProxyValidatorIndex(hash)
 	return vm.State.SafroleState.NextValidators[proxyIndex].Bandersnatch == vm.Keys.BanderPub
 }
 
-// determineProxyValidatorIndex calculates which validator will serve as the proxy
+// DetermineProxyValidatorIndex calculates which validator will serve as the proxy
 // for distributing a Safrole ticket based on the VRF output
-func determineProxyValidatorIndex(hash crypto.BandersnatchOutputHash) uint32 {
+func (vm *ValidatorManager) DetermineProxyValidatorIndex(hash crypto.BandersnatchOutputHash) uint32 {
 	// Take the last 4 bytes of the VRF output
 	lastFourBytes := hash[len(hash)-4:]
 

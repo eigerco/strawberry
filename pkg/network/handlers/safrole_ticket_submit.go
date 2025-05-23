@@ -19,7 +19,7 @@ import (
 // a generating validator sends their ticket to a deterministically-selected proxy validator.
 //
 // Protocol Flow (CE 131):
-// 1. Validator generates Safrole ticket for next epoch
+// 1. Validator generates Safrole ticket for current epoch
 // 2. Validator determines proxy using: last 4 bytes of VRF output % validator_count
 // 3. Validator sends ticket to proxy validator (this handler receives it)
 // 4. Proxy validates ticket and stores it for later distribution (CE 132)
@@ -144,10 +144,7 @@ func handleSafroleTicket(ctx context.Context, stream quic.Stream, handler *safro
 	// Get the ring commitment for the next epoch's validators
 	// This is used to verify the RingVRF proof in the ticket
 	// TODO: Deal with epoch change.
-	ringCommitment, err := handler.state.ValidatorState.SafroleState.NextValidators.RingCommitment()
-	if err != nil {
-		return fmt.Errorf("get ring commitment: %w", err)
-	}
+	ringCommitment := handler.state.ValidatorState.SafroleState.RingCommitment
 
 	// Verify the ticket proof and extract the VRF hash
 	// The hash is used to determine the correct proxy validator
@@ -162,15 +159,9 @@ func handleSafroleTicket(ctx context.Context, stream quic.Stream, handler *safro
 		return fmt.Errorf("not proxy validator for hash %v", hash)
 	}
 
-	// Calculate the next epoch when this ticket will be used
-	nextEpoch, err := jamtime.CurrentEpoch().NextEpoch()
-	if err != nil {
-		return fmt.Errorf("get next epoch: %w", err)
-	}
-
 	// Store the ticket for future use in block production
 	// Tickets are indexed by epoch and hash for efficient retrieval
-	if err = handler.store.PutTicket(uint32(nextEpoch), request.TicketProof, hash); err != nil {
+	if err = handler.store.PutTicket(uint32(jamtime.CurrentEpoch()), request.TicketProof, hash); err != nil {
 		return fmt.Errorf("put ticket: %w", err)
 	}
 
@@ -197,15 +188,10 @@ type SafroleTicketSubmiter struct{}
 // --> FIN
 // <-- FIN
 func (r *SafroleTicketSubmiter) Submit(ctx context.Context, stream quic.Stream, ticketProof block.TicketProof) error {
-	nextEpoch, err := jamtime.CurrentEpoch().NextEpoch()
-	if err != nil {
-		return fmt.Errorf("get next epoch: %w", err)
-	}
-
 	// Create the message with epoch index and ticket proof
 	msg := safroleTicketSubmitMessage{
-		EpochIndex:  nextEpoch,   // When the ticket will be used
-		TicketProof: ticketProof, // The actual RingVRF proof (784 bytes)
+		EpochIndex:  jamtime.CurrentEpoch(), // When the ticket will be used
+		TicketProof: ticketProof,            // The actual RingVRF proof (784 bytes)
 	}
 
 	// Serialize the message for transmission
