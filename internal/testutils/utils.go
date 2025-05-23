@@ -72,6 +72,13 @@ func RandomBandersnatchPrivateKey(t *testing.T) crypto.BandersnatchPrivateKey {
 	return key
 }
 
+func RandomBandersnatchKeys(t *testing.T) (crypto.BandersnatchPublicKey, crypto.BandersnatchPrivateKey) {
+	privateKey := RandomBandersnatchPrivateKey(t)
+	publicKey, err := bandersnatch.Public(privateKey)
+	require.NoError(t, err)
+	return publicKey, privateKey
+}
+
 func RandomBlsKey(t *testing.T) crypto.BlsKey {
 	hash := make([]byte, crypto.BLSSize)
 	_, err := rand.Read(hash)

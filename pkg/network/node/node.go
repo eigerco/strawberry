@@ -51,11 +51,13 @@ type Node struct {
 	WorkReportGuarantor           *handlers.WorkReportGuarantor
 	workReportRequester           *handlers.WorkReportRequester
 	WorkPackageSharingHandler     *handlers.WorkPackageSharingHandler
+	safroleTicketSubmiter         *handlers.SafroleTicketSubmiter
 	currentCoreIndex              uint16
 	currentGuarantorPeers         []*peer.Peer
 	ValidatorService              validator.ValidatorService
 	StateTrieStore                *store.Trie
 	AvailabilityStore             *store.Availability
+	TicketStore                   *store.Ticket
 }
 
 // NewNode creates a new Node instance with the specified configuration.
@@ -77,6 +79,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 		ValidatorService:  validator.NewService(availabilityStore),
 		AvailabilityStore: availabilityStore,
 		StateTrieStore:    store.NewTrie(kvStore),
+		TicketStore:       store.NewTicket(kvStore),
 	}
 	node.ValidatorManager = validator.NewValidatorManager(keys, state.ValidatorState, validatorIdx)
 
@@ -162,6 +165,14 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 
 	node.stateReqester = &handlers.StateRequester{}
 	protoManager.Registry.RegisterHandler(protocol.StreamKindStateRequest, handlers.NewStateRequestHandler(node.StateTrieStore))
+
+	// Safrole ticket submission and broadcast handlers
+
+	node.safroleTicketSubmiter = &handlers.SafroleTicketSubmiter{}
+	// Register handler for safrole ticket submission to proxy (CE131)
+	protoManager.Registry.RegisterHandler(protocol.StreamKindSafroleTicketSubmit, handlers.NewSafroleTicketSubmitRequestHandler(&state, node.ValidatorManager, node.TicketStore))
+	// Register handler for safrole ticket broadcast to proxy (CE132)
+	protoManager.Registry.RegisterHandler(protocol.StreamKindSafroleTicketDist, handlers.NewSafroleTicketBroadcastRequestHandler(&state, node.ValidatorManager, node.TicketStore))
 
 	// Create transport
 	transportConfig := transport.Config{
@@ -595,6 +606,86 @@ func (n *Node) RequestState(ctx context.Context, headerHash crypto.Hash, keyStar
 
 	// Return an error if no peer was found with the specified key
 	return store.TrieRangeResult{}, fmt.Errorf("state request: no peer available with the specified Ed25519 key")
+}
+
+// SubmitTicket implements the CE 131 Safrole ticket submission protocol.
+// CE 131 Protocol Flow (Generating Validator -> Proxy Validator):
+//  1. A validator generates a Safrole ticket for the next epoch
+//  2. The ticket is sent to a deterministically-selected "proxy" validator
+//  3. The proxy validator index is determined by: last 4 bytes of ticket's VRF output
+//     as big-endian uint32, modulo number of validators
+//  4. Proxy is selected from the NEXT epoch's validator list
+//
+// --> Epoch Index ++ Ticket (epoch that ticket will be used in)
+// --> FIN
+// <-- FIN
+func (n *Node) SubmitTicket(ctx context.Context, ticket block.TicketProof, peerKey ed25519.PublicKey) error {
+	return n.sendTicket(ctx, protocol.StreamKindSafroleTicketSubmit, ticket, peerKey)
+}
+
+// TODO: Timing of ticket distribution and actual execution of the protocol.
+// CE 132 Protocol Requirements:
+// - Proxy validator must send ticket to ALL current validators (broadcast)
+// - Distribution should be evenly spaced over time to avoid network congestion
+// - Should stop if ticket gets included in a finalized block
+// - Timing: Start 3 minutes after connectivity changes, spread until halfway through lottery period
+func (n *Node) DistributeTicketToAll(ctx context.Context, ticket block.TicketProof) error {
+	n.peersLock.RLock()
+	peers := n.PeersSet.GetAllPeers()
+	n.peersLock.RUnlock()
+
+	if len(peers) == 0 {
+		return fmt.Errorf("no peers available for ticket distribution")
+	}
+
+	for _, peer := range peers {
+		if peer.IsValidator() {
+			if err := n.DistributeTicketToPeer(ctx, ticket, peer.Ed25519Key); err != nil {
+				//log error and continue to the next peer
+				log.Printf("failed to distribute ticket to validatorindex %d: %v", peer.ValidatorIndex, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// DistributeTicketToPeer implements the CE 132 Safrole ticket distribute protocol.
+// --> Epoch Index ++ Ticket
+// --> FIN
+// <-- FIN
+func (n *Node) DistributeTicketToPeer(ctx context.Context, ticket block.TicketProof, peerKey ed25519.PublicKey) error {
+	return n.sendTicket(ctx, protocol.StreamKindSafroleTicketDist, ticket, peerKey)
+}
+
+// sendTicket is the common implementation for both CE 131 and CE 132 protocols.
+// The protocols are identical on the wire - the difference is in their usage:
+// - CE 131: Generating validator -> Proxy validator (1-to-1)
+// - CE 132: Proxy validator -> All current validators (1-to-many broadcast)
+//
+// Protocol Details:
+// - Both use the same message format: Epoch Index + Ticket data
+// - Epoch Index identifies which epoch the ticket will be used for block production
+// - Simple request-response: sender transmits data, receiver acknowledges with FIN
+func (n *Node) sendTicket(ctx context.Context, streamKind protocol.StreamKind, ticket block.TicketProof, peerKey ed25519.PublicKey) error {
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
+
+	existingPeer := n.PeersSet.GetByEd25519Key(peerKey)
+	if existingPeer == nil {
+		return fmt.Errorf("no peers available to submit ticket")
+	}
+
+	stream, err := existingPeer.ProtoConn.OpenStream(ctx, streamKind)
+	if err != nil {
+		return fmt.Errorf("failed to open stream: %w", err)
+	}
+	defer stream.Close()
+
+	if err := n.safroleTicketSubmiter.Submit(ctx, stream, ticket); err != nil {
+		return fmt.Errorf("failed to submit ticket: %w", err)
+	}
+	return nil
 }
 
 // Start begins the node's network operations, including listening for incoming connections.

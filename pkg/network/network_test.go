@@ -1,3 +1,5 @@
+//go:build integration
+
 package network_test
 
 import (
@@ -14,20 +16,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/quic-go/quic-go"
-	"github.com/stretchr/testify/require"
-
+	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
+	"github.com/quic-go/quic-go"
+	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
-	chainState "github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
@@ -37,16 +39,19 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-func setupNodes(ctx context.Context, t *testing.T, state chainState.State, numNodes int) []*node.Node {
+func setupNodes(ctx context.Context, t *testing.T, s state.State, numNodes int) []*node.Node {
 	nodes := []*node.Node{}
 	validatorsData := safrole.ValidatorsData{}
 	nodeKeys := []validator.ValidatorKeys{}
 	for i := 0; i < numNodes; i++ {
 		pub, prv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
+		banderPub, banderPrv := testutils.RandomBandersnatchKeys(t)
 		keys := validator.ValidatorKeys{
-			EdPrv: prv,
-			EdPub: pub,
+			EdPrv:     prv,
+			EdPub:     pub,
+			BanderPrv: banderPrv,
+			BanderPub: banderPub,
 		}
 		nodeKeys = append(nodeKeys, keys)
 
@@ -54,21 +59,27 @@ func setupNodes(ctx context.Context, t *testing.T, state chainState.State, numNo
 		port := 10000 + i
 		key := crypto.ValidatorKey{}
 		key.Ed25519 = pub
+		key.Bandersnatch = banderPub
 		key.Metadata = crypto.MetadataKey(createMockMetadata(t, addr, uint16(port)))
 		validatorsData[i] = key
 	}
+	safroleState := safrole.State{
+		NextValidators: validatorsData,
+	}
+
 	vstate := validator.ValidatorState{
 		CurrentValidators:  validatorsData,
 		ArchivedValidators: validatorsData,
 		QueuedValidators:   validatorsData,
+		SafroleState:       safroleState,
 	}
 
-	state.ValidatorState = vstate
+	s.ValidatorState = vstate
 
 	for i := 0; i < numNodes; i++ {
 		addr, err := peer.NewPeerAddressFromMetadata(validatorsData[i].Metadata[:])
 		require.NoError(t, err)
-		node, err := node.NewNode(ctx, addr, nodeKeys[i], state, uint16(i))
+		node, err := node.NewNode(ctx, addr, nodeKeys[i], s, uint16(i))
 		require.NoError(t, err)
 		nodes = append(nodes, node)
 	}
@@ -209,7 +220,7 @@ func NewExtendedWorkPackageSubmissionHandler(fetcher *MockImportSegmentsFetcher)
 	return &ExtendedWorkPackageSubmissionHandler{
 		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(
 			fetcher,
-			handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, NewMockRefine([]byte("out")), chainState.State{Services: make(service.ServiceState)}, peer.NewPeerSet(), nil, nil, nil, nil)),
+			handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, NewMockRefine([]byte("out")), state.State{Services: make(service.ServiceState)}, peer.NewPeerSet(), nil, nil, nil, nil)),
 		MockFetcher: fetcher,
 	}
 }
@@ -268,7 +279,7 @@ func TestTwoNodesAnnounceBlocks(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	nodes := setupNodes(ctx, t, chainState.State{}, 2)
+	nodes := setupNodes(ctx, t, state.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 	// Start both nodes
@@ -336,7 +347,7 @@ func TestTwoNodesRequestBlock(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	nodes := setupNodes(ctx, t, chainState.State{}, 2)
+	nodes := setupNodes(ctx, t, state.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 	// Start both nodes
@@ -391,7 +402,7 @@ func TestTwoNodesSubmitWorkPackage(t *testing.T) {
 	defer cancel()
 
 	// Setup nodes using the existing setup function
-	nodes := setupNodes(ctx, t, chainState.State{}, 2)
+	nodes := setupNodes(ctx, t, state.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 
@@ -499,9 +510,9 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	serviceState := getServiceState()
 
 	// Add the auth hash to the core's authorization pool
-	pool := chainState.CoreAuthorizersPool{}
+	pool := state.CoreAuthorizersPool{}
 	pool[coreIndex] = []crypto.Hash{bundle.Package.AuthCodeHash}
-	currentState := chainState.State{
+	currentState := state.State{
 		Services:            serviceState,
 		CoreAuthorizersPool: pool,
 		TimeslotIndex:       jamtime.Timeslot(599),
@@ -772,7 +783,7 @@ func TestTwoNodesDistributeShard(t *testing.T) {
 	defer cancel()
 
 	// Setup nodes using the existing setup function
-	nodes := setupNodes(ctx, t, chainState.State{}, 2)
+	nodes := setupNodes(ctx, t, state.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 
@@ -837,7 +848,7 @@ func TestTwoNodesAuditShard(t *testing.T) {
 	defer cancel()
 
 	// Setup nodes using the existing setup function
-	nodes := setupNodes(ctx, t, chainState.State{}, 2)
+	nodes := setupNodes(ctx, t, state.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 
@@ -893,7 +904,7 @@ func TestTwoNodesSegmentShard(t *testing.T) {
 	defer cancel()
 
 	// Setup nodes using the existing setup function
-	nodes := setupNodes(ctx, t, chainState.State{}, 2)
+	nodes := setupNodes(ctx, t, state.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 
@@ -948,7 +959,7 @@ func TestTwoNodesSegmentJustificationShard(t *testing.T) {
 	defer cancel()
 
 	// Setup nodes using the existing setup function
-	nodes := setupNodes(ctx, t, chainState.State{}, 2)
+	nodes := setupNodes(ctx, t, state.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 
@@ -1014,7 +1025,7 @@ func TestTwoNodesStateRequest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	nodes := setupNodes(ctx, t, chainState.State{}, 2)
+	nodes := setupNodes(ctx, t, state.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
 
@@ -1150,7 +1161,7 @@ func TestAnnounceBlocksAndDistributeShards(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	nodes := setupNodes(ctx, t, chainState.State{}, 3)
+	nodes := setupNodes(ctx, t, state.State{}, 3)
 	const (
 		node1Id      = 0
 		guarantor1Id = 1
@@ -1247,4 +1258,79 @@ func TestAnnounceBlocksAndDistributeShards(t *testing.T) {
 	assert.Equal(t, segmentsShards, actualSegmentsShards)
 	assert.Equal(t, bundleShard, actualBundleShard)
 	assert.Equal(t, justification, actualJustification)
+}
+
+func TestTwoNodesSendAndDistributeSafroleTicket(t *testing.T) {
+	// Create contexts for both nodes
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	nodes := setupNodes(ctx, t, state.State{}, 2)
+	node1 := nodes[0]
+	node2 := nodes[1]
+
+	// Randomization on ValidatorManager.State.SafroleState.NextValidators is used to determine the proxy validator
+	// that should receive the ticket. The receiver checks if they are the proxy validator for the ticket and returns an error if not.
+	// We set the NextValidators to all be his own key, so he will always be the proxy validator for the ticket.
+	vd := safrole.ValidatorsData{}
+	for i := range common.NumberOfValidators {
+		vd[i] = crypto.ValidatorKey{
+			Bandersnatch: node2.ValidatorManager.Keys.BanderPub,
+		}
+	}
+	node2.ValidatorManager.State.SafroleState.NextValidators = vd
+
+	// Start both nodes
+	err := node1.Start()
+	require.NoError(t, err)
+	defer stopNode(t, node1)
+
+	err = node2.Start()
+	require.NoError(t, err)
+	defer stopNode(t, node2)
+
+	// Allow time for the nodes to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Connect node1 to node2
+	node2Addr, err := peer.NewPeerAddressFromMetadata(nodes[1].ValidatorManager.State.CurrentValidators[1].Metadata[:])
+	require.NoError(t, err)
+	err = node1.ConnectToPeer(node2Addr)
+	require.NoError(t, err)
+
+	// Wait for connection to be established
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify nodes are connected
+	node2Peer := node1.PeersSet.GetByAddress(node2Addr.String())
+	require.NotNil(t, node2Peer, "Node1 should have Node2 as a peer")
+	ticket, err := state.CreateTicketProof(node1.State.ValidatorState.SafroleState.NextValidators, node1.State.EntropyPool[2], node1.ValidatorManager.Keys.BanderPrv, 0)
+
+	node1.SubmitTicket(ctx, ticket, node2Peer.Ed25519Key)
+	require.NoError(t, err)
+	// Wait for the ticket to be processed
+	time.Sleep(500 * time.Millisecond)
+
+	// Get the hash of the ticket
+	ringCommitment, err := node2.State.ValidatorState.SafroleState.NextValidators.RingCommitment()
+	require.NoError(t, err)
+	hash, err := state.VerifyTicketProof(ringCommitment, node2.State.EntropyPool[2], ticket)
+	require.NoError(t, err)
+
+	// Check if Node2 has verified the ticket and stored it
+	nextEpoch, err := jamtime.CurrentEpoch().NextEpoch()
+	require.NoError(t, err)
+	resultTicket, err := node2.TicketStore.GetTicket(uint32(nextEpoch), hash)
+	require.NoError(t, err)
+	require.Equal(t, ticket, resultTicket)
+
+	err = node2.DistributeTicketToPeer(ctx, ticket, node1.ValidatorManager.Keys.EdPub)
+	require.NoError(t, err)
+
+	time.Sleep(5000 * time.Millisecond)
+	// Check if Node2 has distributed the ticket to all validators
+	// Check if Node1 has received the ticket
+	resultTicket, err = node1.TicketStore.GetTicket(uint32(nextEpoch), hash)
+	require.NoError(t, err)
+	require.Equal(t, ticket, resultTicket)
 }
