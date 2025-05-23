@@ -668,10 +668,11 @@ func (n *Node) DistributeTicketToPeer(ctx context.Context, ticket block.TicketPr
 // - Epoch Index identifies which epoch the ticket will be used for block production
 // - Simple request-response: sender transmits data, receiver acknowledges with FIN
 func (n *Node) sendTicket(ctx context.Context, streamKind protocol.StreamKind, ticket block.TicketProof, peerKey ed25519.PublicKey) error {
+	var existingPeer *peer.Peer
 	n.peersLock.RLock()
-	defer n.peersLock.RUnlock()
+	existingPeer = n.PeersSet.GetByEd25519Key(peerKey)
+	n.peersLock.RUnlock()
 
-	existingPeer := n.PeersSet.GetByEd25519Key(peerKey)
 	if existingPeer == nil {
 		return fmt.Errorf("no peers available to submit ticket")
 	}
