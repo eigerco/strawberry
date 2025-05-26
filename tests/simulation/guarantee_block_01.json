@@ -3,7 +3,7 @@
         "parent": "0x476243ad7cc4fc49cb6cb362c6568e931731d8650d917007a6037cceedd62244",
         "parent_state_root": "0xdc7695047ae21f0e8dd14b94c8a96ed82c7fcefaf064da03876e804673a6ddb2",
         "extrinsic_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "slot": 12,
+        "slot": 1,
         "tickets_mark": null,
         "offenders_mark": [],
         "author_index": 0,
@@ -70,15 +70,15 @@
                 ],
                 "auth_gas_used": 0
             },
-            "slot": 12,
+            "slot": 1,
             "signatures": [
                 {
-                    "validator_index": 0,
-                    "signature": "0x81fcf8b45f585a8049d798389c56de75dccad3dd1ae67a110f263ae7f318a86bda255802c83975e925e78944be43f3a801512fd3e5192afed598470331ad6d00"
+                    "validator_index": 1,
+                    "signature": "0x1c24f7459b5090c875964e3b5de661ea3db4c0755c1a3d7eda5c61dd613d2ccd553da798d2b691ffba393c6cab098a00d235faf4d639dd7b51e3841490670b0f"
                 },
                 {
-                    "validator_index": 4,
-                    "signature": "0x335011b64fde54914fbf67ddd0c0f7585cc059e8944e93d5dbaec8052ad06b82b3e99ba4d0f19195cfd4f40080afe4a06928be5f7e8119fc5dc96c5773d8c808"
+                    "validator_index": 2,
+                    "signature": "0xb4c000b0f7e7435d3f1dd70a40834e73b535617db1181785c1e0f5244a165d9ff7672bb122d752c0fba34015c9cfd4c744c82ced753d54d3491ff8c9e0265109"
                 },
                 {
                     "validator_index": 5,

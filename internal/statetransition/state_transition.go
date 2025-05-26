@@ -1234,9 +1234,15 @@ func CalculateNewCoreAssignments(
 		log.Printf("Processing guarantee for core %d", coreIndex)
 
 		// Check timeslot range: R(⌊τ′/R⌋ - 1) ≤ t ≤ τ′
-		previousRotationStart := (newTimeslot/jamtime.ValidatorRotationPeriod - 1) * jamtime.ValidatorRotationPeriod
+		rotationIndex := uint32(newTimeslot / jamtime.ValidatorRotationPeriod)
+		var previousRotationStart uint32
+		if rotationIndex == 0 {
+			previousRotationStart = 0
+		} else {
+			previousRotationStart = (rotationIndex - 1) * uint32(jamtime.ValidatorRotationPeriod)
+		}
 
-		if guarantee.Timeslot < previousRotationStart ||
+		if uint32(guarantee.Timeslot) < previousRotationStart ||
 			guarantee.Timeslot > newTimeslot {
 			return state.CoreAssignments{}, nil, ErrTimeslotOutOfRange
 		}
