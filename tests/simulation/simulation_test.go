@@ -428,22 +428,20 @@ func submitTickets(
 
 // Only these fields are needed for now. Extrinsics will be added as we need them.
 type SimulationBlock struct {
-	Header `json:"header"`
-}
-
-type Header struct {
-	Parent          string `json:"parent"`
-	ParentStateRoot string `json:"parent_state_root"`
-	ExtrinsicHash   string `json:"extrinsic_hash"`
-	Slot            int    `json:"slot"`
-	EpochMark       *struct {
-		Entropy        string   `json:"entropy"`
-		TicketsEntropy string   `json:"tickets_entropy"`
-		Validators     []string `json:"validators"`
-	} `json:"epoch_mark"`
-	AuthorIndex   int    `json:"author_index"`
-	EntropySource string `json:"entropy_source"`
-	Seal          string `json:"seal"`
+	Header struct {
+		Parent          string `json:"parent"`
+		ParentStateRoot string `json:"parent_state_root"`
+		ExtrinsicHash   string `json:"extrinsic_hash"`
+		Slot            int    `json:"slot"`
+		EpochMark       *struct {
+			Entropy        string   `json:"entropy"`
+			TicketsEntropy string   `json:"tickets_entropy"`
+			Validators     []string `json:"validators"`
+		} `json:"epoch_mark"`
+		AuthorIndex   int    `json:"author_index"`
+		EntropySource string `json:"entropy_source"`
+		Seal          string `json:"seal"`
+	} `json:"header"`
 }
 
 type ValidatorKeys struct {
