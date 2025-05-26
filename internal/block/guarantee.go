@@ -107,6 +107,9 @@ func (wer *WorkResultOutputOrError) SetValue(value any) error {
 	case uint8:
 		wer.Inner = WorkResultError(v)
 		return nil
+	case WorkResultError:
+		wer.Inner = v
+		return nil
 	default:
 		return fmt.Errorf(jam.ErrUnsupportedType, v)
 	}

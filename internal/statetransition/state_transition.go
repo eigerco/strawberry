@@ -85,6 +85,10 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		newTimeState,
 		workReports,
 	)
+	finalServicesState, err := CalculateIntermediateServiceState(newBlock.Extrinsic.EP, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
+	if err != nil {
+		return err
+	}
 
 	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
 	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, serviceHashPairs)
@@ -109,7 +113,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	s.CoreAssignments = newCoreAssignments
 	s.PastJudgements = newJudgements
 	s.CoreAuthorizersPool = newCoreAuthorizations
-	s.Services = postAccumulationServiceState
+	s.Services = finalServicesState
 	s.PrivilegedServices = newPrivilegedServices
 	s.AccumulationQueue = newAccumulationQueue
 	s.AccumulationHistory = newAccumulationHistory

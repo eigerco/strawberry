@@ -76,6 +76,15 @@ func (ps *PeerSet) GetByValidatorIndex(index uint16) *Peer {
 	return ps.byValidatorIndex[index]
 }
 
+// GetAllPeers returns all peers currently in the peer set
+func (ps *PeerSet) GetAllPeers() []*Peer {
+	peers := make([]*Peer, 0, len(ps.byEd25519Key))
+	for _, peer := range ps.byEd25519Key {
+		peers = append(peers, peer)
+	}
+	return peers
+}
+
 // Peer represents a remote peer and provides high-level protocol operations.
 // It wraps the underlying transport and protocol connections with a simpler interface.
 type Peer struct {

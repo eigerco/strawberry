@@ -15,6 +15,7 @@ const (
 	prefixAvailabilityAuditShard
 	prefixAvailabilitySegmentsShard
 	prefixAvailabilityJustification
+	prefixTicket
 )
 
 // PrefixToString converts a prefix byte to a string
@@ -32,6 +33,8 @@ func PrefixToString(p byte) string {
 		return "trieNodeValue"
 	case prefixTrieNodeRefCount:
 		return "trieNodeRefCount"
+	case prefixTicket:
+		return "ticket"
 	default:
 		return "unknown"
 	}

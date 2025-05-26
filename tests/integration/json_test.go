@@ -25,3 +25,17 @@ func TestJSONStateShapshotRestoreDump(t *testing.T) {
 	require.JSONEq(t, string(jsonDumpBytes), newDump)
 
 }
+
+func TestJSONBlockShapshotRestoreDump(t *testing.T) {
+	jsonDumpBytes, err := os.ReadFile("vectors_community/json/block.json")
+	if err != nil {
+		t.Fatalf("Error opening file: %v", err)
+	}
+
+	restoredBlock := jsonutils.RestoreBlockSnapshot(jsonDumpBytes)
+
+	newDump := jsonutils.DumpBlockSnapshot(restoredBlock)
+
+	require.JSONEq(t, string(jsonDumpBytes), newDump)
+
+}

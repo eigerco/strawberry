@@ -71,7 +71,7 @@ func TestPackageBundleBuildingAndCodec(t *testing.T) {
 			Length: 100,
 		})
 	}
-	builder, err = NewPackageBundleBuilder(pkg, gen.segmentLookup, gen.segmentsPool, slices.Concat(gen.extrinsics...))
+	_, err = NewPackageBundleBuilder(pkg, gen.segmentLookup, gen.segmentsPool, slices.Concat(gen.extrinsics...))
 	assert.ErrorContains(t, err, "extrinsic hash provided in the work-package does not match the one from provided extrinsic")
 }
 

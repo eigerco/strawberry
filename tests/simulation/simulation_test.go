@@ -163,11 +163,12 @@ func TestSimulateSAFROLE(t *testing.T) {
 		t.Logf("block parent hash: %v", hex.EncodeToString(newBlock.Header.ParentHash[:]))
 
 		// Update state
-		statetransition.UpdateState(
+		err = statetransition.UpdateState(
 			currentState,
 			newBlock,
 			chainDB,
 		)
+		require.NoError(t, err)
 
 		currentBlock = newBlock
 	}
