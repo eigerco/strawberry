@@ -86,9 +86,6 @@ func TestSimulateSAFROLE(t *testing.T) {
 		t.Logf("timeslot: %d", timeslot)
 		currentTimeslot := jamtime.Timeslot(timeslot)
 
-		nextEpoch := currentTimeslot.ToEpoch()
-		previousEpoch := currentState.TimeslotIndex.ToEpoch()
-
 		// Reset the ticket attempts at the start of each epoch.
 		if currentTimeslot.IsFirstTimeslotInEpoch() {
 			for k := range ticketAttempts {
@@ -119,35 +116,8 @@ func TestSimulateSAFROLE(t *testing.T) {
 		headerHash, err := currentBlock.Header.Hash()
 		require.NoError(t, err)
 
-		entropy := currentState.EntropyPool[2]
-		pendingValidators := currentState.ValidatorState.SafroleState.NextValidators
-		if nextEpoch > previousEpoch {
-			pendingValidators = validator.NullifyOffenders(currentState.ValidatorState.QueuedValidators, currentState.PastJudgements.OffendingValidators)
-			entropy = currentState.EntropyPool[1]
-		}
-
 		// Submit tickets if possible.
-		ticketProofs := []block.TicketProof{}
-		if currentTimeslot.IsTicketSubmissionPeriod() && !currentTimeslot.IsFirstTimeslotInEpoch() {
-			// Pretty simple, loop over each validator and submit a ticket if they have enough attempts left.
-			// We submit 3 tickets at a time for now.
-			for _, key := range keys {
-				if ticketAttempts[key.Name] < common.MaxTicketAttempts {
-					attempt := ticketAttempts[key.Name]
-					ticketProducerKey := crypto.BandersnatchPrivateKey(testutils.MustFromHex(t, key.BandersnatchPrivate))
-					// TOOD this will need fancier logic too. Needs to use the right yk and eta depending on epoch change.
-					ticketProof, err := state.CreateTicketProof(pendingValidators, entropy, ticketProducerKey, uint8(attempt))
-					require.NoError(t, err)
-					t.Logf("submitted ticket, name: %v, attempt: %v, proof: %v", key.Name, attempt,
-						hex.EncodeToString(ticketProof.Proof[:])[:10]+"...")
-					ticketProofs = append(ticketProofs, ticketProof)
-					ticketAttempts[key.Name]++
-				}
-				if len(ticketProofs) == common.MaxTicketExtrinsicSize {
-					break
-				}
-			}
-		}
+		ticketProofs := submitTickets(t, keys, currentState, currentTimeslot, ticketAttempts)
 
 		newBlock, err := produceBlock(
 			currentTimeslot,
@@ -416,6 +386,44 @@ func toBlock(t *testing.T, simBlock SimulationBlock) block.Block {
 	}
 
 	return b
+}
+
+func submitTickets(
+	t *testing.T,
+	keys []ValidatorKeys,
+	currentState *state.State,
+	currentTimeslot jamtime.Timeslot,
+	ticketAttempts map[string]int,
+) []block.TicketProof {
+	nextEpoch := currentTimeslot.ToEpoch()
+	previousEpoch := currentState.TimeslotIndex.ToEpoch()
+
+	entropy := currentState.EntropyPool[2]
+	pendingValidators := currentState.ValidatorState.SafroleState.NextValidators
+	if nextEpoch > previousEpoch {
+		pendingValidators = validator.NullifyOffenders(currentState.ValidatorState.QueuedValidators, currentState.PastJudgements.OffendingValidators)
+		entropy = currentState.EntropyPool[1]
+	}
+
+	ticketProofs := []block.TicketProof{}
+	for _, key := range keys {
+		if ticketAttempts[key.Name] < common.MaxTicketAttempts {
+			attempt := ticketAttempts[key.Name]
+			ticketProducerKey := crypto.BandersnatchPrivateKey(testutils.MustFromHex(t, key.BandersnatchPrivate))
+			// TODO this will need fancier logic too. Needs to use the right yk and eta depending on epoch change.
+			ticketProof, err := state.CreateTicketProof(pendingValidators, entropy, ticketProducerKey, uint8(attempt))
+			require.NoError(t, err)
+			t.Logf("submitted ticket, name: %v, attempt: %v, proof: %v", key.Name, attempt,
+				hex.EncodeToString(ticketProof.Proof[:])[:10]+"...")
+			ticketProofs = append(ticketProofs, ticketProof)
+			ticketAttempts[key.Name]++
+		}
+		if len(ticketProofs) == common.MaxTicketExtrinsicSize {
+			break
+		}
+	}
+
+	return ticketProofs
 }
 
 // Only these fields are needed for now. Extrinsics will be added as we need them.

@@ -103,16 +103,15 @@ func (wer *WorkResultOutputOrError) SetValue(value any) error {
 	switch v := value.(type) {
 	case []byte:
 		wer.Inner = v
-		return nil
 	case uint8:
 		wer.Inner = WorkResultError(v)
-		return nil
 	case WorkResultError:
 		wer.Inner = v
-		return nil
 	default:
 		return fmt.Errorf(jam.ErrUnsupportedType, v)
 	}
+
+	return nil
 }
 
 func (wer WorkResultOutputOrError) IndexValue() (uint, any, error) {
