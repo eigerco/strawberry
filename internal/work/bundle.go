@@ -19,7 +19,7 @@ type PackageBundle struct {
 	importedSegments [][]Segment
 	justifications   [][][]crypto.Hash
 
-	// cash the encoded bundle so we don't unnecessarily marsha/unmarshal it
+	// cache the encoded bundle so we don't unnecessarily marsha/unmarshal it
 	bytes []byte
 	// keep the offset so we can only get the encoded package when needed
 	bytesPkgOffset int
@@ -238,7 +238,7 @@ func (b *PackageBundleBuilder) buildImportedSegments(item Item) ([]Segment, erro
 		if !exists {
 			return nil, fmt.Errorf("missing segment data for root %x", root)
 		}
-		if int(imp.Index) > len(data) {
+		if int(imp.Index) >= len(data) {
 			return nil, fmt.Errorf("invalid segment index for root %d", imp.Index)
 		}
 		segments[i] = data[imp.Index]

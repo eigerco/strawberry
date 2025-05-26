@@ -51,6 +51,28 @@ func TestPackageBundleBuildingAndCodec(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, encodedBundle, decodedBundleEncoded)
+
+	pkg := generatedBundle.Package()
+	for i := range pkg.WorkItems {
+		pkg.WorkItems[i].ImportedSegments = append(pkg.WorkItems[i].ImportedSegments, ImportedSegment{
+			Hash:  testutils.RandomHash(t), // invalid reference
+			Index: 10010,
+		})
+	}
+	builder, err := NewPackageBundleBuilder(pkg, gen.segmentLookup, gen.segmentsPool, slices.Concat(gen.extrinsics...))
+	require.NoError(t, err)
+	_, err = builder.Build()
+	assert.ErrorContains(t, err, "missing segment data for root")
+
+	pkg = generatedBundle.Package()
+	for i := range pkg.WorkItems {
+		pkg.WorkItems[i].Extrinsics = append(pkg.WorkItems[i].Extrinsics, Extrinsic{
+			Hash:   testutils.RandomHash(t), // invalid reference
+			Length: 100,
+		})
+	}
+	builder, err = NewPackageBundleBuilder(pkg, gen.segmentLookup, gen.segmentsPool, slices.Concat(gen.extrinsics...))
+	assert.ErrorContains(t, err, "extrinsic hash provided in the work-package does not match the one from provided extrinsic")
 }
 
 type bundleGenerator struct {
