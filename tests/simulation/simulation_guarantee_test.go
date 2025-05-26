@@ -40,7 +40,7 @@ func TestSimulateGuarantee(t *testing.T) {
 	// guarantee block
 	data, err = os.ReadFile("guarantee_block_01.json")
 	require.NoError(t, err)
-	currentBlock := jsonutils.RestoreBlock(data)
+	currentBlock := jsonutils.RestoreBlockSnapshot(data)
 
 	// Trie DB for merklization
 	db, err := pebble.NewKVStore()
