@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/store"
@@ -35,7 +36,7 @@ func TestSimulateGuarantee(t *testing.T) {
 	// guarantee block
 	data, err = os.ReadFile("guarantee_block_01.json")
 	require.NoError(t, err)
-	currentBlock := jsonutils.RestoreBlockSnapshot(data)
+	testBlock := jsonutils.RestoreBlockSnapshot(data)
 
 	// Trie DB for merklization
 	db, err := pebble.NewKVStore()
@@ -48,12 +49,26 @@ func TestSimulateGuarantee(t *testing.T) {
 	chainDB := store.NewChain(db)
 	require.NoError(t, err)
 
+	report := testBlock.Extrinsic.EG.Guarantees[0].WorkReport
+	coreIndex := report.CoreIndex
+
+	require.Equal(t, report.AuthorizerHash, currentState.CoreAuthorizersPool[coreIndex][0])
+
 	// Update state
 	err = statetransition.UpdateState(
 		currentState,
-		currentBlock,
+		testBlock,
 		chainDB,
 	)
-
 	require.NoError(t, err)
+
+	require.Equal(t, testBlock.Header.TimeSlotIndex, currentState.TimeslotIndex)
+
+	require.NotNil(t, currentState.CoreAssignments[coreIndex])
+
+	assignment := currentState.CoreAssignments[coreIndex]
+	require.Equal(t, &report, assignment.WorkReport)
+
+	// make sure we clear the authorizer pool
+	require.Equal(t, crypto.Hash{}, currentState.CoreAuthorizersPool[coreIndex][0])
 }
