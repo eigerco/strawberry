@@ -121,24 +121,25 @@ func (h *WorkReportGuarantor) SetGuarantors(guarantors []*peer.Peer) {
 }
 
 // ValidateAndProcessWorkPackage sends the work-package bundle to other guarantors and runs local refinement
-func (h *WorkReportGuarantor) ValidateAndProcessWorkPackage(ctx context.Context, coreIndex uint16, bundle work.PackageBundle) error {
+func (h *WorkReportGuarantor) ValidateAndProcessWorkPackage(ctx context.Context, coreIndex uint16, bundle *work.PackageBundle) error {
+	pkg := bundle.Package()
 	// Validate the basic structure and constraints of the work-package
-	if err := bundle.Package.ValidateLimits(); err != nil {
+	if err := pkg.ValidateLimits(); err != nil {
 		return err
 	}
-	if err := bundle.Package.ValidateGas(); err != nil {
+	if err := pkg.ValidateGas(); err != nil {
 		return err
 	}
-	if err := bundle.Package.ValidateSize(); err != nil {
+	if err := pkg.ValidateSize(); err != nil {
 		return err
 	}
 
-	if err := h.validateAgainstAuthorizationPool(coreIndex, bundle.Package); err != nil {
+	if err := h.validateAgainstAuthorizationPool(coreIndex, pkg); err != nil {
 		return err
 	}
 
 	// Run authorization to produce the auth output needed for refinement
-	authOutput, err := h.auth.InvokePVM(bundle.Package, coreIndex)
+	authOutput, err := h.auth.InvokePVM(pkg, coreIndex)
 	if err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
 	}
@@ -171,7 +172,7 @@ func (h *WorkReportGuarantor) processWorkPackage(
 	authOutput []byte,
 	segments []SegmentRootMapping,
 	coreIndex uint16,
-	bundle work.PackageBundle,
+	bundle *work.PackageBundle,
 ) error {
 	if coreIndex >= common.TotalNumberOfCores {
 		return fmt.Errorf("invalid coreIndex: %d (must be < %d)",
@@ -229,18 +230,21 @@ func (h *WorkReportGuarantor) startLocalRefinement(
 	wg *sync.WaitGroup,
 	coreIndex uint16,
 	authOutput []byte,
-	bundle work.PackageBundle,
+	bundle *work.PackageBundle,
 	segments []SegmentRootMapping,
 	localResultCh chan<- localReportResult,
 ) {
 	defer wg.Done()
 
-	workReport, err := results.ProduceWorkReport(h.refine, h.state.Services, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
+	shardData, workReport, err := results.ProduceWorkReport(h.refine, h.state.Services, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
 	if err != nil {
 		localResultCh <- localReportResult{err: err}
 		log.Printf("local refinement failed: %v", err)
 		return
 	}
+
+	// TODO store shards in the shard store
+	_ = shardData
 
 	log.Println("local refinement finished")
 
@@ -502,7 +506,7 @@ func safeTimerC(t *time.Timer) <-chan time.Time {
 }
 
 // TODO: Build segment-root mappings based on historical data
-func (h *WorkReportGuarantor) buildSegmentRootMapping(pkg work.PackageBundle) []SegmentRootMapping {
+func (h *WorkReportGuarantor) buildSegmentRootMapping(pkg *work.PackageBundle) []SegmentRootMapping {
 	return []SegmentRootMapping{}
 }
 
