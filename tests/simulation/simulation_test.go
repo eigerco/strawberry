@@ -126,7 +126,6 @@ func TestSimulateSAFROLE(t *testing.T) {
 			trieDB,
 			slotLeaderKey,
 			ticketProofs,
-			block.Extrinsic{},
 		)
 		require.NoError(t, err)
 
@@ -163,7 +162,6 @@ func produceBlock(
 	trie *store.Trie,
 	privateKey crypto.BandersnatchPrivateKey,
 	ticketProofs []block.TicketProof,
-	extrinsics block.Extrinsic,
 ) (block.Block, error) {
 
 	nextEpoch := timeslot.ToEpoch()
@@ -175,6 +173,8 @@ func produceBlock(
 	if err != nil {
 		return block.Block{}, err
 	}
+
+	extrinsics := block.Extrinsic{}
 
 	ringCommitment, err := pendingValidators.RingCommitment()
 	if err != nil {
