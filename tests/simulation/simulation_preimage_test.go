@@ -37,7 +37,7 @@ func TestSimulatePreimage(t *testing.T) {
 	require.NoError(t, err)
 	testBlock := jsonutils.RestoreBlockSnapshot(data)
 
-	if len(testBlock.Extrinsic.EP) == 0 {
+	require.NotZero(t, len(testBlock.Extrinsic.EP), "block preimage missing")
 		t.Fatalf("block preimage missing")
 	}
 
