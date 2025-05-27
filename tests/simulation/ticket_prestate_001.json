@@ -435,7 +435,15 @@
     "pi": {
         "vals_current": [
             {
-                "blocks": 0,
+                "blocks": 3,
+                "tickets": 3,
+                "pre_images": 0,
+                "pre_images_size": 0,
+                "guarantees": 0,
+                "assurances": 0
+            },
+            {
+                "blocks": 2,
                 "tickets": 0,
                 "pre_images": 0,
                 "pre_images_size": 0,
@@ -459,24 +467,16 @@
                 "assurances": 0
             },
             {
-                "blocks": 0,
-                "tickets": 0,
+                "blocks": 6,
+                "tickets": 11,
                 "pre_images": 0,
                 "pre_images_size": 0,
                 "guarantees": 0,
                 "assurances": 0
             },
             {
-                "blocks": 0,
-                "tickets": 0,
-                "pre_images": 0,
-                "pre_images_size": 0,
-                "guarantees": 0,
-                "assurances": 0
-            },
-            {
-                "blocks": 0,
-                "tickets": 0,
+                "blocks": 1,
+                "tickets": 3,
                 "pre_images": 0,
                 "pre_images_size": 0,
                 "guarantees": 0,
