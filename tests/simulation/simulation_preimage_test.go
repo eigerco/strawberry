@@ -1,3 +1,5 @@
+//go:build integration
+
 package simulation
 
 import (
@@ -15,6 +17,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestSimulatePreimage tests a very simple happy path for adding a preimage.
+// We setup the state by ensuring that it has a service that is requesting that
+// preimage, ie that it's lookup meta contains the preimages hash and length
+// along with an empty historical timeslots array. We then submit a block with
+// that same preimage, and ensure that it ends up being added the the service
+// preimage lookup map, and also that it's preimage meta is updated to indicate
+// that it's available since the header timeslot.
 func TestSimulatePreimage(t *testing.T) {
 	// Prestate
 	data, err := os.ReadFile("preimage_prestate_001.json")
@@ -27,6 +36,10 @@ func TestSimulatePreimage(t *testing.T) {
 	data, err = os.ReadFile("preimage_block_001.json")
 	require.NoError(t, err)
 	testBlock := jsonutils.RestoreBlockSnapshot(data)
+
+	if len(testBlock.Extrinsic.EP) == 0 {
+		t.Fatalf("block preimage missing")
+	}
 
 	db, err := pebble.NewKVStore()
 	require.NoError(t, err)
@@ -45,10 +58,6 @@ func TestSimulatePreimage(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	if len(testBlock.Extrinsic.EP) == 0 {
-		t.Fatalf("block preimage missing")
-	}
-
 	serviceID := block.ServiceId(testBlock.Extrinsic.EP[0].ServiceIndex)
 	preimageData := testBlock.Extrinsic.EP[0].Data
 	preimageHash := crypto.HashData(preimageData)
@@ -64,6 +73,7 @@ func TestSimulatePreimage(t *testing.T) {
 	svc, ok := currentState.Services[serviceID]
 	require.True(t, ok, "required service not found")
 
+	// Preimage was correctly added to the service and it's lookup meta updated.
 	require.Equal(t, svc.PreimageLookup[preimageHash], preimageData)
 	require.Equal(t, svc.PreimageMeta[preimageMetaKey], service.PreimageHistoricalTimeslots{testBlock.Header.TimeSlotIndex})
 
