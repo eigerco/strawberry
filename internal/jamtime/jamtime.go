@@ -5,18 +5,20 @@ import (
 	"time"
 )
 
-var now = time.Now
+var now = func() time.Time {
+	return time.Now().UTC()
+}
 
 // JamEpoch represents the start of the JAM Common Era
-// 2024-01-01 12:00:00
-var JamEpoch = time.Date(2024, time.January, 1, 12, 0, 0, 0, time.UTC)
+// 2025-01-01 12:00:00
+var JamEpoch = time.Date(2025, time.January, 1, 12, 0, 0, 0, time.UTC)
 
 // MaxRepresentableJamTime is the latest date and time that can be represented
 // in the JAM protocol. It corresponds to the end of the last timeslot in the
 // last epoch (2^32 - 1 timeslots after the JAM Epoch). This time is set to
 // 23:59:59.999999999 UTC on August 15, 2840, as specified in the JAM Graypaper.
 // Any attempt to represent a time beyond this will result in an error.
-var MaxRepresentableJamTime = time.Date(2840, time.August, 15, 23, 59, 59, 999999999, time.UTC)
+var MaxRepresentableJamTime = time.Date(2841, time.August, 15, 23, 59, 59, 999999999, time.UTC)
 
 // JamTime represents a time in the JAM Common Era
 type JamTime struct {
@@ -26,7 +28,7 @@ type JamTime struct {
 
 // Now returns the current time as a JamTime
 func Now() JamTime {
-	t := now()
+	t := now().UTC()
 	seconds := t.Unix() - JamEpoch.Unix()
 
 	return JamTime{src: t, Seconds: uint64(seconds)}
@@ -34,6 +36,7 @@ func Now() JamTime {
 
 // FromTime converts a standard time.Time to JamTime
 func FromTime(t time.Time) (JamTime, error) {
+	t = t.UTC()
 	if t.Before(JamEpoch) {
 		return JamTime{}, ErrBeforeJamEpoch
 	}
@@ -68,7 +71,7 @@ func (jt JamTime) ToTime() time.Time {
 		return time.Unix(t, 0).UTC()
 	}
 
-	return jt.src
+	return jt.src.UTC()
 }
 
 // FromSeconds creates a JamTime from the number of seconds since the JAM Epoch
@@ -126,7 +129,7 @@ func (jt JamTime) ToTimeslot() Timeslot {
 }
 
 // IsZero reports whether jt represents the zero time instant,
-// IsZero is true when the date and time equal to 2024-01-01 12:00:00
+// IsZero is true when the date and time equal to 2025-01-01 12:00:00
 func (jt JamTime) IsZero() bool {
 	return jt.Seconds == 0
 }
@@ -142,6 +145,7 @@ func (jt *JamTime) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+	t = t.UTC()
 	*jt, err = FromTime(t)
 	if err != nil {
 		return err
@@ -169,6 +173,7 @@ func (jt JamTime) ToEpoch() Epoch {
 // ValidateJamTime checks if a given time.Time is within the valid range for JamTime
 // Returns nil if valid and non-nil err if the given time.Time is outside the valid range for JamTime
 func ValidateJamTime(t time.Time) error {
+	t = t.UTC()
 	if t.Before(JamEpoch) {
 		return ErrBeforeJamEpoch
 	}
