@@ -56,7 +56,7 @@ type Node struct {
 	currentGuarantorPeers         []*peer.Peer
 	ValidatorService              validator.ValidatorService
 	StateTrieStore                *store.Trie
-	AvailabilityStore             *store.Availability
+	AvailabilityStore             *store.Shards
 	TicketStore                   *store.Ticket
 }
 
@@ -68,7 +68,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 		return nil, err
 	}
 
-	availabilityStore := store.NewAvailability(kvStore)
+	availabilityStore := store.NewShards(kvStore)
 	nodeCtx, cancel := context.WithCancel(nodeCtx)
 	peerSet := peer.NewPeerSet()
 	node := &Node{
@@ -146,6 +146,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 		node.workReportRequester,
 		handlers.NewWorkPackageSharingRequester(),
 		handlers.NewWorkReportDistributionSender(),
+		node.ValidatorService,
 	)
 	node.WorkReportGuarantor = wpSharerHandler
 
@@ -153,7 +154,7 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	submitter := &handlers.WorkPackageSubmitter{}
 	node.workPackageSubmitter = submitter
 
-	node.WorkPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authInvocation, refineInvocation, keys.EdPrv, state.Services, wrStore)
+	node.WorkPackageSharingHandler = handlers.NewWorkPackageSharingHandler(authInvocation, refineInvocation, keys.EdPrv, state.Services, wrStore, node.ValidatorService)
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageShare, node.WorkPackageSharingHandler)
 
 	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkReportDist, handlers.NewWorkReportDistributionHandler())

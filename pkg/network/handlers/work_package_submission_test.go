@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
+	"github.com/eigerco/strawberry/internal/validator"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -118,7 +119,9 @@ func TestHandleWorkPackage(t *testing.T) {
 	require.NoError(t, err)
 	s := store.NewWorkReport(kvStore)
 
-	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil, nil, nil)
+	validatorMock := validator.NewValidatorServiceMock()
+	validatorMock.On("StoreAllShards", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil, nil, nil, validatorMock)
 	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer)
 
 	// Prepare the message data
@@ -334,7 +337,9 @@ func TestHandleStream_Success(t *testing.T) {
 	require.NoError(t, err)
 	s := store.NewWorkReport(kvStore)
 
-	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil, nil, nil)
+	validatorMock := validator.NewValidatorServiceMock()
+	validatorMock.On("StoreAllShards", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil, nil, nil, validatorMock)
 
 	coreIndexBytes, err := jam.Marshal(coreIndex)
 	require.NoError(t, err)

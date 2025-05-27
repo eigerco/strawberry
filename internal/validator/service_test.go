@@ -13,10 +13,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestShardDistribution(t *testing.T) {
+	kv, err := pebble.NewKVStore()
+	require.NoError(t, err)
+	avStore := store.NewShards(kv)
+
+	erasureRoot := testutils.RandomHash(t)
+	shardIndex := uint16(1)
+	bundleShard := []byte{9, 8, 7}
+	segmentsShard := [][]byte{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}
+	justHash1 := testutils.RandomHash(t)
+	justHash2 := testutils.RandomHash(t)
+	justHash3 := testutils.RandomHash(t)
+	justification := [][]byte{justHash1[:], justHash2[:], justHash3[:]}
+
+	err = avStore.PutShardsAndJustification(erasureRoot, shardIndex, bundleShard, segmentsShard, justification)
+	require.NoError(t, err)
+
+	svc := NewService(avStore)
+
+	ctx := context.Background()
+	actualBundleShard, actualSegmentShard, actualJustification, err := svc.ShardDistribution(ctx, erasureRoot, shardIndex)
+	require.NoError(t, err)
+
+	assert.Equal(t, segmentsShard, actualSegmentShard)
+	assert.Equal(t, bundleShard, actualBundleShard)
+	assert.Equal(t, justification, actualJustification)
+}
+
 func TestAuditShardRequest(t *testing.T) {
 	kv, err := pebble.NewKVStore()
 	require.NoError(t, err)
-	avStore := store.NewAvailability(kv)
+	avStore := store.NewShards(kv)
 
 	erasureRoot := testutils.RandomHash(t)
 	shardIndex := uint16(1)
@@ -42,7 +70,7 @@ func TestAuditShardRequest(t *testing.T) {
 func TestSegmentShardRequest(t *testing.T) {
 	kv, err := pebble.NewKVStore()
 	require.NoError(t, err)
-	avStore := store.NewAvailability(kv)
+	avStore := store.NewShards(kv)
 
 	erasureRoot := testutils.RandomHash(t)
 	shardIndex := uint16(1)
@@ -68,7 +96,7 @@ func TestSegmentShardRequest(t *testing.T) {
 func TestSegmentShardRequestJustification(t *testing.T) {
 	kv, err := pebble.NewKVStore()
 	require.NoError(t, err)
-	avStore := store.NewAvailability(kv)
+	avStore := store.NewShards(kv)
 
 	erasureRoot := testutils.RandomHash(t)
 	shardIndex := uint16(1)

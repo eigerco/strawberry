@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"github.com/eigerco/strawberry/internal/validator"
 	"log"
 	"sync"
 
@@ -31,6 +32,7 @@ type WorkPackageSharingHandler struct {
 	refine              refine.RefinePVMInvoker
 	serviceState        service.ServiceState
 	store               *store.WorkReport
+	validatorService    validator.ValidatorService
 }
 
 // WorkPackageSharingResponse is the response payload of CE-134
@@ -47,13 +49,15 @@ func NewWorkPackageSharingHandler(
 	privateKey ed25519.PrivateKey,
 	serviceState service.ServiceState,
 	store *store.WorkReport,
+	validatorService validator.ValidatorService,
 ) *WorkPackageSharingHandler {
 	return &WorkPackageSharingHandler{
-		privateKey:   privateKey,
-		auth:         auth,
-		refine:       refine,
-		serviceState: serviceState,
-		store:        store,
+		privateKey:       privateKey,
+		auth:             auth,
+		refine:           refine,
+		serviceState:     serviceState,
+		store:            store,
+		validatorService: validatorService,
 	}
 }
 
@@ -115,13 +119,14 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 		return fmt.Errorf("authorization failed: %w", err)
 	}
 
-	shardData, workReport, err := results.ProduceWorkReport(h.refine, h.serviceState, authOutput, coreIndex, bundle, segmentRootLookup)
+	shards, workReport, err := results.ProduceWorkReport(h.refine, h.serviceState, authOutput, coreIndex, bundle, segmentRootLookup)
 	if err != nil {
 		return fmt.Errorf("failed to produce work report: %w", err)
 	}
 
-	// TODO store shards in the shard store
-	_ = shardData
+	if err := h.validatorService.StoreAllShards(ctx, workReport.WorkPackageSpecification.ErasureRoot, shards.Bundle, shards.Segments, shards.BundleHashAndSegmentsRoot); err != nil {
+		return fmt.Errorf("failed to store shards: %w", err)
+	}
 
 	err = h.store.PutWorkReport(workReport)
 	if err != nil {
