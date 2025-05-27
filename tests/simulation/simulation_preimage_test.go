@@ -38,8 +38,6 @@ func TestSimulatePreimage(t *testing.T) {
 	testBlock := jsonutils.RestoreBlockSnapshot(data)
 
 	require.NotZero(t, len(testBlock.Extrinsic.EP), "block preimage missing")
-		t.Fatalf("block preimage missing")
-	}
 
 	db, err := pebble.NewKVStore()
 	require.NoError(t, err)
