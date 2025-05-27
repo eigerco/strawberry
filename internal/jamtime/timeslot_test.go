@@ -1,5 +1,3 @@
-//go:build !integration
-
 package jamtime
 
 import (
@@ -46,7 +44,7 @@ func TestTimeSlot_IsInFuture(t *testing.T) {
 	})
 
 	t.Run("timeslot should be not in the future", func(t *testing.T) {
-		validTime := time.Date(2024, time.January, 27, 0, 0, 0, 0, time.UTC)
+		validTime := time.Date(2025, time.January, 27, 0, 0, 0, 0, time.UTC)
 
 		jamTime, err := FromTime(validTime)
 		assert.Nil(t, err)
@@ -61,7 +59,7 @@ func TestTimeSlot_IsInFuture(t *testing.T) {
 func TestTimeSlot_TimeslotStart(t *testing.T) {
 	t.Run("should be able to get to the start timeslot", func(t *testing.T) {
 		first := Timeslot(1)
-		want, err := FromTime(time.Date(2024, time.January, 01, 12, 00, 06, 0, time.UTC))
+		want, err := FromTime(time.Date(2025, time.January, 01, 12, 00, 06, 0, time.UTC))
 		assert.Nil(t, err)
 
 		got := first.TimeslotStart()
@@ -72,7 +70,7 @@ func TestTimeSlot_TimeslotStart(t *testing.T) {
 func TestTimeSlot_TimeslotEnd(t *testing.T) {
 	t.Run("should be able to go to the end timeslot", func(t *testing.T) {
 		first := Timeslot(1)
-		want, err := FromTime(time.Date(2024, time.January, 01, 12, 00, 11, 0, time.UTC))
+		want, err := FromTime(time.Date(2025, time.January, 01, 12, 00, 11, 0, time.UTC))
 		assert.Nil(t, err)
 
 		got, err := first.TimeslotEnd()

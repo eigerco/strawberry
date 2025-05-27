@@ -6,7 +6,7 @@ import (
 
 const (
 	// MinTimeslot represents the first timeslot in the JAM protocol.
-	// It corresponds to the beginning of the JAM Epoch (12:00pm on January 1, 2024 UTC).
+	// It corresponds to the beginning of the JAM Epoch (12:00pm on January 1, 2025 UTC).
 	MinTimeslot Timeslot = 0
 
 	// MaxTimeslot represents the last possible timeslot in the JAM protocol.
@@ -19,9 +19,9 @@ const (
 	// This constant duration is used for conversions between timeslots and actual time.
 	TimeslotDuration = 6 * time.Second
 
-	// PreimageExpulsionPeriod (D) = 28,800:
 	// The period in timeslots after which an unreferenced preimage may be expunged.
-	PreimageExpulsionPeriod = 28_800
+	// D = L + 4,800 where L = 14,400 (maximum age of lookup anchor)
+	PreimageExpulsionPeriod = 19_200 // D ≡ L + 4_800 = 19_200 (equation B.3 v0.6.6)
 )
 
 // Timeslot represents a 6-second window in JAM time

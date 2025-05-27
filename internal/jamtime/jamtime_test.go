@@ -1,10 +1,7 @@
-//go:build !integration
-
 package jamtime
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
@@ -73,7 +70,7 @@ func TestJamTime_ToTime(t *testing.T) {
 	})
 
 	t.Run("converts time.Time to jamTime and back", func(t *testing.T) {
-		in := time.Date(2024, 07, 27, 01, 01, 00, 00, time.UTC)
+		in := time.Date(2025, 07, 27, 01, 01, 00, 00, time.UTC)
 		jt, err := FromTime(in)
 		assert.Nil(t, err)
 
@@ -135,7 +132,6 @@ func TestJamTimeArithmetic(t *testing.T) {
 	t.Run("adding past max jamtime", func(t *testing.T) {
 		t1, err := FromTime(MaxRepresentableJamTime)
 		assert.Nil(t, err)
-		fmt.Println(t1.ToTime())
 		duration := time.Duration(500 * time.Second)
 		got, err := t1.Add(duration)
 		assert.NotNil(t, err)
@@ -158,7 +154,7 @@ func TestJamTime_MarshalJSON(t *testing.T) {
 		jsonData, err := json.Marshal(jamTime)
 		require.NoError(t, err)
 
-		expected := []byte(`"2024-01-01T12:16:40Z"`)
+		expected := []byte(`"2025-01-01T12:16:40Z"`)
 
 		assert.Equal(t, expected, jsonData)
 	})
@@ -166,7 +162,7 @@ func TestJamTime_MarshalJSON(t *testing.T) {
 
 func TestJamTime_UnmarshalJSON(t *testing.T) {
 	t.Run("successfully unmarshal jamtime", func(t *testing.T) {
-		jsonData := []byte(`"2024-01-01T12:00:00Z"`)
+		jsonData := []byte(`"2025-01-01T12:00:00Z"`)
 
 		var unmarshaledTime JamTime
 		err := json.Unmarshal(jsonData, &unmarshaledTime)
@@ -178,7 +174,7 @@ func TestJamTime_UnmarshalJSON(t *testing.T) {
 	})
 
 	t.Run("successfully unmarshal jamtime in future", func(t *testing.T) {
-		jsonData := []byte(`"2024-01-01T12:00:01Z"`)
+		jsonData := []byte(`"2025-01-01T12:00:01Z"`)
 		want := JamEpoch.Add(1 * time.Second)
 
 		var unmarshaledTime JamTime
@@ -300,14 +296,14 @@ func TestValidateJamTime(t *testing.T) {
 	})
 
 	t.Run("far into the future should be invalid", func(t *testing.T) {
-		inValidTime := time.Date(2840, time.August, 31, 23, 59, 59, 999999999, time.UTC)
+		inValidTime := time.Date(2841, time.August, 31, 23, 59, 59, 999999999, time.UTC)
 
 		err := ValidateJamTime(inValidTime)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, ErrAfterMaxJamTime)
 	})
 
-	t.Run("date before January 1st 2024 is invalid", func(t *testing.T) {
+	t.Run("date before January 1st 2025 is invalid", func(t *testing.T) {
 		invalidTime := time.Date(2023, time.December, 31, 0, 0, 0, 0, time.UTC)
 		err := ValidateJamTime(invalidTime)
 		assert.Error(t, err)
@@ -376,5 +372,84 @@ func TestJamTime_IsInSameEpoch(t *testing.T) {
 		time2 := JamTime{Seconds: 3599}
 
 		assert.True(t, time1.IsInSameEpoch(time2))
+	})
+}
+
+func TestJamTime_Now_AlwaysReturnsUTC(t *testing.T) {
+	t.Run("Now returns UTC regardless of system timezone", func(t *testing.T) {
+		// Save original now function
+		originalNow := now
+		defer func() { now = originalNow }()
+
+		// Create a specific fixed time to test with
+		fixedUTCTime := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
+
+		// Mock now to return that time but in NY timezone
+		nyLoc, _ := time.LoadLocation("America/New_York")
+		fixedNYTime := fixedUTCTime.In(nyLoc)
+
+		now = fixedNYTime
+
+		jamNow := Now()
+		convertedTime := jamNow.ToTime()
+
+		// Assert it's UTC
+		assert.Equal(t, time.UTC, convertedTime.Location())
+		// Assert the actual time instant is preserved
+		assert.True(t, convertedTime.Equal(fixedUTCTime))
+		// Verify that the NY time and UTC time represent the same instant
+		assert.True(t, fixedNYTime.Equal(fixedUTCTime))
+		// Verify the JAM time seconds calculation is correct.
+		// JamTime.Seconds represents the number of seconds elapsed since the JAM epoch
+		// (2025-01-01 12:00:00 UTC). This should be the same regardless of timezone.
+		expectedSeconds := uint64(fixedUTCTime.Unix() - JamEpoch.Unix())
+		assert.Equal(t, expectedSeconds, jamNow.Seconds)
+	})
+
+	t.Run("Now with default implementation returns UTC", func(t *testing.T) {
+		// Test with the actual implementation
+		jamNow := Now()
+		convertedTime := jamNow.ToTime()
+
+		// Verify it's in UTC
+		assert.Equal(t, time.UTC, convertedTime.Location())
+
+		// Verify the stored src is also in UTC
+		if !jamNow.src.IsZero() {
+			assert.Equal(t, time.UTC, jamNow.src.Location())
+		}
+	})
+}
+
+func TestJamTime_FromTime_ConvertsToUTC(t *testing.T) {
+	t.Run("converts non-UTC time to UTC", func(t *testing.T) {
+		// Create a time in a different timezone
+		loc, _ := time.LoadLocation("America/New_York")
+		nyTime := time.Date(2025, time.March, 15, 8, 0, 0, 0, loc)
+
+		jamTime, err := FromTime(nyTime)
+		assert.NoError(t, err)
+
+		// The internal time should be in UTC
+		convertedTime := jamTime.ToTime()
+		assert.Equal(t, time.UTC, convertedTime.Location())
+
+		// Should be the same instant
+		assert.True(t, nyTime.Equal(convertedTime))
+	})
+}
+
+func TestJamTime_UnmarshalJSON_HandlesNonUTC(t *testing.T) {
+	t.Run("unmarshals non-UTC time string correctly", func(t *testing.T) {
+		// JSON with timezone offset
+		jsonData := []byte(`"2025-01-01T07:00:00-05:00"`)
+
+		var unmarshaledTime JamTime
+		err := json.Unmarshal(jsonData, &unmarshaledTime)
+		require.NoError(t, err)
+
+		got := unmarshaledTime.ToTime()
+		assert.Equal(t, time.UTC, got.Location())
+		assert.True(t, got.Equal(JamEpoch))
 	})
 }
