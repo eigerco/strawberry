@@ -146,12 +146,12 @@ func NewPackageBundleBuilder(pkg Package, segmentRootLookup map[crypto.Hash]cryp
 	for itemIndex, item := range pkg.WorkItems {
 		for extrIndex, extr := range item.Extrinsics {
 			if int(offset+extr.Length) > len(extrinsics) {
-				return nil, fmt.Errorf("extrinsic data provided too small, expected length %d for item %d extrinsic %d", extr.Length, itemIndex, extrIndex)
+				return nil, fmt.Errorf("invalid extrinsic reference item=%d extr=%d hash=%x len=%d", itemIndex, extrIndex, extr.Hash, extr.Length)
 			}
 			extrinsicData := extrinsics[offset : offset+extr.Length]
 			extrHash := crypto.HashData(extrinsicData)
 			if extr.Hash != extrHash {
-				return nil, fmt.Errorf("extrinsic hash provided in the work-package does not match the one from provided extrinsic")
+				return nil, fmt.Errorf("invalid extrinsic reference item=%d extr=%d hash=%x len=%d", itemIndex, extrIndex, extr.Hash, extr.Length)
 			}
 			extrinsicsMap[extrHash] = extrinsicData
 			offset += extr.Length

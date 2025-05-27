@@ -72,7 +72,7 @@ func TestPackageBundleBuildingAndCodec(t *testing.T) {
 		})
 	}
 	_, err = NewPackageBundleBuilder(pkg, gen.segmentLookup, gen.segmentsPool, slices.Concat(gen.extrinsics...))
-	assert.ErrorContains(t, err, "extrinsic hash provided in the work-package does not match the one from provided extrinsic")
+	assert.ErrorContains(t, err, "invalid extrinsic reference")
 }
 
 type bundleGenerator struct {
