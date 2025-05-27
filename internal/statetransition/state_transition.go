@@ -470,6 +470,10 @@ type SafroleOutput struct {
 	EpochMark *block.EpochMarker
 	// H_w
 	WinningTicketMark *block.WinningTicketMarker
+
+	// Entropies for use by downstream functions that might also use this output.
+	TicketEntropy  crypto.Hash // n_2
+	SealingEntropy crypto.Hash // n_3
 }
 
 // Validates then produces tickets from submitted ticket proofs.
@@ -580,7 +584,10 @@ func UpdateSafroleState(
 	}
 
 	newValidatorState := validatorState
-	output := SafroleOutput{}
+	output := SafroleOutput{
+		TicketEntropy:  newEntropyPool[2],
+		SealingEntropy: newEntropyPool[3],
+	}
 
 	epoch := nextTimeSlot.ToEpoch()   // e'
 	preEpoch := preTimeSlot.ToEpoch() // e
@@ -635,7 +642,10 @@ func UpdateSafroleState(
 			TicketsEntropy: entropyPool[1],
 		}
 		for i, vd := range newValidatorState.SafroleState.NextValidators {
-			output.EpochMark.Keys[i].Bandersnatch = vd.Bandersnatch
+			output.EpochMark.Keys[i] = block.ValidatorKeys{
+				Bandersnatch: vd.Bandersnatch,
+				Ed25519:      vd.Ed25519,
+			}
 		}
 
 		// Reset ticket accumulator. From equation 79.
