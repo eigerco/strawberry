@@ -388,9 +388,7 @@ func TestJamTime_Now_AlwaysReturnsUTC(t *testing.T) {
 		nyLoc, _ := time.LoadLocation("America/New_York")
 		fixedNYTime := fixedUTCTime.In(nyLoc)
 
-		now = func() time.Time {
-			return fixedNYTime
-		}
+		now = fixedNYTime
 
 		jamNow := Now()
 		convertedTime := jamNow.ToTime()

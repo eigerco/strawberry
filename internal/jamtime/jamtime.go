@@ -5,9 +5,7 @@ import (
 	"time"
 )
 
-var now = func() time.Time {
-	return time.Now().UTC()
-}
+var now = time.Now()
 
 // JamEpoch represents the start of the JAM Common Era
 // 2025-01-01 12:00:00
@@ -28,7 +26,7 @@ type JamTime struct {
 
 // Now returns the current time as a JamTime
 func Now() JamTime {
-	t := now().UTC()
+	t := now.UTC()
 	seconds := t.Unix() - JamEpoch.Unix()
 
 	return JamTime{src: t, Seconds: uint64(seconds)}
