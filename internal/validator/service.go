@@ -34,11 +34,11 @@ type validatorService struct {
 
 // StoreAllShards computes the justifications for each shard and stores it
 func (s *validatorService) StoreAllShards(ctx context.Context, erasureRoot crypto.Hash, bundle [][]byte, segments [][][]byte, bundleHashAndSegmentsRoot [][]byte) error {
-	if len(segments) != len(bundleHashAndSegmentsRoot) {
-		return fmt.Errorf("missmached shards number for bundle and justifocations")
+	if len(bundle) != len(bundleHashAndSegmentsRoot) {
+		return fmt.Errorf("mismatched shards number for bundle and justifications")
 	}
 	if segments != nil && len(segments) != len(bundleHashAndSegmentsRoot) {
-		return fmt.Errorf("missmached shards number for segments and justifocations")
+		return fmt.Errorf("mismatched shards number for segments and justifications")
 	}
 
 	justifications := make([][][]byte, len(bundleHashAndSegmentsRoot))
@@ -55,9 +55,10 @@ func (s *validatorService) StoreAllShards(ctx context.Context, erasureRoot crypt
 	return nil
 }
 
-// ShardDistribution this method is called by the guarantor as opposed to the other 3 methods
-// the guarantor is expected to have all the shards so they can be distributed to the availability assurers
-// after 2/3 of assurers commit to having the shards, these shards in the guarantor can be removed
+// ShardDistribution this method is called by the guarantor as opposed to
+// AuditShardRequest, SegmentShardRequest and SegmentShardRequestJustification which are called by the assurer.
+// the guarantor is expected to have all the shards so they can be distributed to the availability assurers.
+// After 2/3 of assurers commit to having the shards, these shards in the guarantor can be removed.
 func (s *validatorService) ShardDistribution(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
 	bundleShard, err = s.store.GetAuditShard(erasureRoot, shardIndex)
 	if err != nil {

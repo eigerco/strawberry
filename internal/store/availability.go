@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math"
 
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/pkg/db"
@@ -36,8 +37,11 @@ func (a *Shards) PutAllShardsAndJustifications(erasureRoot crypto.Hash, bundleSh
 		if segmentsShards != nil {
 			segmentsShard = segmentsShards[shardIndex]
 		}
+		if shardIndex > math.MaxUint16 {
+			return fmt.Errorf("shard index out of bounds: %v", shardIndex)
+		}
 		if err := a.putShardsAndJustification(batch, erasureRoot, uint16(shardIndex), bundleShards[shardIndex], segmentsShard, justifications[shardIndex]); err != nil {
-			return err
+			return fmt.Errorf("unable to store shards and justifications: %v", err)
 		}
 	}
 	return batch.Commit()
