@@ -17,6 +17,10 @@ import (
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 )
 
+// TestSimulateGuarantee simulates processing a block containing a guarantee and verifies that:
+// - A block with a valid work report and 3 guarantor signatures is imported.
+// - The core assignment includes the expected work report.
+// - The used authorizer is removed from the core's authorization pool after processing.
 func TestSimulateGuarantee(t *testing.T) {
 	data, err := os.ReadFile("keys.json")
 	require.NoError(t, err)
@@ -27,14 +31,14 @@ func TestSimulateGuarantee(t *testing.T) {
 	require.NoError(t, err)
 
 	// Genesis state
-	data, err = os.ReadFile("genesis-state-tiny.json")
+	data, err = os.ReadFile("guarantee_prestate_001.json")
 	require.NoError(t, err)
 	var currentState *state.State
 	restoredState := jsonutils.RestoreStateSnapshot(data)
 	currentState = &restoredState
 
 	// guarantee block
-	data, err = os.ReadFile("guarantee_block_01.json")
+	data, err = os.ReadFile("guarantee_block_001.json")
 	require.NoError(t, err)
 	testBlock := jsonutils.RestoreBlockSnapshot(data)
 
@@ -64,11 +68,13 @@ func TestSimulateGuarantee(t *testing.T) {
 
 	require.Equal(t, testBlock.Header.TimeSlotIndex, currentState.TimeslotIndex)
 
+	// Core assignment for the report's core should be set.
 	require.NotNil(t, currentState.CoreAssignments[coreIndex])
 
+	// And the assigned report should match the one in the guarantee.
 	assignment := currentState.CoreAssignments[coreIndex]
 	require.Equal(t, &report, assignment.WorkReport)
 
-	// make sure we clear the authorizer pool
+	// Ensure the used authorizer has been removed from the pool.
 	require.Equal(t, crypto.Hash{}, currentState.CoreAuthorizersPool[coreIndex][0])
 }
