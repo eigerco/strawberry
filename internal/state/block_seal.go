@@ -298,6 +298,11 @@ func VerifyBlockSignatures(
 	currentValidators safrole.ValidatorsData,
 	entropy crypto.Hash,
 ) (bool, error) {
+	if int(header.BlockAuthorIndex) > len(currentValidators)-1 {
+		return false, errors.New("invalid block author index")
+	}
+	publicKey := currentValidators[header.BlockAuthorIndex].Bandersnatch
+
 	unsealedHeader, err := encodeUnsealedHeader(header)
 	if err != nil {
 		return false, err
@@ -309,8 +314,6 @@ func VerifyBlockSignatures(
 	}
 
 	switch tok := ticketOrKey.(type) {
-	// The ticket case is more challenging because we don't immediately know the
-	// public key of the validator who signed.
 	case block.Ticket:
 		// Sanity check.
 		if sealOutputHash != tok.Identifier {
@@ -318,35 +321,20 @@ func VerifyBlockSignatures(
 		}
 
 		sealContext := buildTicketSealContext(entropy, tok.EntryIndex)
-		publicKey := crypto.BandersnatchPublicKey{}
 
-		// Since the original ticket submission was anonymous we need to figure
-		// out which validator signed. We do this by looping through all
-		// currentValidators and seeing which validator's bandersnatch public
-		// key is able to verify the seal signature.
-		for _, keys := range currentValidators {
-			if keys.IsEmpty() {
-				continue
-			}
-
-			ok, _ := bandersnatch.Verify(
-				keys.Bandersnatch,
-				sealContext,
-				unsealedHeader,
-				header.BlockSealSignature,
-			)
-			if ok {
-				publicKey = keys.Bandersnatch
-				break
-			}
-		}
-
-		if publicKey == (crypto.BandersnatchPublicKey{}) {
+		// Verify block seal.
+		ok, _ := bandersnatch.Verify(
+			publicKey,
+			sealContext,
+			unsealedHeader,
+			header.BlockSealSignature,
+		)
+		if !ok {
 			return false, nil
 		}
 
 		// Use the found public key to also check the VRF signature.
-		ok, _ := bandersnatch.Verify(
+		ok, _ = bandersnatch.Verify(
 			publicKey,
 			buildVRFContext(sealOutputHash),
 			[]byte{},
@@ -355,11 +343,16 @@ func VerifyBlockSignatures(
 		if !ok {
 			return false, nil
 		}
+
 		return true, nil
 
 	// This case is much easier since we actually know the public key from the
 	// start.
 	case crypto.BandersnatchPublicKey:
+		if tok != publicKey {
+			return false, nil
+		}
+
 		ok, _ := bandersnatch.Verify(
 			tok,
 			buildTicketFallbackContext(entropy),
@@ -369,6 +362,7 @@ func VerifyBlockSignatures(
 		if !ok {
 			return false, nil
 		}
+
 		ok, _ = bandersnatch.Verify(
 			tok,
 			buildVRFContext(sealOutputHash),
@@ -378,6 +372,7 @@ func VerifyBlockSignatures(
 		if !ok {
 			return false, nil
 		}
+
 		return true, nil
 	default:
 		return false, fmt.Errorf("unexpected type for ticketOrKey: %T", tok)
