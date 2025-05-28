@@ -75,7 +75,8 @@ require.NoError(t, err)
 	require.NoError(t, err)
 
 	// Dump the valid selaed block
-	os.WriteFile("block_out.json", []byte(jsonutils.DumpBlockSnapshot(newBlock)), 0644)
+	err = os.WriteFile("block_out.json", []byte(jsonutils.DumpBlockSnapshot(newBlock)), 0644)
+require.NoError(t, err)
 
 	// Update state
 	err = statetransition.UpdateState(
