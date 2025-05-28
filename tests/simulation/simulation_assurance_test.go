@@ -16,9 +16,18 @@ import (
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 )
 
-// TestSimulateAssurance simulates processing a block containing availability assurances and verifies that:
-// - Core 0 receives >2/3 of validator assurances and is removed from core assignments as it becomes available.
-// - Core 1 receives no assurances and remains in the core assignments after processing.
+// TestSimulateAssurance simulates processing a block containing availability assurances and verifies
+// that core assignments are correctly updated
+//
+// Specifically:
+// - The test begins from an intermediate state (`ρ†`) with two active core assignments (cores 0 and 1), each with a valid work report
+// - Core 0 receives 5 out of 6 total validator assurances (>2/3), making it "available"
+// - Core 1 receives no assurances and should not be marked as available
+//
+// We must remove assignments that are now considered available or stale.
+// This test ensures that after applying `UpdateState`:
+// - The assignment for core 0 is removed
+// - The assignment for core 1 remains
 func TestSimulateAssurance(t *testing.T) {
 	data, err := os.ReadFile("keys.json")
 	require.NoError(t, err)
