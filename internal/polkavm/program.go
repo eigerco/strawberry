@@ -21,34 +21,37 @@ type Program struct {
 	ROData             []byte
 	RWData             []byte
 	CodeAndJumpTable   []byte
+	Metadata           []byte
 }
 
 // ParseBlob let E3(|o|) ⌢ E3(|w|) ⌢ E2(z) ⌢ E3(s) ⌢ o ⌢ w ⌢ E4(|c|) ⌢ c = p (eq. A.32)
 func ParseBlob(data []byte) (program *Program, err error) {
-	memorySizes := ProgramMemorySizes{}
+	program = &Program{ProgramMemorySizes: ProgramMemorySizes{}}
 	buff := bytes.NewBuffer(data)
 	dec := jam.NewDecoder(buff)
-	if err := dec.Decode(&memorySizes); err != nil {
+	if err := dec.Decode(&program.Metadata); err != nil {
 		return nil, err
 	}
-	program = &Program{ProgramMemorySizes: memorySizes}
-	if err := dec.DecodeFixedLength(&program.ROData, uint(memorySizes.RODataSize)); err != nil {
+	if err := dec.Decode(&program.ProgramMemorySizes); err != nil {
 		return nil, err
 	}
-	if int(memorySizes.RODataSize) != len(program.ROData) {
+	if err := dec.DecodeFixedLength(&program.ROData, uint(program.ProgramMemorySizes.RODataSize)); err != nil {
+		return nil, err
+	}
+	if int(program.ProgramMemorySizes.RODataSize) != len(program.ROData) {
 		return nil, fmt.Errorf("ro data size mismatch")
 	}
-	if int(memorySizes.RWDataSize) != len(program.RWData) {
+	if int(program.ProgramMemorySizes.RWDataSize) != len(program.RWData) {
 		return nil, fmt.Errorf("rw data size mismatch")
 	}
-	if err := dec.DecodeFixedLength(&program.RWData, uint(memorySizes.RWDataSize)); err != nil {
+	if err := dec.DecodeFixedLength(&program.RWData, uint(program.ProgramMemorySizes.RWDataSize)); err != nil {
 		return nil, err
 	}
 	var codeSize uint32
 	if err := dec.Decode(&codeSize); err != nil {
 		return nil, err
 	}
-	if len(data[memorySizes.RWDataSize+4:]) != int(codeSize) {
+	if len(buff.Bytes()) != int(codeSize) {
 		return nil, fmt.Errorf("code size mismatch")
 	}
 

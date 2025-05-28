@@ -6,6 +6,7 @@ import (
 	"maps"
 
 	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -78,6 +79,16 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	hostCallFunc := func(hostCall uint64, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctx polkavm.AccumulateContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.AccumulateContextPair, error) {
 		// s
 		currentService := accState.ServiceState[serviceIndex]
+		if currentService.Storage == nil {
+			currentService.Storage = make(map[statekey.StateKey][]byte)
+		}
+		if currentService.PreimageLookup == nil {
+			currentService.PreimageLookup = make(map[crypto.Hash][]byte)
+		}
+		if currentService.PreimageMeta == nil {
+			currentService.PreimageMeta = make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots)
+		}
+
 		var err error
 		switch hostCall {
 		case host_call.GasID:

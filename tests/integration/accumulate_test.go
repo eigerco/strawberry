@@ -14,6 +14,7 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/stretchr/testify/assert"
 
@@ -136,6 +137,15 @@ func TestAccumulate(t *testing.T) {
 				newState.ValidatorState.QueuedValidators,
 				newState.PendingAuthorizersQueues,
 				_ = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports)
+
+			// TODO check storage properly when we update to the v0.6.5 vectors.
+			// For now ignore storage since it's set by the accumulate code and
+			// not yet in the test vectors.
+			for serviceId, service := range newState.Services {
+				service.Storage = make(map[statekey.StateKey][]byte)
+				newState.Services[serviceId] = service
+			}
+
 			assert.Equal(t, postState, newState)
 		})
 	}
@@ -241,6 +251,8 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 	for _, account := range accounts {
 		sa := service.ServiceAccount{
 			PreimageLookup:         make(map[crypto.Hash][]byte),
+			PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
+			Storage:                make(map[statekey.StateKey][]byte),
 			CodeHash:               mapHash(account.Data.Service.CodeHash),
 			Balance:                account.Data.Service.Balance,
 			GasLimitForAccumulator: account.Data.Service.MinItemGas,
