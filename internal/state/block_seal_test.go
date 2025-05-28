@@ -30,11 +30,13 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 	ticketAccumulator := safrole.SealingKeys{}
 	ticketAccumulator.Set(ticketBodies)
 
+	blockAuthorIndex := 1
 	header := &block.Header{
-		ParentHash:     testutils.RandomHash(t),
-		PriorStateRoot: testutils.RandomHash(t),
-		ExtrinsicHash:  testutils.RandomHash(t),
-		TimeSlotIndex:  jamtime.Timeslot(randomTimeslot),
+		ParentHash:       testutils.RandomHash(t),
+		PriorStateRoot:   testutils.RandomHash(t),
+		ExtrinsicHash:    testutils.RandomHash(t),
+		TimeSlotIndex:    jamtime.Timeslot(randomTimeslot),
+		BlockAuthorIndex: uint16(blockAuthorIndex),
 	}
 
 	currentValidators := safrole.ValidatorsData{}
@@ -47,7 +49,7 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 	// Add our public key to the current validators set.
 	publicKey, err := bandersnatch.Public(privateKey)
 	require.NoError(t, err)
-	currentValidators[1] = crypto.ValidatorKey{
+	currentValidators[blockAuthorIndex] = crypto.ValidatorKey{
 		Bandersnatch: publicKey,
 	}
 
@@ -97,14 +99,28 @@ func TestSealVerifyBlockFallback(t *testing.T) {
 	ticketAccumulator := safrole.SealingKeys{}
 	ticketAccumulator.Set(epochKeys)
 
+	blockAuthorIndex := 1
 	header := &block.Header{
-		ParentHash:     testutils.RandomHash(t),
-		PriorStateRoot: testutils.RandomHash(t),
-		ExtrinsicHash:  testutils.RandomHash(t),
-		TimeSlotIndex:  jamtime.Timeslot(randomTimeslot),
+		ParentHash:       testutils.RandomHash(t),
+		PriorStateRoot:   testutils.RandomHash(t),
+		ExtrinsicHash:    testutils.RandomHash(t),
+		TimeSlotIndex:    jamtime.Timeslot(randomTimeslot),
+		BlockAuthorIndex: uint16(blockAuthorIndex),
 	}
 
 	currentValidators := safrole.ValidatorsData{}
+	for i := range currentValidators {
+		currentValidators[i] = crypto.ValidatorKey{
+			Bandersnatch: testutils.RandomBandersnatchPublicKey(t),
+		}
+	}
+
+	// Add our public key to the current validators set.
+	publicKey, err = bandersnatch.Public(privateKey)
+	require.NoError(t, err)
+	currentValidators[blockAuthorIndex] = crypto.ValidatorKey{
+		Bandersnatch: publicKey,
+	}
 
 	err = SealBlock(header, ticketAccumulator, entropy, privateKey)
 	require.NoError(t, err)
