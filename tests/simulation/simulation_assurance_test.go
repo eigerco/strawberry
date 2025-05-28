@@ -36,7 +36,7 @@ func TestSimulateAssurance(t *testing.T) {
 	currentState = &restoredState
 
 	// assurance block
-	data, err = os.ReadFile("assurance_block_01.json")
+	data, err = os.ReadFile("assurance_block_001.json")
 	require.NoError(t, err)
 	testBlock := jsonutils.RestoreBlockSnapshot(data)
 
