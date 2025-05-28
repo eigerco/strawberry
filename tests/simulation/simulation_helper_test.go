@@ -92,7 +92,8 @@ func TestBlockGenerator(t *testing.T) {
 
 	// Dump the post state
 	postStateDump := jsonutils.DumpStateSnapshot(*currentState)
-	os.WriteFile("output/poststate_out.json", []byte(postStateDump), 0644)
+	err = os.WriteFile("output/poststate_out.json", []byte(postStateDump), 0644)
+	require.NoError(t, err)
 
 	// Print diff
 	diff, _ := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
