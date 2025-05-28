@@ -37,9 +37,10 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		return errors.New("invalid block, it is in the future")
 	}
 
-	newTimeState := CalculateNewTimeState(newBlock.Header)
+	prevTimeSlot := s.TimeslotIndex
+	newTimeSlot := CalculateNewTimeState(newBlock.Header)
 
-	if err := ValidateExtrinsicGuarantees(newBlock.Header, s, newBlock.Extrinsic.EG, s.CoreAssignments, newTimeState, chain); err != nil {
+	if err := ValidateExtrinsicGuarantees(newBlock.Header, s, newBlock.Extrinsic.EG, s.CoreAssignments, newTimeSlot, chain); err != nil {
 		return fmt.Errorf("extrinsic guarantees validation failed, err: %w", err)
 	}
 
@@ -52,7 +53,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	}
 	newEntropyPool, newValidatorState, _, err := UpdateSafroleState(
 		safroleInput,
-		s.TimeslotIndex,
+		prevTimeSlot,
 		s.EntropyPool,
 		s.ValidatorState,
 		s.PastJudgements.OffendingValidators)
@@ -65,11 +66,11 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		return err
 	}
 
-	newCoreAssignments, reporters, err := CalculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState, newTimeState, newEntropyPool)
+	newCoreAssignments, reporters, err := CalculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState, newTimeSlot, newEntropyPool)
 	if err != nil {
 		return err
 	}
-	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, newTimeState, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators)
+	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators)
 
 	workReports := GetAvailableWorkReports(newCoreAssignments)
 
@@ -82,7 +83,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		serviceHashPairs := CalculateWorkReportsAndAccumulate(
 		&newBlock.Header,
 		s,
-		newTimeState,
+		newTimeSlot,
 		workReports,
 	)
 	finalServicesState, err := CalculateIntermediateServiceState(newBlock.Extrinsic.EP, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
@@ -96,7 +97,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		return err
 	}
 
-	newJudgements, err := CalculateNewJudgements(newTimeState, newBlock.Extrinsic.ED, s.PastJudgements, s.ValidatorState)
+	newJudgements, err := CalculateNewJudgements(newTimeSlot, newBlock.Extrinsic.ED, s.PastJudgements, s.ValidatorState)
 	if err != nil {
 		return err
 	}
@@ -104,7 +105,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	newCoreAuthorizations := CalculateNewCoreAuthorizations(newBlock.Header, newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
 
 	// Update the state with new state values.
-	s.TimeslotIndex = newTimeState
+	s.TimeslotIndex = newTimeSlot
 	s.EntropyPool = newEntropyPool
 	s.ValidatorState = newValidatorState
 	s.ValidatorState.QueuedValidators = newQueuedValidators
@@ -2332,14 +2333,14 @@ func buildServiceAccumulationCommitments(accumResults map[block.ServiceId]state.
 // CalculateNewActivityStatistics implements equation 30:
 // π′ ≺ (EG, EP, EA, ET, τ, κ′, π, H)
 // TODO: add core and service statistics when vectors are available.
-func CalculateNewActivityStatistics(block block.Block, timeslot jamtime.Timeslot, validatorStatistics validator.ActivityStatisticsState, reporters crypto.ED25519PublicKeySet, currValidators safrole.ValidatorsData) validator.ActivityStatisticsState {
+func CalculateNewActivityStatistics(block block.Block, prevTimeslot jamtime.Timeslot, validatorStatistics validator.ActivityStatisticsState, reporters crypto.ED25519PublicKeySet, currValidators safrole.ValidatorsData) validator.ActivityStatisticsState {
 	newStats := validatorStatistics
 
 	// Implements equations 170-171:
 	// let e = ⌊τ/E⌋, e′ = ⌊τ′/E⌋
 	// (a, π′₁) ≡ { (π₀, π₁) if e′ = e
 	//              ([{0,...,[0,...]},...], π₀) otherwise
-	if timeslot.ToEpoch() != block.Header.TimeSlotIndex.ToEpoch() {
+	if prevTimeslot.ToEpoch() != block.Header.TimeSlotIndex.ToEpoch() {
 		// Rotate statistics - completed stats become history, start fresh present stats
 		newStats.ValidatorsLast = newStats.ValidatorsCurrent                                    // Move current to history
 		newStats.ValidatorsCurrent = [common.NumberOfValidators]validator.ValidatorStatistics{} // Reset current

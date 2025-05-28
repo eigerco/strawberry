@@ -30,6 +30,8 @@ func TestSimulateTicket(t *testing.T) {
 	restoredPreState := jsonutils.RestoreStateSnapshot(data)
 	currentState = &restoredPreState
 
+	preActivityStats := currentState.ActivityStatistics
+
 	// Block
 	data, err = os.ReadFile("ticket_block_001.json")
 	require.NoError(t, err)
@@ -68,4 +70,12 @@ func TestSimulateTicket(t *testing.T) {
 		require.NoError(t, err)
 		require.Contains(t, postStateTicketIDs, ticketID)
 	}
+
+	// Check that validator activity stats were rotated correctly on epoch
+	// change. Current should become last.
+	require.Equal(t, preActivityStats.ValidatorsCurrent, currentState.ActivityStatistics.ValidatorsLast)
+
+	// Our validator should have 1 block and 3 tickets in this new epoch.
+	require.Equal(t, uint32(1), currentState.ActivityStatistics.ValidatorsCurrent[testBlock.Header.BlockAuthorIndex].NumOfBlocks)
+	require.Equal(t, uint32(3), currentState.ActivityStatistics.ValidatorsCurrent[testBlock.Header.BlockAuthorIndex].NumOfTickets)
 }
