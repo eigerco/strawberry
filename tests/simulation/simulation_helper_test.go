@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestGenerateGenesisState is used to create valid blocks for simulation test
+// TestBlockGenerator is used to create valid blocks for simulation test
 // purposes. It reads a prestate and block template and then produces a valid
 // sealed block that it then applies to the prestate (using UpdateState). It
 // then writes the resulting post state and block to files and prints the diff
@@ -63,7 +63,7 @@ func TestBlockGenerator(t *testing.T) {
 		currentState,
 		keys,
 	)
-require.NoError(t, err)
+	require.NoError(t, err)
 	newBlock, err := ProduceBlock(
 		nextTimeslot,
 		templateBlock.Header.ParentHash,
@@ -74,9 +74,12 @@ require.NoError(t, err)
 	)
 	require.NoError(t, err)
 
-	// Dump the valid selaed block
-	err = os.WriteFile("block_out.json", []byte(jsonutils.DumpBlockSnapshot(newBlock)), 0644)
-require.NoError(t, err)
+	// Dump the valid sealed block
+	err = os.MkdirAll("output", 0755)
+	require.NoError(t, err)
+
+	err = os.WriteFile("output/block_out.json", []byte(jsonutils.DumpBlockSnapshot(newBlock)), 0644)
+	require.NoError(t, err)
 
 	// Update state
 	err = statetransition.UpdateState(
@@ -88,7 +91,7 @@ require.NoError(t, err)
 
 	// Dump the post state
 	postStateDump := jsonutils.DumpStateSnapshot(*currentState)
-	os.WriteFile("poststate_out.json", []byte(postStateDump), 0644)
+	os.WriteFile("output/poststate_out.json", []byte(postStateDump), 0644)
 
 	// Print diff
 	diff, _ := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
