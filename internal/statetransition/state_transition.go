@@ -287,10 +287,9 @@ func CalculateIntermediateCoreAssignmentsFromAvailability(assurances block.Assur
 	// This implements equation 130: ∀c ∈ NC : ρ‡[c] ≡ { ∅ if ρ[c]w ∈ W, ρ†[c] otherwise }
 	for coreIndex := range common.TotalNumberOfCores {
 		availCountForCore, ok := availabilityCounts[coreIndex]
-		// remove core if:
-		// 1. there is no availability value for core
-		// 2. There is some availability, but it's less than the required threshold
-		// 3. Assignment report is stale
+		// Remove core if:
+		// 1. There are availability assurances for this core, and it exceeds threshold
+		// 2. Assignment report is stale
 		if ok && availCountForCore > common.AvailabilityThreshold {
 			removedReports = append(removedReports, coreAssignments[coreIndex].WorkReport)
 			coreAssignments[coreIndex] = nil
