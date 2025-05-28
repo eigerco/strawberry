@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"github.com/eigerco/strawberry/internal/validator"
 	"log"
 	"sort"
 	"sync"
@@ -54,6 +55,7 @@ type WorkReportGuarantor struct {
 	workReportRequester          *WorkReportRequester
 	workPackageSharingRequester  *WorkPackageSharingRequester
 	workReportDistributionSender *WorkReportDistributionSender
+	validatorService             validator.ValidatorService
 }
 
 // SegmentRootMapping It maps a work-package hash (h⊞) to the actual segment root (H).
@@ -72,6 +74,7 @@ type guaranteeResponse struct {
 
 type localReportResult struct {
 	report         block.WorkReport
+	shards         *results.Shards
 	workReportHash crypto.Hash
 	signature      crypto.Ed25519Signature
 	err            error
@@ -98,6 +101,7 @@ func NewWorkReportGuarantor(
 	requester *WorkReportRequester,
 	workPackageSharingRequester *WorkPackageSharingRequester,
 	workReportDistributionSender *WorkReportDistributionSender,
+	validatorService validator.ValidatorService,
 ) *WorkReportGuarantor {
 	return &WorkReportGuarantor{
 		validatorIndex:               validatorIndex,
@@ -110,6 +114,7 @@ func NewWorkReportGuarantor(
 		workReportRequester:          requester,
 		workPackageSharingRequester:  workPackageSharingRequester,
 		workReportDistributionSender: workReportDistributionSender,
+		validatorService:             validatorService,
 	}
 }
 
@@ -236,15 +241,17 @@ func (h *WorkReportGuarantor) startLocalRefinement(
 ) {
 	defer wg.Done()
 
-	shardData, workReport, err := results.ProduceWorkReport(h.refine, h.state.Services, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
+	shards, workReport, err := results.ProduceWorkReport(h.refine, h.state.Services, authOutput, coreIndex, bundle, buildSegmentRootLookup(segments))
 	if err != nil {
 		localResultCh <- localReportResult{err: err}
 		log.Printf("local refinement failed: %v", err)
 		return
 	}
-
-	// TODO store shards in the shard store
-	_ = shardData
+	if err := h.validatorService.StoreAllShards(context.Background(), workReport.WorkPackageSpecification.ErasureRoot, shards.Bundle, shards.Segments, shards.BundleHashAndSegmentsRoot); err != nil {
+		localResultCh <- localReportResult{err: err}
+		log.Printf("failed to store shards: %v", err)
+		return
+	}
 
 	log.Println("local refinement finished")
 
@@ -262,6 +269,7 @@ func (h *WorkReportGuarantor) startLocalRefinement(
 	localResultCh <- localReportResult{
 		report:         workReport,
 		workReportHash: wrHash,
+		shards:         shards,
 		signature:      crypto.Ed25519Signature(localSig),
 	}
 }

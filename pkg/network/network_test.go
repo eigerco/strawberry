@@ -225,7 +225,7 @@ func NewExtendedWorkPackageSubmissionHandler(fetcher *MockImportSegmentsFetcher)
 	return &ExtendedWorkPackageSubmissionHandler{
 		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(
 			fetcher,
-			handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, NewMockRefine([]byte("out")), state.State{Services: make(service.ServiceState)}, peer.NewPeerSet(), nil, nil, nil, nil)),
+			handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, NewMockRefine([]byte("out")), state.State{Services: make(service.ServiceState)}, peer.NewPeerSet(), nil, nil, nil, nil, nil)),
 		MockFetcher: fetcher,
 	}
 }
@@ -638,6 +638,9 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	expectedWorkReportHash, err := expectedWorkReport.Hash()
 	require.NoError(t, err)
 
+	validatorService := validator.NewValidatorServiceMock()
+	validatorService.On("StoreAllShards", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
 	t.Run("success", func(t *testing.T) {
 		// start with an empty store
 		kvStore, err := pebble.NewKVStore()
@@ -653,6 +656,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 			prv,
 			serviceState,
 			reportStore,
+			validatorService,
 		)
 
 		// override handlers in order to mock pvm invocations
@@ -678,6 +682,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 			requester,
 			handlers.NewWorkPackageSharingRequester(),
 			handlers.NewWorkReportDistributionSender(),
+			validatorService,
 		)
 
 		submissionHandler := handlers.NewWorkPackageSubmissionHandler(
@@ -715,6 +720,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 			prv,
 			serviceState,
 			reportStore,
+			validatorService,
 		)
 
 		// override handlers in order to mock pvm invocations
@@ -741,6 +747,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 			requester,
 			handlers.NewWorkPackageSharingRequester(),
 			handlers.NewWorkReportDistributionSender(),
+			validatorService,
 		)
 
 		submissionHandler := handlers.NewWorkPackageSubmissionHandler(
@@ -1180,8 +1187,6 @@ func TestAnnounceBlocksAndDistributeShards(t *testing.T) {
 
 	erasureRoot := testutils.RandomHash(t)
 
-	mockValidatorService := validator.NewValidatorServiceMock()
-
 	bundleShard := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	segmentsShards := [][]byte{
 		{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
@@ -1192,12 +1197,6 @@ func TestAnnounceBlocksAndDistributeShards(t *testing.T) {
 	hash2 := testutils.RandomHash(t)
 
 	justification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
-
-	// TODO once shard distribution is implemented we should take the shards from the actual service instead of mocking it
-	mockValidatorService.On("ShardDistribution", mock.Anything, erasureRoot, nodes[assurer1Id].ValidatorManager.Index).
-		Return(bundleShard, segmentsShards, justification, nil).Once()
-
-	nodes[guarantor1Id].ProtocolManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(mockValidatorService))
 
 	err := nodes[node1Id].Start()
 	require.NoError(t, err)
@@ -1249,13 +1248,20 @@ func TestAnnounceBlocksAndDistributeShards(t *testing.T) {
 	err = nodes[node1Id].BlockService.Store.PutBlock(*mockBLock)
 	require.NoError(t, err)
 
+	// make sure the guarantor has the shards needed for this specific assurer index
+	err = nodes[guarantor1Id].AvailabilityStore.PutShardsAndJustification(
+		erasureRoot,
+		nodes[assurer1Id].ValidatorManager.Index,
+		bundleShard,
+		segmentsShards,
+		justification,
+	)
+
 	// Announce the newly generated block, this block supposedly contains new guarantees that were executed previously
 	err = nodes[node1Id].AnnounceBlock(ctx, mockHeader, assurer1Peer)
 	require.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
-
-	mockValidatorService.AssertExpectations(t)
 
 	// Assert that the assurer node now contains it's appropriate shard from the guarantor
 	actualSegmentsShards, err := nodes[assurer1Id].AvailabilityStore.GetSegmentsShard(erasureRoot, nodes[assurer1Id].ValidatorManager.Index)

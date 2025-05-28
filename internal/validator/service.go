@@ -3,11 +3,11 @@ package validator
 import (
 	"context"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
-	"github.com/eigerco/strawberry/internal/store"
 	"slices"
 
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
+	"github.com/eigerco/strawberry/internal/store"
 )
 
 // ValidatorService holds the logic for storing DA shards for availability purposes, and distributing the shards with
@@ -17,33 +17,73 @@ type ValidatorService interface {
 	AuditShardRequest(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, justification [][]byte, err error)
 	SegmentShardRequest(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, err error)
 	SegmentShardRequestJustification(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, justification [][][]byte, err error)
+
+	StoreAllShards(ctx context.Context, erasureRoot crypto.Hash, bundle [][]byte, segments [][][]byte, bundleHashAndSegmentsRoot [][]byte) error
 }
 
 // NewService creates a new validator service that implements ValidatorService interface
-func NewService(availabilityStore *store.Availability) ValidatorService {
+func NewService(availabilityStore *store.Shards) ValidatorService {
 	return &validatorService{
-		availabilityStore: availabilityStore,
+		store: availabilityStore,
 	}
 }
 
 type validatorService struct {
-	availabilityStore *store.Availability
+	store *store.Shards
 }
 
+// StoreAllShards computes the justifications for each shard and stores it
+func (s *validatorService) StoreAllShards(ctx context.Context, erasureRoot crypto.Hash, bundle [][]byte, segments [][][]byte, bundleHashAndSegmentsRoot [][]byte) error {
+	if len(bundle) != len(bundleHashAndSegmentsRoot) {
+		return fmt.Errorf("mismatched shards number for bundle and justifications")
+	}
+	if segments != nil && len(segments) != len(bundleHashAndSegmentsRoot) {
+		return fmt.Errorf("mismatched shards number for segments and justifications")
+	}
+
+	justifications := make([][][]byte, len(bundleHashAndSegmentsRoot))
+
+	// compute the justification for each shard and store it
+	// T(s, i, H)
+	for shardIndex := range bundleHashAndSegmentsRoot {
+		justifications[shardIndex] = binary_tree.ComputeTrace(bundleHashAndSegmentsRoot, shardIndex, crypto.HashData)
+	}
+
+	if err := s.store.PutAllShardsAndJustifications(erasureRoot, bundle, segments, justifications); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ShardDistribution this method is called by the guarantor as opposed to
+// AuditShardRequest, SegmentShardRequest and SegmentShardRequestJustification which are called by the assurer.
+// the guarantor is expected to have all the shards so they can be distributed to the availability assurers.
+// After 2/3 of assurers commit to having the shards, these shards in the guarantor can be removed.
 func (s *validatorService) ShardDistribution(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
-	//TODO implement me
-	panic("implement me")
+	bundleShard, err = s.store.GetAuditShard(erasureRoot, shardIndex)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	segmentShard, err = s.store.GetSegmentsShard(erasureRoot, shardIndex)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	justification, err = s.store.GetJustification(erasureRoot, shardIndex)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return bundleShard, segmentShard, justification, nil
 }
 
 // AuditShardRequest gets the audit shards and justification from the availability store.
 // this method will be later used by the auditors to request and reconstruct the work-package bundle and execute it to assess the correctness of the guarantee.
 func (s *validatorService) AuditShardRequest(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, justification [][]byte, err error) {
-	bundleShard, err = s.availabilityStore.GetAuditShard(erasureRoot, shardIndex)
+	bundleShard, err = s.store.GetAuditShard(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	justification, err = s.availabilityStore.GetJustification(erasureRoot, shardIndex)
+	justification, err = s.store.GetJustification(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,7 +95,7 @@ func (s *validatorService) AuditShardRequest(ctx context.Context, erasureRoot cr
 // required for guarantors to reconstruct the segment shards from previous executions to be able to compute the work-packages and guarantee them.
 // this variant the assurer does not provide any justification for the returned segment.
 func (s *validatorService) SegmentShardRequest(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, err error) {
-	allSegmentsShards, err := s.availabilityStore.GetSegmentsShard(erasureRoot, shardIndex)
+	allSegmentsShards, err := s.store.GetSegmentsShard(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +112,7 @@ func (s *validatorService) SegmentShardRequest(ctx context.Context, erasureRoot 
 // required for guarantors to reconstruct the segment shards from previous executions to be able to compute the work-packages and guarantee them.
 // this variant the assurer provides the justification for the returned segment, allowing the guarantor to immediately asses the correctness of the response.
 func (s *validatorService) SegmentShardRequestJustification(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, justification [][][]byte, err error) {
-	allSegmentsShards, err := s.availabilityStore.GetSegmentsShard(erasureRoot, shardIndex)
+	allSegmentsShards, err := s.store.GetSegmentsShard(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -91,13 +131,13 @@ func (s *validatorService) SegmentShardRequestJustification(ctx context.Context,
 	}
 
 	// return audit shard from store, required for computing the audit shard hash for the segment justification
-	auditShard, err := s.availabilityStore.GetAuditShard(erasureRoot, shardIndex)
+	auditShard, err := s.store.GetAuditShard(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, err
 	}
 	auditShardHash := crypto.HashData(auditShard)
 
-	baseJustification, err := s.availabilityStore.GetJustification(erasureRoot, shardIndex)
+	baseJustification, err := s.store.GetJustification(erasureRoot, shardIndex)
 	if err != nil {
 		return nil, nil, err
 	}

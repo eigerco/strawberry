@@ -2,7 +2,6 @@ package validator
 
 import (
 	"context"
-
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/stretchr/testify/mock"
 )
@@ -13,6 +12,11 @@ func NewValidatorServiceMock() *ValidatorServiceMock {
 
 type ValidatorServiceMock struct {
 	mock.Mock
+}
+
+func (v *ValidatorServiceMock) StoreAllShards(ctx context.Context, erasureRoot crypto.Hash, bundle [][]byte, segments [][][]byte, bundleHashAndSegmentsRoot [][]byte) error {
+	args := v.MethodCalled("StoreAllShards", ctx, erasureRoot, bundle, segments, bundleHashAndSegmentsRoot)
+	return args.Error(0)
 }
 
 func (v *ValidatorServiceMock) ShardDistribution(ctx context.Context, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {

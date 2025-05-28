@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"context"
 	"crypto/ed25519"
+	"github.com/eigerco/strawberry/internal/validator"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -107,12 +108,15 @@ func TestHandleSharingStream_Success(t *testing.T) {
 	require.NoError(t, err)
 	s := store.NewWorkReport(kvStore)
 
+	validatorService := validator.NewValidatorServiceMock()
+	validatorService.On("StoreAllShards", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	handler := handlers.NewWorkPackageSharingHandler(
 		mockAuthorizationInvoker{},
 		mockRefineInvoker{},
 		privKey,
 		serviceState,
 		s,
+		validatorService,
 	)
 
 	handler.SetCurrentCore(coreIndex)
