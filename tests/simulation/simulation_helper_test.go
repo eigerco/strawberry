@@ -63,7 +63,7 @@ func TestBlockGenerator(t *testing.T) {
 		currentState,
 		keys,
 	)
-
+require.NoError(t, err)
 	newBlock, err := ProduceBlock(
 		nextTimeslot,
 		templateBlock.Header.ParentHash,
