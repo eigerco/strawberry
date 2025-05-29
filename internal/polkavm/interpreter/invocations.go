@@ -2,11 +2,10 @@ package interpreter
 
 import (
 	"errors"
-
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
-// InvokeWholeProgram the marshalling whole-program pvm machine state-transition function: (ΨM)
+// InvokeWholeProgram the marshalling whole-program pvm machine state-transition function: (ΨM eq. A.43)
 // returns remaining gas and:
 // if error is nil (meaning halt or ∎) should return a result as bytes otherwise
 // error as one of:
@@ -31,11 +30,19 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.G
 		return 0, nil, x, err
 	}
 	_, gasRemaining, regs, memory1 := i.Results()
-	result := make([]byte, regs[polkavm.A0])
-	if err := memory1.Read(regs[polkavm.A1], result); err != nil {
+	result := make([]byte, regs[polkavm.A1])
+	if err := memory1.Read(regs[polkavm.A0], result); err != nil {
+		// Do not return anything if registers 7 and 8 are not pointing to a valid memory page
+		// (u, [], x′) if ε = ∎ ∧ Nω′7...+ω′8 ⊄ Vμ′
+		faultErr := &polkavm.ErrPageFault{}
+		if errors.As(err, &faultErr) {
+			return gasRemaining, []byte{}, x1, nil
+		}
 		return 0, nil, x, err
 	}
 
+	// Return the memory that registers 7 and 8 are pointing to, if it's a valid memory page
+	// (u, μ′ω′7⋅⋅⋅+ω′8, x′) if ε = ∎ ∧ Nω′7⋅⋅⋅+ω′8 ⊆ Vμ′
 	return gasRemaining, result, x1, nil
 }
 
