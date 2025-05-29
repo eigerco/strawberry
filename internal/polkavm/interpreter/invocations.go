@@ -5,7 +5,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
-// InvokeWholeProgram the marshalling whole-program pvm machine state-transition function: (ΨM)
+// InvokeWholeProgram the marshalling whole-program pvm machine state-transition function: (ΨM eq. A.43)
 // returns remaining gas and:
 // if error is nil (meaning halt or ∎) should return a result as bytes otherwise
 // error as one of:
