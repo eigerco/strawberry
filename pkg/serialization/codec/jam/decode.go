@@ -367,7 +367,12 @@ func (br *byteReader) decodeStruct(value reflect.Value) error {
 				continue
 			}
 			tagValues := parseTag(tag)
+			encodingType, encodingTagFound := tagValues["encoding"]
 			if length, found := tagValues["length"]; found {
+				// "length" and "encoding" are mutually exclusive
+				if encodingTagFound {
+					return fmt.Errorf(ErrConflictingTags, fieldType.Name)
+				}
 				size, err := strconv.ParseUint(length, 10, 64)
 				if err != nil {
 					return fmt.Errorf(ErrInvalidLengthValue, fieldType.Name, err)
@@ -381,7 +386,7 @@ func (br *byteReader) decodeStruct(value reflect.Value) error {
 			}
 
 			// Handle compact decoding for unsigned integers if specified via struct tag
-			if encodingType, found := tagValues["encoding"]; found && encodingType == "compact" {
+			if encodingTagFound && encodingType == "compact" {
 				switch field.Kind() {
 				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 					err := br.decodeCompact(field)

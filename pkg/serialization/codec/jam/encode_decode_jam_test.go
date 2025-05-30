@@ -188,6 +188,20 @@ func TestCompactTag(t *testing.T) {
 	err = jam.Unmarshal(marshaledData, &withTagUnmarshaled)
 	require.NoError(t, err)
 	assert.Equal(t, withTag, withTagUnmarshaled)
+
+	// test conflicting value
+	type ConflictingTags struct {
+		Uint32 uint32 `jam:"encoding=compact,length=10"`
+	}
+	conflictingTags := ConflictingTags{10}
+	_, err = jam.Marshal(conflictingTags)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "conflicting struct tags")
+
+	var conflictingTagsUnmarshaled ConflictingTags
+	err = jam.Unmarshal(marshaledData, &conflictingTagsUnmarshaled)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "conflicting struct tags")
 }
 
 // Struct for testing custom marshalling.

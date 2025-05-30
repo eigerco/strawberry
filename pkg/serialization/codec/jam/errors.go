@@ -27,4 +27,6 @@ var (
 
 	ErrUnSuportedFieldForCompactDecoding = "unsupported field kind for compact decoding: %s"
 	ErrUnSuportedFieldForCompactEncoding = "unsupported field kind for compact encoding: %s"
+
+	ErrConflictingTags = "conflicting struct tags on field %s: 'length' and 'encoding' cannot be used together"
 )
