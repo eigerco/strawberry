@@ -206,6 +206,20 @@ func TestCompactTag(t *testing.T) {
 	err = jam.Unmarshal(marshaledData, &conflictingTagsUnmarshaled)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "conflicting struct tags")
+
+	// check invalid type
+	type InvalidType struct {
+		IsValid bool `jam:"encoding=compact"`
+	}
+	invalidType := InvalidType{true}
+	_, err = jam.Marshal(invalidType)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported field kind for compact")
+
+	var invalidTypeUnmarshaled InvalidType
+	err = jam.Unmarshal(marshaledData, &invalidTypeUnmarshaled)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported field kind for compact")
 }
 
 // Struct for testing custom marshalling.
