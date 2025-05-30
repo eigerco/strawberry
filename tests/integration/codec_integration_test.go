@@ -536,7 +536,7 @@ type ExpectedWorkReport struct {
 	AuthOutput        string                    `json:"auth_output"`
 	SegmentRootLookup []interface{}             `json:"segment_root_lookup"`
 	Results           []ExpectedWorkResult      `json:"results"`
-	AuthGasUsed       uint                      `json:"auth_gas_used"`
+	AuthGasUsed       uint64                    `json:"auth_gas_used"`
 }
 
 type ExpectedWorkResult struct {
@@ -546,11 +546,11 @@ type ExpectedWorkResult struct {
 	AccumulateGas uint64          `json:"accumulate_gas"`
 	Result        Result          `json:"result"`
 	RefineLoad    struct {
-		GasUsed        uint `json:"gas_used"`
-		Imports        uint `json:"imports"`
-		ExtrinsicCount uint `json:"extrinsic_count"`
-		ExtrinsicSize  uint `json:"extrinsic_size"`
-		Exports        uint `json:"exports"`
+		GasUsed        uint64 `json:"gas_used"`
+		Imports        uint16 `json:"imports"`
+		ExtrinsicCount uint16 `json:"extrinsic_count"`
+		ExtrinsicSize  uint32 `json:"extrinsic_size"`
+		Exports        uint16 `json:"exports"`
 	} `json:"refine_load"`
 }
 

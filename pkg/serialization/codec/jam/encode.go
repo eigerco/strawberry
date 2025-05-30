@@ -54,9 +54,9 @@ func (bw *byteWriter) marshal(in interface{}) error {
 
 	switch v := in.(type) {
 	case int:
-		return bw.encodeUint(uint(v))
+		return bw.encodeCompact(uint64(v))
 	case uint:
-		return bw.encodeUint(v)
+		return bw.encodeCompact(uint64(v))
 	case uint8, uint16, uint32, uint64:
 		l, err := IntLength(v)
 		if err != nil {
@@ -390,7 +390,13 @@ func (bw *byteWriter) encodeStruct(in interface{}) error {
 			}
 
 			tagValues := parseTag(tag)
+			encodingType, encodingTagFound := tagValues["encoding"]
 			if length, found := tagValues["length"]; found {
+				// "length" and "encoding" are mutually exclusive
+				if encodingTagFound {
+					return fmt.Errorf(ErrConflictingTags, fieldType.Name)
+				}
+
 				size, err := strconv.ParseUint(length, 10, 64)
 				if err != nil {
 					return fmt.Errorf(ErrInvalidLengthValue, fieldType.Name, err)
@@ -401,6 +407,19 @@ func (bw *byteWriter) encodeStruct(in interface{}) error {
 					return fmt.Errorf(ErrEncodingStructField, fieldType.Name, err)
 				}
 				continue
+			}
+			// Handle compact encoding for unsigned integers if specified via struct tag
+			if encodingTagFound && encodingType == "compact" {
+				switch field.Kind() {
+				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+					err := bw.encodeCompact(field.Uint())
+					if err != nil {
+						return fmt.Errorf(ErrEncodingStructField, fieldType.Name, err)
+					}
+					continue
+				default:
+					return fmt.Errorf(ErrUnSuportedFieldForCompactEncoding, field.Kind())
+				}
 			}
 		}
 
@@ -415,11 +434,14 @@ func (bw *byteWriter) encodeStruct(in interface{}) error {
 }
 
 func (bw *byteWriter) encodeLength(l int) error {
-	return bw.encodeUint(uint(l))
+	return bw.encodeCompact(uint64(l))
 }
 
-func (bw *byteWriter) encodeUint(i uint) error {
-	encodedBytes := serializeUint64(uint64(i))
+// encodeCompact encodes an uint64 using the general compact natural number encoding
+// as defined in appendix C.6. This encoding produces a variable-length
+// byte sequence (1–9 bytes) depending on the input
+func (bw *byteWriter) encodeCompact(i uint64) error {
+	encodedBytes := serializeUint64(i)
 
 	_, err := bw.Write(encodedBytes)
 

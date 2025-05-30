@@ -158,6 +158,70 @@ func TestLengthTag(t *testing.T) {
 	assert.Equal(t, original, unmarshaled)
 }
 
+func TestCompactTag(t *testing.T) {
+	// simple struct without tags
+	type NoTag struct {
+		Uint32 uint32
+	}
+	noTag := NoTag{10}
+	marshaledData, err := jam.Marshal(noTag)
+	require.NoError(t, err)
+	require.Len(t, marshaledData, 4)
+	require.Equal(t, []byte{10, 0, 0, 0}, marshaledData)
+
+	var noTagUnmarshaled NoTag
+	err = jam.Unmarshal(marshaledData, &noTagUnmarshaled)
+	require.NoError(t, err)
+	assert.Equal(t, noTag, noTagUnmarshaled)
+
+	// simple struct with compact tags checking all possible types
+	type WithTag struct {
+		Uint   uint   `jam:"encoding=compact"`
+		Uint8  uint8  `jam:"encoding=compact"`
+		Uint16 uint16 `jam:"encoding=compact"`
+		Uint32 uint32 `jam:"encoding=compact"`
+		Uint64 uint64 `jam:"encoding=compact"`
+	}
+	withTag := WithTag{10, 10, 10, 10, 10}
+	marshaledData, err = jam.Marshal(withTag)
+	require.NoError(t, err)
+	require.Len(t, marshaledData, 5)
+	assert.Equal(t, []byte{10, 10, 10, 10, 10}, marshaledData)
+
+	var withTagUnmarshaled WithTag
+	err = jam.Unmarshal(marshaledData, &withTagUnmarshaled)
+	require.NoError(t, err)
+	assert.Equal(t, withTag, withTagUnmarshaled)
+
+	// test conflicting value
+	type ConflictingTags struct {
+		Uint32 uint32 `jam:"encoding=compact,length=10"`
+	}
+	conflictingTags := ConflictingTags{10}
+	_, err = jam.Marshal(conflictingTags)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "conflicting struct tags")
+
+	var conflictingTagsUnmarshaled ConflictingTags
+	err = jam.Unmarshal(marshaledData, &conflictingTagsUnmarshaled)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "conflicting struct tags")
+
+	// check invalid type
+	type InvalidType struct {
+		IsValid bool `jam:"encoding=compact"`
+	}
+	invalidType := InvalidType{true}
+	_, err = jam.Marshal(invalidType)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported field kind for compact")
+
+	var invalidTypeUnmarshaled InvalidType
+	err = jam.Unmarshal(marshaledData, &invalidTypeUnmarshaled)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported field kind for compact")
+}
+
 // Struct for testing custom marshalling.
 type CustomStruct struct {
 	First uint32

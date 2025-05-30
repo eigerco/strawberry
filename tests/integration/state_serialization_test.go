@@ -8,14 +8,15 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/eigerco/strawberry/internal/state/serialization"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/testutils"
-	"github.com/stretchr/testify/require"
 )
 
 func TestStateSerialization(t *testing.T) {
-	b, err := os.ReadFile("vectors_community/state_serialization/trace.json")
+	b, err := os.ReadFile("vectors/state_serialization/trace.json")
 	require.NoError(t, err)
 
 	tv := TraceVector{}

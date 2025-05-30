@@ -842,7 +842,7 @@ func (w WorkReport) To() block.WorkReport {
 		Output:                   hexToBytes(w.AuthOutput),
 		SegmentRootLookup:        segmentRootLookup,
 		WorkResults:              results,
-		AuthGasUsed:              uint(w.AuthGasUsed),
+		AuthGasUsed:              w.AuthGasUsed,
 	}
 }
 
@@ -1017,11 +1017,11 @@ func (w WorkResult) To() block.WorkResult {
 		PayloadHash:            hexToHash(w.PayloadHash),
 		GasPrioritizationRatio: w.AccumulateGas,
 		Output:                 resultOutput,
-		GasUsed:                uint(w.RefineLoad.GasUsed),
-		ImportsCount:           uint(w.RefineLoad.Imports),
-		ExtrinsicCount:         uint(w.RefineLoad.ExtrinsicCount),
-		ExtrinsicSize:          uint(w.RefineLoad.ExtrinsicSize),
-		ExportsCount:           uint(w.RefineLoad.Exports),
+		GasUsed:                w.RefineLoad.GasUsed,
+		ImportsCount:           w.RefineLoad.Imports,
+		ExtrinsicCount:         w.RefineLoad.ExtrinsicCount,
+		ExtrinsicSize:          w.RefineLoad.ExtrinsicSize,
+		ExportsCount:           w.RefineLoad.Exports,
 	}
 }
 
