@@ -69,12 +69,20 @@
                             "service_id": 129,
                             "code_hash": "0x8178abf4f459e8ed591be1f7f629168213a5ac2a487c28c0ef1a806198096c7a",
                             "payload_hash": "0xfa99b97e72fcfaef616108de981a59dc3310e2a9f5e73cd44d702ecaaccd8696",
-                            "gas": 120,
+                            "accumulate_gas": 120,
                             "result": {
                                 "ok": "0x64756d6d792d726573756c74"
+                            },
+                            "refine_load": {
+                                "gas_used": 0,
+                                "imports": 0,
+                                "extrinsic_count": 0,
+                                "extrinsic_size": 0,
+                                "exports": 0
                             }
                         }
-                    ]
+                    ],
+                    "auth_gas_used": 0
                 },
                 "timeout": 11
             },
@@ -150,12 +158,20 @@
                             "service_id": 129,
                             "code_hash": "0x8178abf4f459e8ed591be1f7f629168213a5ac2a487c28c0ef1a806198096c7a",
                             "payload_hash": "0xfa99b97e72fcfaef616108de981a59dc3310e2a9f5e73cd44d702ecaaccd8696",
-                            "gas": 120,
+                            "accumulate_gas": 120,
                             "result": {
                                 "ok": "0x64756d6d792d726573756c74"
+                            },
+                            "refine_load": {
+                                "gas_used": 0,
+                                "imports": 0,
+                                "extrinsic_count": 0,
+                                "extrinsic_size": 0,
+                                "exports": 0
                             }
                         }
-                    ]
+                    ],
+                    "auth_gas_used": 0
                 },
                 "timeout": 11
             },
