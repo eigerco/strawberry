@@ -174,15 +174,19 @@ func TestCompactTag(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, noTag, noTagUnmarshaled)
 
-	// simple struct with compact tag
+	// simple struct with compact tags checking all possible types
 	type WithTag struct {
+		Uint   uint   `jam:"encoding=compact"`
+		Uint8  uint8  `jam:"encoding=compact"`
+		Uint16 uint16 `jam:"encoding=compact"`
 		Uint32 uint32 `jam:"encoding=compact"`
+		Uint64 uint64 `jam:"encoding=compact"`
 	}
-	withTag := WithTag{10}
+	withTag := WithTag{10, 10, 10, 10, 10}
 	marshaledData, err = jam.Marshal(withTag)
 	require.NoError(t, err)
-	require.Len(t, marshaledData, 1)
-	assert.Equal(t, []byte{10}, marshaledData)
+	require.Len(t, marshaledData, 5)
+	assert.Equal(t, []byte{10, 10, 10, 10, 10}, marshaledData)
 
 	var withTagUnmarshaled WithTag
 	err = jam.Unmarshal(marshaledData, &withTagUnmarshaled)
