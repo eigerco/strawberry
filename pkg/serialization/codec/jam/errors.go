@@ -24,4 +24,7 @@ var (
 	ErrEncodingStructField     = "encoding struct field '%s': %w"
 	ErrDecodingStructField     = "decoding struct field '%s': %w"
 	ErrInvalidLengthValue      = "invalid length value in jam tag for field %s: %v"
+
+	ErrUnSuportedFieldForCompactDecoding = "unsupported field kind for compact decoding: %s"
+	ErrUnSuportedFieldForCompactEncoding = "unsupported field kind for compact encoding: %s"
 )

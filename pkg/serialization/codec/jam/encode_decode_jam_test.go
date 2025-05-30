@@ -158,6 +158,38 @@ func TestLengthTag(t *testing.T) {
 	assert.Equal(t, original, unmarshaled)
 }
 
+func TestCompactTag(t *testing.T) {
+	// simple struct without tags
+	type NoTag struct {
+		Uint32 uint32
+	}
+	noTag := NoTag{10}
+	marshaledData, err := jam.Marshal(noTag)
+	require.NoError(t, err)
+	require.Len(t, marshaledData, 4)
+	require.Equal(t, []byte{10, 0, 0, 0}, marshaledData)
+
+	var noTagUnmarshaled NoTag
+	err = jam.Unmarshal(marshaledData, &noTagUnmarshaled)
+	require.NoError(t, err)
+	assert.Equal(t, noTag, noTagUnmarshaled)
+
+	// simple struct with compact tag
+	type WithTag struct {
+		Uint32 uint32 `jam:"encoding=compact"`
+	}
+	withTag := WithTag{10}
+	marshaledData, err = jam.Marshal(withTag)
+	require.NoError(t, err)
+	require.Len(t, marshaledData, 1)
+	assert.Equal(t, []byte{10}, marshaledData)
+
+	var withTagUnmarshaled WithTag
+	err = jam.Unmarshal(marshaledData, &withTagUnmarshaled)
+	require.NoError(t, err)
+	assert.Equal(t, withTag, withTagUnmarshaled)
+}
+
 // Struct for testing custom marshalling.
 type CustomStruct struct {
 	First uint32

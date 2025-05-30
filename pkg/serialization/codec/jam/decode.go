@@ -115,7 +115,7 @@ func (br *byteReader) unmarshal(value reflect.Value) error {
 	switch in.(type) {
 
 	case int, uint:
-		return br.decodeUint(value)
+		return br.decodeCompact(value)
 	case int8, uint8, int16, uint16, int32, uint32, int64, uint64:
 		l, err := IntLength(value.Interface())
 		if err != nil {
@@ -379,6 +379,21 @@ func (br *byteReader) decodeStruct(value reflect.Value) error {
 				}
 				continue
 			}
+
+			// Handle compact decoding for unsigned integers if specified via struct tag
+			if encodingType, found := tagValues["encoding"]; found && encodingType == "compact" {
+				switch field.Kind() {
+				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+					err := br.decodeCompact(field)
+					if err != nil {
+						return fmt.Errorf(ErrEncodingStructField, fieldType.Name, err)
+					}
+					continue
+				default:
+					return fmt.Errorf(ErrUnSuportedFieldForCompactDecoding, field.Kind())
+				}
+			}
+
 		}
 
 		// Decode the field value
@@ -409,7 +424,8 @@ func (br *byteReader) decodeBool(value reflect.Value) error {
 	return nil
 }
 
-func (br *byteReader) decodeUint(value reflect.Value) error {
+// decodeCompact decodes a compact-encoded natural number as defined in appendix C.6
+func (br *byteReader) decodeCompact(value reflect.Value) error {
 	// Read the first byte to determine how many bytes are used in the encoding
 	prefix, err := br.ReadOctet()
 	if err != nil {
@@ -440,11 +456,11 @@ func (br *byteReader) decodeUint(value reflect.Value) error {
 	return nil
 }
 
-// decodeLength is helper method which calls decodeUint and casts to int
+// decodeLength is helper method which calls decodeCompact and casts to int
 func (br *byteReader) decodeLength() (uint, error) {
 	var l uint
 	dstv := reflect.New(reflect.TypeOf(l))
-	err := br.decodeUint(dstv.Elem())
+	err := br.decodeCompact(dstv.Elem())
 	if err != nil {
 		return 0, fmt.Errorf(ErrDecodingUint, err)
 	}

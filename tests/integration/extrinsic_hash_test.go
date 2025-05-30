@@ -9,14 +9,32 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
+type KeyValue struct {
+	Key   [31]byte `json:"key"`
+	Value []byte   `json:"value"`
+}
+
+type RawState struct {
+	StateRoot crypto.Hash
+	KeyValues []KeyValue
+}
+
+type Trace struct {
+	PreState  RawState
+	Block     block.Block
+	PostState RawState
+}
+
 func TestExtrinsicHash(t *testing.T) {
-	// Blocks taken from: https://github.com/jam-duna/jamtestnet/tree/main/data/orderedaccumulation/blocks
-	files, err := filepath.Glob("vectors_community/extrinsic_hash/*.bin")
+	// Traces taken from: https://github.com/davxy/jam-test-vectors/blob/traces/traces
+	files, err := filepath.Glob("vectors/extrinsic_hash/*.bin")
 	require.NoError(t, err)
 	require.NotEmpty(t, files, "No test vectors found.")
 
@@ -30,14 +48,14 @@ func TestExtrinsicHash(t *testing.T) {
 			b, err := os.ReadFile(file)
 			require.NoError(t, err)
 
-			var block block.Block
-			err = jam.Unmarshal(b, &block)
+			var trace Trace
+			err = jam.Unmarshal(b, &trace)
 			require.NoError(t, err)
 
-			hash, err := block.Extrinsic.Hash()
+			hash, err := trace.Block.Extrinsic.Hash()
 			require.NoError(t, err)
 
-			require.Equal(t, hex.EncodeToString(block.Header.ExtrinsicHash[:]), hex.EncodeToString(hash[:]))
+			require.Equal(t, hex.EncodeToString(trace.Block.Header.ExtrinsicHash[:]), hex.EncodeToString(hash[:]))
 		})
 	}
 }

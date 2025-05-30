@@ -50,9 +50,9 @@ func (w *Item) ToWorkResult(output block.WorkResultOutputOrError, gasUsed uint64
 		gasPrioritizationRatio = w.GasLimitRefine / w.GasLimitAccumulate
 	}
 
-	extrinsicSize := uint(0)
+	extrinsicSize := uint32(0)
 	for _, e := range w.Extrinsics {
-		extrinsicSize += uint(e.Length)
+		extrinsicSize += e.Length
 	}
 	return block.WorkResult{
 		ServiceId:              w.ServiceId,
@@ -60,10 +60,10 @@ func (w *Item) ToWorkResult(output block.WorkResultOutputOrError, gasUsed uint64
 		PayloadHash:            payloadHash,
 		GasPrioritizationRatio: gasPrioritizationRatio,
 		Output:                 output,
-		GasUsed:                uint(gasUsed),
-		ImportsCount:           uint(len(w.ImportedSegments)),
-		ExtrinsicCount:         uint(len(w.Extrinsics)),
+		GasUsed:                gasUsed,
+		ImportsCount:           uint16(len(w.ImportedSegments)),
+		ExtrinsicCount:         uint16(len(w.Extrinsics)),
 		ExtrinsicSize:          extrinsicSize,
-		ExportsCount:           uint(w.ExportedSegments),
+		ExportsCount:           w.ExportedSegments,
 	}
 }
