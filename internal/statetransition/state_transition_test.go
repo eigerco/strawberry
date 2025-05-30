@@ -382,7 +382,7 @@ func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 	require.Equal(t, expectedAssignments, newAssignments)
 }
 
-func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
+func TestCalculateIntermediateCoreAssignments(t *testing.T) {
 	testCases := []struct {
 		name            string
 		availableCores  uint16
@@ -402,7 +402,7 @@ func TestCalculateIntermediateCoreAssignmentsFromAvailability(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			assurances := createAssuranceExtrinsic(tc.availableCores, tc.validators)
 			initialAssignments := createInitialAssignments()
-			newAssignments, _, err := CalculateIntermediateCoreAssignmentsFromAvailability(assurances, initialAssignments, block.Header{TimeSlotIndex: jamtime.Timeslot(12)})
+			newAssignments, _, err := CalculateIntermediateCoreAssignments(assurances, initialAssignments, block.Header{TimeSlotIndex: jamtime.Timeslot(12)})
 			require.NoError(t, err)
 
 			removedCount := uint16(0)
