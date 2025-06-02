@@ -258,9 +258,15 @@ func CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeEx
 	return newAssignments
 }
 
-// CalculateIntermediateCoreAssignmentsFromAvailability implements equation 26: ρ‡ ≺ (EA, ρ†)
-// It calculates the intermediate core assignments based on availability assurances.
-func CalculateIntermediateCoreAssignmentsFromAvailability(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments, header block.Header) (state.CoreAssignments, []*block.WorkReport, error) {
+// CalculateIntermediateCoreAssignments implements equations
+//
+//	4.13: ρ‡ ≺ (EA, ρ†)
+//	4.15: W* ≺ (EA, ρ†). Note there's a typo in the paper, which states ρ' but that isn't correct.
+//
+// It calculates the intermediate core assignments based on availability
+// assurances, and also returns the set of now avaiable work reports.
+// (GP v0.6.5)
+func CalculateIntermediateCoreAssignments(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments, header block.Header) (state.CoreAssignments, []*block.WorkReport, error) {
 	// Initialize availability count for each core
 	availabilityCounts := make(map[uint16]int)
 
@@ -269,38 +275,45 @@ func CalculateIntermediateCoreAssignmentsFromAvailability(assurances block.Assur
 	for coreIndex := range common.TotalNumberOfCores {
 		for _, assurance := range assurances {
 			// Check if the bit corresponding to this core is set (1) in the Bitfield
+			// See equation 11.15: af[c] ⇒ ρ†[c] ≠ ∅
 			if block.HasAssuranceForCore(assurance, coreIndex) {
 				if coreAssignments[coreIndex] == nil {
 					return coreAssignments, nil, ErrCoreNotEngaged
 				}
 				// If set, increment the availability count for this core
 				availabilityCounts[coreIndex]++
-				if isAssignmentStale(coreAssignments[coreIndex], header.TimeSlotIndex) {
-					return coreAssignments, nil, ErrReportTimeout
-				}
 			}
 		}
 	}
 
-	var removedReports []*block.WorkReport
+	// W, the set of work reports that have become available. (see equation 11.16)
+	var availableReports []*block.WorkReport
 	// Update assignments based on availability
-	// This implements equation 130: ∀c ∈ NC : ρ‡[c] ≡ { ∅ if ρ[c]w ∈ W, ρ†[c] otherwise }
+	// This implements equation 11.17:
+	// ∀c ∈ NC : ρ‡[c] ≡ { ∅ if ρ[c]w ∈ W ∨ Ht ≥ ρ†[c]t + U
+	//                    ρ†[c] otherwise }
+	// It also implements 11.16 by adding any reports that are now available to W.
 	for coreIndex := range common.TotalNumberOfCores {
 		availCountForCore, ok := availabilityCounts[coreIndex]
 		// Remove core if:
-		// 1. There are availability assurances for this core, and it exceeds threshold
-		// 2. Assignment report is stale
+		// 1. There are availability assurances for this core, and they exceed the threshold, i.e > 2/3 of validators are assuring
+		// 2. Assignment report is stale, the report is older than U timeslots ago and should timeout.
 		if ok && availCountForCore > common.AvailabilityThreshold {
-			removedReports = append(removedReports, coreAssignments[coreIndex].WorkReport)
+			// Add any report that is made available to the W set. Note this
+			// includes reports that could already be timed out. We are lenient
+			// here, as long as they are made available they get added to the
+			// set.
+			availableReports = append(availableReports, coreAssignments[coreIndex].WorkReport)
 			coreAssignments[coreIndex] = nil
 		}
+		// Any report that isn't lucky enough to be made available is timed out and removed.
 		if isAssignmentStale(coreAssignments[coreIndex], header.TimeSlotIndex) {
 			coreAssignments[coreIndex] = nil
 		}
 	}
 
-	// Return the new intermediate CoreAssignments (ρ‡)
-	return coreAssignments, removedReports, nil
+	// Return the new intermediate CoreAssignments (ρ‡), along with the newly available reports. (W)
+	return coreAssignments, availableReports, nil
 }
 
 // Final State Calculation Functions
@@ -2167,25 +2180,32 @@ func translatePVMContext(ctx polkavm.AccumulateContext, root *crypto.Hash) state
 // assuranceIsOrderedByValidatorIndex (126) ∀i ∈ {1 ... |E_A|} ∶ EA[i − 1]v < EA[i]v
 func assuranceIsOrderedByValidatorIndex(assurances block.AssurancesExtrinsic) bool {
 	return slices.IsSortedFunc(assurances, func(a, b block.Assurance) int {
-		if a.ValidatorIndex < b.ValidatorIndex {
-			return -1
-		} else if a.ValidatorIndex > b.ValidatorIndex {
+		if a.ValidatorIndex > b.ValidatorIndex {
 			return 1
 		}
-		return 0
+		return -1
 	})
 }
 
+// CalculateIntermediateCoreFromAssurances implements equations
+//
+//	4.13: ρ‡ ≺ (EA, ρ†)
+//	4.15: W* ≺ (EA, ρ†). Note there's a typo in the paper, which states ρ' but that isn't correct.
+//
+// It calculates the intermediate core assignments based on availability
+// assurances, and also returns the set of now avaiable work reports. It also
+// validates that the assurance extrinsic, checking signatures and that ordering
+// is correct with no duplicates. (GP v0.6.5)
 func CalculateIntermediateCoreFromAssurances(validators safrole.ValidatorsData, assignments state.CoreAssignments, header block.Header, assurances block.AssurancesExtrinsic) (state.CoreAssignments, []*block.WorkReport, error) {
 	if err := validateAssurancesSignature(validators, header, assurances); err != nil {
 		return assignments, nil, err
 	}
 
 	if !assuranceIsOrderedByValidatorIndex(assurances) {
-		return assignments, nil, ErrBadOrder
+		return assignments, nil, fmt.Errorf("not sorted or unique assurers")
 	}
 
-	return CalculateIntermediateCoreAssignmentsFromAvailability(assurances, assignments, header)
+	return CalculateIntermediateCoreAssignments(assurances, assignments, header)
 }
 
 // validateAssurancesSignature (127) ∀a ∈ EA ∶ as ∈ Eκ′[av ]e ⟨XA ⌢ H(E(Hp, af ))⟩
