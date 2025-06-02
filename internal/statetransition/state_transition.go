@@ -240,16 +240,25 @@ func CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeEx
 
 	// Process each verdict in the disputes
 	for _, verdict := range disputes.Verdicts {
-		reportHash := verdict.ReportHash
+		verdictReportHash := verdict.ReportHash
 		positiveJudgments := block.CountPositiveJudgments(verdict.Judgements)
 
 		// If less than 2/3 majority of positive judgments, clear the assignment for matching cores
 		if positiveJudgments < common.ValidatorsSuperMajority {
 			for c := uint16(0); c < common.TotalNumberOfCores; c++ {
-				if newAssignments[c] != nil {
-					if hash, err := newAssignments[c].WorkReport.Hash(); err == nil && hash == reportHash {
-						newAssignments[c] = nil // Clear the assignment
-					}
+				if newAssignments[c] == nil {
+					continue
+				}
+
+				coreReportHash, err := newAssignments[c].WorkReport.Hash()
+				if err != nil {
+					log.Printf("Failed to hash work report on core %d while clearing assignments for verdict with %d/%d positive votes: %v",
+						c, positiveJudgments, common.ValidatorsSuperMajority, err)
+					continue
+				}
+
+				if coreReportHash == verdictReportHash {
+					newAssignments[c] = nil // Clear the assignment
 				}
 			}
 		}
@@ -1092,6 +1101,12 @@ func verifyAllSignatures(newTimeslot jamtime.Timeslot, disputes block.DisputeExt
 
 	// Verify culprit signatures
 	for _, culprit := range disputes.Culprits {
+		// Check if the key is in the validator set
+		if !isValidatorKeyInCurrentOrPrevEpoch(culprit.ValidatorEd25519PublicKey,
+			validators.CurrentValidators,
+			validators.ArchivedValidators) {
+			return errors.New("bad guarantor key")
+		}
 		message := append([]byte(state.SignatureContextGuarantee), culprit.ReportHash[:]...)
 		if !ed25519.Verify(culprit.ValidatorEd25519PublicKey, message, culprit.Signature[:]) {
 			return errors.New("bad signature")
@@ -1100,6 +1115,12 @@ func verifyAllSignatures(newTimeslot jamtime.Timeslot, disputes block.DisputeExt
 
 	// Verify fault signatures
 	for _, fault := range disputes.Faults {
+		// Check if the key is in the validator set
+		if !isValidatorKeyInCurrentOrPrevEpoch(fault.ValidatorEd25519PublicKey,
+			validators.CurrentValidators,
+			validators.ArchivedValidators) {
+			return errors.New("bad auditor key")
+		}
 		context := state.SignatureContextValid
 		if !fault.IsValid {
 			context = state.SignatureContextInvalid
@@ -1217,6 +1238,22 @@ func verifyFaults(faults []block.Fault, verdicts []block.Verdict, offendingValid
 		}
 	}
 	return nil
+}
+
+func isValidatorKeyInCurrentOrPrevEpoch(key ed25519.PublicKey, currentValidators, archivedValidators safrole.ValidatorsData) bool {
+	// Check in current validators
+	for _, validator := range currentValidators {
+		if bytes.Equal(validator.Ed25519, key) {
+			return true
+		}
+	}
+	// Check in archived validators
+	for _, validator := range archivedValidators {
+		if bytes.Equal(validator.Ed25519, key) {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(slice []crypto.Hash, item crypto.Hash) bool {

@@ -73,17 +73,17 @@ type Disputes struct {
 }
 
 type Psi struct {
-	Good      []string `json:"psi_g"`
-	Bad       []string `json:"psi_b"`
-	Wonky     []string `json:"psi_w"`
-	Offenders []string `json:"psi_o"`
+	Good      []string `json:"good"`
+	Bad       []string `json:"bad"`
+	Wonky     []string `json:"wonky"`
+	Offenders []string `json:"offenders"`
 }
 
 type ReportResult struct {
 	ServiceID   int                `json:"service_id"`
 	CodeHash    string             `json:"code_hash"`
 	PayloadHash string             `json:"payload_hash"`
-	Gas         uint64             `json:"gas"`
+	Gas         uint64             `json:"accumulate_gas"`
 	Result      ReportResultOutput `json:"result"`
 }
 
@@ -169,6 +169,20 @@ type JSONData struct {
 	PreState  State     `json:"pre_state"`
 	Output    Output    `json:"output"`
 	PostState PostState `json:"post_state"`
+}
+
+func mapRho(rhos []Rho) state.CoreAssignments {
+	assignments := state.CoreAssignments{}
+	for i, rho := range rhos {
+		if rho.Report != nil {
+			r := &state.Assignment{
+				WorkReport: mapReport(rho.Report),
+				Time:       jamtime.Timeslot(rho.Timeout),
+			}
+			assignments[i] = r
+		}
+	}
+	return assignments
 }
 
 func mapPsi(psi Psi) state.Judgements {
@@ -274,21 +288,22 @@ func TestDisputes(t *testing.T) {
 			input := data.Input
 			disputes := mapDisputes(input.Disputes)
 			preState := state.State{}
-			kappa := safrole.ValidatorsData{}
 			pastJudgements := mapPsi(data.PreState.Psi)
-			for i, key := range data.PreState.Kappa {
-				kappa[i] = mapKey(key)
-			}
+			kappa := safrole.ValidatorsData{}
 			lambda := safrole.ValidatorsData{}
 			for i, key := range data.PreState.Lambda {
 				lambda[i] = mapKey(key)
 			}
+			for i, key := range data.PreState.Kappa {
+				kappa[i] = mapKey(key)
+			}
 			preState.PastJudgements = pastJudgements
+			preStateCoreAssignmetns := mapRho(data.PreState.Rho)
 			preState.ValidatorState.CurrentValidators = kappa
 			preState.ValidatorState.ArchivedValidators = lambda
 			preState.TimeslotIndex = jamtime.Timeslot(data.PreState.Tau)
 
-			postState := state.State{}
+			expectedState := state.State{}
 			kappa = safrole.ValidatorsData{}
 			for i, key := range data.PostState.Kappa {
 				kappa[i] = mapKey(key)
@@ -297,10 +312,11 @@ func TestDisputes(t *testing.T) {
 			for i, key := range data.PostState.Lambda {
 				lambda[i] = mapKey(key)
 			}
-			postState.PastJudgements = mapPsi(data.PostState.Psi)
-			postState.ValidatorState.CurrentValidators = kappa
-			postState.ValidatorState.ArchivedValidators = lambda
-			postState.TimeslotIndex = jamtime.Timeslot(data.PostState.Tau)
+			expectedState.PastJudgements = mapPsi(data.PostState.Psi)
+			expectedState.CoreAssignments = mapRho(data.PostState.Rho)
+			expectedState.ValidatorState.CurrentValidators = kappa
+			expectedState.ValidatorState.ArchivedValidators = lambda
+			expectedState.TimeslotIndex = jamtime.Timeslot(data.PostState.Tau)
 
 			newJudgements, err := statetransition.CalculateNewJudgements(preState.TimeslotIndex, disputes, preState.PastJudgements, preState.ValidatorState)
 			if data.Output.Err != "" {
@@ -309,7 +325,10 @@ func TestDisputes(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+			// Manually assign to produce a "new state" since we are not using the full UpdateState func
+			preState.PastJudgements = newJudgements
 
+			// If we are supposed to have offenders according to the test vector
 			if len(data.Output.Ok.OffendersMark) > 0 {
 				offendersMark := make([]ed25519.PublicKey, len(data.Output.Ok.OffendersMark))
 				for i, offender := range data.Output.Ok.OffendersMark {
@@ -317,20 +336,19 @@ func TestDisputes(t *testing.T) {
 				}
 				require.ElementsMatch(t, offendersMark, newJudgements.OffendingValidators)
 			}
-			preState.PastJudgements = newJudgements
 
-			for i, key := range preState.ValidatorState.CurrentValidators {
-				require.EqualValues(t, key.Bandersnatch, postState.ValidatorState.CurrentValidators[i].Bandersnatch, "Bandersnatch keys are not equal")
-				require.EqualValues(t, key.Ed25519, postState.ValidatorState.CurrentValidators[i].Ed25519, "Ed25519 keys are not equal")
-				require.EqualValues(t, key.Bls, postState.ValidatorState.CurrentValidators[i].Bls)
-				require.EqualValues(t, key.Metadata, postState.ValidatorState.CurrentValidators[i].Metadata)
-			}
-			require.ElementsMatch(t, preState.ValidatorState.CurrentValidators, postState.ValidatorState.CurrentValidators)
-			require.ElementsMatch(t, preState.PastJudgements.BadWorkReports, postState.PastJudgements.BadWorkReports, "Mismatch in BadWorkReports")
-			require.ElementsMatch(t, preState.PastJudgements.GoodWorkReports, postState.PastJudgements.GoodWorkReports, "Mismatch in GoodWorkReports")
-			require.ElementsMatch(t, preState.PastJudgements.WonkyWorkReports, postState.PastJudgements.WonkyWorkReports, "Mismatch in WonkyWorkReports")
-			require.ElementsMatch(t, preState.PastJudgements.OffendingValidators, postState.PastJudgements.OffendingValidators, "Mismatch in OffendingValidators")
-			require.Equal(t, preState.TimeslotIndex, postState.TimeslotIndex, "Mismatch in TimeslotIndex")
+			newCoreAssignments := statetransition.CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes, preStateCoreAssignmetns)
+			// Manually assign to produce a "new state" since we are not using the full UpdateState func
+			preState.CoreAssignments = newCoreAssignments
+
+			require.ElementsMatch(t, preState.CoreAssignments, expectedState.CoreAssignments)
+			require.ElementsMatch(t, preState.ValidatorState.CurrentValidators, expectedState.ValidatorState.CurrentValidators)
+			require.ElementsMatch(t, preState.ValidatorState.ArchivedValidators, expectedState.ValidatorState.ArchivedValidators)
+			require.ElementsMatch(t, preState.PastJudgements.BadWorkReports, expectedState.PastJudgements.BadWorkReports, "Mismatch in BadWorkReports")
+			require.ElementsMatch(t, preState.PastJudgements.GoodWorkReports, expectedState.PastJudgements.GoodWorkReports, "Mismatch in GoodWorkReports")
+			require.ElementsMatch(t, preState.PastJudgements.WonkyWorkReports, expectedState.PastJudgements.WonkyWorkReports, "Mismatch in WonkyWorkReports")
+			require.ElementsMatch(t, preState.PastJudgements.OffendingValidators, expectedState.PastJudgements.OffendingValidators, "Mismatch in OffendingValidators")
+			require.Equal(t, preState.TimeslotIndex, expectedState.TimeslotIndex, "Mismatch in TimeslotIndex")
 		})
 	}
 }

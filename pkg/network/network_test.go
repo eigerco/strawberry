@@ -1261,6 +1261,7 @@ func TestAnnounceBlocksAndDistributeShards(t *testing.T) {
 		segmentsShards,
 		justification,
 	)
+	require.NoError(t, err)
 
 	// Announce the newly generated block, this block supposedly contains new guarantees that were executed previously
 	err = nodes[node1Id].AnnounceBlock(ctx, mockHeader, assurer1Peer)
