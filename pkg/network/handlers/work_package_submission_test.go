@@ -31,7 +31,7 @@ type MockFetcher struct {
 	mock.Mock
 }
 
-func (m *MockFetcher) Fetch(segmentRoot crypto.Hash, segmentIndexes ...uint16) ([]work.Segment, error) {
+func (m *MockFetcher) Fetch(ctx context.Context, segmentRoot crypto.Hash, segmentIndexes ...uint16) ([]work.Segment, error) {
 	seg := work.Segment{}
 	copy(seg[:], "mock segment data")
 	return []work.Segment{seg}, nil
@@ -121,8 +121,8 @@ func TestHandleWorkPackage(t *testing.T) {
 
 	validatorMock := validator.NewValidatorServiceMock()
 	validatorMock.On("StoreAllShards", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil, nil, nil, validatorMock)
-	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer)
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil, nil, nil, validatorMock, make(work.SegmentRootLookup))
+	handler := handlers.NewWorkPackageSubmissionHandler(&MockFetcher{}, workPackageSharer, make(work.SegmentRootLookup))
 
 	// Prepare the message data
 	coreIndexBytes, err := jam.Marshal(coreIndex)
@@ -339,7 +339,7 @@ func TestHandleStream_Success(t *testing.T) {
 
 	validatorMock := validator.NewValidatorServiceMock()
 	validatorMock.On("StoreAllShards", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil, nil, nil, validatorMock)
+	workPackageSharer := handlers.NewWorkReportGuarantor(coreIndex, prv, mockAuthorizationInvoker{}, mockRefineInvoker{}, currentState, peer.NewPeerSet(), s, nil, nil, nil, validatorMock, make(work.SegmentRootLookup))
 
 	coreIndexBytes, err := jam.Marshal(coreIndex)
 	require.NoError(t, err)
@@ -433,7 +433,7 @@ func TestHandleStream_Success(t *testing.T) {
 
 	workPackageSharer.SetGuarantors([]*peer.Peer{mockPeer})
 
-	handler := handlers.NewWorkPackageSubmissionHandler(mockFetcher, workPackageSharer)
+	handler := handlers.NewWorkPackageSubmissionHandler(mockFetcher, workPackageSharer, make(work.SegmentRootLookup))
 	err = handler.HandleStream(ctx, mockStream, peerKey)
 
 	assert.NoError(t, err)

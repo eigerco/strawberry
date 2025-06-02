@@ -15,6 +15,7 @@ import (
 	"github.com/eigerco/strawberry/internal/chain"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/d3l"
 	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/statetransition"
@@ -48,7 +49,7 @@ type Node struct {
 	segmentShardRequestSender     *handlers.SegmentShardRequestSender
 	segmentShardRequestJustSender *handlers.SegmentShardRequestJustificationSender
 	stateReqester                 *handlers.StateRequester
-	WorkReportGuarantor           *handlers.WorkReportGuarantor
+	WorkReportGuarantor           handlers.WorkReportProcessAndGuarantee
 	workReportRequester           *handlers.WorkReportRequester
 	WorkPackageSharingHandler     *handlers.WorkPackageSharingHandler
 	safroleTicketSubmiter         *handlers.SafroleTicketSubmiter
@@ -58,6 +59,14 @@ type Node struct {
 	StateTrieStore                *store.Trie
 	AvailabilityStore             *store.Shards
 	TicketStore                   *store.Ticket
+	SegmentRootToErasureRoot      map[crypto.Hash]crypto.Hash
+	SegmentRootLookup             work.SegmentRootLookup
+}
+
+func (n *Node) GetAllPeers() []*peer.Peer {
+	n.peersLock.RLock()
+	defer n.peersLock.RUnlock()
+	return n.PeersSet.GetAllPeers()
 }
 
 // NewNode creates a new Node instance with the specified configuration.
@@ -72,14 +81,16 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 	nodeCtx, cancel := context.WithCancel(nodeCtx)
 	peerSet := peer.NewPeerSet()
 	node := &Node{
-		PeersSet:          peerSet,
-		State:             state,
-		Context:           nodeCtx,
-		Cancel:            cancel,
-		ValidatorService:  validator.NewService(availabilityStore),
-		AvailabilityStore: availabilityStore,
-		StateTrieStore:    store.NewTrie(kvStore),
-		TicketStore:       store.NewTicket(kvStore),
+		PeersSet:                 peerSet,
+		State:                    state,
+		Context:                  nodeCtx,
+		Cancel:                   cancel,
+		ValidatorService:         validator.NewService(availabilityStore),
+		AvailabilityStore:        availabilityStore,
+		StateTrieStore:           store.NewTrie(kvStore),
+		TicketStore:              store.NewTicket(kvStore),
+		SegmentRootToErasureRoot: make(map[crypto.Hash]crypto.Hash), // TODO compute from state history
+		SegmentRootLookup:        make(map[crypto.Hash]crypto.Hash), // TODO compute from state history
 	}
 	node.ValidatorManager = validator.NewValidatorManager(keys, state.ValidatorState, validatorIdx)
 
@@ -147,10 +158,15 @@ func NewNode(nodeCtx context.Context, listenAddr *net.UDPAddr, keys validator.Va
 		handlers.NewWorkPackageSharingRequester(),
 		handlers.NewWorkReportDistributionSender(),
 		node.ValidatorService,
+		node.SegmentRootLookup,
 	)
 	node.WorkReportGuarantor = wpSharerHandler
 
-	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(handlers.NewSegmentsFetcher(), wpSharerHandler))
+	protoManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(
+		d3l.NewSegmentsFetcher(node, node.SegmentRootToErasureRoot),
+		node.WorkReportGuarantor,
+		node.SegmentRootLookup,
+	))
 	submitter := &handlers.WorkPackageSubmitter{}
 	node.workPackageSubmitter = submitter
 

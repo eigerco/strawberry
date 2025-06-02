@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"slices"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-const SegmentShardLength = 12
+const SegmentShardLength = 4104 / common.ErasureCodingOriginalShards
 
 // NewShardDistributionHandler creates a new ShardDistributionHandler
 func NewShardDistributionHandler(validatorSvc validator.ValidatorService) protocol.StreamHandler {

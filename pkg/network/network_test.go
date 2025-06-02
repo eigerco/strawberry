@@ -7,6 +7,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"github.com/eigerco/strawberry/internal/d3l"
+	"github.com/eigerco/strawberry/internal/erasurecoding"
+	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
 	"net"
 	"strings"
 	"sync"
@@ -128,7 +131,7 @@ func NewMockImportSegmentsFetcher() *MockImportSegmentsFetcher {
 	}
 }
 
-func (m *MockImportSegmentsFetcher) Fetch(segmentRoot crypto.Hash, segmentIndexes ...uint16) ([]work.Segment, error) {
+func (m *MockImportSegmentsFetcher) Fetch(ctx context.Context, segmentRoot crypto.Hash, segmentIndexes ...uint16) ([]work.Segment, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -225,7 +228,7 @@ func NewExtendedWorkPackageSubmissionHandler(fetcher *MockImportSegmentsFetcher)
 	return &ExtendedWorkPackageSubmissionHandler{
 		WorkPackageSubmissionHandler: handlers.NewWorkPackageSubmissionHandler(
 			fetcher,
-			handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, NewMockRefine([]byte("out")), state.State{Services: make(service.ServiceState)}, peer.NewPeerSet(), nil, nil, nil, nil, nil)),
+			handlers.NewWorkReportGuarantor(uint16(1), prv, mockAuthorizationInvoker{}, NewMockRefine([]byte("out")), state.State{Services: make(service.ServiceState)}, peer.NewPeerSet(), nil, nil, nil, nil, nil, make(work.SegmentRootLookup)), make(work.SegmentRootLookup)),
 		MockFetcher: fetcher,
 	}
 }
@@ -269,7 +272,7 @@ func (h *ExtendedWorkPackageSubmissionHandler) HandleStream(ctx context.Context,
 	// Process imported segments as in the original handler
 	for _, item := range pkg.WorkItems {
 		for _, imp := range item.ImportedSegments {
-			_, err = h.Fetcher.Fetch(imp.Hash)
+			_, err = h.Fetcher.Fetch(ctx, imp.Hash)
 			if err != nil {
 				continue
 			}
@@ -683,11 +686,12 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 			handlers.NewWorkPackageSharingRequester(),
 			handlers.NewWorkReportDistributionSender(),
 			validatorService,
+			make(work.SegmentRootLookup),
 		)
 
 		submissionHandler := handlers.NewWorkPackageSubmissionHandler(
 			&MockImportSegmentsFetcher{},
-			mainGuarantor.WorkReportGuarantor)
+			mainGuarantor.WorkReportGuarantor, make(work.SegmentRootLookup))
 		mainGuarantor.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, submissionHandler)
 
 		mainGuarantor.WorkReportGuarantor.SetGuarantors([]*peer.Peer{
@@ -748,11 +752,12 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 			handlers.NewWorkPackageSharingRequester(),
 			handlers.NewWorkReportDistributionSender(),
 			validatorService,
+			make(work.SegmentRootLookup),
 		)
 
 		submissionHandler := handlers.NewWorkPackageSubmissionHandler(
 			&MockImportSegmentsFetcher{},
-			mainGuarantor.WorkReportGuarantor)
+			mainGuarantor.WorkReportGuarantor, make(work.SegmentRootLookup))
 		mainGuarantor.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, submissionHandler)
 
 		mainGuarantor.WorkReportGuarantor.SetGuarantors([]*peer.Peer{
@@ -1331,4 +1336,142 @@ func TestTwoNodesSendAndDistributeSafroleTicket(t *testing.T) {
 	resultTicket, err = sender.TicketStore.GetTicket(uint32(jamtime.CurrentEpoch()), hash)
 	require.NoError(t, err)
 	require.Equal(t, ticket, resultTicket)
+}
+
+func TestReconstructSegmentsFromAssurers(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	nodes := setupNodes(ctx, t, state.State{}, 4)
+	for _, node := range nodes {
+		node.Start()
+		defer stopNode(t, node)
+	}
+
+	node1 := nodes[0]
+	guarantor1 := nodes[1]
+	assurer1 := nodes[2]
+	assurer2 := nodes[3]
+
+	segment1 := work.Segment{}
+	copy(segment1[:], "segment 1")
+	segment2 := work.Segment{}
+	copy(segment2[:], "segment 2")
+
+	segmentShards1, err := erasurecoding.Encode(segment1[:])
+	require.NoError(t, err)
+	segmentShards2, err := erasurecoding.Encode(segment1[:])
+	require.NoError(t, err)
+	require.Len(t, segmentShards1, 6)
+	require.Len(t, segmentShards2, 6)
+
+	// Store shards in assurers
+	erasureRoot := testutils.RandomHash(t)
+	err = assurer1.AvailabilityStore.PutShardsAndJustification(erasureRoot, assurer1.ValidatorManager.Index, nil, [][]byte{
+		segmentShards1[0],
+		segmentShards2[0],
+	}, nil)
+	require.NoError(t, err)
+
+	err = assurer2.AvailabilityStore.PutShardsAndJustification(erasureRoot, assurer2.ValidatorManager.Index, nil, [][]byte{
+		segmentShards1[1],
+		segmentShards2[1],
+	}, nil)
+	require.NoError(t, err)
+
+	coreIndex := uint16(1)
+	extrinsics := []byte("test extrinsic")
+
+	segmentsRoot := binary_tree.ComputeConstantDepthRoot([][]byte{segment1[:], segment2[:]}, crypto.HashData)
+	workPackage := work.Package{
+		AuthorizationToken: []byte{},
+		AuthorizerService:  0,
+		AuthCodeHash:       crypto.Hash{},
+		Parameterization:   []byte{},
+		Context:            block.RefinementContext{},
+		WorkItems: []work.Item{
+			{
+				ServiceId:          0,
+				CodeHash:           crypto.Hash{},
+				Payload:            []byte{},
+				GasLimitRefine:     0,
+				GasLimitAccumulate: 0,
+				ImportedSegments: []work.ImportedSegment{{
+					Hash:  segmentsRoot,
+					Index: 0,
+				}},
+				Extrinsics: []work.Extrinsic{{
+					Hash:   crypto.HashData(extrinsics),
+					Length: uint32(len(extrinsics)),
+				}},
+				ExportedSegments: 0,
+			},
+		},
+	}
+
+	// Connect guarantor to assurers and builder to guarantor
+	guarantor1Addr, err := peer.NewPeerAddressFromMetadata(nodes[1].ValidatorManager.State.CurrentValidators[1].Metadata[:])
+	require.NoError(t, err)
+	err = node1.ConnectToPeer(guarantor1Addr)
+	require.NoError(t, err)
+
+	assurer1Addr, err := peer.NewPeerAddressFromMetadata(nodes[2].ValidatorManager.State.CurrentValidators[2].Metadata[:])
+	require.NoError(t, err)
+	err = guarantor1.ConnectToPeer(assurer1Addr)
+	require.NoError(t, err)
+
+	assurer2Addr, err := peer.NewPeerAddressFromMetadata(nodes[3].ValidatorManager.State.CurrentValidators[3].Metadata[:])
+	require.NoError(t, err)
+	err = guarantor1.ConnectToPeer(assurer2Addr)
+	require.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Make sure all peers are properly set and add validator indexes
+	guarantor1Peer := node1.PeersSet.GetByAddress(guarantor1Addr.String())
+	require.NotNil(t, guarantor1Peer, "Node1 should have guarantor1 as a peer")
+
+	assurer1Peer := guarantor1.PeersSet.GetByAddress(assurer1Addr.String())
+	require.NotNil(t, assurer1Peer, "Guarantor1 should have assurer1 as a peer")
+	assurer1Peer.ValidatorIndex = &assurer1.ValidatorManager.Index
+	guarantor1.PeersSet.AddPeer(assurer1Peer)
+
+	assurer2Peer := guarantor1.PeersSet.GetByAddress(assurer2Addr.String())
+	require.NotNil(t, assurer2Peer, "Guarantor1 should have assurer2 as a peer")
+	assurer2Peer.ValidatorIndex = &assurer2.ValidatorManager.Index
+	guarantor1.PeersSet.AddPeer(assurer2Peer)
+
+	wrgMock := new(workReportGuarantorMock)
+
+	expectedImportSegments := map[crypto.Hash][]work.Segment{segmentsRoot: {segment1}}
+	builder, err := work.NewPackageBundleBuilder(workPackage, guarantor1.SegmentRootLookup, expectedImportSegments, extrinsics)
+	require.NoError(t, err)
+	bundle, err := builder.Build()
+	require.NoError(t, err)
+
+	wrgMock.On("ValidateAndProcessWorkPackage", mock.Anything, coreIndex, bundle).Return(nil)
+	guarantor1.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindWorkPackageSubmit, handlers.NewWorkPackageSubmissionHandler(
+		d3l.NewSegmentsFetcher(guarantor1, map[crypto.Hash]crypto.Hash{segmentsRoot: erasureRoot}),
+		wrgMock,
+		guarantor1.SegmentRootLookup,
+	))
+
+	// Submit work package
+	err = node1.SubmitWorkPackage(ctx, coreIndex, workPackage, extrinsics, guarantor1Peer.Ed25519Key)
+	require.NoError(t, err)
+	time.Sleep(1 * time.Second)
+	wrgMock.AssertExpectations(t)
+}
+
+type workReportGuarantorMock struct {
+	mock.Mock
+}
+
+func (w *workReportGuarantorMock) ValidateAndProcessWorkPackage(ctx context.Context, coreIndex uint16, bundle *work.PackageBundle) error {
+	args := w.MethodCalled("ValidateAndProcessWorkPackage", ctx, coreIndex, bundle)
+	return args.Error(0)
+}
+
+func (w *workReportGuarantorMock) SetGuarantors(guarantors []*peer.Peer) {
+	w.MethodCalled("ValidateAndProcessWorkPackage", guarantors)
 }
