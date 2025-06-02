@@ -1,6 +1,6 @@
 package statetransition
 
-import "github.com/pkg/errors"
+import "errors"
 
 var (
 	ErrTimeslotOutOfRange   = errors.New("timeslot out of range")
