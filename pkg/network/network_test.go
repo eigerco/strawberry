@@ -1360,7 +1360,7 @@ func TestReconstructSegmentsFromAssurers(t *testing.T) {
 
 	segmentShards1, err := erasurecoding.Encode(segment1[:])
 	require.NoError(t, err)
-	segmentShards2, err := erasurecoding.Encode(segment1[:])
+	segmentShards2, err := erasurecoding.Encode(segment2[:])
 	require.NoError(t, err)
 	require.Len(t, segmentShards1, 6)
 	require.Len(t, segmentShards2, 6)
