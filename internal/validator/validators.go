@@ -38,33 +38,29 @@ type CoreStatistics struct {
 	// DALoad (d) is the amount of bytes placed into either Audits or Segments DA.
 	// This includes the work-bundle (including all extrinsics and imports) as well as all
 	// (exported) segments.
-	DALoad         uint
-	Popularity     uint // Popularity (p) is the number of validators which formed super-majority for assurance.
-	Imports        uint // Imports (i) is the number of segments imported from DA made by core for reported work.
-	Exports        uint // Exports (e) is the number of segments exported into DA made by core for reported work.
-	ExtrinsicSize  uint // ExtrinsicSize (x) is the total size of extrinsics used by core for reported work.
-	ExtrinsicCount uint // ExtrinsicCount (z) is the total number of extrinsics used by core for reported work.
-	BundleSize     uint // BundleSize (b) is the work-bundle size. This is the size of data being placed into Audits DA by the core.
-	// TODO this can break on 32 bit systems, might need a custom type that can general integer encode.
-	GasUsed uint // GasUsed (g) is the total gas consumed by core for reported work. Includes all refinement and authorizations.
+	DALoad         uint32 `jam:"encoding=compact"`
+	Popularity     uint16 `jam:"encoding=compact"` // Popularity (p) is the number of validators which formed super-majority for assurance.
+	Imports        uint16 `jam:"encoding=compact"` // Imports (i) is the number of segments imported from DA made by core for reported work.
+	Exports        uint16 `jam:"encoding=compact"` // Exports (e) is the number of segments exported into DA made by core for reported work.
+	ExtrinsicSize  uint32 `jam:"encoding=compact"` // ExtrinsicSize (x) is the total size of extrinsics used by core for reported work.
+	ExtrinsicCount uint16 `jam:"encoding=compact"` // ExtrinsicCount (z) is the total number of extrinsics used by core for reported work.
+	BundleSize     uint32 `jam:"encoding=compact"` // BundleSize (b) is the work-bundle size. This is the size of data being placed into Audits DA by the core.
+	GasUsed        uint64 `jam:"encoding=compact"` // GasUsed (g) is the total gas consumed by core for reported work. Includes all refinement and authorizations.
 }
 
 type ServiceActivityRecord struct {
-	ProvidedCount   uint // ProvidedCount (p.0) is the number of preimages provided to this service.
-	ProvidedSize    uint // ProvidedSize (p.1) is the total size of preimages provided to this service.
-	RefinementCount uint // RefinementCount (r.0) is the number of work-items refined by service for reported work.
-	// TODO this can break on 32 bit systems, might need a custom type that can general integer encode.
-	RefinementGasUsed uint // RefinementGasUsed (r.1) is the amount of gas used for refinement by service for reported work.
-	Imports           uint // Imports (i) is the number of segments imported from the DL by service for reported work.
-	Exports           uint // Exports (e) is the number of segments exported into the DL by service for reported work.
-	ExtrinsicSize     uint // ExtrinsicSize (x) is the total size of extrinsics used by service for reported work.
-	ExtrinsicCount    uint // ExtrinsicCount (z) is the total number of extrinsics used by service for reported work.
-	AccumulateCount   uint // AccumulateCount (a.0) is the number of work-items accumulated by service.
-	// TODO this can break on 32 bit systems, might need a custom type that can general integer encode.
-	AccumulateGasUsed uint // AccumulateGasUsed (a.1) is the amount of gas used for accumulation by service.
-	OnTransfersCount  uint // OnTransfersCount (t.0) is the number of transfers processed by service.
-	// TODO this can break on 32 bit systems, might need a custom type that can general integer encode.
-	OnTransfersGasUsed uint // OnTransfersGasUsed (t.1) is the amount of gas used for processing transfers by service.
+	ProvidedCount      uint16 `jam:"encoding=compact"` // ProvidedCount (p.0) is the number of preimages provided to this service.
+	ProvidedSize       uint32 `jam:"encoding=compact"` // ProvidedSize (p.1) is the total size of preimages provided to this service.
+	RefinementCount    uint32 `jam:"encoding=compact"` // RefinementCount (r.0) is the number of work-items refined by service for reported work.
+	RefinementGasUsed  uint64 `jam:"encoding=compact"` // RefinementGasUsed (r.1) is the amount of gas used for refinement by service for reported work.
+	Imports            uint32 `jam:"encoding=compact"` // Imports (i) is the number of segments imported from the DL by service for reported work.
+	Exports            uint32 `jam:"encoding=compact"` // Exports (e) is the number of segments exported into the DL by service for reported work.
+	ExtrinsicSize      uint32 `jam:"encoding=compact"` // ExtrinsicSize (x) is the total size of extrinsics used by service for reported work.
+	ExtrinsicCount     uint32 `jam:"encoding=compact"` // ExtrinsicCount (z) is the total number of extrinsics used by service for reported work.
+	AccumulateCount    uint32 `jam:"encoding=compact"` // AccumulateCount (a.0) is the number of work-items accumulated by service.
+	AccumulateGasUsed  uint64 `jam:"encoding=compact"` // AccumulateGasUsed (a.1) is the amount of gas used for accumulation by service.
+	OnTransfersCount   uint32 `jam:"encoding=compact"` // OnTransfersCount (t.0) is the number of transfers processed by service.
+	OnTransfersGasUsed uint64 `jam:"encoding=compact"` // OnTransfersGasUsed (t.1) is the amount of gas used for processing transfers by service.
 }
 
 type ServiceStatistics struct {

@@ -94,8 +94,15 @@ type WorkResult struct {
 	ServiceID   int               `json:"service_id"`
 	CodeHash    string            `json:"code_hash"`
 	PayloadHash string            `json:"payload_hash"`
-	Gas         int               `json:"accumulate_gas"`
+	Gas         uint64            `json:"accumulate_gas"`
 	Result      map[string]string `json:"result"`
+	RefineLoad  struct {
+		GasUsed        uint64 `json:"gas_used"`
+		Imports        uint16 `json:"imports"`
+		ExtrinsicCount uint16 `json:"extrinsic_count"`
+		ExtrinsicSize  uint32 `json:"extrinsic_size"`
+		Exports        uint16 `json:"exports"`
+	} `json:"refine_load"`
 }
 
 type SegmentRootLookupEntry struct {
@@ -106,7 +113,7 @@ type SegmentRootLookupEntry struct {
 type Report struct {
 	PackageSpec       WorkPackageSpec          `json:"package_spec"`
 	Context           Context                  `json:"context"`
-	CoreIndex         int                      `json:"core_index"`
+	CoreIndex         uint16                   `json:"core_index"`
 	AuthorizerHash    string                   `json:"authorizer_hash"`
 	AuthOutput        string                   `json:"auth_output"`
 	SegmentRootLookup []SegmentRootLookupEntry `json:"segment_root_lookup"`
@@ -114,7 +121,7 @@ type Report struct {
 }
 
 type Signature struct {
-	ValidatorIndex int    `json:"validator_index"`
+	ValidatorIndex uint16 `json:"validator_index"`
 	Signature      string `json:"signature"`
 }
 
@@ -257,8 +264,13 @@ func mapWorkResults(results []WorkResult) []block.WorkResult {
 			ServiceId:              block.ServiceId(r.ServiceID),
 			ServiceHashCode:        crypto.Hash(mustStringToHex(r.CodeHash)),
 			PayloadHash:            crypto.Hash(mustStringToHex(r.PayloadHash)),
-			GasPrioritizationRatio: uint64(r.Gas),
+			GasPrioritizationRatio: r.Gas,
 			Output:                 output,
+			GasUsed:                r.RefineLoad.GasUsed,
+			ImportsCount:           r.RefineLoad.Imports,
+			ExtrinsicCount:         r.RefineLoad.ExtrinsicCount,
+			ExtrinsicSize:          r.RefineLoad.ExtrinsicSize,
+			ExportsCount:           r.RefineLoad.Exports,
 		}
 	}
 	return workResults

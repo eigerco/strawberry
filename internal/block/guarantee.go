@@ -31,12 +31,12 @@ type CredentialSignature struct {
 type WorkReport struct {
 	WorkPackageSpecification WorkPackageSpecification    // Work-package specification (s)
 	RefinementContext        RefinementContext           // Refinement context (x)
-	CoreIndex                uint16                      // Core index (c) - Max value: TotalNumberOfCores
+	CoreIndex                uint16                      `jam:"encoding=compact"` // Core index (c) - Max value: TotalNumberOfCores
 	AuthorizerHash           crypto.Hash                 // HeaderHash of the authorizer (a)
 	Output                   []byte                      // Output of the work report (o)
 	SegmentRootLookup        map[crypto.Hash]crypto.Hash // A segment-root lookup dictionary (l ∈ D⟨H → H⟩)
 	WorkResults              []WorkResult                // Results of the evaluation of each of the items in the work-package (r) - Min value: MinWorkPackageResultsSize. Max value: MaxWorkPackageResultsSize.
-	AuthGasUsed              uint                        // The amount of gas used during authorization (g)
+	AuthGasUsed              uint64                      `jam:"encoding=compact"` // The amount of gas used during authorization (g)
 }
 
 type WorkPackageSpecification struct {
@@ -87,11 +87,11 @@ type WorkResult struct {
 	PayloadHash            crypto.Hash             // Hash of the payload (y) - The hash of the payload within the work item which was executed in the refine stage to give this result. Provided to the accumulation logic of the service later on.
 	GasPrioritizationRatio uint64                  // Gas prioritization ratio (g) - used when determining how much gas should be allocated to execute of this item’s accumulate.
 	Output                 WorkResultOutputOrError // Output of the work result (d) ∈ Y ∪ J: Output or error (Y is the set of octet strings, J is the set of work execution errors)
-	GasUsed                uint                    // (u) the actual amount of gas used during refinement
-	ImportsCount           uint                    // (i) the number of segments imported from
-	ExtrinsicCount         uint                    // (x) the number of the extrinsics used in computing the workload
-	ExtrinsicSize          uint                    // (z) total size in octets of the extrinsics used in computing the workload
-	ExportsCount           uint                    // (e) the number of segments exported into
+	GasUsed                uint64                  `jam:"encoding=compact"` // (u) the actual amount of gas used during refinement
+	ImportsCount           uint16                  `jam:"encoding=compact"` // (i) the number of segments imported from
+	ExtrinsicCount         uint16                  `jam:"encoding=compact"` // (x) the number of the extrinsics used in computing the workload
+	ExtrinsicSize          uint32                  `jam:"encoding=compact"` // (z) total size in octets of the extrinsics used in computing the workload
+	ExportsCount           uint16                  `jam:"encoding=compact"` // (e) the number of segments exported into
 }
 
 // WorkResultOutputOrError represents either the successful output or an error from a work result
