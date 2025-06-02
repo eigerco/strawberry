@@ -197,7 +197,7 @@ func CalculateIntermediateServiceState(
 		return serviceState, errors.New("preimages not sorted unique")
 	}
 
-	newServiceState := maps.Clone(serviceState)
+	newServiceState := serviceState.Clone()
 
 	for _, preimage := range preimages {
 		serviceId := block.ServiceId(preimage.ServiceIndex)
@@ -2606,7 +2606,7 @@ func (a *Accumulator) ParallelDelta(
 				})
 			}
 
-			resultServices := maps.Clone(accState.ServiceState)
+			resultServices := accState.ServiceState.Clone()
 
 			// (∆1(o, w, f , s)o)d ∖ K(d ∖ {s})
 			maps.DeleteFunc(resultServices, func(id block.ServiceId, _ service.ServiceAccount) bool {

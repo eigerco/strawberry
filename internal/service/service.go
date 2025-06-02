@@ -1,6 +1,8 @@
 package service
 
 import (
+	"slices"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -17,6 +19,19 @@ const (
 )
 
 type ServiceState map[block.ServiceId]ServiceAccount
+
+func (ss ServiceState) Clone() ServiceState {
+	if ss == nil {
+		return nil
+	}
+
+	cloned := make(ServiceState, len(ss))
+	for k, v := range ss {
+		cloned[k] = v.Clone()
+	}
+
+	return cloned
+}
 
 // ServiceAccount represents a service account in the JAM state
 type ServiceAccount struct {
@@ -136,6 +151,17 @@ func (sa ServiceAccount) LookupPreimage(t jamtime.Timeslot, h crypto.Hash) []byt
 	return nil
 }
 
+// Clone returns a deep copy of the service account
+func (sa ServiceAccount) Clone() ServiceAccount {
+	cloned := sa
+
+	cloned.Storage = cloneMapOfSlices(sa.Storage)
+	cloned.PreimageLookup = cloneMapOfSlices(sa.PreimageLookup)
+	cloned.PreimageMeta = cloneMapOfSlices(sa.PreimageMeta)
+
+	return cloned
+}
+
 // isPreimageAvailableAt determines availability based on historical timeslots
 // ● h = []: The preimage is requested, but has not yet been supplied.
 // ● h ∈ [h0]: The preimage is available and has been from time h0.
@@ -180,4 +206,19 @@ type DeferredTransfer struct {
 	Balance              uint64          // balance value (a)
 	Memo                 Memo            // memo (m)
 	GasLimit             uint64          // gas limit (g)
+}
+
+// cloneMapOfSlices creates a deep copy of a map where values are slices.
+// Similar to maps.Clone, but also clones the slice values.
+func cloneMapOfSlices[K comparable, V ~[]E, E any](m map[K]V) map[K]V {
+	if m == nil {
+		return nil
+	}
+
+	clone := make(map[K]V, len(m))
+	for k, v := range m {
+		clone[k] = slices.Clone(v)
+	}
+
+	return clone
 }
