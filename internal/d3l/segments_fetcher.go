@@ -65,6 +65,7 @@ func (m *segmentsFetcher) Fetch(ctx context.Context, segmentRoot crypto.Hash, se
 			continue
 		}
 		validatorIndex := *assurer.ValidatorIndex
+		// TODO parallelize segment shards requests
 		segmentShards, err := m.assurerClient.SegmentShardRequestSend(ctx, assurer.Ed25519Key, erasureRoot, validatorIndex, segmentIndexes)
 		if err != nil {
 			log.Printf("failed to fetch segment shard for hash %x indexes: %v err: %v", segmentRoot, segmentIndexes, err)

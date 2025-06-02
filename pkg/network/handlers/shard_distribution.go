@@ -15,7 +15,7 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-const SegmentShardLength = 4104 / common.ErasureCodingOriginalShards
+const SegmentShardSize = 4104 / common.ErasureCodingOriginalShards
 
 // NewShardDistributionHandler creates a new ShardDistributionHandler
 func NewShardDistributionHandler(validatorSvc validator.ValidatorService) protocol.StreamHandler {
@@ -94,7 +94,7 @@ func encodeJustification(justification [][]byte) (justificationBytes []byte, err
 		case crypto.HashSize * 2: // two hashes in case of a leaf
 			justificationBytes = append(justificationBytes, 1)
 			justificationBytes = append(justificationBytes, just...)
-		case SegmentShardLength: // TODO segment shard
+		case SegmentShardSize: // TODO segment shard
 			justificationBytes = append(justificationBytes, 2)
 			justificationBytes = append(justificationBytes, just...)
 		default:
@@ -113,7 +113,7 @@ func decodeJustification(justificationBytes []byte) (justification [][]byte, err
 		case 1:
 			skip = crypto.HashSize*2 + 1
 		case 2:
-			skip = SegmentShardLength + 1
+			skip = SegmentShardSize + 1
 		default:
 			return nil, fmt.Errorf("unexpected justification path segment format")
 		}
@@ -167,11 +167,11 @@ func (s *ShardDistributionSender) ShardDistribution(ctx context.Context, stream 
 }
 
 func decodeSegmentShards(payload []byte) (segmentShard [][]byte, err error) {
-	if len(payload)%SegmentShardLength != 0 {
+	if len(payload)%SegmentShardSize != 0 {
 		return nil, fmt.Errorf("invalid segment shard length (%d)", len(payload))
 	}
-	for i := 0; i < len(payload); i += SegmentShardLength {
-		segmentShard = append(segmentShard, payload[i:i+SegmentShardLength])
+	for i := 0; i < len(payload); i += SegmentShardSize {
+		segmentShard = append(segmentShard, payload[i:i+SegmentShardSize])
 	}
 	return segmentShard, nil
 }
