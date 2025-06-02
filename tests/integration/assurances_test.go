@@ -159,7 +159,7 @@ func mapReport(r *Report) *block.WorkReport {
 				PayloadHash:            mapHash(rr.PayloadHash),
 				GasPrioritizationRatio: rr.Gas,
 				Output: block.WorkResultOutputOrError{
-					Inner: rr.Result.Ok,
+					Inner: mustStringToHex(rr.Result.Ok),
 				},
 			}
 		}),
