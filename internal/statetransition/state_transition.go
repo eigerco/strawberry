@@ -60,7 +60,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		return err
 	}
 
-	intermediateCoreAssignments, _, err = CalculateIntermediateCoreFromAssurances(newValidatorState.CurrentValidators, intermediateCoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
+	intermediateCoreAssignments, _, err = CalculateIntermediateCoreFromAssurances(s.ValidatorState.CurrentValidators, intermediateCoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
 	if err != nil {
 		return err
 	}
@@ -2074,7 +2074,8 @@ func assuranceIsOrderedByValidatorIndex(assurances block.AssurancesExtrinsic) bo
 // It calculates the intermediate core assignments based on availability
 // assurances, and also returns the set of now avaiable work reports. It also
 // validates that the assurance extrinsic, checking signatures and that ordering
-// is correct with no duplicates. (GP v0.6.5)
+// is correct with no duplicates. Signatures should be checked using the prior
+// state active validators, ie κ. (GP v0.6.5)
 func CalculateIntermediateCoreFromAssurances(validators safrole.ValidatorsData, assignments state.CoreAssignments, header block.Header, assurances block.AssurancesExtrinsic) (state.CoreAssignments, []*block.WorkReport, error) {
 	if err := validateAssurancesSignature(validators, header, assurances); err != nil {
 		return assignments, nil, err
