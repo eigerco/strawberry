@@ -3,7 +3,6 @@ package statetransition
 import (
 	"errors"
 	"log"
-	"maps"
 
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
@@ -156,7 +155,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 
 // newCtx (B.9)
 func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.ServiceId) (polkavm.AccumulateContext, error) {
-	serviceState := maps.Clone(u.ServiceState)
+	serviceState := u.ServiceState.Clone()
 	delete(serviceState, serviceIndex)
 	ctx := polkavm.AccumulateContext{
 		ServiceId: serviceIndex,
