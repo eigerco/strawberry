@@ -8,51 +8,27 @@ import (
 	"github.com/quic-go/quic-go"
 
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/d3l"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-// SegmentsFetcher defines an interface for fetching imported segments from the availability system
-type SegmentsFetcher interface {
-
-	// Fetch fetches enough segment shards from the availability system to reconstructs the requested segments
-	// the availability system expects to request the shards by the erasure-root
-	// however we request the segments by segment-root,
-	// to tackle this problem the SegmentsFetcher keeps internally a dictionary of segment-root to erasure-root mappings
-	Fetch(segmentRoot crypto.Hash, segmentIndexes ...uint16) ([]work.Segment, error)
-}
-
-// NewSegmentsFetcher creates a basic segments fetcher
-func NewSegmentsFetcher() SegmentsFetcher {
-	return &segmentsFetcher{}
-}
-
-// segmentsFetcher implements SegmentsFetcher
-type segmentsFetcher struct{}
-
-func (m *segmentsFetcher) Fetch(segmentRoot crypto.Hash, segmentIndexes ...uint16) ([]work.Segment, error) {
-	fmt.Printf("fetching imported segment for hash %x indexes: %v\n", segmentRoot, segmentIndexes)
-	// TODO implement
-
-	return []work.Segment{}, nil
-}
-
 // WorkPackageSubmissionHandler processes incoming CE-133 submission streams
 type WorkPackageSubmissionHandler struct {
 	// Fetcher is used to retrieve imported segments referenced in the work-package.
-	Fetcher SegmentsFetcher
+	Fetcher d3l.SegmentsFetcher
 	// workReportGuarantor handles the rest of the flow after submission:
 	// running validation + auth + refinement (CE-134) and distributing guarantees (CE-135).
-	workReportGuarantor *WorkReportGuarantor
-
-	segmentRootLookup work.SegmentRootLookup
+	workReportGuarantor WorkReportProcessAndGuarantee
+	segmentRootLookup   work.SegmentRootLookup
 }
 
 // NewWorkPackageSubmissionHandler creates a new handler instance with the given fetcher.
-func NewWorkPackageSubmissionHandler(fetcher SegmentsFetcher, wpSharingHandler *WorkReportGuarantor) *WorkPackageSubmissionHandler {
+func NewWorkPackageSubmissionHandler(fetcher d3l.SegmentsFetcher, wpSharingHandler WorkReportProcessAndGuarantee, segmentRootLookup work.SegmentRootLookup) *WorkPackageSubmissionHandler {
 	return &WorkPackageSubmissionHandler{
 		Fetcher:             fetcher,
 		workReportGuarantor: wpSharingHandler,
+		segmentRootLookup:   segmentRootLookup,
 	}
 }
 
@@ -97,7 +73,7 @@ func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream 
 	fmt.Printf("received submission with coreIndex=%d, work package with %d work items, extrinsics=%d bytes\n",
 		coreIndex, len(pkg.WorkItems), len(extrinsics))
 
-	importedSegments, err := h.fetchAllImportSegments(pkg)
+	importedSegments, err := h.fetchAllImportSegments(ctx, pkg)
 	if err != nil {
 		return err
 	}
@@ -118,7 +94,7 @@ func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream 
 	return h.workReportGuarantor.ValidateAndProcessWorkPackage(ctx, coreIndex, bundle)
 }
 
-func (h *WorkPackageSubmissionHandler) fetchAllImportSegments(pkg work.Package) (map[crypto.Hash][]work.Segment, error) {
+func (h *WorkPackageSubmissionHandler) fetchAllImportSegments(ctx context.Context, pkg work.Package) (map[crypto.Hash][]work.Segment, error) {
 	// build a map of segment-root to segment indexes dictionary to request multiple segment indexes at a time if necessary
 	segmentRootAndIndexes := make(map[crypto.Hash][]uint16)
 	for _, item := range pkg.WorkItems {
@@ -130,10 +106,13 @@ func (h *WorkPackageSubmissionHandler) fetchAllImportSegments(pkg work.Package) 
 
 	importedSegments := make(map[crypto.Hash][]work.Segment)
 	for segmentRoot, indexes := range segmentRootAndIndexes {
-		segments, err := h.Fetcher.Fetch(segmentRoot, indexes...)
+		segments, err := h.Fetcher.Fetch(ctx, segmentRoot, indexes...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch imported segments: %w", err)
 		}
+		// TODO we should use proofs to verify the consistency of the segments
+		// if the segments are inconsistent with the proofs we should fetch again with justifications
+		// using protocol 140 and verify the correctness of each response as it is received
 		importedSegments[segmentRoot] = segments
 	}
 

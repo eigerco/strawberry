@@ -103,7 +103,7 @@ func (a *Shards) GetAuditShard(erasureRoot crypto.Hash, shardIndex uint16) ([]by
 func (a *Shards) GetSegmentsShard(erasureRoot crypto.Hash, shardIndex uint16) ([][]byte, error) {
 	val, err := a.db.Get(makeAvailabilityKey(prefixAvailabilitySegmentsShard, erasureRoot, shardIndex))
 	if err != nil {
-		return nil, fmt.Errorf("unable to store segments shard: %w", err)
+		return nil, fmt.Errorf("unable to get segments shard erasure-root=%x shard-index=%d: %w", erasureRoot, shardIndex, err)
 	}
 
 	segmentsShards := [][]byte{}

@@ -56,6 +56,7 @@ type WorkReportGuarantor struct {
 	workPackageSharingRequester  *WorkPackageSharingRequester
 	workReportDistributionSender *WorkReportDistributionSender
 	validatorService             validator.ValidatorService
+	segmentRootLookup            work.SegmentRootLookup
 }
 
 // SegmentRootMapping It maps a work-package hash (h⊞) to the actual segment root (H).
@@ -90,6 +91,11 @@ type signedWorkReport struct {
 	Report         *block.WorkReport // Only set if local and successful
 }
 
+type WorkReportProcessAndGuarantee interface {
+	ValidateAndProcessWorkPackage(ctx context.Context, coreIndex uint16, bundle *work.PackageBundle) error
+	SetGuarantors(guarantors []*peer.Peer)
+}
+
 func NewWorkReportGuarantor(
 	validatorIndex uint16,
 	privateKey ed25519.PrivateKey,
@@ -102,6 +108,7 @@ func NewWorkReportGuarantor(
 	workPackageSharingRequester *WorkPackageSharingRequester,
 	workReportDistributionSender *WorkReportDistributionSender,
 	validatorService validator.ValidatorService,
+	segmentRootLookup work.SegmentRootLookup,
 ) *WorkReportGuarantor {
 	return &WorkReportGuarantor{
 		validatorIndex:               validatorIndex,
@@ -115,6 +122,7 @@ func NewWorkReportGuarantor(
 		workPackageSharingRequester:  workPackageSharingRequester,
 		workReportDistributionSender: workReportDistributionSender,
 		validatorService:             validatorService,
+		segmentRootLookup:            segmentRootLookup,
 	}
 }
 
@@ -148,8 +156,8 @@ func (h *WorkReportGuarantor) ValidateAndProcessWorkPackage(ctx context.Context,
 	if err != nil {
 		return fmt.Errorf("authorization failed: %w", err)
 	}
-	// TODO retrieve import segments and produce the mappings
-	segments := h.buildSegmentRootMapping(bundle)
+
+	segments := h.buildSegmentRootMapping()
 
 	return h.processWorkPackage(ctx, authOutput, segments, coreIndex, bundle)
 }
@@ -513,9 +521,14 @@ func safeTimerC(t *time.Timer) <-chan time.Time {
 	return make(<-chan time.Time)
 }
 
-// TODO: Build segment-root mappings based on historical data
-func (h *WorkReportGuarantor) buildSegmentRootMapping(pkg *work.PackageBundle) []SegmentRootMapping {
-	return []SegmentRootMapping{}
+func (h *WorkReportGuarantor) buildSegmentRootMapping() (mappings []SegmentRootMapping) {
+	for workPackageHash, segmentsRoot := range h.segmentRootLookup {
+		mappings = append(mappings, SegmentRootMapping{
+			WorkPackageHash: workPackageHash,
+			SegmentRoot:     segmentsRoot,
+		})
+	}
+	return mappings
 }
 
 // distribute guarantee to all current validators (CE-135)
