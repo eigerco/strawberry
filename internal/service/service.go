@@ -64,40 +64,40 @@ func (sa ServiceAccount) EncodedCodeAndMetadata() []byte {
 	return nil
 }
 
-// TotalItems (9.8 v0.5.0) ∀a ∈ V(δ): ai
+// TotalItems (9.8 v0.6.5) ∀a ∈ V(δ): ai
 func (sa ServiceAccount) TotalItems() uint32 {
-	totalPreimages := len(sa.PreimageLookup)
+	totalPreimages := len(sa.PreimageMeta)
 	totalStorageItems := len(sa.Storage)
+	// 2 ⋅ ∣ al ∣ + ∣ as ∣
 	ai := 2*totalPreimages + totalStorageItems
 
 	return uint32(ai)
 }
 
-// TotalStorageSize (9.8 v0.5.0) ∀a ∈ V(δ): al
+// TotalStorageSize (9.8 v0.6.5) ∀a ∈ V(δ): ao
 func (sa ServiceAccount) TotalStorageSize() uint64 {
-	var al uint64 = 0
+	var ao uint64 = 0
 
-	// PreimageLookup sizes
-	for _, z := range sa.PreimageLookup {
-		zSize := uint64(len(z))
-		al += 81 + zSize
+	// PreimageLookup sizes ∑(h,z)∈K(al) 81 + z
+	for k := range sa.PreimageMeta {
+		ao += 81 + uint64(k.Length)
 	}
 
-	// Storage sizes
+	// Storage sizes ∑ x∈V(as) 32 + ∣x∣
 	for _, x := range sa.Storage {
 		xSize := uint64(len(x))
-		al += 32 + xSize
+		ao += 32 + xSize
 	}
 
-	return al
+	return ao
 }
 
-// ThresholdBalance (9.8 v0.5.0) ∀a ∈ V(δ): at
+// ThresholdBalance (9.8 v0.6.5) ∀a ∈ V(δ): at
 func (sa ServiceAccount) ThresholdBalance() uint64 {
 	ai := uint64(sa.TotalItems())
-	al := sa.TotalStorageSize()
+	ao := sa.TotalStorageSize()
 
-	return BasicMinimumBalance + AdditionalMinimumBalancePerItem*ai + AdditionalMinimumBalancePerOctet*al
+	return BasicMinimumBalance + AdditionalMinimumBalancePerItem*ai + AdditionalMinimumBalancePerOctet*ao
 }
 
 // AddPreimage adds a preimage to the service account's preimage lookup and metadata
