@@ -535,11 +535,11 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 //
 //	c = E(
 //
-// E8(BI ), E8(BL), E8(BS), E2(C), E4(D), E4(E), E8(GA),
-// E8(GI ), E8(GR), E8(GT ), E2(H), E2(I), E2(J), E4(L), E2(O),
+// E8(BI), E8(BL), E8(BS), E2(C), E4(D), E4(E), E8(GA),
+// E8(GI), E8(GR), E8(GT), E2(H), E2(I), E2(J), E4(L), E2(O),
 // E2(P), E2(Q), E2(R), E2(S), E2(T), E2(U), E2(V), E4(WA),
-// E4(WB), E4(WC ), E4(WE), E4(WG), E4(WM), E4(WP ),
-// E4(WR), E4(WT ), E4(WX), E4(Y)
+// E4(WB), E4(WC), E4(WE), E4(WG), E4(WM), E4(WP),
+// E4(WR), E4(WT), E4(WX), E4(Y)
 //
 // )
 func GetChainConstants() ([]byte, error) {
