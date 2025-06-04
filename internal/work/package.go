@@ -32,11 +32,11 @@ func (wp *Package) ValidateLimits() error {
 		totalExtrinsics += uint16(len(w.Extrinsics))
 	}
 
-	if totalExported > MaxNumberOfImportsExports {
-		return fmt.Errorf("exceeded maximum exported segments: %d/%d", totalExported, MaxNumberOfImportsExports)
+	if totalExported > MaxNumberOfImports {
+		return fmt.Errorf("exceeded maximum exported segments: %d/%d", totalExported, MaxNumberOfImports)
 	}
-	if totalImported > MaxNumberOfImportsExports {
-		return fmt.Errorf("exceeded maximum imported segments: %d/%d", totalImported, MaxNumberOfImportsExports)
+	if totalImported > MaxNumberOfImports {
+		return fmt.Errorf("exceeded maximum imported segments: %d/%d", totalImported, MaxNumberOfImports)
 	}
 
 	if totalExtrinsics > MaxNumberOfExtrinsics {

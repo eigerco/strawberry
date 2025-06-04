@@ -101,7 +101,8 @@ func (r *Refine) InvokePVM(
 		case host_call.HistoricalLookupID:
 			gasCounter, regs, mem, ctxPair, err = host_call.HistoricalLookup(gasCounter, regs, mem, ctxPair, w.ServiceId, r.state.Services, workPackage.Context.LookupAnchor.Timeslot)
 		case host_call.FetchID:
-			gasCounter, regs, mem, ctxPair, err = host_call.Fetch(gasCounter, regs, mem, ctxPair, itemIndex, workPackage, authorizerHashOutput, importedSegments, nil)
+			zeroHash := crypto.Hash{}
+			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, &workPackage, &zeroHash, authorizerHashOutput, &itemIndex, importedSegments, nil, nil, nil)
 		case host_call.ExportID:
 			gasCounter, regs, mem, ctxPair, err = host_call.Export(gasCounter, regs, mem, ctxPair, exportOffset)
 		case host_call.GasID:

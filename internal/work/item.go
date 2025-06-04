@@ -22,7 +22,7 @@ type Extrinsic struct {
 // Item represents I (14.2 v0.5.4)
 type Item struct {
 	ServiceId          block.ServiceId   // s ∈ N_S
-	CodeHash           crypto.Hash       // c ∈ H
+	CodeHash           crypto.Hash       // h ∈ H
 	Payload            []byte            // y ∈ Y
 	GasLimitRefine     uint64            // g ∈ N_G
 	GasLimitAccumulate uint64            // a ∈ N_G
