@@ -92,7 +92,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		ss = serviceId // s* = s
 	}
 
-	a := s
+	a := s.Clone()
 	if ss != serviceId {
 		var exists bool
 		a, exists = serviceState[ss]
@@ -171,7 +171,7 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 	}
 
-	a := s
+	a := s.Clone()
 	if vz == 0 {
 		delete(a.Storage, k)
 	} else {
