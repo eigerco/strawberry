@@ -17,7 +17,7 @@ const (
 	// TimeslotDuration defines the length of each timeslot in the JAM protocol.
 	// Each timeslot is exactly 6 seconds long, as specified in the JAM Graypaper.
 	// This constant duration is used for conversions between timeslots and actual time.
-	TimeslotDuration = 6 * time.Second
+	TimeslotDuration = SlotPeriodInSeconds * time.Second
 
 	// The period in timeslots after which an unreferenced preimage may be expunged.
 	// D = L + 4,800 where L = 14,400 (maximum age of lookup anchor)
