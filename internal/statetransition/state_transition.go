@@ -2127,60 +2127,120 @@ func GetAvailableWorkReports(coreAssignments state.CoreAssignments) (workReports
 	return workReports
 }
 
-// CalculateNewActivityStatistics implements equation 30:
-// π′ ≺ (EG, EP, EA, ET, τ, κ′, π, H)
-// TODO: add core and service statistics when vectors are available.
-func CalculateNewActivityStatistics(block block.Block, prevTimeslot jamtime.Timeslot, validatorStatistics validator.ActivityStatisticsState, reporters crypto.ED25519PublicKeySet, currValidators safrole.ValidatorsData) validator.ActivityStatisticsState {
-	newStats := validatorStatistics
+// CalculateNewActivityStatistics updates activity statistics.
+// It implements equation 4.20:
+// π′ ≺ (EG, EP , EA, ET , τ, κ′, π, H, I, X)
+// And the entire section 13.
+// TODO complete service and core stats. For now we only support service stats
+// for preimages, and no core stats yet.
+func CalculateNewActivityStatistics(
+	blk block.Block,
+	prevTimeslot jamtime.Timeslot,
+	activityStatistics validator.ActivityStatisticsState,
+	reporters crypto.ED25519PublicKeySet,
+	currValidators safrole.ValidatorsData,
+) validator.ActivityStatisticsState {
+	current, last := CalculateNewValidatorStatistics(blk, prevTimeslot, activityStatistics.ValidatorsCurrent, activityStatistics.ValidatorsLast, reporters, currValidators)
 
-	// Implements equations 170-171:
+	return validator.ActivityStatisticsState{
+		ValidatorsCurrent: current,
+		ValidatorsLast:    last,
+		Services:          CalculateNewServiceStatistics(blk, activityStatistics.Services),
+	}
+}
+
+// CalculateNewValidatorStatistics updates validator statistics.
+// It implements equations 13.3 - 13.5.
+func CalculateNewValidatorStatistics(
+	blk block.Block,
+	prevTimeslot jamtime.Timeslot,
+	validatorStatsCurrent, validatorStatsLast [common.NumberOfValidators]validator.ValidatorStatistics,
+	reporters crypto.ED25519PublicKeySet,
+	currValidators safrole.ValidatorsData,
+) ([common.NumberOfValidators]validator.ValidatorStatistics, [common.NumberOfValidators]validator.ValidatorStatistics) { // (current, last)
+	// Implements equations 13.3 - 13.4:
 	// let e = ⌊τ/E⌋, e′ = ⌊τ′/E⌋
 	// (a, π′₁) ≡ { (π₀, π₁) if e′ = e
 	//              ([{0,...,[0,...]},...], π₀) otherwise
-	if prevTimeslot.ToEpoch() != block.Header.TimeSlotIndex.ToEpoch() {
+	if prevTimeslot.ToEpoch() != blk.Header.TimeSlotIndex.ToEpoch() {
 		// Rotate statistics - completed stats become history, start fresh present stats
-		newStats.ValidatorsLast = newStats.ValidatorsCurrent                                    // Move current to history
-		newStats.ValidatorsCurrent = [common.NumberOfValidators]validator.ValidatorStatistics{} // Reset current
+		validatorStatsLast = validatorStatsCurrent                                         // Move current to history
+		validatorStatsCurrent = [common.NumberOfValidators]validator.ValidatorStatistics{} // Reset current
 	}
 
-	// Implements equation 172: ∀v ∈ NV
-	for v := uint16(0); v < uint16(len(newStats.ValidatorsCurrent)); v++ {
+	// Implements equation 13.5: ∀v ∈ NV
+	for v := uint16(0); v < uint16(len(validatorStatsCurrent)); v++ {
 		// π′₀[v]b ≡ a[v]b + (v = Hi)
-		if v == block.Header.BlockAuthorIndex {
-			newStats.ValidatorsCurrent[v].NumOfBlocks++
+		if v == blk.Header.BlockAuthorIndex {
+			validatorStatsCurrent[v].NumOfBlocks++
 
 			// π′₀[v]t ≡ a[v]t + {|ET| if v = Hi
 			//                     0 otherwise
-			newStats.ValidatorsCurrent[v].NumOfTickets += uint32(len(block.Extrinsic.ET.TicketProofs))
+			validatorStatsCurrent[v].NumOfTickets += uint32(len(blk.Extrinsic.ET.TicketProofs))
 
 			// π′₀[v]p ≡ a[v]p + {|EP| if v = Hi
 			//                     0 otherwise
-			newStats.ValidatorsCurrent[v].NumOfPreimages += uint32(len(block.Extrinsic.EP))
+			validatorStatsCurrent[v].NumOfPreimages += uint32(len(blk.Extrinsic.EP))
 
 			// π′₀[v]d ≡ a[v]d + {Σd∈EP|d| if v = Hi
 			//                     0 otherwise
-			for _, preimage := range block.Extrinsic.EP {
-				newStats.ValidatorsCurrent[v].NumOfBytesAllPreimages += uint32(len(preimage.Data))
+			for _, preimage := range blk.Extrinsic.EP {
+				validatorStatsCurrent[v].NumOfBytesAllPreimages += uint32(len(preimage.Data))
 			}
 		}
 
 		// π′₀[v]g ≡ a[v]g + (κ′v ∈ R)
-		// Where R is the set of reporter keys defined in 11.26 0.6.2
+		// Where R is the set of reporter keys defined in 11.26 0.6.5
 		for reporter := range reporters {
 			if !currValidators[v].IsEmpty() && slices.Equal(currValidators[v].Ed25519, reporter[:]) {
-				newStats.ValidatorsCurrent[v].NumOfGuaranteedReports++
+				validatorStatsCurrent[v].NumOfGuaranteedReports++
 			}
 		}
 
 		// π′₀[v]a ≡ a[v]a + (∃a ∈ EA : av = v)
-		for _, assurance := range block.Extrinsic.EA {
+		for _, assurance := range blk.Extrinsic.EA {
 			if assurance.ValidatorIndex == v {
-				newStats.ValidatorsCurrent[v].NumOfAvailabilityAssurances++
+				validatorStatsCurrent[v].NumOfAvailabilityAssurances++
 			}
 		}
 	}
 
-	return newStats
+	return validatorStatsCurrent, validatorStatsLast
+}
+
+// CalculateNewServiceStatistics updates service statistics.
+// It implements equation 13.11 - 13.15.
+// TODO complete service stats, for now this only supports preimage stats.
+func CalculateNewServiceStatistics(
+	blk block.Block,
+	serviceStatistics []validator.ServiceStatistics,
+) []validator.ServiceStatistics {
+	// TODO service stats type must be refactored to a map.
+	serviceStatsMap := make(map[block.ServiceId]validator.ServiceActivityRecord, len(serviceStatistics))
+	for _, serviceStat := range serviceStatistics {
+		serviceStatsMap[serviceStat.ID] = serviceStat.Record
+	}
+	for _, preimage := range blk.Extrinsic.EP {
+		serviceID := block.ServiceId(preimage.ServiceIndex)
+		record := serviceStatsMap[serviceID]
+		// p: ∑ (s,p) ∈EP (1, |p|)
+		record.ProvidedCount++
+		record.ProvidedSize += uint32(len(preimage.Data))
+		serviceStatsMap[serviceID] = record
+	}
+
+	newServiceStats := make([]validator.ServiceStatistics, 0, len(serviceStatsMap))
+	for serviceID, record := range serviceStatsMap {
+		newServiceStats = append(newServiceStats, validator.ServiceStatistics{
+			ID:     serviceID,
+			Record: record,
+		})
+	}
+	sort.Slice(newServiceStats, func(i, j int) bool {
+		return newServiceStats[i].ID < newServiceStats[j].ID
+	})
+
+	return newServiceStats
 }
 
 // ServiceHashPairs B ≡ {(NS , H)} (eq. 12.15)

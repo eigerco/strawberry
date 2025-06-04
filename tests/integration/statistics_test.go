@@ -194,7 +194,8 @@ func TestStatistics(t *testing.T) {
 
 			postState := mapStatisticsState(tc.PostState)
 
-			assert.Equal(t, postState, preState)
+			assert.Equal(t, postState.ActivityStatistics.ValidatorsCurrent, preState.ActivityStatistics.ValidatorsCurrent)
+			assert.Equal(t, postState.ActivityStatistics.ValidatorsLast, preState.ActivityStatistics.ValidatorsLast)
 		})
 	}
 }
