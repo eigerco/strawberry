@@ -9,6 +9,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -16,7 +18,6 @@ import (
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/statetransition"
-	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 )
@@ -259,7 +260,7 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 			GasLimitOnTransfer:     account.Data.Service.MinMemoGas,
 		}
 		for _, preimage := range account.Data.Preimages {
-			sa.PreimageLookup[mapHash(preimage.Hash)] = mustStringToHex(preimage.Blob)
+			sa.PreimageMeta[service.PreImageMetaKey{Hash: mapHash(preimage.Hash), Length: service.PreimageLength(len(mustStringToHex(preimage.Blob)))}] = service.PreimageHistoricalTimeslots{}
 		}
 		assert.Equal(t, account.Data.Service.Bytes, sa.TotalStorageSize())
 		assert.Equal(t, account.Data.Service.Items, sa.TotalItems())

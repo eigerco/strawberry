@@ -164,7 +164,7 @@ func TestAccumulate(t *testing.T) {
 			alloc: alloc{
 				A0: hash2bytes(randomHash),
 			},
-			initialRegs: deltaRegs{A1: 123123, A2: 123124123, A3: 756846353},
+			initialRegs: deltaRegs{A1: 100, A2: 100, A3: 100},
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(newServiceID),
 			},
@@ -176,7 +176,7 @@ func TestAccumulate(t *testing.T) {
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
 						currentServiceID: {
-							Balance: 123123123,
+							Balance: 500,
 						},
 					},
 				},
@@ -187,15 +187,15 @@ func TestAccumulate(t *testing.T) {
 						service.CheckIndex(service.BumpIndex(newServiceID), make(service.ServiceState)): {
 							Storage: make(map[statekey.StateKey][]byte),
 							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-								{Hash: randomHash, Length: service.PreimageLength(123123)}: {},
+								{Hash: randomHash, Length: service.PreimageLength(100)}: {},
 							},
 							CodeHash:               randomHash,
-							GasLimitForAccumulator: 123124123,
-							GasLimitOnTransfer:     756846353,
-							Balance:                100, // balance of the new service
+							GasLimitForAccumulator: 100,
+							GasLimitOnTransfer:     100,
+							Balance:                service.BasicMinimumBalance + service.AdditionalMinimumBalancePerItem*2 + service.AdditionalMinimumBalancePerOctet*(100+81), // =301 balance of the new service
 						},
 						currentServiceID: {
-							Balance: 123123123 - 100, // initial balance minus balance of the new service
+							Balance: 500 - 301, // initial balance minus balance of the new service
 						},
 					},
 				},
@@ -573,7 +573,7 @@ func TestAccumulate(t *testing.T) {
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
 						currentServiceID: {
-							Balance:      200,
+							Balance:      500,
 							PreimageMeta: make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 						},
 					},
@@ -584,7 +584,7 @@ func TestAccumulate(t *testing.T) {
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
 						currentServiceID: {
-							Balance: 200,
+							Balance: 500,
 							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 								{Hash: randomHash, Length: service.PreimageLength(256)}: {},
 							},
@@ -612,7 +612,7 @@ func TestAccumulate(t *testing.T) {
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
 						currentServiceID: {
-							Balance: 200,
+							Balance: 500,
 							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 								{Hash: randomHash, Length: service.PreimageLength(256)}: {800, 900}, // Exactly 2 timeslots
 							},
@@ -625,7 +625,7 @@ func TestAccumulate(t *testing.T) {
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
 						currentServiceID: {
-							Balance: 200,
+							Balance: 500,
 							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 								{Hash: randomHash, Length: service.PreimageLength(256)}: {800, 900, 1000}, // Appended current timeslot
 							},
