@@ -2213,32 +2213,20 @@ func CalculateNewValidatorStatistics(
 // TODO complete service stats, for now this only supports preimage stats.
 func CalculateNewServiceStatistics(
 	blk block.Block,
-	serviceStatistics []validator.ServiceStatistics,
-) []validator.ServiceStatistics {
-	// TODO service stats type must be refactored to a map.
-	serviceStatsMap := make(map[block.ServiceId]validator.ServiceActivityRecord, len(serviceStatistics))
-	for _, serviceStat := range serviceStatistics {
-		serviceStatsMap[serviceStat.ID] = serviceStat.Record
+	serviceStatistics validator.ServiceStatistics,
+) validator.ServiceStatistics {
+	if serviceStatistics == nil {
+		serviceStatistics = validator.ServiceStatistics{}
 	}
+	newServiceStats := maps.Clone(serviceStatistics)
 	for _, preimage := range blk.Extrinsic.EP {
 		serviceID := block.ServiceId(preimage.ServiceIndex)
-		record := serviceStatsMap[serviceID]
+		record := newServiceStats[serviceID]
 		// p: ∑ (s,p) ∈EP (1, |p|)
 		record.ProvidedCount++
 		record.ProvidedSize += uint32(len(preimage.Data))
-		serviceStatsMap[serviceID] = record
+		newServiceStats[serviceID] = record
 	}
-
-	newServiceStats := make([]validator.ServiceStatistics, 0, len(serviceStatsMap))
-	for serviceID, record := range serviceStatsMap {
-		newServiceStats = append(newServiceStats, validator.ServiceStatistics{
-			ID:     serviceID,
-			Record: record,
-		})
-	}
-	sort.Slice(newServiceStats, func(i, j int) bool {
-		return newServiceStats[i].ID < newServiceStats[j].ID
-	})
 
 	return newServiceStats
 }

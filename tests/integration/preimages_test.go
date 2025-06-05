@@ -12,7 +12,6 @@ import (
 
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/store"
-	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 
 	"github.com/eigerco/strawberry/internal/statetransition"
@@ -67,8 +66,8 @@ type PreimageItem struct {
 
 // PreimageState represents the state in the test vector
 type PreimageState struct {
-	Accounts          []AccountData                 `json:"accounts"`
-	ServiceStatistics []jsonutils.ServiceStatistics `json:"statistics"`
+	Accounts          []AccountData               `json:"accounts"`
+	ServiceStatistics jsonutils.ServiceStatistics `json:"statistics"`
 }
 
 // AccountData represents account data in state
@@ -130,10 +129,7 @@ func TestPreimage(t *testing.T) {
 
 			preServiceState := mapServiceState(t, data.PreState)
 			preimages := mapPreimages(t, data.Input.Preimages)
-			preServiceStats := make([]validator.ServiceStatistics, len(data.PreState.ServiceStatistics))
-			for i, s := range data.PreState.ServiceStatistics {
-				preServiceStats[i] = s.To()
-			}
+			preServiceStats := data.PreState.ServiceStatistics.To()
 
 			newTimeSlot := jamtime.Timeslot(data.Input.Slot)
 			newServiceState, err := statetransition.CalculateIntermediateServiceState(preimages, preServiceState, newTimeSlot)
@@ -151,10 +147,7 @@ func TestPreimage(t *testing.T) {
 
 			expectedPostServiceState := mapServiceState(t, data.PostState)
 			require.Equal(t, expectedPostServiceState, newServiceState, "State after transition does not match expected state")
-			expectedPostServiceStats := make([]validator.ServiceStatistics, len(data.PostState.ServiceStatistics))
-			for i, s := range data.PostState.ServiceStatistics {
-				expectedPostServiceStats[i] = s.To()
-			}
+			expectedPostServiceStats := data.PostState.ServiceStatistics.To()
 			require.Equal(t, expectedPostServiceStats, newServiceStats, "Service statistics after transition do not match expected statistics")
 		})
 	}
