@@ -26,24 +26,25 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.G
 		return 0, nil, x, polkavm.ErrPanicf(err.Error())
 	}
 	x1, err := InvokeHostCall(i, hostFunc, x)
-	if err != nil {
-		return 0, nil, x, err
+	if err == nil {
+		return 0, nil, x1, polkavm.ErrPanicf("abnormal program termination, program should finish with one of: halt, out-of-gas, panic or page-fault")
 	}
-	_, gasRemaining, regs, memory1 := i.Results()
-	result := make([]byte, regs[polkavm.A1])
-	if err := memory1.Read(regs[polkavm.A0], result); err != nil {
-		// Do not return anything if registers 7 and 8 are not pointing to a valid memory page
-		// (u, [], x′) if ε = ∎ ∧ Nω′7...+ω′8 ⊄ Vμ′
-		faultErr := &polkavm.ErrPageFault{}
-		if errors.As(err, &faultErr) {
+	if errors.Is(err, polkavm.ErrHalt) {
+		_, gasRemaining, regs, memory1 := i.Results()
+		result := make([]byte, regs[polkavm.A1])
+		if err := memory1.Read(regs[polkavm.A0], result); err != nil {
+			// Do not return anything if registers 7 and 8 are not pointing to a valid memory page
+			// (u, [], x′) if ε = ∎ ∧ Nω′7...+ω′8 ⊄ Vμ′
 			return gasRemaining, []byte{}, x1, nil
 		}
-		return 0, nil, x, err
+
+		// Return the memory that registers 7 and 8 are pointing to, if it's a valid memory page
+		// (u, μ′ω′7⋅⋅⋅+ω′8, x′) if ε = ∎ ∧ Nω′7⋅⋅⋅+ω′8 ⊆ Vμ′
+		return gasRemaining, result, x1, nil
 	}
 
-	// Return the memory that registers 7 and 8 are pointing to, if it's a valid memory page
-	// (u, μ′ω′7⋅⋅⋅+ω′8, x′) if ε = ∎ ∧ Nω′7⋅⋅⋅+ω′8 ⊆ Vμ′
-	return gasRemaining, result, x1, nil
+	// if ε ∈ {∞, ☇}
+	return 0, nil, x1, err
 }
 
 // InvokeHostCall host call invocation (ΨH)
@@ -53,15 +54,16 @@ func InvokeHostCall[X any](
 ) (X, error) {
 	for {
 		hostCallIndex, err := Invoke(i)
-		if err != nil && errors.Is(err, polkavm.ErrHostCall) {
-			var gasRemaining polkavm.Gas
-			gasRemaining, i.regs, i.memory, x, err = hostCall(hostCallIndex, polkavm.Gas(i.gasRemaining), i.regs, i.memory, x)
-			i.gasRemaining = int64(gasRemaining)
-			if err != nil {
-				return x, err
+		if err != nil {
+			if errors.Is(err, polkavm.ErrHostCall) {
+				var gasRemaining polkavm.Gas
+				gasRemaining, i.regs, i.memory, x, err = hostCall(hostCallIndex, polkavm.Gas(i.gasRemaining), i.regs, i.memory, x)
+				i.gasRemaining = int64(gasRemaining)
+				i.instructionCounter += 1 + polkavm.Skip(i.instructionCounter, i.bitmask)
+				continue
 			}
-			i.instructionCounter += 1 + polkavm.Skip(i.instructionCounter, i.bitmask)
-			continue
+
+			return x, err
 		}
 
 		break

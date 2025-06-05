@@ -2260,14 +2260,6 @@ func (a *Accumulator) SequentialDelta(
 	return uint32(maxReports), newCtx, transfers, hashPairs
 }
 
-func getServiceIdsAsSet(m map[block.ServiceId]service.ServiceAccount) map[block.ServiceId]struct{} {
-	m2 := make(map[block.ServiceId]struct{}, len(m))
-	for k := range m {
-		m2[k] = struct{}{}
-	}
-	return m2
-}
-
 // ParallelDelta implements equation 12.17 (∆*)
 func (a *Accumulator) ParallelDelta(
 	initialAccState state.AccumulationState,
@@ -2299,17 +2291,11 @@ func (a *Accumulator) ParallelDelta(
 	var allTransfers []service.DeferredTransfer
 	accumHashPairs := make(ServiceHashPairs, 0)
 	newAccState := state.AccumulationState{
-		ServiceState: make(service.ServiceState),
+		ServiceState: maps.Clone(initialAccState.ServiceState),
 	}
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-
-	// n = ⋃[s∈s]({(∆1(o, w, f , s)o)d ∖ K(d ∖ {s})})
-	allResultServices := make(map[block.ServiceId]service.ServiceAccount)
-
-	// m = ⋃[s∈s](K(d) ∖ K((∆1(o, w, f , s)o)d))
-	resultServicesExclude := make(map[block.ServiceId]struct{})
 
 	for svcId := range serviceIndices {
 		wg.Add(1)
@@ -2337,27 +2323,23 @@ func (a *Accumulator) ParallelDelta(
 				})
 			}
 
-			resultServices := accState.ServiceState.Clone()
-
-			// (∆1(o, w, f , s)o)d ∖ K(d ∖ {s})
-			maps.DeleteFunc(resultServices, func(id block.ServiceId, _ service.ServiceAccount) bool {
-				if id == serviceId {
-					return false
+			// Adds the newly created services after accumulation to the service state set
+			// Removes the deleted services from the state
+			//
+			// n = ⋃[s∈s]({(∆1(o, w, f, s)o)d ∖ K(d ∖ {s})})
+			// m = ⋃[s∈s](K(d) ∖ K((∆1(o, w, f , s)o)d))
+			// (d ∪ n) ∖ m
+			maps.Copy(newAccState.ServiceState, accState.ServiceState)
+			for svc := range newAccState.ServiceState {
+				if svc == serviceId {
+					continue
 				}
 
-				_, ok := initialAccState.ServiceState[id]
-				return ok
-			})
-
-			maps.Copy(allResultServices, resultServices)
-
-			initialServicesKeys := getServiceIdsAsSet(initialAccState.ServiceState)
-			maps.DeleteFunc(initialServicesKeys, func(id block.ServiceId, _ struct{}) bool {
-				_, ok := accState.ServiceState[id]
-				return ok
-			})
-
-			maps.Copy(resultServicesExclude, initialServicesKeys)
+				_, ok := accState.ServiceState[svc]
+				if !ok {
+					delete(newAccState.ServiceState, svc)
+				}
+			}
 
 		}(svcId)
 	}
@@ -2404,14 +2386,6 @@ func (a *Accumulator) ParallelDelta(
 	// Wait for all goroutines to complete
 	wg.Wait()
 
-	// (d ∪ n) ∖ m
-	maps.Copy(newAccState.ServiceState, initialAccState.ServiceState)
-	maps.Copy(newAccState.ServiceState, allResultServices)
-	maps.DeleteFunc(newAccState.ServiceState, func(id block.ServiceId, _ service.ServiceAccount) bool {
-		_, ok := resultServicesExclude[id]
-		return ok
-	})
-
 	// Sort accumulation pairs by service ID to ensure deterministic output
 	sort.Slice(accumHashPairs, func(i, j int) bool {
 		return accumHashPairs[i].ServiceId < accumHashPairs[j].ServiceId
@@ -2453,6 +2427,7 @@ func (a *Accumulator) Delta1(
 					AuthorizationHash: report.AuthorizerHash,
 					Output:            report.Output,
 					PayloadHash:       result.PayloadHash,
+					GasLimit:          result.GasPrioritizationRatio,
 					OutputOrError:     result.Output,
 				}
 				operands = append(operands, operand)

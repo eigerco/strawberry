@@ -184,9 +184,13 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 		a.Storage[k] = valueData
 	}
 
+	// let l = |s_s[k]| if k ∈ K(s_s); NONE otherwise
+	var storageItemLength uint64
 	storageItem, ok := s.Storage[k]
-	if !ok {
-		return gas, withCode(regs, NONE), mem, s, err
+	if ok {
+		storageItemLength = uint64(len(storageItem))
+	} else {
+		storageItemLength = uint64(NONE)
 	}
 
 	if a.ThresholdBalance() > a.Balance {
@@ -194,8 +198,8 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 	}
 
 	// otherwise a.ThresholdBalance() <= a.Balance
-	regs[polkavm.A0] = uint64(len(storageItem)) // l
-	return gas, regs, mem, a, err               // return service account 'a' as opposed to 's' for not successful paths
+	regs[polkavm.A0] = storageItemLength // l
+	return gas, regs, mem, a, err        // return service account 'a' as opposed to 's' for not successful paths
 }
 
 // Info ΩI(ϱ, ω, μ, s, d)
