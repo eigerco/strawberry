@@ -20,6 +20,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
+	jsonutils "github.com/eigerco/strawberry/internal/testutils/json"
 	"github.com/stretchr/testify/require"
 )
 
@@ -65,7 +66,8 @@ type PreimageItem struct {
 
 // PreimageState represents the state in the test vector
 type PreimageState struct {
-	Accounts []AccountData `json:"accounts"`
+	Accounts          []AccountData               `json:"accounts"`
+	ServiceStatistics jsonutils.ServiceStatistics `json:"statistics"`
 }
 
 // AccountData represents account data in state
@@ -127,6 +129,7 @@ func TestPreimage(t *testing.T) {
 
 			preServiceState := mapServiceState(t, data.PreState)
 			preimages := mapPreimages(t, data.Input.Preimages)
+			preServiceStats := data.PreState.ServiceStatistics.To()
 
 			newTimeSlot := jamtime.Timeslot(data.Input.Slot)
 			newServiceState, err := statetransition.CalculateIntermediateServiceState(preimages, preServiceState, newTimeSlot)
@@ -136,9 +139,16 @@ func TestPreimage(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+			newServiceStats := statetransition.CalculateNewServiceStatistics(block.Block{
+				Extrinsic: block.Extrinsic{
+					EP: preimages,
+				},
+			}, preServiceStats)
 
 			expectedPostServiceState := mapServiceState(t, data.PostState)
 			require.Equal(t, expectedPostServiceState, newServiceState, "State after transition does not match expected state")
+			expectedPostServiceStats := data.PostState.ServiceStatistics.To()
+			require.Equal(t, expectedPostServiceStats, newServiceStats, "Service statistics after transition do not match expected statistics")
 		})
 	}
 }

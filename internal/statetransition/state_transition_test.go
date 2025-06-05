@@ -911,7 +911,8 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 	})
 }
 
-func TestCalculateNewValidatorStatistics(t *testing.T) {
+// Currently tests the validator statistics portion of CalculateNewActivityStatistics.
+func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) {
 	t.Run("new epoch transition", func(t *testing.T) {
 		// Initial state with some existing stats
 		initialStats := validator.ActivityStatisticsState{

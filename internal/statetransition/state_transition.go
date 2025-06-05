@@ -2127,60 +2127,108 @@ func GetAvailableWorkReports(coreAssignments state.CoreAssignments) (workReports
 	return workReports
 }
 
-// CalculateNewActivityStatistics implements equation 30:
-// π′ ≺ (EG, EP, EA, ET, τ, κ′, π, H)
-// TODO: add core and service statistics when vectors are available.
-func CalculateNewActivityStatistics(block block.Block, prevTimeslot jamtime.Timeslot, validatorStatistics validator.ActivityStatisticsState, reporters crypto.ED25519PublicKeySet, currValidators safrole.ValidatorsData) validator.ActivityStatisticsState {
-	newStats := validatorStatistics
+// CalculateNewActivityStatistics updates activity statistics.
+// It implements equation 4.20:
+// π′ ≺ (EG, EP , EA, ET , τ, κ′, π, H, I, X)
+// And the entire section 13.
+// TODO complete service and core stats. For now we only support service stats
+// for preimages, and no core stats yet.
+func CalculateNewActivityStatistics(
+	blk block.Block,
+	prevTimeslot jamtime.Timeslot,
+	activityStatistics validator.ActivityStatisticsState,
+	reporters crypto.ED25519PublicKeySet,
+	currValidators safrole.ValidatorsData,
+) validator.ActivityStatisticsState {
+	current, last := CalculateNewValidatorStatistics(blk, prevTimeslot, activityStatistics.ValidatorsCurrent, activityStatistics.ValidatorsLast, reporters, currValidators)
 
-	// Implements equations 170-171:
+	return validator.ActivityStatisticsState{
+		ValidatorsCurrent: current,
+		ValidatorsLast:    last,
+		Services:          CalculateNewServiceStatistics(blk, activityStatistics.Services),
+	}
+}
+
+// CalculateNewValidatorStatistics updates validator statistics.
+// It implements equations 13.3 - 13.5.
+func CalculateNewValidatorStatistics(
+	blk block.Block,
+	prevTimeslot jamtime.Timeslot,
+	validatorStatsCurrent, validatorStatsLast [common.NumberOfValidators]validator.ValidatorStatistics,
+	reporters crypto.ED25519PublicKeySet,
+	currValidators safrole.ValidatorsData,
+) ([common.NumberOfValidators]validator.ValidatorStatistics, [common.NumberOfValidators]validator.ValidatorStatistics) { // (current, last)
+	// Implements equations 13.3 - 13.4:
 	// let e = ⌊τ/E⌋, e′ = ⌊τ′/E⌋
 	// (a, π′₁) ≡ { (π₀, π₁) if e′ = e
 	//              ([{0,...,[0,...]},...], π₀) otherwise
-	if prevTimeslot.ToEpoch() != block.Header.TimeSlotIndex.ToEpoch() {
+	if prevTimeslot.ToEpoch() != blk.Header.TimeSlotIndex.ToEpoch() {
 		// Rotate statistics - completed stats become history, start fresh present stats
-		newStats.ValidatorsLast = newStats.ValidatorsCurrent                                    // Move current to history
-		newStats.ValidatorsCurrent = [common.NumberOfValidators]validator.ValidatorStatistics{} // Reset current
+		validatorStatsLast = validatorStatsCurrent                                         // Move current to history
+		validatorStatsCurrent = [common.NumberOfValidators]validator.ValidatorStatistics{} // Reset current
 	}
 
-	// Implements equation 172: ∀v ∈ NV
-	for v := uint16(0); v < uint16(len(newStats.ValidatorsCurrent)); v++ {
+	// Implements equation 13.5: ∀v ∈ NV
+	for v := uint16(0); v < uint16(len(validatorStatsCurrent)); v++ {
 		// π′₀[v]b ≡ a[v]b + (v = Hi)
-		if v == block.Header.BlockAuthorIndex {
-			newStats.ValidatorsCurrent[v].NumOfBlocks++
+		if v == blk.Header.BlockAuthorIndex {
+			validatorStatsCurrent[v].NumOfBlocks++
 
 			// π′₀[v]t ≡ a[v]t + {|ET| if v = Hi
 			//                     0 otherwise
-			newStats.ValidatorsCurrent[v].NumOfTickets += uint32(len(block.Extrinsic.ET.TicketProofs))
+			validatorStatsCurrent[v].NumOfTickets += uint32(len(blk.Extrinsic.ET.TicketProofs))
 
 			// π′₀[v]p ≡ a[v]p + {|EP| if v = Hi
 			//                     0 otherwise
-			newStats.ValidatorsCurrent[v].NumOfPreimages += uint32(len(block.Extrinsic.EP))
+			validatorStatsCurrent[v].NumOfPreimages += uint32(len(blk.Extrinsic.EP))
 
 			// π′₀[v]d ≡ a[v]d + {Σd∈EP|d| if v = Hi
 			//                     0 otherwise
-			for _, preimage := range block.Extrinsic.EP {
-				newStats.ValidatorsCurrent[v].NumOfBytesAllPreimages += uint32(len(preimage.Data))
+			for _, preimage := range blk.Extrinsic.EP {
+				validatorStatsCurrent[v].NumOfBytesAllPreimages += uint32(len(preimage.Data))
 			}
 		}
 
 		// π′₀[v]g ≡ a[v]g + (κ′v ∈ R)
-		// Where R is the set of reporter keys defined in 11.26 0.6.2
+		// Where R is the set of reporter keys defined in 11.26 0.6.5
 		for reporter := range reporters {
 			if !currValidators[v].IsEmpty() && slices.Equal(currValidators[v].Ed25519, reporter[:]) {
-				newStats.ValidatorsCurrent[v].NumOfGuaranteedReports++
+				validatorStatsCurrent[v].NumOfGuaranteedReports++
 			}
 		}
 
 		// π′₀[v]a ≡ a[v]a + (∃a ∈ EA : av = v)
-		for _, assurance := range block.Extrinsic.EA {
+		for _, assurance := range blk.Extrinsic.EA {
 			if assurance.ValidatorIndex == v {
-				newStats.ValidatorsCurrent[v].NumOfAvailabilityAssurances++
+				validatorStatsCurrent[v].NumOfAvailabilityAssurances++
 			}
 		}
 	}
 
-	return newStats
+	return validatorStatsCurrent, validatorStatsLast
+}
+
+// CalculateNewServiceStatistics updates service statistics.
+// It implements equation 13.11 - 13.15.
+// TODO complete service stats, for now this only supports preimage stats.
+func CalculateNewServiceStatistics(
+	blk block.Block,
+	serviceStatistics validator.ServiceStatistics,
+) validator.ServiceStatistics {
+	if serviceStatistics == nil {
+		serviceStatistics = validator.ServiceStatistics{}
+	}
+	newServiceStats := maps.Clone(serviceStatistics)
+	for _, preimage := range blk.Extrinsic.EP {
+		serviceID := block.ServiceId(preimage.ServiceIndex)
+		record := newServiceStats[serviceID]
+		// p: ∑ (s,p) ∈EP (1, |p|)
+		record.ProvidedCount++
+		record.ProvidedSize += uint32(len(preimage.Data))
+		newServiceStats[serviceID] = record
+	}
+
+	return newServiceStats
 }
 
 // ServiceHashPairs B ≡ {(NS , H)} (eq. 12.15)
@@ -2260,14 +2308,6 @@ func (a *Accumulator) SequentialDelta(
 	return uint32(maxReports), newCtx, transfers, hashPairs
 }
 
-func getServiceIdsAsSet(m map[block.ServiceId]service.ServiceAccount) map[block.ServiceId]struct{} {
-	m2 := make(map[block.ServiceId]struct{}, len(m))
-	for k := range m {
-		m2[k] = struct{}{}
-	}
-	return m2
-}
-
 // ParallelDelta implements equation 12.17 (∆*)
 func (a *Accumulator) ParallelDelta(
 	initialAccState state.AccumulationState,
@@ -2299,17 +2339,11 @@ func (a *Accumulator) ParallelDelta(
 	var allTransfers []service.DeferredTransfer
 	accumHashPairs := make(ServiceHashPairs, 0)
 	newAccState := state.AccumulationState{
-		ServiceState: make(service.ServiceState),
+		ServiceState: initialAccState.ServiceState.Clone(),
 	}
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-
-	// n = ⋃[s∈s]({(∆1(o, w, f , s)o)d ∖ K(d ∖ {s})})
-	allResultServices := make(map[block.ServiceId]service.ServiceAccount)
-
-	// m = ⋃[s∈s](K(d) ∖ K((∆1(o, w, f , s)o)d))
-	resultServicesExclude := make(map[block.ServiceId]struct{})
 
 	for svcId := range serviceIndices {
 		wg.Add(1)
@@ -2337,27 +2371,23 @@ func (a *Accumulator) ParallelDelta(
 				})
 			}
 
-			resultServices := accState.ServiceState.Clone()
-
-			// (∆1(o, w, f , s)o)d ∖ K(d ∖ {s})
-			maps.DeleteFunc(resultServices, func(id block.ServiceId, _ service.ServiceAccount) bool {
-				if id == serviceId {
-					return false
+			// Adds the newly created services after accumulation to the service state set
+			// Removes the deleted services from the state
+			//
+			// n = ⋃[s∈s]({(∆1(o, w, f, s)o)d ∖ K(d ∖ {s})})
+			// m = ⋃[s∈s](K(d) ∖ K((∆1(o, w, f , s)o)d))
+			// (d ∪ n) ∖ m
+			maps.Copy(newAccState.ServiceState, accState.ServiceState)
+			for svc := range newAccState.ServiceState {
+				if svc == serviceId {
+					continue
 				}
 
-				_, ok := initialAccState.ServiceState[id]
-				return ok
-			})
-
-			maps.Copy(allResultServices, resultServices)
-
-			initialServicesKeys := getServiceIdsAsSet(initialAccState.ServiceState)
-			maps.DeleteFunc(initialServicesKeys, func(id block.ServiceId, _ struct{}) bool {
-				_, ok := accState.ServiceState[id]
-				return ok
-			})
-
-			maps.Copy(resultServicesExclude, initialServicesKeys)
+				_, ok := accState.ServiceState[svc]
+				if !ok {
+					delete(newAccState.ServiceState, svc)
+				}
+			}
 
 		}(svcId)
 	}
@@ -2404,14 +2434,6 @@ func (a *Accumulator) ParallelDelta(
 	// Wait for all goroutines to complete
 	wg.Wait()
 
-	// (d ∪ n) ∖ m
-	maps.Copy(newAccState.ServiceState, initialAccState.ServiceState)
-	maps.Copy(newAccState.ServiceState, allResultServices)
-	maps.DeleteFunc(newAccState.ServiceState, func(id block.ServiceId, _ service.ServiceAccount) bool {
-		_, ok := resultServicesExclude[id]
-		return ok
-	})
-
 	// Sort accumulation pairs by service ID to ensure deterministic output
 	sort.Slice(accumHashPairs, func(i, j int) bool {
 		return accumHashPairs[i].ServiceId < accumHashPairs[j].ServiceId
@@ -2453,6 +2475,7 @@ func (a *Accumulator) Delta1(
 					AuthorizationHash: report.AuthorizerHash,
 					Output:            report.Output,
 					PayloadHash:       result.PayloadHash,
+					GasLimit:          result.GasPrioritizationRatio,
 					OutputOrError:     result.Output,
 				}
 				operands = append(operands, operand)

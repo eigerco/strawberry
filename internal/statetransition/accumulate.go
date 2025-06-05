@@ -61,8 +61,8 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 
 	// E(t, s, ↕o)
 	args, err := jam.Marshal(struct {
-		Timeslot             jamtime.Timeslot
-		ServiceID            block.ServiceId
+		Timeslot             jamtime.Timeslot `jam:"encoding=compact"`
+		ServiceID            block.ServiceId  `jam:"encoding=compact"`
 		AccumulationOperands []state.AccumulationOperand
 	}{
 		Timeslot:             newTime,
@@ -141,9 +141,11 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	if err != nil {
 		errPanic := &polkavm.ErrPanic{}
 		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {
+			log.Println("Program invocation failed with error:", err)
 			return newCtxPair.ExceptionalCtx.AccumulationState, newCtxPair.ExceptionalCtx.DeferredTransfers, nil, uint64(remainingGas)
 		}
-		return newCtxPair.ExceptionalCtx.AccumulationState, newCtxPair.ExceptionalCtx.DeferredTransfers, nil, uint64(remainingGas)
+		// halt
+		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(remainingGas)
 	}
 	// if o ∈ Y ∖ H. There is no sure way to check that a byte array is a hash
 	// one way would be to check the shannon entropy but this also not a guarantee, so we just limit to checking the size
@@ -160,15 +162,8 @@ func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.Servi
 	serviceState := u.ServiceState.Clone()
 	delete(serviceState, serviceIndex)
 	ctx := polkavm.AccumulateContext{
-		ServiceId: serviceIndex,
-		AccumulationState: state.AccumulationState{
-			ServiceState: map[block.ServiceId]service.ServiceAccount{
-				serviceIndex: u.ServiceState[serviceIndex],
-			},
-			ValidatorKeys:            u.ValidatorKeys,
-			PendingAuthorizersQueues: u.PendingAuthorizersQueues,
-			PrivilegedServices:       u.PrivilegedServices,
-		},
+		ServiceId:         serviceIndex,
+		AccumulationState: u,
 		DeferredTransfers: []service.DeferredTransfer{},
 	}
 

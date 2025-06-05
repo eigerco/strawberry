@@ -41,7 +41,7 @@ func InitializeMemory(roData, rwData, argsData []byte, stackSize uint32, initial
 		return Memory{}, ErrMemoryLayoutOverflowsAddressSpace
 	}
 	stackSizeAligned := alignToPage(uint64(stackSize)) // P(s)
-	return Memory{
+	mem := Memory{
 		// if Z_Z		≤ i < Z_Z + |o|
 		// if Z_Z + |o| ≤ i < Z_Z + P(|o|)
 		ro: memorySegment{
@@ -69,7 +69,9 @@ func InitializeMemory(roData, rwData, argsData []byte, stackSize uint32, initial
 			access:  ReadOnly,
 			data:    copySized(argsData, alignToPage(uint64(len(argsData)))),
 		},
-	}, nil
+	}
+	mem.currentHeapPointer = mem.rw.address + uint64(len(mem.rw.data)) + PageSize // Note: extra Z_P is debatable
+	return mem, nil
 }
 
 func InitializeCustomMemory(roAddr, rwAddr, stackAddr, argsAddr, roSize, rwSize, stackSize, argsSize uint64) Memory {
