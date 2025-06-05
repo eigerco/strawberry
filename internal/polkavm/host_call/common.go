@@ -65,6 +65,8 @@ const (
 	VoidID
 	InvokeID
 	ExpungeID
+
+	LogID = 100
 )
 
 type Code uint64
