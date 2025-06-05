@@ -125,13 +125,14 @@ type AccumulationState struct {
 	PrivilegedServices       service.PrivilegedServices                         // Privileges state (x ∈ (NS, NS, NS, D⟨NS → NG⟩))
 }
 
-// AccumulationOperand represents a single operand for accumulation (equation 179 v0.4.5)
+// AccumulationOperand represents a single operand for accumulation (eq. 12.19)
 type AccumulationOperand struct {
 	WorkPackageHash   crypto.Hash                   // Work-package hash (h ∈ H)
 	SegmentRoot       crypto.Hash                   // Segment root (e ∈ H)
 	AuthorizationHash crypto.Hash                   // Authorization hash (a ∈ H)
 	Output            []byte                        // Output of the work report (o ∈ Y)
 	PayloadHash       crypto.Hash                   // Payload hash (y ∈ H)
+	GasLimit          uint64                        `jam:"encoding=compact"` // Gas limit (g ∈ NG)
 	OutputOrError     block.WorkResultOutputOrError // Output or error (d ∈ Y ∪ J)
 }
 

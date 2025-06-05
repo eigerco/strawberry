@@ -20,10 +20,11 @@ const (
 // for practical reasons we define each memory segment separately
 // so we don't have to allocate [2^32]byte unnecessarily
 type Memory struct {
-	ro    memorySegment
-	rw    memorySegment
-	stack memorySegment
-	args  memorySegment
+	ro                 memorySegment
+	rw                 memorySegment
+	stack              memorySegment
+	args               memorySegment
+	currentHeapPointer uint64
 }
 
 type memorySegment struct {
@@ -52,6 +53,8 @@ func (m *Memory) Read(address uint64, data []byte) error {
 	} else if address >= m.args.address && address+uint64(len(data)) <= m.args.address+uint64(len(m.args.data)) {
 		memoryData = m.args.data[address-m.args.address : address-m.args.address+uint64(len(data))]
 		access = m.args.access
+		logd := make([]byte, len(data))
+		copy(logd, memoryData)
 	}
 
 	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋
@@ -108,21 +111,35 @@ func (m *Memory) Write(address uint64, data []byte) error {
 }
 
 func (m *Memory) Sbrk(size uint64) (uint64, error) {
-	currentHeapPointer := m.rw.address + uint64(len(m.rw.data)) // h
 	if size == 0 {
-		return currentHeapPointer, nil
+		return m.currentHeapPointer, nil
 	}
 
-	newHeapPointer := currentHeapPointer + size
-	if newHeapPointer >= m.stack.address { // where the next memory segment begins
-		return 0, &ErrPageFault{Reason: "allocation failed heap pointer exceeds maximum allowed", Address: newHeapPointer}
+	nextPageBoundary := alignToPage(m.currentHeapPointer)
+	newHeapPointer := m.currentHeapPointer + size
+
+	if newHeapPointer > nextPageBoundary {
+		finalBoundary := alignToPage(newHeapPointer)
+		idxStart := nextPageBoundary / PageSize
+		idxEnd := finalBoundary / PageSize
+		pageCount := idxEnd - idxStart
+
+		m.allocatePages(idxStart, pageCount)
 	}
 
-	if newHeapPointer > currentHeapPointer {
-		m.rw.data = make([]byte, alignToPage(newHeapPointer))
-	}
+	// Advance the heap
+	m.currentHeapPointer = newHeapPointer
+	return m.currentHeapPointer, nil
+}
 
-	return m.rw.address + uint64(len(m.rw.data)), nil
+func (m *Memory) allocatePages(startPage uint64, count uint64) {
+	required := (startPage + count) * PageSize
+	if uint64(len(m.rw.data)) < required {
+		// Grow rw_data to fit new allocation
+		newData := make([]byte, required)
+		copy(newData, m.rw.data)
+		m.rw.data = newData
+	}
 }
 
 // SetAccess updates the access mode

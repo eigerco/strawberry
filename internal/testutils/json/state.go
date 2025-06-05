@@ -1043,11 +1043,11 @@ func NewWorkResult(result block.WorkResult) WorkResult {
 		AccumulateGas: result.GasPrioritizationRatio,
 		Result:        resultMap,
 		RefineLoad: RefineLoad{
-			GasUsed:        uint64(result.GasUsed),
-			Imports:        uint16(result.ImportsCount),
-			ExtrinsicCount: uint16(result.ExtrinsicCount),
-			ExtrinsicSize:  uint32(result.ExtrinsicSize),
-			Exports:        uint16(result.ExportsCount),
+			GasUsed:        result.GasUsed,
+			Imports:        result.ImportsCount,
+			ExtrinsicCount: result.ExtrinsicCount,
+			ExtrinsicSize:  result.ExtrinsicSize,
+			Exports:        result.ExportsCount,
 		},
 	}
 }
