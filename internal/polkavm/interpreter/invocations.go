@@ -59,6 +59,9 @@ func InvokeHostCall[X any](
 				var gasRemaining polkavm.Gas
 				gasRemaining, i.regs, i.memory, x, err = hostCall(hostCallIndex, polkavm.Gas(i.gasRemaining), i.regs, i.memory, x)
 				i.gasRemaining = int64(gasRemaining)
+				if err != nil {
+					return x, err
+				}
 				i.instructionCounter += 1 + polkavm.Skip(i.instructionCounter, i.bitmask)
 				continue
 			}

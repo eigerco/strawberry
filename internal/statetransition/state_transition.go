@@ -45,6 +45,11 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 
 	intermediateCoreAssignments := CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
 
+	newJudgements, err := CalculateNewJudgements(prevTimeSlot, newBlock.Extrinsic.ED, s.PastJudgements, s.ValidatorState)
+	if err != nil {
+		return err
+	}
+
 	// Update SAFROLE state.
 	safroleInput, err := NewSafroleInputFromBlock(newBlock)
 	if err != nil {
@@ -55,7 +60,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		prevTimeSlot,
 		s.EntropyPool,
 		s.ValidatorState,
-		s.PastJudgements.OffendingValidators)
+		newJudgements.OffendingValidators)
 	if err != nil {
 		return err
 	}
@@ -92,11 +97,6 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 
 	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
 	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, serviceHashPairs)
-	if err != nil {
-		return err
-	}
-
-	newJudgements, err := CalculateNewJudgements(newTimeSlot, newBlock.Extrinsic.ED, s.PastJudgements, s.ValidatorState)
 	if err != nil {
 		return err
 	}
@@ -852,12 +852,12 @@ func addUniqueEdPubKey(slice []ed25519.PublicKey, key ed25519.PublicKey) []ed255
 // ψ'b ≡ ψb ∪ {r | {r, 0} ∈ V}
 // ψ'w ≡ ψw ∪ {r | {r, ⌊1/3V⌋} ∈ V}
 // ψ'o ≡ ψo ∪ {k | (r, k, s) ∈ c} ∪ {k | (r, v, k, s) ∈ f}
-func CalculateNewJudgements(newTimeslot jamtime.Timeslot, disputes block.DisputeExtrinsic, stateJudgements state.Judgements, validators validator.ValidatorState) (state.Judgements, error) {
+func CalculateNewJudgements(priorTimeslot jamtime.Timeslot, disputes block.DisputeExtrinsic, stateJudgements state.Judgements, validators validator.ValidatorState) (state.Judgements, error) {
 	if err := verifySortedUnique(disputes); err != nil {
 		return stateJudgements, err
 	}
 
-	if err := verifyAllSignatures(newTimeslot, disputes, validators); err != nil {
+	if err := verifyAllSignatures(priorTimeslot, disputes, validators); err != nil {
 		return stateJudgements, err
 	}
 
