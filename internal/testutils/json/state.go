@@ -572,23 +572,7 @@ func (as ActivityStatistics) To() validator.ActivityStatisticsState {
 
 	serviceStats := make([]validator.ServiceStatistics, len(as.Services))
 	for i, s := range as.Services {
-		serviceStats[i] = validator.ServiceStatistics{
-			ID: block.ServiceId(s.ID),
-			Record: validator.ServiceActivityRecord{
-				ProvidedCount:      s.Record.ProvidedCount,
-				ProvidedSize:       s.Record.ProvidedSize,
-				RefinementCount:    s.Record.RefinementCount,
-				RefinementGasUsed:  s.Record.RefinementGasUsed,
-				Imports:            s.Record.Imports,
-				Exports:            s.Record.Exports,
-				ExtrinsicSize:      s.Record.ExtrinsicSize,
-				ExtrinsicCount:     s.Record.ExtrinsicCount,
-				AccumulateCount:    s.Record.AccumulateCount,
-				AccumulateGasUsed:  s.Record.AccumulateGasUsed,
-				OnTransfersCount:   s.Record.OnTransfersCount,
-				OnTransfersGasUsed: s.Record.OnTransfersGasUsed,
-			},
-		}
+		serviceStats[i] = s.To()
 	}
 
 	return validator.ActivityStatisticsState{
@@ -640,23 +624,7 @@ func NewActivityStatistics(stats validator.ActivityStatisticsState) ActivityStat
 
 	serviceStats := make([]ServiceStatistics, len(stats.Services))
 	for i, s := range stats.Services {
-		serviceStats[i] = ServiceStatistics{
-			ID: uint32(s.ID),
-			Record: ServiceStatisticsRecord{
-				ProvidedCount:      s.Record.ProvidedCount,
-				ProvidedSize:       s.Record.ProvidedSize,
-				RefinementCount:    s.Record.RefinementCount,
-				RefinementGasUsed:  s.Record.RefinementGasUsed,
-				Imports:            s.Record.Imports,
-				Exports:            s.Record.Exports,
-				ExtrinsicSize:      s.Record.ExtrinsicSize,
-				ExtrinsicCount:     s.Record.ExtrinsicCount,
-				AccumulateCount:    s.Record.AccumulateCount,
-				AccumulateGasUsed:  s.Record.AccumulateGasUsed,
-				OnTransfersCount:   s.Record.OnTransfersCount,
-				OnTransfersGasUsed: s.Record.OnTransfersGasUsed,
-			},
-		}
+		serviceStats[i] = NewServiceStatistics(s)
 	}
 
 	return ActivityStatistics{
@@ -705,6 +673,46 @@ type ServiceStatisticsRecord struct {
 type ServiceStatistics struct {
 	ID     uint32                  `json:"id"`
 	Record ServiceStatisticsRecord `json:"record"`
+}
+
+func (s ServiceStatistics) To() validator.ServiceStatistics {
+	return validator.ServiceStatistics{
+		ID: block.ServiceId(s.ID),
+		Record: validator.ServiceActivityRecord{
+			ProvidedCount:      s.Record.ProvidedCount,
+			ProvidedSize:       s.Record.ProvidedSize,
+			RefinementCount:    s.Record.RefinementCount,
+			RefinementGasUsed:  s.Record.RefinementGasUsed,
+			Imports:            s.Record.Imports,
+			Exports:            s.Record.Exports,
+			ExtrinsicSize:      s.Record.ExtrinsicSize,
+			ExtrinsicCount:     s.Record.ExtrinsicCount,
+			AccumulateCount:    s.Record.AccumulateCount,
+			AccumulateGasUsed:  s.Record.AccumulateGasUsed,
+			OnTransfersCount:   s.Record.OnTransfersCount,
+			OnTransfersGasUsed: s.Record.OnTransfersGasUsed,
+		},
+	}
+}
+
+func NewServiceStatistics(s validator.ServiceStatistics) ServiceStatistics {
+	return ServiceStatistics{
+		ID: uint32(s.ID),
+		Record: ServiceStatisticsRecord{
+			ProvidedCount:      s.Record.ProvidedCount,
+			ProvidedSize:       s.Record.ProvidedSize,
+			RefinementCount:    s.Record.RefinementCount,
+			RefinementGasUsed:  s.Record.RefinementGasUsed,
+			Imports:            s.Record.Imports,
+			Exports:            s.Record.Exports,
+			ExtrinsicSize:      s.Record.ExtrinsicSize,
+			ExtrinsicCount:     s.Record.ExtrinsicCount,
+			AccumulateCount:    s.Record.AccumulateCount,
+			AccumulateGasUsed:  s.Record.AccumulateGasUsed,
+			OnTransfersCount:   s.Record.OnTransfersCount,
+			OnTransfersGasUsed: s.Record.OnTransfersGasUsed,
+		},
+	}
 }
 
 type DisputeRecords struct {
