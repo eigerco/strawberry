@@ -2291,7 +2291,7 @@ func (a *Accumulator) ParallelDelta(
 	var allTransfers []service.DeferredTransfer
 	accumHashPairs := make(ServiceHashPairs, 0)
 	newAccState := state.AccumulationState{
-		ServiceState: maps.Clone(initialAccState.ServiceState),
+		ServiceState: initialAccState.ServiceState.Clone(),
 	}
 
 	var mu sync.Mutex

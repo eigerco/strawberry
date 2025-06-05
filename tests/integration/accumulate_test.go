@@ -176,6 +176,7 @@ func mapAccumulateState(t *testing.T, s AccumulateState) *state.State {
 		TimeslotIndex:       s.Slot,
 		AccumulationQueue:   mapAccumulationQueue(s.ReadyQueue),
 		AccumulationHistory: mapAccumulateHistory(s.Accumulated),
+		// TODO add activity statistics after it is implemented
 	}
 }
 
