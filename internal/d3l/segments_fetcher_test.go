@@ -1,3 +1,5 @@
+//go:build integration
+
 package d3l_test
 
 import (
@@ -5,6 +7,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"testing"
+
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/d3l"
@@ -15,7 +19,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 type assurerClientMock struct {
