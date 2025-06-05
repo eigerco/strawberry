@@ -22,7 +22,7 @@ type ActivityStatisticsState struct {
 	ValidatorsCurrent [common.NumberOfValidators]ValidatorStatistics // Present validator statistics (π_v) - The activity statistics for the validators which are currently being accumulated.
 	ValidatorsLast    [common.NumberOfValidators]ValidatorStatistics // Completed validator statistics (π_l) - The activity statistics for the validators which have completed their work.
 	Cores             [common.TotalNumberOfCores]CoreStatistics      // Core statistics (π_c) - The activity statistics for each core.
-	Services          []ServiceStatistics                            // Service statistics (π_s) - The activity statistics for each service.
+	Services          ServiceStatistics                              // Service statistics (π_s) - The activity statistics for each service.
 }
 
 type ValidatorStatistics struct {
@@ -63,10 +63,7 @@ type ServiceActivityRecord struct {
 	OnTransfersGasUsed uint64 `jam:"encoding=compact"` // OnTransfersGasUsed (t.1) is the amount of gas used for processing transfers by service.
 }
 
-type ServiceStatistics struct {
-	ID     block.ServiceId       // ID is the service identifier
-	Record ServiceActivityRecord // Record contains the activity metrics for the service
-}
+type ServiceStatistics map[block.ServiceId]ServiceActivityRecord
 
 // Implements equation 59 from the graypaper, i.e Φ(k). If any of the queued
 // validator data matches the offenders list (ψ′), all the keys for that

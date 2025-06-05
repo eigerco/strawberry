@@ -528,7 +528,7 @@ type ActivityStatistics struct {
 	ValsCurrent []ValidatorStatistics `json:"vals_current"`
 	ValsLast    []ValidatorStatistics `json:"vals_last"`
 	Cores       []CoreStatistics      `json:"cores"`
-	Services    []ServiceStatistics   `json:"services"`
+	Services    ServiceStatistics     `json:"services"`
 }
 
 func (as ActivityStatistics) To() validator.ActivityStatisticsState {
@@ -570,16 +570,11 @@ func (as ActivityStatistics) To() validator.ActivityStatisticsState {
 		}
 	}
 
-	serviceStats := make([]validator.ServiceStatistics, len(as.Services))
-	for i, s := range as.Services {
-		serviceStats[i] = s.To()
-	}
-
 	return validator.ActivityStatisticsState{
 		ValidatorsCurrent: valsCurrent,
 		ValidatorsLast:    valsLast,
 		Cores:             coreStats,
-		Services:          serviceStats,
+		Services:          as.Services.To(),
 	}
 }
 
@@ -622,16 +617,11 @@ func NewActivityStatistics(stats validator.ActivityStatisticsState) ActivityStat
 		}
 	}
 
-	serviceStats := make([]ServiceStatistics, len(stats.Services))
-	for i, s := range stats.Services {
-		serviceStats[i] = NewServiceStatistics(s)
-	}
-
 	return ActivityStatistics{
 		ValsCurrent: valsCurrent,
 		ValsLast:    valsLast,
 		Cores:       coreStats,
-		Services:    serviceStats,
+		Services:    NewServiceStatistics(stats.Services),
 	}
 }
 
@@ -670,49 +660,63 @@ type ServiceStatisticsRecord struct {
 	OnTransfersGasUsed uint64 `json:"on_transfers_gas_used"`
 }
 
-type ServiceStatistics struct {
+type ServiceStatisticsEntry struct {
 	ID     uint32                  `json:"id"`
 	Record ServiceStatisticsRecord `json:"record"`
 }
 
+type ServiceStatistics []ServiceStatisticsEntry
+
 func (s ServiceStatistics) To() validator.ServiceStatistics {
-	return validator.ServiceStatistics{
-		ID: block.ServiceId(s.ID),
-		Record: validator.ServiceActivityRecord{
-			ProvidedCount:      s.Record.ProvidedCount,
-			ProvidedSize:       s.Record.ProvidedSize,
-			RefinementCount:    s.Record.RefinementCount,
-			RefinementGasUsed:  s.Record.RefinementGasUsed,
-			Imports:            s.Record.Imports,
-			Exports:            s.Record.Exports,
-			ExtrinsicSize:      s.Record.ExtrinsicSize,
-			ExtrinsicCount:     s.Record.ExtrinsicCount,
-			AccumulateCount:    s.Record.AccumulateCount,
-			AccumulateGasUsed:  s.Record.AccumulateGasUsed,
-			OnTransfersCount:   s.Record.OnTransfersCount,
-			OnTransfersGasUsed: s.Record.OnTransfersGasUsed,
-		},
+	newServiceStats := make(validator.ServiceStatistics, len(s))
+	for _, statEntry := range s {
+		newServiceStats[block.ServiceId(statEntry.ID)] = validator.ServiceActivityRecord{
+			ProvidedCount:      statEntry.Record.ProvidedCount,
+			ProvidedSize:       statEntry.Record.ProvidedSize,
+			RefinementCount:    statEntry.Record.RefinementCount,
+			RefinementGasUsed:  statEntry.Record.RefinementGasUsed,
+			Imports:            statEntry.Record.Imports,
+			Exports:            statEntry.Record.Exports,
+			ExtrinsicSize:      statEntry.Record.ExtrinsicSize,
+			ExtrinsicCount:     statEntry.Record.ExtrinsicCount,
+			AccumulateCount:    statEntry.Record.AccumulateCount,
+			AccumulateGasUsed:  statEntry.Record.AccumulateGasUsed,
+			OnTransfersCount:   statEntry.Record.OnTransfersCount,
+			OnTransfersGasUsed: statEntry.Record.OnTransfersGasUsed,
+		}
 	}
+
+	return newServiceStats
 }
 
 func NewServiceStatistics(s validator.ServiceStatistics) ServiceStatistics {
-	return ServiceStatistics{
-		ID: uint32(s.ID),
-		Record: ServiceStatisticsRecord{
-			ProvidedCount:      s.Record.ProvidedCount,
-			ProvidedSize:       s.Record.ProvidedSize,
-			RefinementCount:    s.Record.RefinementCount,
-			RefinementGasUsed:  s.Record.RefinementGasUsed,
-			Imports:            s.Record.Imports,
-			Exports:            s.Record.Exports,
-			ExtrinsicSize:      s.Record.ExtrinsicSize,
-			ExtrinsicCount:     s.Record.ExtrinsicCount,
-			AccumulateCount:    s.Record.AccumulateCount,
-			AccumulateGasUsed:  s.Record.AccumulateGasUsed,
-			OnTransfersCount:   s.Record.OnTransfersCount,
-			OnTransfersGasUsed: s.Record.OnTransfersGasUsed,
-		},
+	newServiceStats := make(ServiceStatistics, 0, len(s))
+	for id, record := range s {
+		newServiceStats = append(newServiceStats, ServiceStatisticsEntry{
+			ID: uint32(id),
+			Record: ServiceStatisticsRecord{
+				ProvidedCount:      record.ProvidedCount,
+				ProvidedSize:       record.ProvidedSize,
+				RefinementCount:    record.RefinementCount,
+				RefinementGasUsed:  record.RefinementGasUsed,
+				Imports:            record.Imports,
+				Exports:            record.Exports,
+				ExtrinsicSize:      record.ExtrinsicSize,
+				ExtrinsicCount:     record.ExtrinsicCount,
+				AccumulateCount:    record.AccumulateCount,
+				AccumulateGasUsed:  record.AccumulateGasUsed,
+				OnTransfersCount:   record.OnTransfersCount,
+				OnTransfersGasUsed: record.OnTransfersGasUsed,
+			},
+		})
 	}
+
+	// Sort by Service ID
+	sort.Slice(newServiceStats, func(i, j int) bool {
+		return newServiceStats[i].ID < newServiceStats[j].ID
+	})
+
+	return newServiceStats
 }
 
 type DisputeRecords struct {
