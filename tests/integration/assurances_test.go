@@ -103,8 +103,9 @@ func mapCoreAssignments(availAssignments []*Assignment) state.CoreAssignments {
 		if a == nil {
 			return nil
 		}
+		report := mapReport(a.Report)
 		return &state.Assignment{
-			WorkReport: mapReport(a.Report),
+			WorkReport: &report,
 			Time:       a.Timeout,
 		}
 	})
@@ -127,15 +128,15 @@ func mapSlice[T1, T2 any](s1 []T1, fn func(T1) T2) (s2 []T2) {
 	return
 }
 
-func mapReport(r *Report) *block.WorkReport {
+func mapReport(r *Report) block.WorkReport {
 	if r == nil {
-		return nil
+		panic("cannot map nil report")
 	}
 	segmentRootLookup := make(map[crypto.Hash]crypto.Hash)
 	for _, pair := range r.SegmentRootLookup {
 		segmentRootLookup[mapHash(pair.Key)] = mapHash(pair.Val)
 	}
-	return &block.WorkReport{
+	return block.WorkReport{
 		WorkPackageSpecification: block.WorkPackageSpecification{
 			WorkPackageHash:           mapHash(r.PackageSpec.Hash),
 			AuditableWorkBundleLength: r.PackageSpec.Length,
@@ -199,7 +200,7 @@ func TestAssurancesTiny(t *testing.T) {
 
 			newBlock := mapBlock(tc.Input)
 			theState := mapAssurancesState(tc.PreState)
-			var removedReports []*block.WorkReport
+			var removedReports []block.WorkReport
 			theState.CoreAssignments, removedReports, err = statetransition.CalculateIntermediateCoreFromAssurances(theState.ValidatorState.CurrentValidators, theState.CoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
 			if tc.Output.Err != "" {
 				require.EqualError(t, err, strings.ReplaceAll(tc.Output.Err, "_", " "))

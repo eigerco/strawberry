@@ -65,7 +65,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		return err
 	}
 
-	intermediateCoreAssignments, _, err = CalculateIntermediateCoreFromAssurances(s.ValidatorState.CurrentValidators, intermediateCoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
+	intermediateCoreAssignments, availableReports, err := CalculateIntermediateCoreFromAssurances(s.ValidatorState.CurrentValidators, intermediateCoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
 	if err != nil {
 		return err
 	}
@@ -75,8 +75,6 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		return err
 	}
 	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators)
-
-	workReports := GetAvailableWorkReports(newCoreAssignments)
 
 	newAccumulationQueue,
 		newAccumulationHistory,
@@ -88,7 +86,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		&newBlock.Header,
 		s,
 		newTimeSlot,
-		workReports,
+		availableReports,
 	)
 	finalServicesState, err := CalculateIntermediateServiceState(newBlock.Extrinsic.EP, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
 	if err != nil {
@@ -274,7 +272,7 @@ func CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeEx
 // It calculates the intermediate core assignments based on availability
 // assurances, and also returns the set of now avaiable work reports.
 // (GP v0.6.5)
-func CalculateIntermediateCoreAssignments(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments, header block.Header) (state.CoreAssignments, []*block.WorkReport, error) {
+func CalculateIntermediateCoreAssignments(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments, header block.Header) (state.CoreAssignments, []block.WorkReport, error) {
 	// Initialize availability count for each core
 	availabilityCounts := make(map[uint16]int)
 
@@ -295,7 +293,7 @@ func CalculateIntermediateCoreAssignments(assurances block.AssurancesExtrinsic, 
 	}
 
 	// W, the set of work reports that have become available. (see equation 11.16)
-	var availableReports []*block.WorkReport
+	var availableReports []block.WorkReport
 	// Update assignments based on availability
 	// This implements equation 11.17:
 	// ∀c ∈ NC : ρ‡[c] ≡ { ∅ if ρ[c]w ∈ W ∨ Ht ≥ ρ†[c]t + U
@@ -311,7 +309,11 @@ func CalculateIntermediateCoreAssignments(assurances block.AssurancesExtrinsic, 
 			// includes reports that could already be timed out. We are lenient
 			// here, as long as they are made available they get added to the
 			// set.
-			availableReports = append(availableReports, coreAssignments[coreIndex].WorkReport)
+			if coreAssignments[coreIndex].WorkReport == nil {
+				// Shouldn't happen.
+				return coreAssignments, nil, fmt.Errorf("invalid state: core %d has no work report", coreIndex)
+			}
+			availableReports = append(availableReports, *coreAssignments[coreIndex].WorkReport)
 			coreAssignments[coreIndex] = nil
 		}
 		// Any report that isn't lucky enough to be made available is timed out and removed.
@@ -2076,7 +2078,7 @@ func assuranceIsOrderedByValidatorIndex(assurances block.AssurancesExtrinsic) bo
 // validates that the assurance extrinsic, checking signatures and that ordering
 // is correct with no duplicates. Signatures should be checked using the prior
 // state active validators, ie κ. (GP v0.6.5)
-func CalculateIntermediateCoreFromAssurances(validators safrole.ValidatorsData, assignments state.CoreAssignments, header block.Header, assurances block.AssurancesExtrinsic) (state.CoreAssignments, []*block.WorkReport, error) {
+func CalculateIntermediateCoreFromAssurances(validators safrole.ValidatorsData, assignments state.CoreAssignments, header block.Header, assurances block.AssurancesExtrinsic) (state.CoreAssignments, []block.WorkReport, error) {
 	if err := validateAssurancesSignature(validators, header, assurances); err != nil {
 		return assignments, nil, err
 	}
@@ -2115,16 +2117,6 @@ func validateAssurancesSignature(validators safrole.ValidatorsData, header block
 		}
 	}
 	return nil
-}
-
-// W ≡ [ ρ†[c]w | c <− N_C, ∑ [a∈E_A] a_f [c] > 2/3 V ]
-func GetAvailableWorkReports(coreAssignments state.CoreAssignments) (workReports []block.WorkReport) {
-	for _, c := range coreAssignments {
-		if c != nil {
-			workReports = append(workReports, *c.WorkReport)
-		}
-	}
-	return workReports
 }
 
 // CalculateNewActivityStatistics updates activity statistics.

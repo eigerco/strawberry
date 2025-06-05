@@ -175,8 +175,9 @@ func mapRho(rhos []Rho) state.CoreAssignments {
 	assignments := state.CoreAssignments{}
 	for i, rho := range rhos {
 		if rho.Report != nil {
+			report := mapReport(rho.Report)
 			r := &state.Assignment{
-				WorkReport: mapReport(rho.Report),
+				WorkReport: &report,
 				Time:       jamtime.Timeslot(rho.Timeout),
 			}
 			assignments[i] = r
