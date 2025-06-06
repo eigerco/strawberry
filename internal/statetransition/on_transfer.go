@@ -1,8 +1,9 @@
 package statetransition
 
 import (
-	"github.com/eigerco/strawberry/internal/jamtime"
 	"log"
+
+	"github.com/eigerco/strawberry/internal/jamtime"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/polkavm"
@@ -14,7 +15,7 @@ import (
 
 // InvokePVMOnTransfer On-Transfer service-account invocation (ΨT).
 // The only state alteration it facilitates are basic alteration to the storage of the subject account
-func InvokePVMOnTransfer(serviceState service.ServiceState, slot jamtime.Timeslot, serviceIndex block.ServiceId, transfers []service.DeferredTransfer) (service.ServiceAccount, uint64) {
+func (a *Accumulator) InvokePVMOnTransfer(serviceState service.ServiceState, slot jamtime.Timeslot, serviceIndex block.ServiceId, transfers []service.DeferredTransfer) (service.ServiceAccount, uint64) {
 	serviceAccount := serviceState[serviceIndex]
 	serviceCode := serviceAccount.PreimageLookup[serviceAccount.CodeHash]
 	if serviceCode == nil || len(transfers) == 0 {
@@ -39,6 +40,9 @@ func InvokePVMOnTransfer(serviceState service.ServiceState, slot jamtime.Timeslo
 		switch hostCall {
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
+		case host_call.FetchID:
+			entropy := a.state.EntropyPool[0]
+			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, nil, &entropy, nil, nil, nil, nil, nil, transfers)
 		case host_call.LookupID:
 			gasCounter, regs, mem, err = host_call.Lookup(gasCounter, regs, mem, serviceAccount, serviceIndex, serviceState)
 		case host_call.ReadID:
