@@ -926,14 +926,14 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 			},
 		}
 
-		block := block.Block{
+		blk := block.Block{
 			Header: block.Header{
 				TimeSlotIndex:    jamtime.Timeslot(600), // First slot in new epoch
 				BlockAuthorIndex: 2,
 			},
 		}
 
-		newStats := CalculateNewActivityStatistics(block, jamtime.Timeslot(599), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{})
+		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(599), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{}, []block.WorkReport{})
 
 		// Check that stats were rotated correctly
 		assert.Equal(t, uint32(10), newStats.ValidatorsLast[0].NumOfBlocks, "Previous current stats should become history")
@@ -947,7 +947,7 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
 		}
 
-		block := block.Block{
+		blk := block.Block{
 			Header: block.Header{
 				TimeSlotIndex:    jamtime.Timeslot(5),
 				BlockAuthorIndex: 1,
@@ -963,7 +963,7 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 			},
 		}
 
-		newStats := CalculateNewActivityStatistics(block, jamtime.Timeslot(5), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{})
+		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{}, []block.WorkReport{})
 
 		// Check block author stats
 		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[1].NumOfBlocks, "Block count should increment")
@@ -980,7 +980,7 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
 		}
 
-		block := block.Block{
+		blk := block.Block{
 			Header: block.Header{
 				TimeSlotIndex: jamtime.Timeslot(5),
 			},
@@ -1011,7 +1011,7 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 		reporters := make(crypto.ED25519PublicKeySet)
 		reporters.Add(ed25519key1)
 		reporters.Add(ed25519key2)
-		newStats := CalculateNewActivityStatistics(block, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}})
+		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}}, []block.WorkReport{})
 
 		// Check guarantees and assurances
 		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[0].NumOfGuaranteedReports, "Should count all guarantees for validator 0")
@@ -1034,7 +1034,7 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 			},
 		}
 
-		block := block.Block{
+		blk := block.Block{
 			Header: block.Header{
 				TimeSlotIndex:    jamtime.Timeslot(5),
 				BlockAuthorIndex: 1,
@@ -1066,7 +1066,7 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 		reporters := make(crypto.ED25519PublicKeySet)
 		reporters.Add(ed25519key1)
 		reporters.Add(ed25519key2)
-		newStats := CalculateNewActivityStatistics(block, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}})
+		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}}, []block.WorkReport{})
 
 		expected := validator.ValidatorStatistics{
 			NumOfBlocks:                 6,
@@ -1079,6 +1079,140 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 
 		assert.Equal(t, expected, newStats.ValidatorsCurrent[1], "All statistics should be updated correctly")
 	})
+}
+func TestCalculateNewCoreStatistics(t *testing.T) {
+	bitfieldCore0and1 := [block.AvailBitfieldBytes]byte{}
+	bitfieldCore0and1[0] = 0x03
+
+	testCases := []struct {
+		name              string
+		block             block.Block
+		availableReports  []block.WorkReport
+		expectedCoreStats [common.TotalNumberOfCores]validator.CoreStatistics
+	}{
+		{
+			name:              "empty block, no available reports",
+			block:             block.Block{},
+			availableReports:  []block.WorkReport{},
+			expectedCoreStats: [common.TotalNumberOfCores]validator.CoreStatistics{},
+		},
+		{
+			name: "reports being made available",
+			block: block.Block{
+				Extrinsic: block.Extrinsic{
+					EA: block.AssurancesExtrinsic{
+						{Bitfield: bitfieldCore0and1},
+						{Bitfield: bitfieldCore0and1},
+						{Bitfield: bitfieldCore0and1},
+						{Bitfield: bitfieldCore0and1},
+						{Bitfield: bitfieldCore0and1},
+						{Bitfield: bitfieldCore0and1},
+					},
+				},
+			},
+			availableReports: []block.WorkReport{
+				{
+					CoreIndex: 0,
+					WorkPackageSpecification: block.WorkPackageSpecification{
+						AuditableWorkBundleLength: 8649,
+						SegmentCount:              2,
+					},
+				},
+				{
+					CoreIndex: 1,
+					WorkPackageSpecification: block.WorkPackageSpecification{
+						AuditableWorkBundleLength: 335,
+						SegmentCount:              0,
+					},
+				},
+			},
+			expectedCoreStats: [common.TotalNumberOfCores]validator.CoreStatistics{
+				0: {
+					DALoad:     20961,
+					Popularity: 6,
+				},
+				1: {
+					DALoad:     335,
+					Popularity: 6,
+				},
+			},
+		},
+		{
+			name: "new reports",
+			block: block.Block{
+				Extrinsic: block.Extrinsic{
+					EG: block.GuaranteesExtrinsic{
+						Guarantees: []block.Guarantee{
+							{
+								WorkReport: block.WorkReport{
+									CoreIndex: 0,
+									WorkPackageSpecification: block.WorkPackageSpecification{
+										AuditableWorkBundleLength: 17180,
+										SegmentCount:              3,
+									},
+
+									WorkResults: []block.WorkResult{
+										{
+											GasUsed:        821,
+											ImportsCount:   8,
+											ExportsCount:   17,
+											ExtrinsicCount: 8,
+											ExtrinsicSize:  1526,
+										},
+									},
+								},
+							},
+							{
+								WorkReport: block.WorkReport{
+									CoreIndex: 1,
+									WorkPackageSpecification: block.WorkPackageSpecification{
+										AuditableWorkBundleLength: 12487,
+										SegmentCount:              3,
+									},
+
+									WorkResults: []block.WorkResult{
+										{
+											GasUsed:        697,
+											ImportsCount:   1,
+											ExportsCount:   18,
+											ExtrinsicCount: 3,
+											ExtrinsicSize:  1926,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			availableReports: []block.WorkReport{},
+			expectedCoreStats: [common.TotalNumberOfCores]validator.CoreStatistics{
+				0: {
+					GasUsed:        821,
+					Imports:        8,
+					Exports:        17,
+					ExtrinsicSize:  1526,
+					ExtrinsicCount: 8,
+					BundleSize:     17180,
+				},
+				1: {
+					GasUsed:        697,
+					Imports:        1,
+					Exports:        18,
+					ExtrinsicSize:  1926,
+					ExtrinsicCount: 3,
+					BundleSize:     12487,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			newCoreStats := CalculateNewCoreStatistics(tc.block, [common.TotalNumberOfCores]validator.CoreStatistics{}, tc.availableReports)
+			require.Equal(t, tc.expectedCoreStats, newCoreStats)
+		})
+	}
 }
 
 func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16) block.Verdict {

@@ -190,7 +190,7 @@ func TestStatistics(t *testing.T) {
 				reporters.Add(mustStringToHex(reporter))
 			}
 
-			preState.ActivityStatistics = statetransition.CalculateNewActivityStatistics(newBlock, preState.TimeslotIndex, preState.ActivityStatistics, reporters, preState.ValidatorState.CurrentValidators)
+			preState.ActivityStatistics = statetransition.CalculateNewActivityStatistics(newBlock, preState.TimeslotIndex, preState.ActivityStatistics, reporters, preState.ValidatorState.CurrentValidators, []block.WorkReport{})
 
 			postState := mapStatisticsState(tc.PostState)
 
