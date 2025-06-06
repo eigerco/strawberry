@@ -1,6 +1,7 @@
 package statetransition
 
 import (
+	"github.com/eigerco/strawberry/internal/jamtime"
 	"log"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -13,18 +14,22 @@ import (
 
 // InvokePVMOnTransfer On-Transfer service-account invocation (ΨT).
 // The only state alteration it facilitates are basic alteration to the storage of the subject account
-func InvokePVMOnTransfer(serviceState service.ServiceState, serviceIndex block.ServiceId, transfers []service.DeferredTransfer) service.ServiceAccount {
+func InvokePVMOnTransfer(serviceState service.ServiceState, slot jamtime.Timeslot, serviceIndex block.ServiceId, transfers []service.DeferredTransfer) (service.ServiceAccount, uint64) {
 	serviceAccount := serviceState[serviceIndex]
 	serviceCode := serviceAccount.PreimageLookup[serviceAccount.CodeHash]
 	if serviceCode == nil || len(transfers) == 0 {
-		return serviceAccount
+		return serviceAccount, 0
 	}
 	var gas uint64
 	for _, transfer := range transfers {
 		gas += transfer.GasLimit
 		serviceAccount.Balance += transfer.Balance
 	}
-	args, err := jam.Marshal(transfers)
+	args, err := jam.Marshal(struct {
+		Slot      jamtime.Timeslot `jam:"encoding=compact"`
+		ServiceId block.ServiceId  `jam:"encoding=compact"`
+		Transfers []service.DeferredTransfer
+	}{slot, serviceIndex, transfers})
 	if err != nil {
 		// TODO handle errors appropriately
 		log.Println("error encoding PVM arguments: ", err)
@@ -43,7 +48,7 @@ func InvokePVMOnTransfer(serviceState service.ServiceState, serviceIndex block.S
 		case host_call.InfoID:
 			gasCounter, regs, mem, err = host_call.Info(gasCounter, regs, mem, serviceIndex, serviceState)
 		case host_call.LogID:
-			gasCounter, regs, mem = host_call.Log(gasCounter, regs, mem, nil, &serviceIndex)
+			gasCounter, regs, mem, err = host_call.Log(gasCounter, regs, mem, nil, &serviceIndex)
 		default:
 			regs[polkavm.A0] = uint64(host_call.WHAT)
 			gasCounter -= OnTransferCost
@@ -51,10 +56,10 @@ func InvokePVMOnTransfer(serviceState service.ServiceState, serviceIndex block.S
 		return gasCounter, regs, mem, serviceAccount, err
 	}
 
-	_, _, newServiceAccount, err := interpreter.InvokeWholeProgram(serviceCode, 10, polkavm.Gas(gas), args, hostCallFunc, serviceAccount)
+	gasUsed, _, newServiceAccount, err := interpreter.InvokeWholeProgram(serviceCode, 10, polkavm.Gas(gas), args, hostCallFunc, serviceAccount)
 	if err != nil {
 		// TODO handle errors appropriately
 		log.Println("the virtual machine exited with an error", err)
 	}
-	return newServiceAccount
+	return newServiceAccount, uint64(gasUsed)
 }

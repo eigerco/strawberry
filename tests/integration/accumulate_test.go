@@ -5,12 +5,12 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -19,8 +19,8 @@ import (
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/statetransition"
-
-	"github.com/stretchr/testify/require"
+	"github.com/eigerco/strawberry/internal/validator"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 type AccumulateInput struct {
@@ -42,7 +42,26 @@ type AccumulateState struct {
 			Gas       uint64          `json:"gas"`
 		} `json:"always_acc"`
 	} `json:"privileges"`
-	Accounts []AccumulateServiceAccount `json:"accounts"`
+	Accounts   []AccumulateServiceAccount `json:"accounts"`
+	Statistics []ServiceStat              `json:"statistics"`
+}
+
+type ServiceStat struct {
+	Id     block.ServiceId `json:"id"`
+	Record struct {
+		ProvidedCount      int    `json:"provided_count"`
+		ProvidedSize       int    `json:"provided_size"`
+		RefinementCount    int    `json:"refinement_count"`
+		RefinementGasUsed  int    `json:"refinement_gas_used"`
+		Imports            int    `json:"imports"`
+		Exports            int    `json:"exports"`
+		ExtrinsicSize      int    `json:"extrinsic_size"`
+		ExtrinsicCount     int    `json:"extrinsic_count"`
+		AccumulateCount    uint32 `json:"accumulate_count"`
+		AccumulateGasUsed  uint64 `json:"accumulate_gas_used"`
+		OnTransfersCount   uint32 `json:"on_transfers_count"`
+		OnTransfersGasUsed uint64 `json:"on_transfers_gas_used"`
+	} `json:"record"`
 }
 
 type AccumulateReport struct {
@@ -140,10 +159,15 @@ func TestAccumulate(t *testing.T) {
 			preState := mapAccumulateState(t, tc.PreState)
 			postState := mapAccumulateState(t, tc.PostState)
 
-			newState := &state.State{}
-			preStateVal := *preState // create shallow copy
-			newState = &preStateVal
+			newState := &state.State{
+				ActivityStatistics: validator.ActivityStatisticsState{
+					Services: make(validator.ServiceStatistics),
+				},
+				EntropyPool: preState.EntropyPool, // copy the entropy pool, accumulation is not supposed to do any changes to it
+			}
 
+			var accStat statetransition.AccumulationStats
+			var transfStat statetransition.DeferredTransfersStats
 			header := &block.Header{TimeSlotIndex: tc.Input.Slot}
 			newState.TimeslotIndex = statetransition.CalculateNewTimeState(*header)
 			newState.AccumulationQueue,
@@ -152,8 +176,19 @@ func TestAccumulate(t *testing.T) {
 				newState.PrivilegedServices,
 				newState.ValidatorState.QueuedValidators,
 				newState.PendingAuthorizersQueues,
-				_ = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports)
-
+				_, accStat, transfStat = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports)
+			for id, stat := range accStat {
+				stateStat := newState.ActivityStatistics.Services[id]
+				stateStat.AccumulateCount = stat.AccumulateCount
+				stateStat.AccumulateGasUsed = stat.AccumulateGasUsed
+				newState.ActivityStatistics.Services[id] = stateStat
+			}
+			for id, stat := range transfStat {
+				stateStat := newState.ActivityStatistics.Services[id]
+				stateStat.OnTransfersCount = stat.OnTransfersCount
+				stateStat.OnTransfersGasUsed = stat.OnTransfersGasUsed
+				newState.ActivityStatistics.Services[id] = stateStat
+			}
 			assert.Equal(t, postState, newState)
 		})
 	}
@@ -176,8 +211,23 @@ func mapAccumulateState(t *testing.T, s AccumulateState) *state.State {
 		TimeslotIndex:       s.Slot,
 		AccumulationQueue:   mapAccumulationQueue(s.ReadyQueue),
 		AccumulationHistory: mapAccumulateHistory(s.Accumulated),
-		// TODO add activity statistics after it is implemented
+		ActivityStatistics:  mapStatistics(s.Statistics),
 	}
+}
+
+func mapStatistics(servicesStats []ServiceStat) validator.ActivityStatisticsState {
+	stats := validator.ActivityStatisticsState{
+		Services: make(map[block.ServiceId]validator.ServiceActivityRecord),
+	}
+	for _, svcStat := range servicesStats {
+		stats.Services[svcStat.Id] = validator.ServiceActivityRecord{
+			AccumulateCount:    svcStat.Record.AccumulateCount,
+			AccumulateGasUsed:  svcStat.Record.AccumulateGasUsed,
+			OnTransfersCount:   svcStat.Record.OnTransfersCount,
+			OnTransfersGasUsed: svcStat.Record.OnTransfersGasUsed,
+		}
+	}
+	return stats
 }
 
 func mapAccumulationQueue(queue [][]ReadyQueueItem) state.AccumulationQueue {

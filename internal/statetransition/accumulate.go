@@ -129,7 +129,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		case host_call.YieldID:
 			gasCounter, regs, mem, ctx, err = host_call.Yield(gasCounter, regs, mem, ctx)
 		case host_call.LogID:
-			gasCounter, regs, mem = host_call.Log(gasCounter, regs, mem, nil, &serviceIndex)
+			gasCounter, regs, mem, err = host_call.Log(gasCounter, regs, mem, nil, &serviceIndex)
 		default:
 			regs[polkavm.A0] = uint64(host_call.WHAT)
 			gasCounter -= AccumulateCost
@@ -137,24 +137,24 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		return gasCounter, regs, mem, ctx, err
 	}
 
-	remainingGas, ret, newCtxPair, err := interpreter.InvokeWholeProgram(accState.ServiceState[serviceIndex].EncodedCodeAndMetadata(), 5, polkavm.Gas(gas), args, hostCallFunc, newCtxPair)
+	gasUsed, ret, newCtxPair, err := interpreter.InvokeWholeProgram(accState.ServiceState[serviceIndex].EncodedCodeAndMetadata(), 5, polkavm.Gas(gas), args, hostCallFunc, newCtxPair)
 	if err != nil {
 		errPanic := &polkavm.ErrPanic{}
 		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {
 			log.Println("Program invocation failed with error:", err)
-			return newCtxPair.ExceptionalCtx.AccumulationState, newCtxPair.ExceptionalCtx.DeferredTransfers, nil, uint64(remainingGas)
+			return newCtxPair.ExceptionalCtx.AccumulationState, newCtxPair.ExceptionalCtx.DeferredTransfers, nil, uint64(gasUsed)
 		}
 		// halt
-		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(remainingGas)
+		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(gasUsed)
 	}
 	// if o ∈ Y ∖ H. There is no sure way to check that a byte array is a hash
 	// one way would be to check the shannon entropy but this also not a guarantee, so we just limit to checking the size
 	if len(ret) == crypto.HashSize {
 		h := crypto.Hash(ret)
-		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, &h, uint64(remainingGas)
+		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, &h, uint64(gasUsed)
 	}
 
-	return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(remainingGas)
+	return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(gasUsed)
 }
 
 // newCtx (B.9)
