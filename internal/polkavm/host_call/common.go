@@ -35,6 +35,7 @@ const (
 	VoidCost
 	InvokeCost
 	ExpungeCost
+	LogCost
 )
 
 const (

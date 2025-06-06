@@ -33,7 +33,7 @@ type TestCase struct {
 	ExpectedRegs             polkavm.Registers `json:"expected-regs"`
 	ExpectedPc               uint64            `json:"expected-pc"`
 	ExpectedMemory           []MemoryChunk     `json:"expected-memory"`
-	ExpectedGas              polkavm.Gas       `json:"expected-gas"`
+	ExpectedGas              int64             `json:"expected-gas"`
 	ExpectedPageFaultAddress uint64            `json:"expected-page-fault-address"`
 }
 

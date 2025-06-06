@@ -474,7 +474,12 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 }
 
 // Log A host call for passing a debugging message from the service/authorizer to the hosting environment for logging to the node operator
-func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint16, serviceId *block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory) {
+func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint16, serviceId *block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
+	if gas < LogCost {
+		return gas, regs, mem, polkavm.ErrOutOfGas
+	}
+	gas -= LogCost
+
 	fullMsg := &bytes.Buffer{}
 	lvl := regs[polkavm.A0]
 
@@ -528,7 +533,7 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 	_, _ = fmt.Fprintf(fullMsg, " %s", msgBytes)
 
 	log.Println(fullMsg.String())
-	return gas, regs, mem
+	return gas, regs, mem, nil
 }
 
 // GetChainConstants

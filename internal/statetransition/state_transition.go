@@ -84,7 +84,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		newPrivilegedServices,
 		newQueuedValidators,
 		newPendingCoreAuthorizations,
-		serviceHashPairs := CalculateWorkReportsAndAccumulate(
+		serviceHashPairs, _, _ := CalculateWorkReportsAndAccumulate(
 		&newBlock.Header,
 		s,
 		newTimeSlot,
@@ -1863,10 +1863,9 @@ func PermuteAssignments(entropy crypto.Hash, timeslot jamtime.Timeslot) ([]uint3
 	return rotatedSequence, nil
 }
 
-// CalculateWorkReportsAndAccumulate implements equation 29: (ϑ′, ξ′, δ′, χ′, ι′, φ′, C) ≺ (W*, ϑ, ξ, δ†, χ, ι, φ)
-// with the only difference that we take in available work reports and calculate the accumulatable WR
-// eq. 4.16 W* ≺ (EA, ρ′) and
-// eq. 4.17: (ϑ′, ξ′, δ‡, χ′, ι′, φ′, C) ≺ (W*, ϑ, ξ, δ, χ, ι, φ)
+// CalculateWorkReportsAndAccumulate implements equations. We pass W instead of W* because we also need WQ for
+// updating the state queue.
+// eq. 4.16: (ϑ′, ξ′, δ‡, χ′, ι′, φ′, θ′, I, X) ≺ (W*, ϑ, ξ, δ, χ, ι, φ, τ, τ′)
 func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state.State, newTimeslot jamtime.Timeslot, workReports []block.WorkReport) (
 	newAccumulationQueue state.AccumulationQueue,
 	newAccumulationHistory state.AccumulationHistory,
@@ -1875,6 +1874,8 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	newValidatorKeys safrole.ValidatorsData,
 	newPendingAuthorizersQueues state.PendingAuthorizersQueues,
 	hashPairs ServiceHashPairs,
+	accumulationStats AccumulationStats,
+	transfersStats DeferredTransfersStats,
 ) {
 	// W! ≡ [w S w <− W, |(w_x)p| = 0 ∧ wl = {}] (eq. 12.4)
 	var immediatelyAccWorkReports []block.WorkReport
@@ -1913,8 +1914,8 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	// let g = max(GT, GA ⋅ C + [∑ x∈V(χ_g)](x)) (eq. 12.20)
 	gasLimit := max(service.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
 
-	// let (n, o, t, C) = ∆+(g, W∗, (χ, δ, ι, φ), χg) (eq. 12.21)
-	maxReports, newAccumulationState, transfers, hashPairs := NewAccumulator(currentState, header, newTimeslot).
+	// let (n, o, t, θ′, u) = ∆+(g, W∗, (χ, δ, ι, φ), χg) (eq. 12.22)
+	accumulatedCount, newAccumulationState, transfers, hashPairs, gasPairs := NewAccumulator(currentState, header, newTimeslot).
 		SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
 			PrivilegedServices:       currentState.PrivilegedServices,
 			ServiceState:             currentState.Services,
@@ -1922,28 +1923,76 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 			PendingAuthorizersQueues: currentState.PendingAuthorizersQueues,
 		}, currentState.PrivilegedServices.AmountOfGasPerServiceId)
 
-	// (χ′, δ†, ι′, φ′) ≡ o (eq. 12.22)
+	// (χ′, δ†, ι′, φ′) ≡ o (eq. 12.23)
 	intermediateServiceState := newAccumulationState.ServiceState
 	newPrivilegedServices = newAccumulationState.PrivilegedServices
 	newValidatorKeys = newAccumulationState.ValidatorKeys
 	newPendingAuthorizersQueues = newAccumulationState.PendingAuthorizersQueues
 
-	// δ‡ = {s ↦ ΨT (δ†, τ ′, s, R(t, s)) S (s ↦ a) ∈ δ†} (eq. 12.24)
+	// Compute accumulation statistics
+
+	// N(s) ≡ [r | w <− W*...n, r <− w_r, r_s = s] (eq. 12.26)
+	accumulateCountBySvc := map[block.ServiceId]uint32{}
+	for _, workReport := range accumulatableWorkReports[:accumulatedCount] {
+		for _, result := range workReport.WorkResults {
+			accumulateCountBySvc[result.ServiceId]++
+		}
+	}
+
+	// I ≡ {s ↦([∑(s,u)∈u] (u), |N(s)|) | N(s) ≠ []} (eq. 12.25)
+	accumulationStats = AccumulationStats{}
+	for _, gp := range gasPairs {
+		totalGas := accumulationStats[gp.ServiceId].AccumulateGasUsed
+		totalGas += gp.Gas
+
+		accumulateCount, ok := accumulateCountBySvc[gp.ServiceId]
+		if ok {
+			accumulationStats[gp.ServiceId] = AccumulationStatEntry{
+				AccumulateGasUsed: totalGas,
+				AccumulateCount:   accumulateCount,
+			}
+		}
+	}
+
+	// x  = {s ↦ ΨT(δ†, τ′, s, R(t, s)) | (s ↦ a) ∈ δ†} (eq. 12.28)
+	// δ‡ ≡ {s ↦ a′ T (s ↦ (a, u)) ∈ x} (12.29)
 	postAccumulationServiceState = make(service.ServiceState)
+
+	// X ≡ {d ↦ (|R(t, d)|, u) | R(t, d) ≠ [], ∃a ∶ x[d] = (a, u)} (eq. 12.31)
+	transfersStats = DeferredTransfersStats{}
+
 	for serviceId := range intermediateServiceState {
-		newService := InvokePVMOnTransfer(
+		// R(t, d)
+		receiverTransfers := transfersForReceiver(transfers, serviceId)
+
+		newService, gasUsed := InvokePVMOnTransfer(
 			intermediateServiceState,
+			newTimeslot,
 			serviceId,
-			transfersForReceiver(transfers, serviceId),
+			receiverTransfers,
 		)
+
+		// TODO uncomment when upgrading to v0.6.7
+		//if _, ok := accumulationStats[serviceId]; !ok {
+		//	newService.MostRecentAccumulationTimeslot = newTimeslot
+		//}
+
 		postAccumulationServiceState[serviceId] = newService
+
+		// R(t, d) ≠ []
+		if len(receiverTransfers) > 0 {
+			transfersStats[serviceId] = DeferredTransfersStatEntry{
+				OnTransfersCount:   uint32(len(receiverTransfers)),
+				OnTransfersGasUsed: gasUsed,
+			}
+		}
 	}
 
 	// ξ′E−1 = P(W*...n) (eq. 12.25)
 	// ∀i ∈ NE−1 ∶ ξ′i ≡ ξi+1 (eq. 12.26)
 	newAccumulationHistory = state.AccumulationHistory(append(
 		currentState.AccumulationHistory[1:],
-		getWorkPackageHashes(accumulatableWorkReports[:maxReports]),
+		getWorkPackageHashes(accumulatableWorkReports[:accumulatedCount]),
 	))
 
 	// ξ′E−1
@@ -2035,7 +2084,7 @@ func getWorkPackageHashes(workReports []block.WorkReport) (hashes map[crypto.Has
 	return hashes
 }
 
-// transfersForReceiver R(t ⟦T⟧, d NS ) → ⟦T⟧ (eq. 12.23)
+// transfersForReceiver R(t ⟦T⟧, d NS) → ⟦T⟧ (eq. 12.27)
 func transfersForReceiver(transfers []service.DeferredTransfer, serviceId block.ServiceId) (transfersForReceiver []service.DeferredTransfer) {
 	// [ t | t <− t, t_d = d ]
 	for _, transfer := range transfers {
@@ -2239,7 +2288,31 @@ type ServiceHashPair struct {
 	Hash      crypto.Hash
 }
 
-// SequentialDelta implements equation 12.16 (∆+)
+// ServiceGasPairs U ≡ ⟦(NS , NG)⟧
+type ServiceGasPairs []ServiceGasPair
+
+// AccumulationStats I ∈ D⟨NS →(NG, N)⟩ (eq. 12.24)
+type AccumulationStats map[block.ServiceId]AccumulationStatEntry
+
+type AccumulationStatEntry struct {
+	AccumulateGasUsed uint64
+	AccumulateCount   uint32
+}
+
+// DeferredTransfersStats X ∈ D⟨NS →(N, NG)⟩ (eq. 12.30)
+type DeferredTransfersStats map[block.ServiceId]DeferredTransfersStatEntry
+
+type DeferredTransfersStatEntry struct {
+	OnTransfersCount   uint32
+	OnTransfersGasUsed uint64
+}
+
+type ServiceGasPair struct {
+	ServiceId block.ServiceId
+	Gas       uint64
+}
+
+// SequentialDelta implements equation 12.16 (∆+(NG, ⟦W⟧, U, D⟨NS → NG⟩) → (N, U, ⟦T⟧, B, U))
 func (a *Accumulator) SequentialDelta(
 	gasLimit uint64,
 	workReports []block.WorkReport,
@@ -2250,10 +2323,11 @@ func (a *Accumulator) SequentialDelta(
 	state.AccumulationState,
 	[]service.DeferredTransfer,
 	ServiceHashPairs,
+	ServiceGasPairs,
 ) {
 	// If no work reports, return early
 	if len(workReports) == 0 {
-		return 0, ctx, nil, ServiceHashPairs{}
+		return 0, ctx, nil, ServiceHashPairs{}, ServiceGasPairs{}
 	}
 
 	// Calculate i = max(N|w|+1) : ∑w∈w...i∑r∈wr(rg) ≤ g
@@ -2277,21 +2351,27 @@ func (a *Accumulator) SequentialDelta(
 
 	// If no reports can be processed, return early
 	if maxReports == 0 {
-		return 0, ctx, nil, ServiceHashPairs{}
+		return 0, ctx, nil, ServiceHashPairs{}, ServiceGasPairs{}
 	}
 
 	// Process maxReports using ParallelDelta (∆*)
-	gasUsed, newCtx, transfers, hashPairs := a.ParallelDelta(
+	newCtx, transfers, hashPairs, gasPairs := a.ParallelDelta(
 		ctx,
 		workReports[:maxReports],
 		alwaysAccumulate,
 	)
 
+	// [∑(s,u) ∈ u∗] u
+	var gasUsed uint64
+	for _, pair := range gasPairs {
+		gasUsed += pair.Gas
+	}
+
 	// If we have remaining reports and gas, process recursively (∆+)
 	if maxReports < len(workReports) {
 		remainingGas := gasLimit - gasUsed
 		if remainingGas > 0 {
-			moreItems, finalCtx, moreTransfers, moreHashPairs := a.SequentialDelta(
+			moreItems, finalCtx, moreTransfers, moreHashPairs, moreGasPairs := a.SequentialDelta(
 				remainingGas,
 				workReports[maxReports:],
 				newCtx,
@@ -2301,11 +2381,12 @@ func (a *Accumulator) SequentialDelta(
 			return uint32(maxReports) + moreItems,
 				finalCtx,
 				append(transfers, moreTransfers...),
-				append(hashPairs, moreHashPairs...)
+				append(hashPairs, moreHashPairs...),
+				append(gasPairs, moreGasPairs...)
 		}
 	}
 
-	return uint32(maxReports), newCtx, transfers, hashPairs
+	return uint32(maxReports), newCtx, transfers, hashPairs, gasPairs
 }
 
 // ParallelDelta implements equation 12.17 (∆*)
@@ -2314,10 +2395,10 @@ func (a *Accumulator) ParallelDelta(
 	workReports []block.WorkReport,
 	alwaysAccumulate map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
-	uint64, // total gas used
 	state.AccumulationState, // updated context
 	[]service.DeferredTransfer, // all transfers
 	ServiceHashPairs, // accumulation outputs
+	ServiceGasPairs, // accumulation gas
 ) {
 	// Get all unique service indices involved (s)
 	// s = {rs | w ∈ w, r ∈ wr} ∪ K(f)
@@ -2337,7 +2418,9 @@ func (a *Accumulator) ParallelDelta(
 
 	var totalGasUsed uint64
 	var allTransfers []service.DeferredTransfer
+	// u = [(s, ∆1(o, w, f , s)u) | s <− s]
 	accumHashPairs := make(ServiceHashPairs, 0)
+	accumGasPairs := make(ServiceGasPairs, 0)
 	newAccState := state.AccumulationState{
 		ServiceState: initialAccState.ServiceState.Clone(),
 	}
@@ -2370,6 +2453,10 @@ func (a *Accumulator) ParallelDelta(
 					Hash:      *resultHash,
 				})
 			}
+			accumGasPairs = append(accumGasPairs, ServiceGasPair{
+				ServiceId: serviceId,
+				Gas:       gasUsed,
+			})
 
 			// Adds the newly created services after accumulation to the service state set
 			// Removes the deleted services from the state
@@ -2388,7 +2475,6 @@ func (a *Accumulator) ParallelDelta(
 					delete(newAccState.ServiceState, svc)
 				}
 			}
-
 		}(svcId)
 	}
 
@@ -2439,7 +2525,7 @@ func (a *Accumulator) ParallelDelta(
 		return accumHashPairs[i].ServiceId < accumHashPairs[j].ServiceId
 	})
 
-	return totalGasUsed, newAccState, allTransfers, accumHashPairs
+	return newAccState, allTransfers, accumHashPairs, accumGasPairs
 }
 
 // Delta1 implements equation 12.19 ∆1 (U, ⟦W⟧, D⟨NS → NG⟩, NS ) → (U, ⟦T⟧, H?, NG)

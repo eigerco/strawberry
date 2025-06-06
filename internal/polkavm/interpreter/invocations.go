@@ -31,16 +31,18 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.G
 	}
 	if errors.Is(err, polkavm.ErrHalt) {
 		_, gasRemaining, regs, memory1 := i.Results()
+		// u = ϱ − max(ϱ′, 0)
+		gasUsed := max(int64(initialGas)-gasRemaining, 0)
 		result := make([]byte, regs[polkavm.A1])
 		if err := memory1.Read(regs[polkavm.A0], result); err != nil {
 			// Do not return anything if registers 7 and 8 are not pointing to a valid memory page
 			// (u, [], x′) if ε = ∎ ∧ Nω′7...+ω′8 ⊄ Vμ′
-			return gasRemaining, []byte{}, x1, nil
+			return polkavm.Gas(gasUsed), []byte{}, x1, nil
 		}
 
 		// Return the memory that registers 7 and 8 are pointing to, if it's a valid memory page
 		// (u, μ′ω′7⋅⋅⋅+ω′8, x′) if ε = ∎ ∧ Nω′7⋅⋅⋅+ω′8 ⊆ Vμ′
-		return gasRemaining, result, x1, nil
+		return polkavm.Gas(gasUsed), result, x1, nil
 	}
 
 	// if ε ∈ {∞, ☇}
@@ -84,6 +86,6 @@ func Invoke(i *Instance) (uint64, error) {
 	}
 }
 
-func (i *Instance) Results() (uint64, polkavm.Gas, polkavm.Registers, polkavm.Memory) {
-	return i.instructionCounter, polkavm.Gas(i.gasRemaining), i.regs, i.memory
+func (i *Instance) Results() (uint64, int64, polkavm.Registers, polkavm.Memory) {
+	return i.instructionCounter, i.gasRemaining, i.regs, i.memory
 }
