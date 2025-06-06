@@ -54,15 +54,16 @@ func (a *Authorization) InvokePVM(
 		mem polkavm.Memory,
 		ctx EmptyContext,
 	) (polkavm.Gas, polkavm.Registers, polkavm.Memory, EmptyContext, error) {
-		if hostCall == host_call.GasID {
+		switch hostCall {
+		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
-
-			return gasCounter, regs, mem, ctx, err
+		case host_call.FetchID:
+			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, &workPackage, nil, nil, nil, nil, nil, nil, nil)
+		default:
+			// (▸, ϱ−10, [ω0,…,ω6, WHAT, ω8,…], µ)
+			regs[polkavm.A0] = uint64(host_call.WHAT)
+			gasCounter -= isAuthorizedCost
 		}
-
-		// (▸, ϱ−10, [ω0,…,ω6, WHAT, ω8,…], µ)
-		regs[polkavm.A0] = uint64(host_call.WHAT)
-		gasCounter -= isAuthorizedCost
 
 		return gasCounter, regs, mem, ctx, nil
 	}

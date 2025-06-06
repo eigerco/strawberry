@@ -25,24 +25,38 @@ const (
 	SolicitCost
 	ForgetCost
 	YieldCost
+	ProvideCost
 	HistoricalLookupCost
 	FetchCost
 	ExportCost
 	MachineCost
 	PeekCost
 	PokeCost
-	ZeroCost
-	VoidCost
+	PagesCost
 	InvokeCost
 	ExpungeCost
 )
 
 const (
+	// General Functions
 	GasID = iota
+	FetchID
 	LookupID
 	ReadID
 	WriteID
 	InfoID
+
+	// Refine Functions
+	HistoricalLookupID
+	ExportID
+	MachineID
+	PeekID
+	PokeID
+	PagesID
+	InvokeID
+	ExpungeID
+
+	// Accumulate Functions
 	BlessID
 	AssignID
 	DesignateID
@@ -55,16 +69,7 @@ const (
 	SolicitID
 	ForgetID
 	YieldID
-	HistoricalLookupID
-	FetchID
-	ExportID
-	MachineID
-	PeekID
-	PokeID
-	ZeroID
-	VoidID
-	InvokeID
-	ExpungeID
+	ProvideID
 
 	LogID = 100
 )
