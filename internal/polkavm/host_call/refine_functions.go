@@ -234,96 +234,76 @@ func Poke(
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Zero ΩZ(ϱ, ω, µ, (m, e))
-func Zero(
+// Pages ΩZ (ϱ, ω, µ, (m, e))
+func Pages(
 	gas Gas,
 	regs Registers,
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	if gas < ZeroCost {
+	if gas < PagesCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
-	gas -= ZeroCost
+	gas -= PagesCost
 
-	n, p, c := regs[A0], regs[A1], regs[A2]
+	// let [n, p, c, r] = ω7⋅⋅⋅+4
+	n, p, c, r := regs[A0], regs[A1], regs[A2], regs[A3]
 
-	// p < 16 ∨ p + c ≥  2^32 / ZP
-	if p < 16 || p+c >= MaxPageIndex {
+	// m[n]u if n ∈ K(m);
+	u, exists := ctxPair.IntegratedPVMMap[n]
+	if !exists {
+		//  ∇ otherwise
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
+
+	// if r > 4 ∨ p < 16 ∨ p + c ≥ 2^32/ZP
+	if r > 4 || p < 16 || p+c >= MaxPageIndex {
 		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
-	// u = m[n]u if n ∈ K(m), otherwise ∇
-	u, exists := ctxPair.IntegratedPVMMap[n]
-	if !exists {
-		return gas, withCode(regs, WHO), mem, ctxPair, nil
-	}
-
-	for pageIndex := p; pageIndex < p+c; pageIndex++ {
-		// (u′A)p..+c = [W, W, ...]
-		if err := u.Ram.SetAccess(pageIndex, ReadWrite); err != nil {
-			return gas, regs, mem, ctxPair, err
-		}
-
-		// (u′V)pZP..+cZP = [0, 0, ...]
-		start := pageIndex * uint64(PageSize)
-		zeroBuf := make([]byte, PageSize)
-		if err := u.Ram.Write(start, zeroBuf); err != nil {
-			return gas, regs, mem, ctxPair, err
+	// if r > 2 ∧ (uA)p⋅⋅⋅+c ∋ ∅
+	if r > 2 {
+		for pageIndex := p; pageIndex < p+c; pageIndex++ {
+			if u.Ram.GetAccess(pageIndex) == Inaccessible {
+				return gas, withCode(regs, HUH), mem, ctxPair, nil
+			}
 		}
 	}
 
-	// (ω′7,m′) = (OK, (m′[n]u)=u′)
-	ctxPair.IntegratedPVMMap[n] = u
-	return gas, withCode(regs, OK), mem, ctxPair, nil
-}
-
-// Void ΩV(ϱ, ω, µ, (m, e))
-func Void(
-	gas Gas,
-	regs Registers,
-	mem Memory,
-	ctxPair RefineContextPair,
-) (Gas, Registers, Memory, RefineContextPair, error) {
-	if gas < VoidCost {
-		return gas, regs, mem, ctxPair, ErrOutOfGas
-	}
-	gas -= VoidCost
-
-	n, p, c := regs[A0], regs[A1], regs[A2]
-
-	u, exists := ctxPair.IntegratedPVMMap[n]
-	if !exists {
-		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	// (u′V)pZP..+cZP = [0, 0, ...] if r < 3
+	if r < 3 {
+		for pageIndex := p; pageIndex < p+c; pageIndex++ {
+			start := pageIndex * uint64(PageSize)
+			zeroBuf := make([]byte, PageSize)
+			if err := u.Ram.Write(start, zeroBuf); err != nil {
+				return gas, regs, mem, ctxPair, err
+			}
+		}
 	}
 
-	// p < 16 ∨ p + c ≥  2^32 / ZP
-	if p < 16 || p+c >= MaxPageIndex {
+	// (u′A)p..+c = [∅|R|W,...]
+	var newAccess MemoryAccess
+	switch r {
+	case 0:
+		//[∅, ∅, ...]
+		newAccess = Inaccessible
+	case 1, 3:
+		//[R, R, ...]
+		newAccess = ReadOnly
+	case 2, 4:
+		//[W, W, ...]
+		newAccess = ReadWrite
+	default:
 		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
-		if u.Ram.GetAccess(pageIndex) == Inaccessible {
-			// ∃i ∈ N_{p..+c} : (uA)[i] = ∅
-			return gas, withCode(regs, HUH), mem, ctxPair, nil
-		}
-
-		// (u′V)pZP..+cZP = [0, 0, ...]
-		start := pageIndex * uint64(PageSize)
-		zeroBuf := make([]byte, PageSize)
-		if err := u.Ram.Write(start, zeroBuf); err != nil {
+		if err := u.Ram.SetAccess(pageIndex, newAccess); err != nil {
 			return gas, regs, mem, ctxPair, err
 		}
 	}
 
-	for pageIndex := p; pageIndex < p+c; pageIndex++ {
-		// (u′A)p..+c = [∅, ∅, ...]
-		if err := u.Ram.SetAccess(pageIndex, Inaccessible); err != nil {
-			return gas, regs, mem, ctxPair, err
-		}
-	}
-
-	// (ω′7,m′) = (OK, m′[n]u = u′)
+	// m′[n]u = u′
 	ctxPair.IntegratedPVMMap[n] = u
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }

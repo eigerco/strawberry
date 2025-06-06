@@ -491,3 +491,13 @@ func Yield(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
+
+// Provide ΩP(ϱ, ω, µ, (x,y), s)
+func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceId block.ServiceId) (Gas, Registers, Memory, AccumulateContextPair, error) {
+	if gas < ProvideCost {
+		return gas, regs, mem, ctxPair, ErrOutOfGas
+	}
+	gas -= ProvideCost
+	// TODO implement provide
+	return gas, regs, mem, ctxPair, ErrOutOfGas
+}

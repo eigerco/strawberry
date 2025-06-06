@@ -1913,8 +1913,9 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	// let g = max(GT, GA ⋅ C + [∑ x∈V(χ_g)](x)) (eq. 12.20)
 	gasLimit := max(service.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
 
+	accumulator := NewAccumulator(currentState, header, newTimeslot)
 	// let (n, o, t, C) = ∆+(g, W∗, (χ, δ, ι, φ), χg) (eq. 12.21)
-	maxReports, newAccumulationState, transfers, hashPairs := NewAccumulator(currentState, header, newTimeslot).
+	maxReports, newAccumulationState, transfers, hashPairs := accumulator.
 		SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
 			PrivilegedServices:       currentState.PrivilegedServices,
 			ServiceState:             currentState.Services,
@@ -1931,7 +1932,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	// δ‡ = {s ↦ ΨT (δ†, τ ′, s, R(t, s)) S (s ↦ a) ∈ δ†} (eq. 12.24)
 	postAccumulationServiceState = make(service.ServiceState)
 	for serviceId := range intermediateServiceState {
-		newService := InvokePVMOnTransfer(
+		newService := accumulator.InvokePVMOnTransfer(
 			intermediateServiceState,
 			serviceId,
 			transfersForReceiver(transfers, serviceId),
