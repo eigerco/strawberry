@@ -340,8 +340,8 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 			require.NoError(t, err)
 			sa.Storage[sk] = mustStringToHex(storage.Value)
 		}
-		//assert.Equal(t, account.Data.Service.Bytes, sa.TotalStorageSize()) // TODO fix service accounts section 9
-		//assert.Equal(t, account.Data.Service.Items, sa.TotalItems())       // TODO fix service accounts section 9
+		assert.Equal(t, account.Data.Service.Bytes, sa.TotalStorageSize())
+		assert.Equal(t, account.Data.Service.Items, sa.TotalItems())
 		serviceAccounts[account.Id] = sa
 	}
 	return serviceAccounts
