@@ -1,6 +1,9 @@
 package host_call
 
 import (
+	"bytes"
+	"fmt"
+	"log"
 	"math"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -241,4 +244,62 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 	}
 
 	return gas, withCode(regs, OK), mem, nil
+}
+
+// Log A host call for passing a debugging message from the service/authorizer to the hosting environment for logging to the node operator
+func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint16, serviceId *block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory) {
+	fullMsg := &bytes.Buffer{}
+	lvl := regs[polkavm.A0]
+
+	// Write level
+	switch lvl {
+	case 0:
+		fullMsg.WriteString("FATAL")
+	case 1:
+		fullMsg.WriteString("WARNING")
+	case 2:
+		fullMsg.WriteString("INFO")
+	case 3:
+		fullMsg.WriteString("HELP")
+	case 4:
+		fullMsg.WriteString("PEDANT")
+	default:
+		fullMsg.WriteString("UNKNOWN")
+	}
+
+	// Write core and service
+	if core != nil {
+		_, _ = fmt.Fprintf(fullMsg, "@%d", *core)
+	}
+	if serviceId != nil {
+		_, _ = fmt.Fprintf(fullMsg, "#%d", *serviceId)
+	}
+
+	to := regs[polkavm.A1]
+	tz := regs[polkavm.A2]
+	xo := regs[polkavm.A3]
+	xz := regs[polkavm.A4]
+
+	// Write target
+	if to != 0 && tz != 0 {
+		targetBytes := make([]byte, tz)
+		err := mem.Read(to, targetBytes)
+		if err != nil {
+			log.Printf("unable to access memory for target: address %d length %d", to, tz)
+		}
+
+		_, _ = fmt.Fprintf(fullMsg, " %s", targetBytes)
+	}
+
+	msgBytes := make([]byte, xz)
+	err := mem.Read(xo, msgBytes)
+	if err != nil {
+		log.Printf("unable to access memory for target: address %d length %d", to, tz)
+	}
+
+	// Write message
+	_, _ = fmt.Fprintf(fullMsg, " %s", msgBytes)
+
+	log.Println(fullMsg.String())
+	return gas, regs, mem
 }

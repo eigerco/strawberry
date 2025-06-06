@@ -128,6 +128,8 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 			gasCounter, regs, mem, ctx, err = host_call.Forget(gasCounter, regs, mem, ctx, a.header.TimeSlotIndex)
 		case host_call.YieldID:
 			gasCounter, regs, mem, ctx, err = host_call.Yield(gasCounter, regs, mem, ctx)
+		case host_call.LogID:
+			gasCounter, regs, mem = host_call.Log(gasCounter, regs, mem, nil, &serviceIndex)
 		default:
 			regs[polkavm.A0] = uint64(host_call.WHAT)
 			gasCounter -= AccumulateCost
