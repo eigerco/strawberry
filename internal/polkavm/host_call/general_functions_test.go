@@ -11,7 +11,10 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
+	"github.com/eigerco/strawberry/internal/testutils"
+	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -30,6 +33,291 @@ func TestGasRemaining(t *testing.T) {
 
 	assert.Equal(t, uint64(90), regs[polkavm.A0])
 	assert.Equal(t, polkavm.Gas(90), gasRemaining)
+}
+
+func TestFetch(t *testing.T) {
+	pp := &polkavm.Program{
+		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+			RWDataSize:       512,
+			StackSize:        512,
+			InitialHeapPages: 10,
+		},
+	}
+
+	mem, regs, err := polkavm.InitializeStandardProgram(pp, nil)
+	require.NoError(t, err)
+
+	preimageBytes := testutils.RandomBytes(t, 32)
+
+	importedSegments := []work.Segment{
+		{1, 2, 3},
+		{4, 5, 6},
+		{7, 8, 9},
+	}
+
+	workPackage := &work.Package{
+		AuthorizationToken: testutils.RandomBytes(t, 5),
+		AuthorizerService:  1,
+		AuthCodeHash:       testutils.RandomHash(t),
+		Parameterization:   testutils.RandomBytes(t, 5),
+		Context: block.RefinementContext{
+			Anchor:                  block.RefinementContextAnchor{HeaderHash: testutils.RandomHash(t)},
+			LookupAnchor:            block.RefinementContextLookupAnchor{HeaderHash: testutils.RandomHash(t), Timeslot: 125},
+			PrerequisiteWorkPackage: nil,
+		},
+		WorkItems: []work.Item{
+			{
+				Payload:            testutils.RandomBytes(t, 10),
+				GasLimitRefine:     100,
+				GasLimitAccumulate: 100,
+				Extrinsics:         []work.Extrinsic{},
+				ImportedSegments:   []work.ImportedSegment{},
+				ServiceId:          42,
+				CodeHash:           testutils.RandomHash(t),
+			},
+		},
+	}
+
+	workPackageBytes, err := jam.Marshal(workPackage)
+	require.NoError(t, err)
+
+	authorizerHashOutput := testutils.RandomBytes(t, 32)
+	extrinsicPreimages := [][]byte{preimageBytes}
+	itemIndex := uint32(0)
+
+	operand := []state.AccumulationOperand{
+		{Output: testutils.RandomBytes(t, 5), OutputOrError: block.WorkResultOutputOrError{Inner: block.UnexpectedTermination}},
+	}
+	transfers := []service.DeferredTransfer{
+		{Balance: 100, Memo: [service.TransferMemoSizeBytes]byte{1, 2, 3}},
+		{Balance: 100, Memo: [service.TransferMemoSizeBytes]byte{4, 5, 6}},
+	}
+
+	entropy := testutils.RandomHash(t)
+
+	ho := polkavm.RWAddressBase + 100
+	initialGas := polkavm.Gas(100)
+	offset := uint64(0)
+	length := uint64(256)
+
+	cases := []struct {
+		name   string
+		dataID uint64
+		idx1   uint64
+		idx2   uint64
+		expect func() []byte
+	}{
+		{
+			name:   "dataID 0 (constants)",
+			dataID: 0,
+			expect: func() []byte {
+				out, err := host_call.GetChainConstants()
+				require.NoError(t, err)
+
+				return out
+			},
+		},
+		{
+			name:   "dataID 1 (entropy)",
+			dataID: 1,
+			expect: func() []byte { return entropy[:] },
+		},
+		{
+			name:   "dataID 2 (authorizer hash)",
+			dataID: 2,
+			expect: func() []byte { return authorizerHashOutput },
+		},
+		{
+			name:   "dataID 3 (preimages)",
+			dataID: 3,
+			idx1:   0,
+			idx2:   0,
+			expect: func() []byte {
+				return []byte{preimageBytes[0]}
+			},
+		},
+		{
+			name:   "dataID 4 (preimages)",
+			dataID: 4,
+			idx1:   0,
+			expect: func() []byte {
+				return []byte{preimageBytes[0]}
+			},
+		},
+		{
+			name:   "dataID 5 (importedSegments)",
+			dataID: 5,
+			idx1:   1,
+			idx2:   2,
+			expect: func() []byte {
+				return []byte{6}
+			},
+		},
+		{
+			name:   "dataID 6 (importedSegments)",
+			dataID: 6,
+			idx1:   2,
+			expect: func() []byte {
+				return []byte{3}
+			},
+		},
+		{
+			name:   "dataID 7 (work package)",
+			dataID: 7,
+			expect: func() []byte {
+				return workPackageBytes
+			},
+		},
+		{
+			name:   "dataID 8 (AuthCodeHash + Parameterization)",
+			dataID: 8,
+			expect: func() []byte {
+				out, _ := jam.Marshal(struct {
+					AuthCodeHash     crypto.Hash
+					Parameterization []byte
+				}{workPackage.AuthCodeHash, workPackage.Parameterization})
+				return out
+			},
+		},
+		{
+			name:   "dataID 9 (AuthorizationToken)",
+			dataID: 9,
+			expect: func() []byte {
+				return workPackage.AuthorizationToken
+			},
+		},
+		{
+			name:   "dataID 10 (Context)",
+			dataID: 10,
+			expect: func() []byte {
+				out, _ := jam.Marshal(workPackage.Context)
+				return out
+			},
+		},
+		{
+			name:   "dataID 11 (all workItems)",
+			dataID: 11,
+			expect: func() []byte {
+				var all [][]byte
+				for _, item := range workPackage.WorkItems {
+					meta := host_call.WorkItemMetadata{
+						ServiceId:              item.ServiceId,
+						CodeHash:               item.CodeHash,
+						GasLimitRefine:         item.GasLimitRefine,
+						GasLimitAccumulate:     item.GasLimitAccumulate,
+						ExportedSegmentsLength: item.ExportedSegments,
+						ImportedSegmentsLength: uint16(len(item.ImportedSegments)),
+						ExtrinsicsLength:       uint16(len(item.Extrinsics)),
+						PayloadLength:          uint32(len(item.Payload)),
+					}
+					b, _ := jam.Marshal(meta)
+					all = append(all, b)
+				}
+				out, _ := jam.Marshal(all)
+				return out
+			},
+		},
+		{
+			name:   "dataID 12 (specific workItem)",
+			dataID: 12,
+			idx1:   0,
+			expect: func() []byte {
+				item := workPackage.WorkItems[0]
+				meta := host_call.WorkItemMetadata{
+					ServiceId:              item.ServiceId,
+					CodeHash:               item.CodeHash,
+					GasLimitRefine:         item.GasLimitRefine,
+					GasLimitAccumulate:     item.GasLimitAccumulate,
+					ExportedSegmentsLength: item.ExportedSegments,
+					ImportedSegmentsLength: uint16(len(item.ImportedSegments)),
+					ExtrinsicsLength:       uint16(len(item.Extrinsics)),
+					PayloadLength:          uint32(len(item.Payload)),
+				}
+				out, err := jam.Marshal(meta)
+				require.NoError(t, err)
+
+				return out
+			},
+		},
+		{
+			name:   "dataID 13 (Payload)",
+			dataID: 13,
+			idx1:   0,
+			expect: func() []byte {
+				return workPackage.WorkItems[0].Payload
+			},
+		},
+		{
+			name:   "dataID 14 (↕operand)",
+			dataID: 14,
+			expect: func() []byte {
+				out, err := jam.Marshal(operand)
+				require.NoError(t, err)
+
+				return out
+			},
+		},
+		{
+			name:   "dataID 15 (operand[0])",
+			dataID: 15,
+			idx1:   0,
+			expect: func() []byte {
+				out, err := jam.Marshal(operand[0])
+				require.NoError(t, err)
+
+				return out
+			},
+		},
+		{
+			name:   "dataID 16 (↕transfers)",
+			dataID: 16,
+			expect: func() []byte {
+				out, err := jam.Marshal(transfers)
+				require.NoError(t, err)
+
+				return out
+			},
+		},
+		{
+			name:   "dataID 17 (transfers[1])",
+			dataID: 17,
+			idx1:   1,
+			expect: func() []byte {
+				out, err := jam.Marshal(transfers[1])
+				require.NoError(t, err)
+
+				return out
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			regs[polkavm.A0] = ho
+			regs[polkavm.A1] = offset
+			regs[polkavm.A2] = length
+			regs[polkavm.A3] = tc.dataID
+			regs[polkavm.A4] = tc.idx1
+			regs[polkavm.A5] = tc.idx2
+
+			expect := tc.expect()
+
+			gasLeft, regsOut, memOut, err := host_call.Fetch(
+				initialGas, regs, mem,
+				workPackage, &entropy, authorizerHashOutput,
+				&itemIndex, importedSegments, extrinsicPreimages,
+				operand, transfers,
+			)
+			require.NoError(t, err)
+
+			actual := make([]byte, len(expect))
+			err = memOut.Read(ho, actual)
+			require.NoError(t, err)
+			require.Equal(t, expect, actual)
+			require.Equal(t, uint64(len(expect)), regsOut[polkavm.A0])
+			require.Equal(t, polkavm.Gas(90), gasLeft)
+		})
+	}
 }
 
 func TestLookup(t *testing.T) {

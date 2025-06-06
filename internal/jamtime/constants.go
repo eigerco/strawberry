@@ -29,4 +29,6 @@ const (
 
 	// R = 10: The rotation period of validator-core assignments, in timeslots.
 	ValidatorRotationPeriod = Timeslot(10)
+
+	SlotPeriodInSeconds = 6 // P = 6: The slot period, in seconds
 )
