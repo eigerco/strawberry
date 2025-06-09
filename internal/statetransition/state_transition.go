@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"maps"
+	"math"
 	"slices"
 	"sort"
 	"sync"
@@ -74,7 +75,8 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	if err != nil {
 		return err
 	}
-	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators)
+	// TODO: pass correct available reports.
+	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators, []block.WorkReport{})
 
 	workReports := GetAvailableWorkReports(newCoreAssignments)
 
@@ -284,7 +286,7 @@ func CalculateIntermediateCoreAssignments(assurances block.AssurancesExtrinsic, 
 		for _, assurance := range assurances {
 			// Check if the bit corresponding to this core is set (1) in the Bitfield
 			// See equation 11.15: af[c] ⇒ ρ†[c] ≠ ∅
-			if block.HasAssuranceForCore(assurance, coreIndex) {
+			if assurance.IsForCore(coreIndex) {
 				if coreAssignments[coreIndex] == nil {
 					return coreAssignments, nil, ErrCoreNotEngaged
 				}
@@ -2188,12 +2190,14 @@ func CalculateNewActivityStatistics(
 	activityStatistics validator.ActivityStatisticsState,
 	reporters crypto.ED25519PublicKeySet,
 	currValidators safrole.ValidatorsData,
+	availableWorkReports []block.WorkReport,
 ) validator.ActivityStatisticsState {
 	current, last := CalculateNewValidatorStatistics(blk, prevTimeslot, activityStatistics.ValidatorsCurrent, activityStatistics.ValidatorsLast, reporters, currValidators)
 
 	return validator.ActivityStatisticsState{
 		ValidatorsCurrent: current,
 		ValidatorsLast:    last,
+		Cores:             CalculateNewCoreStatistics(blk, activityStatistics.Cores, availableWorkReports),
 		Services:          CalculateNewServiceStatistics(blk, activityStatistics.Services),
 	}
 }
@@ -2255,6 +2259,58 @@ func CalculateNewValidatorStatistics(
 	}
 
 	return validatorStatsCurrent, validatorStatsLast
+}
+
+// CalculateNewCoreStatistics updates core statistics.
+// It implements equations 13.8 - 13.10.
+func CalculateNewCoreStatistics(
+	blk block.Block,
+	coreStats [common.TotalNumberOfCores]validator.CoreStatistics,
+	availableReports []block.WorkReport, // W
+) [common.TotalNumberOfCores]validator.CoreStatistics {
+	newCoreStats := [common.TotalNumberOfCores]validator.CoreStatistics{}
+
+	// Equation 13.9
+	// ∑ r ∈wr,w ∈w, wc=c (ri, rx, rz , re, ru, b: (ws)l)
+	for _, guarantee := range blk.Extrinsic.EG.Guarantees {
+		workReport := guarantee.WorkReport
+		coreIndex := workReport.CoreIndex
+		for _, workResult := range workReport.WorkResults {
+
+			newCoreStats[coreIndex].Imports += workResult.ImportsCount
+			newCoreStats[coreIndex].Exports += workResult.ExportsCount
+			newCoreStats[coreIndex].ExtrinsicCount += workResult.ExtrinsicCount
+			newCoreStats[coreIndex].ExtrinsicSize += workResult.ExtrinsicSize
+			newCoreStats[coreIndex].GasUsed += workResult.GasUsed
+			// TODO this might be out of the loop, but the equation looks like it's done for each result.
+			newCoreStats[coreIndex].BundleSize += workReport.WorkPackageSpecification.AuditableWorkBundleLength
+
+		}
+
+	}
+
+	// Equation 13.10
+	// ∑ w ∈W, wc=c (ws)_l + W_G⌈(ws)_n65/64⌉
+	// 65/64 likely adds overhead for proofs which require one segment for every 64 segments.
+	for _, workReport := range availableReports {
+		coreIndex := workReport.CoreIndex
+
+		l := workReport.WorkPackageSpecification.AuditableWorkBundleLength
+		n := workReport.WorkPackageSpecification.SegmentCount
+		var daLoad uint32 = l + (common.SizeOfSegment * uint32(math.Ceil(float64(n)*65/64)))
+
+		newCoreStats[coreIndex].DALoad += daLoad
+	}
+
+	// Equation 13.8
+	// ∑ a ∈EA a_f[c]
+	for _, assurance := range blk.Extrinsic.EA {
+		for _, coreIndex := range assurance.SetCoreIndexes() {
+			newCoreStats[coreIndex].Popularity++
+		}
+	}
+
+	return newCoreStats
 }
 
 // CalculateNewServiceStatistics updates service statistics.
