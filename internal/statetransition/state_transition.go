@@ -2324,13 +2324,36 @@ func CalculateNewServiceStatistics(
 		serviceStatistics = validator.ServiceStatistics{}
 	}
 	newServiceStats := maps.Clone(serviceStatistics)
+
+	// Equation 13.11
 	for _, preimage := range blk.Extrinsic.EP {
 		serviceID := block.ServiceId(preimage.ServiceIndex)
 		record := newServiceStats[serviceID]
+
 		// p: ∑ (s,p) ∈EP (1, |p|)
 		record.ProvidedCount++
 		record.ProvidedSize += uint32(len(preimage.Data))
+
 		newServiceStats[serviceID] = record
+	}
+
+	// Equation 13.15
+	// ∑ r ∈wr,w ∈w, wc=c (ri, rx, rz , re, ru, b: (ws)l)
+	for _, guarantee := range blk.Extrinsic.EG.Guarantees {
+		workReport := guarantee.WorkReport
+		for _, workResult := range workReport.WorkResults {
+			serviceID := block.ServiceId(workResult.ServiceId)
+			record := newServiceStats[serviceID]
+
+			record.Imports += uint32(workResult.ImportsCount)
+			record.Exports += uint32(workResult.ExportsCount)
+			record.ExtrinsicCount += uint32(workResult.ExtrinsicCount)
+			record.ExtrinsicSize += uint32(workResult.ExtrinsicSize)
+			record.RefinementCount += 1
+			record.RefinementGasUsed += workResult.GasUsed
+
+			newServiceStats[serviceID] = record
+		}
 	}
 
 	return newServiceStats
