@@ -21,4 +21,5 @@ type State struct {
 	ActivityStatistics       validator.ActivityStatisticsState // Validator statistics (π) - The activity statistics for the validators.
 	AccumulationQueue        AccumulationQueue                 // Accumulation Queue (ϑ) - ready (i.e. available and/or audited) but not-yet-accumulated work-reports. Each of these were made available at most one epoch ago but have or had unfulfilled dependencies.
 	AccumulationHistory      AccumulationHistory               // Accumulation history (ξ) - history of what has been accumulated for an epoch worth of work-reports. Mapping of work-package hash to segment-root.
+	AccumulationOutputLog    AccumulationOutputLog             // Accumulation Output Log (θ)
 }

@@ -152,3 +152,11 @@ type AccumulationResult struct {
 		GasAssignments     map[block.ServiceId]uint64 // g - Gas assignments
 	}
 }
+
+// AccumulationOutputLog θ ∈ ⟦(NS, H)⟧ (eq. 7.4)
+type AccumulationOutputLog []ServiceHashPair
+
+type ServiceHashPair struct {
+	ServiceId block.ServiceId
+	Hash      crypto.Hash
+}
