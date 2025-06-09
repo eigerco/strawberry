@@ -129,7 +129,6 @@ func TestPreimage(t *testing.T) {
 
 			preServiceState := mapServiceState(t, data.PreState)
 			preimages := mapPreimages(t, data.Input.Preimages)
-			preServiceStats := data.PreState.ServiceStatistics.To()
 
 			newTimeSlot := jamtime.Timeslot(data.Input.Slot)
 			newServiceState, err := statetransition.CalculateIntermediateServiceState(preimages, preServiceState, newTimeSlot)
@@ -143,7 +142,7 @@ func TestPreimage(t *testing.T) {
 				Extrinsic: block.Extrinsic{
 					EP: preimages,
 				},
-			}, preServiceStats)
+			}, statetransition.AccumulationStats{}, statetransition.DeferredTransfersStats{})
 
 			expectedPostServiceState := mapServiceState(t, data.PostState)
 			require.Equal(t, expectedPostServiceState, newServiceState, "State after transition does not match expected state")
