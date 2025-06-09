@@ -340,8 +340,15 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 			require.NoError(t, err)
 			sa.Storage[sk] = mustStringToHex(storage.Value)
 		}
-		assert.Equal(t, account.Data.Service.Bytes, sa.TotalStorageSize())
-		assert.Equal(t, account.Data.Service.Items, sa.TotalItems())
+
+		// Skip this test verification, the storage footprint for this service seems to be wrong in the test vector
+		// as service does not contain any preimages or storage items so the expected size is zero
+		// see issue: https://github.com/w3f/jamtestvectors/issues/50
+		t.Log("ignoring TestAccumulate/same_code_different_services-1.json threshold verification!")
+		if t.Name() != "TestAccumulate/same_code_different_services-1.json" {
+			assert.Equal(t, account.Data.Service.Bytes, sa.TotalStorageSize())
+			assert.Equal(t, account.Data.Service.Items, sa.TotalItems())
+		}
 		serviceAccounts[account.Id] = sa
 	}
 	return serviceAccounts
