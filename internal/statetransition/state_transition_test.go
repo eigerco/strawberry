@@ -933,7 +933,8 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 			},
 		}
 
-		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(599), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{}, []block.WorkReport{})
+		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(599), initialStats, make(crypto.ED25519PublicKeySet),
+			safrole.ValidatorsData{}, []block.WorkReport{}, AccumulationStats{}, DeferredTransfersStats{})
 
 		// Check that stats were rotated correctly
 		assert.Equal(t, uint32(10), newStats.ValidatorsLast[0].NumOfBlocks, "Previous current stats should become history")
@@ -963,7 +964,8 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 			},
 		}
 
-		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, make(crypto.ED25519PublicKeySet), safrole.ValidatorsData{}, []block.WorkReport{})
+		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, make(crypto.ED25519PublicKeySet),
+			safrole.ValidatorsData{}, []block.WorkReport{}, AccumulationStats{}, DeferredTransfersStats{})
 
 		// Check block author stats
 		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[1].NumOfBlocks, "Block count should increment")
@@ -1011,7 +1013,8 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 		reporters := make(crypto.ED25519PublicKeySet)
 		reporters.Add(ed25519key1)
 		reporters.Add(ed25519key2)
-		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}}, []block.WorkReport{})
+		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}},
+			[]block.WorkReport{}, AccumulationStats{}, DeferredTransfersStats{})
 
 		// Check guarantees and assurances
 		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[0].NumOfGuaranteedReports, "Should count all guarantees for validator 0")
@@ -1066,7 +1069,8 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 		reporters := make(crypto.ED25519PublicKeySet)
 		reporters.Add(ed25519key1)
 		reporters.Add(ed25519key2)
-		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}}, []block.WorkReport{})
+		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}},
+			[]block.WorkReport{}, AccumulationStats{}, DeferredTransfersStats{})
 
 		expected := validator.ValidatorStatistics{
 			NumOfBlocks:                 6,
@@ -1219,6 +1223,8 @@ func TestCalculateNewServiceStatistics(t *testing.T) {
 	testCases := []struct {
 		name                 string
 		block                block.Block
+		accumulationStats    AccumulationStats
+		transfersStats       DeferredTransfersStats
 		expectedServiceStats validator.ServiceStatistics
 	}{
 		{
@@ -1302,11 +1308,45 @@ func TestCalculateNewServiceStatistics(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "accumulation and transfer stats",
+			block: block.Block{},
+			accumulationStats: AccumulationStats{
+				1: {
+					AccumulateGasUsed: 1000,
+					AccumulateCount:   1,
+				},
+				2: {
+					AccumulateGasUsed: 2000,
+					AccumulateCount:   2,
+				},
+			},
+			transfersStats: DeferredTransfersStats{
+				1: {
+					OnTransfersGasUsed: 100,
+					OnTransfersCount:   1,
+				},
+			},
+			expectedServiceStats: validator.ServiceStatistics{
+				1: {
+					AccumulateCount:    1,
+					AccumulateGasUsed:  1000,
+					OnTransfersCount:   1,
+					OnTransfersGasUsed: 100,
+				},
+				2: {
+					AccumulateCount:    2,
+					AccumulateGasUsed:  2000,
+					OnTransfersCount:   0,
+					OnTransfersGasUsed: 0,
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			newServiceStats := CalculateNewServiceStatistics(tc.block, validator.ServiceStatistics{})
+			newServiceStats := CalculateNewServiceStatistics(tc.block, tc.accumulationStats, tc.transfersStats)
 			require.Equal(t, tc.expectedServiceStats, newServiceStats)
 		})
 	}
