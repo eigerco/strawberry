@@ -24,8 +24,21 @@ type Assurance struct {
 
 type AssurancesExtrinsic []Assurance
 
-func HasAssuranceForCore(a Assurance, coreIndex uint16) bool {
+func (a Assurance) IsForCore(coreIndex uint16) bool {
 	byteIndex := coreIndex / 8
 	bitIndex := coreIndex % 8
 	return (a.Bitfield[byteIndex] & (1 << bitIndex)) != 0
+}
+
+func (a Assurance) SetCoreIndexes() []uint16 {
+	indexes := []uint16{}
+
+	// TODO make this more efficient, but this is fine for now.
+	for i := uint16(0); i < common.TotalNumberOfCores; i++ {
+		if a.IsForCore(i) {
+			indexes = append(indexes, i)
+		}
+	}
+
+	return indexes
 }
