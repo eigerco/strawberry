@@ -1215,6 +1215,103 @@ func TestCalculateNewCoreStatistics(t *testing.T) {
 	}
 }
 
+func TestCalculateNewServiceStatistics(t *testing.T) {
+	testCases := []struct {
+		name                 string
+		block                block.Block
+		expectedServiceStats validator.ServiceStatistics
+	}{
+		{
+			name:                 "empty block",
+			block:                block.Block{},
+			expectedServiceStats: validator.ServiceStatistics{},
+		},
+		{
+			name: "preimages",
+			block: block.Block{
+				Header: block.Header{
+					TimeSlotIndex:    jamtime.Timeslot(5),
+					BlockAuthorIndex: 1,
+				},
+				Extrinsic: block.Extrinsic{
+					EP: block.PreimageExtrinsic{
+						{
+							ServiceIndex: 1,
+							Data:         []byte("test1"),
+						},
+						{
+							ServiceIndex: 1,
+							Data:         []byte("test2"),
+						},
+					},
+				},
+			},
+			expectedServiceStats: validator.ServiceStatistics{
+				1: {
+					ProvidedCount: 2,
+					ProvidedSize:  10,
+				},
+			},
+		},
+		{
+			name: "reports",
+			block: block.Block{
+				Extrinsic: block.Extrinsic{
+					EG: block.GuaranteesExtrinsic{
+						Guarantees: []block.Guarantee{
+							{
+								WorkReport: block.WorkReport{
+									WorkResults: []block.WorkResult{
+										{
+											ServiceId:      1,
+											GasUsed:        821,
+											ImportsCount:   8,
+											ExportsCount:   17,
+											ExtrinsicCount: 8,
+											ExtrinsicSize:  1526,
+										},
+									},
+								},
+							},
+							{
+								WorkReport: block.WorkReport{
+									WorkResults: []block.WorkResult{
+										{
+											ServiceId:      1,
+											GasUsed:        697,
+											ImportsCount:   1,
+											ExportsCount:   18,
+											ExtrinsicCount: 3,
+											ExtrinsicSize:  1926,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedServiceStats: validator.ServiceStatistics{
+				1: {
+					RefinementCount:   2,
+					RefinementGasUsed: 1518,
+					Imports:           9,
+					Exports:           35,
+					ExtrinsicSize:     3452,
+					ExtrinsicCount:    11,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			newServiceStats := CalculateNewServiceStatistics(tc.block, validator.ServiceStatistics{})
+			require.Equal(t, tc.expectedServiceStats, newServiceStats)
+		})
+	}
+}
+
 func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16) block.Verdict {
 	var judgments [common.ValidatorsSuperMajority]block.Judgement
 	for i := uint16(0); i < positiveJudgments; i++ {
