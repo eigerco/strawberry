@@ -75,8 +75,6 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	if err != nil {
 		return err
 	}
-	// TODO: pass correct available reports.
-	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators, []block.WorkReport{})
 
 	workReports := GetAvailableWorkReports(newCoreAssignments)
 
@@ -86,7 +84,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		newPrivilegedServices,
 		newQueuedValidators,
 		newPendingCoreAuthorizations,
-		accumulationOutputLog, _, _ := CalculateWorkReportsAndAccumulate(
+		accumulationOutputLog, accumulationStats, transferStats := CalculateWorkReportsAndAccumulate(
 		&newBlock.Header,
 		s,
 		newTimeSlot,
@@ -96,6 +94,10 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	if err != nil {
 		return err
 	}
+
+	// TODO: pass correct available reports.
+	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators,
+		[]block.WorkReport{}, accumulationStats, transferStats)
 
 	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
 	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, accumulationOutputLog)
@@ -2192,6 +2194,8 @@ func CalculateNewActivityStatistics(
 	reporters crypto.ED25519PublicKeySet,
 	currValidators safrole.ValidatorsData,
 	availableWorkReports []block.WorkReport,
+	accumulationStats AccumulationStats,
+	transferStats DeferredTransfersStats,
 ) validator.ActivityStatisticsState {
 	current, last := CalculateNewValidatorStatistics(blk, prevTimeslot, activityStatistics.ValidatorsCurrent, activityStatistics.ValidatorsLast, reporters, currValidators)
 
@@ -2199,7 +2203,7 @@ func CalculateNewActivityStatistics(
 		ValidatorsCurrent: current,
 		ValidatorsLast:    last,
 		Cores:             CalculateNewCoreStatistics(blk, activityStatistics.Cores, availableWorkReports),
-		Services:          CalculateNewServiceStatistics(blk, activityStatistics.Services),
+		Services:          CalculateNewServiceStatistics(blk, accumulationStats, transferStats),
 	}
 }
 
@@ -2319,18 +2323,61 @@ func CalculateNewCoreStatistics(
 // TODO complete service stats, for now this only supports preimage stats.
 func CalculateNewServiceStatistics(
 	blk block.Block,
-	serviceStatistics validator.ServiceStatistics,
+	accumulationStats AccumulationStats,
+	transferStats DeferredTransfersStats,
 ) validator.ServiceStatistics {
-	if serviceStatistics == nil {
-		serviceStatistics = validator.ServiceStatistics{}
-	}
-	newServiceStats := maps.Clone(serviceStatistics)
+	newServiceStats := validator.ServiceStatistics{}
+
+	// Equation 13.11
 	for _, preimage := range blk.Extrinsic.EP {
 		serviceID := block.ServiceId(preimage.ServiceIndex)
 		record := newServiceStats[serviceID]
+
 		// p: ∑ (s,p) ∈EP (1, |p|)
 		record.ProvidedCount++
 		record.ProvidedSize += uint32(len(preimage.Data))
+
+		newServiceStats[serviceID] = record
+	}
+
+	// Equation 13.15
+	// ∑ r ∈wr,w ∈w, wc=c (ri, rx, rz , re, ru, b: (ws)l)
+	for _, guarantee := range blk.Extrinsic.EG.Guarantees {
+		workReport := guarantee.WorkReport
+		for _, workResult := range workReport.WorkResults {
+			serviceID := block.ServiceId(workResult.ServiceId)
+			record := newServiceStats[serviceID]
+
+			record.Imports += uint32(workResult.ImportsCount)
+			record.Exports += uint32(workResult.ExportsCount)
+			record.ExtrinsicCount += uint32(workResult.ExtrinsicCount)
+			record.ExtrinsicSize += uint32(workResult.ExtrinsicSize)
+			record.RefinementCount += 1
+			record.RefinementGasUsed += workResult.GasUsed
+
+			newServiceStats[serviceID] = record
+		}
+	}
+
+	// Equation 13.11
+	// U(I[s], (0, 0))
+	for serviceID, stat := range accumulationStats {
+		record := newServiceStats[serviceID]
+
+		record.AccumulateCount += stat.AccumulateCount
+		record.AccumulateGasUsed += stat.AccumulateGasUsed
+
+		newServiceStats[serviceID] = record
+	}
+
+	// Equation 13.11
+	// U(X[s], (0, 0))
+	for serviceID, stat := range transferStats {
+		record := newServiceStats[serviceID]
+
+		record.OnTransfersCount += stat.OnTransfersCount
+		record.OnTransfersGasUsed += stat.OnTransfersGasUsed
+
 		newServiceStats[serviceID] = record
 	}
 
