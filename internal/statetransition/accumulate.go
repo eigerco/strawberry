@@ -31,9 +31,9 @@ func NewAccumulator(state *state.State, header *block.Header, newTimeslot jamtim
 }
 
 type Accumulator struct {
-	header      *block.Header    // H
-	state       *state.State     // σ
-	newTimeslot jamtime.Timeslot // τ′
+	header      *block.Header
+	state       *state.State
+	newTimeslot jamtime.Timeslot
 }
 
 // InvokePVM ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G, ⟦(N_S, Y)⟧) Equation (B.9)
@@ -44,13 +44,13 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		if err != nil {
 			log.Println("error creating context", "err", err)
 		}
-		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0, []service.PreimageProvision{}
+		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0, []polkavm.ProvidedPreimage{}
 	}
 
 	ctx, err := a.newCtx(accState, serviceIndex)
 	if err != nil {
 		log.Println("error creating context", "err", err)
-		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0, []service.PreimageProvision{}
+		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0, []polkavm.ProvidedPreimage{}
 	}
 
 	// I(u, s), I(u, s)
@@ -170,6 +170,7 @@ func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.Servi
 		ServiceId:         serviceIndex,
 		AccumulationState: u,
 		DeferredTransfers: []service.DeferredTransfer{},
+		ProvidedPreimages: []polkavm.ProvidedPreimage{},
 	}
 
 	newServiceID, err := a.newServiceID(serviceIndex)

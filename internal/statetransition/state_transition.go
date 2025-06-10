@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/polkavm"
 	"log"
 	"maps"
 	"math"
@@ -21,6 +20,7 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
 	"github.com/eigerco/strawberry/internal/merkle/mountain_ranges"
+	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
@@ -1906,7 +1906,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		slices.Concat(
 			slices.Concat(currentState.AccumulationQueue[timeslotPerEpoch:]...), // ⋃(ϑm...)
 			slices.Concat(currentState.AccumulationQueue[:timeslotPerEpoch]...), // ⋃(ϑ...m)
-			queuedWorkReports,                                                   // WQ
+			queuedWorkReports, // WQ
 		),
 		getWorkPackageHashes(immediatelyAccWorkReports), // P(W!)
 	)
@@ -2496,10 +2496,10 @@ func (a *Accumulator) ParallelDelta(
 	workReports []block.WorkReport,
 	alwaysAccumulate map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
-	state.AccumulationState,    // updated context
+	state.AccumulationState, // updated context
 	[]service.DeferredTransfer, // all transfers
-	ServiceHashPairs,           // accumulation outputs
-	ServiceGasPairs,            // accumulation gas
+	ServiceHashPairs, // accumulation outputs
+	ServiceGasPairs, // accumulation gas
 ) {
 	// Get all unique service indices involved (s)
 	// s = {rs | w ∈ w, r ∈ wr} ∪ K(f)
@@ -2639,8 +2639,8 @@ func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
 	alwaysAccumulate map[block.ServiceId]uint64, // D⟨NS → NG⟩
-	serviceIndex block.ServiceId,                // NS
-) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64, []service.PreimageProvision) {
+	serviceIndex block.ServiceId, // NS
+) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64, []polkavm.ProvidedPreimage) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)
 	if gas, exists := alwaysAccumulate[serviceIndex]; exists {
