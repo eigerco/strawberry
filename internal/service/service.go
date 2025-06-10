@@ -208,12 +208,6 @@ type DeferredTransfer struct {
 	GasLimit             uint64          // gas limit (g)
 }
 
-// PreimageProvision (N_S, Y)
-type PreimageProvision struct {
-	ServiceId block.ServiceId
-	Preimage  []byte
-}
-
 // cloneMapOfSlices creates a deep copy of a map where values are slices.
 // Similar to maps.Clone, but also clones the slice values.
 func cloneMapOfSlices[K comparable, V ~[]E, E any](m map[K]V) map[K]V {

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/eigerco/strawberry/internal/polkavm"
 	"log"
 	"maps"
 	"math"
@@ -1905,7 +1906,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		slices.Concat(
 			slices.Concat(currentState.AccumulationQueue[timeslotPerEpoch:]...), // ⋃(ϑm...)
 			slices.Concat(currentState.AccumulationQueue[:timeslotPerEpoch]...), // ⋃(ϑ...m)
-			queuedWorkReports, // WQ
+			queuedWorkReports,                                                   // WQ
 		),
 		getWorkPackageHashes(immediatelyAccWorkReports), // P(W!)
 	)
@@ -1919,8 +1920,9 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	// let g = max(GT, GA ⋅ C + [∑ x∈V(χ_g)](x)) (eq. 12.20)
 	gasLimit := max(service.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
 
+	accumulator := NewAccumulator(currentState, header, newTimeslot)
 	// let (n, o, t, θ′, u) = ∆+(g, W∗, (χ, δ, ι, φ), χg) (eq. 12.22)
-	accumulatedCount, newAccumulationState, transfers, accumulationOutputLog, gasPairs := NewAccumulator(currentState, header, newTimeslot).
+	accumulatedCount, newAccumulationState, transfers, accumulationOutputLog, gasPairs := accumulator.
 		SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
 			PrivilegedServices:       currentState.PrivilegedServices,
 			ServiceState:             currentState.Services,
@@ -1970,7 +1972,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		// R(t, d)
 		receiverTransfers := transfersForReceiver(transfers, serviceId)
 
-		newService, gasUsed := InvokePVMOnTransfer(
+		newService, gasUsed := accumulator.InvokePVMOnTransfer(
 			intermediateServiceState,
 			newTimeslot,
 			serviceId,
@@ -2494,10 +2496,10 @@ func (a *Accumulator) ParallelDelta(
 	workReports []block.WorkReport,
 	alwaysAccumulate map[block.ServiceId]uint64, // D⟨NS → NG⟩
 ) (
-	state.AccumulationState, // updated context
+	state.AccumulationState,    // updated context
 	[]service.DeferredTransfer, // all transfers
-	ServiceHashPairs, // accumulation outputs
-	ServiceGasPairs, // accumulation gas
+	ServiceHashPairs,           // accumulation outputs
+	ServiceGasPairs,            // accumulation gas
 ) {
 	// Get all unique service indices involved (s)
 	// s = {rs | w ∈ w, r ∈ wr} ∪ K(f)
@@ -2523,7 +2525,7 @@ func (a *Accumulator) ParallelDelta(
 	newAccState := state.AccumulationState{
 		ServiceState: initialAccState.ServiceState.Clone(),
 	}
-	var allPreimageProvisions []service.PreimageProvision
+	var allPreimageProvisions []polkavm.ProvidedPreimage
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -2637,7 +2639,7 @@ func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
 	alwaysAccumulate map[block.ServiceId]uint64, // D⟨NS → NG⟩
-	serviceIndex block.ServiceId, // NS
+	serviceIndex block.ServiceId,                // NS
 ) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64, []service.PreimageProvision) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)
@@ -2678,16 +2680,16 @@ func (a *Accumulator) Delta1(
 }
 
 // P(d D⟨NS → A⟩,p {(NS , Y)}) → D⟨NS → A⟩
-func (a *Accumulator) preimageIntegration(services service.ServiceState, preimages []service.PreimageProvision) service.ServiceState {
+func (a *Accumulator) preimageIntegration(services service.ServiceState, preimages []polkavm.ProvidedPreimage) service.ServiceState {
 	servicesWithPreimages := services.Clone()
 
 	// ∀(s, i) ∈ p, s ∈ K(d), d[s]l[H(i), |i|] = []∶
 	for _, preimage := range preimages {
-		preimageHash := crypto.HashData(preimage.Preimage)
+		preimageHash := crypto.HashData(preimage.Data)
 		if _, ok := services[preimage.ServiceId]; ok {
 			key := service.PreImageMetaKey{
 				Hash:   preimageHash,
-				Length: service.PreimageLength(len(preimage.Preimage)),
+				Length: service.PreimageLength(len(preimage.Data)),
 			}
 
 			if timeslots := services[preimage.ServiceId].PreimageMeta[key]; len(timeslots) == 0 {
@@ -2695,7 +2697,7 @@ func (a *Accumulator) preimageIntegration(services service.ServiceState, preimag
 				// d′[s]l[H(i), |i|] = [τ′]
 				// d′[s]p[H(i)] = i
 				servicesWithPreimages[preimage.ServiceId].PreimageMeta[key] = service.PreimageHistoricalTimeslots{a.newTimeslot}
-				servicesWithPreimages[preimage.ServiceId].PreimageLookup[preimageHash] = preimage.Preimage
+				servicesWithPreimages[preimage.ServiceId].PreimageLookup[preimageHash] = preimage.Data
 			}
 		}
 	}

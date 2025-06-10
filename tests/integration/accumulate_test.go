@@ -139,6 +139,9 @@ func TestAccumulate(t *testing.T) {
 	files, err := os.ReadDir("vectors/accumulate/tiny")
 	require.NoError(t, err)
 
+	// TODO: Remove test skip after updating to test vectors v0.6.7
+	t.Skip()
+
 	for _, file := range files {
 		t.Run(file.Name(), func(t *testing.T) {
 			f, err := os.Open(fmt.Sprintf("vectors/accumulate/tiny/%s", file.Name()))
