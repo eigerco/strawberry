@@ -98,26 +98,24 @@ func (r *Refine) InvokePVM(
 	// F ∈ Ω⟨(D⟨N → M⟩, ⟦G⟧)⟩∶ (n, ϱ, ω, μ, (m, e))
 	hostCall := func(hostCall uint64, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctxPair polkavm.RefineContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.RefineContextPair, error) {
 		switch hostCall {
-		case host_call.HistoricalLookupID:
-			gasCounter, regs, mem, ctxPair, err = host_call.HistoricalLookup(gasCounter, regs, mem, ctxPair, w.ServiceId, r.state.Services, workPackage.Context.LookupAnchor.Timeslot)
+		case host_call.GasID:
+			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
 		case host_call.FetchID:
 			zeroHash := crypto.Hash{}
 			// TODO we need to pass the preimage data `x` instead of nil (where x = [[x ∣ (H(x), ∣x∣) <− wx] ∣ w <− pw])
 			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, &workPackage, &zeroHash, authorizerHashOutput, &itemIndex, importedSegments, nil, nil, nil)
+		case host_call.HistoricalLookupID:
+			gasCounter, regs, mem, ctxPair, err = host_call.HistoricalLookup(gasCounter, regs, mem, ctxPair, w.ServiceId, r.state.Services, workPackage.Context.LookupAnchor.Timeslot)
 		case host_call.ExportID:
 			gasCounter, regs, mem, ctxPair, err = host_call.Export(gasCounter, regs, mem, ctxPair, exportOffset)
-		case host_call.GasID:
-			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
 		case host_call.MachineID:
 			gasCounter, regs, mem, ctxPair, err = host_call.Machine(gasCounter, regs, mem, ctxPair)
 		case host_call.PeekID:
 			gasCounter, regs, mem, ctxPair, err = host_call.Peek(gasCounter, regs, mem, ctxPair)
-		case host_call.ZeroID:
-			gasCounter, regs, mem, ctxPair, err = host_call.Zero(gasCounter, regs, mem, ctxPair)
 		case host_call.PokeID:
 			gasCounter, regs, mem, ctxPair, err = host_call.Poke(gasCounter, regs, mem, ctxPair)
-		case host_call.VoidID:
-			gasCounter, regs, mem, ctxPair, err = host_call.Void(gasCounter, regs, mem, ctxPair)
+		case host_call.PagesID:
+			gasCounter, regs, mem, ctxPair, err = host_call.Pages(gasCounter, regs, mem, ctxPair)
 		case host_call.InvokeID:
 			gasCounter, regs, mem, ctxPair, err = host_call.Invoke(gasCounter, regs, mem, ctxPair)
 		case host_call.ExpungeID:

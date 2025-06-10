@@ -338,13 +338,19 @@ type Mutator interface {
 	MinUnsigned(Reg, Reg, Reg)
 }
 
-// AccumulateContext B.6 (v0.5.4)
+// AccumulateContext B.7 (v0.6.7)
 type AccumulateContext struct {
 	ServiceId         block.ServiceId            // s
 	AccumulationState state.AccumulationState    // u
 	NewServiceId      block.ServiceId            // i
 	DeferredTransfers []service.DeferredTransfer // t
 	AccumulationHash  *crypto.Hash               // y
+	ProvidedPreimages []ProvidedPreimage         // p
+}
+
+type ProvidedPreimage struct {
+	ServiceId block.ServiceId
+	Data      []byte
 }
 
 // ServiceAccount x_s

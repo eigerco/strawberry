@@ -330,61 +330,7 @@ func TestPoke(t *testing.T) {
 	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
 
-func TestZero(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
-			RWDataSize:       256,
-			StackSize:        512,
-			InitialHeapPages: 10,
-		},
-	}
-
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
-	require.NoError(t, err)
-	innerMem, _, err := polkavm.InitializeStandardProgram(pp, nil)
-	require.NoError(t, err)
-
-	n := uint64(0)
-	p := uint64(32)
-	c := uint64(2) // zero out pages #32 & #33
-
-	startAddr := p * uint64(polkavm.PageSize)
-	endAddr := (p + c) * uint64(polkavm.PageSize)
-
-	for addr := startAddr; addr < endAddr; addr++ {
-		err := mem.Write(addr, []byte{0xFF})
-		require.NoError(t, err)
-	}
-
-	ctxPair := polkavm.RefineContextPair{
-		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{n: {Ram: innerMem}},
-	}
-
-	initialRegs[polkavm.A0] = n
-	initialRegs[polkavm.A1] = p
-	initialRegs[polkavm.A2] = c
-
-	gasRemaining, regsOut, _, _, err := host_call.Zero(
-		initialGas,
-		initialRegs,
-		mem,
-		ctxPair,
-	)
-	require.NoError(t, err)
-
-	require.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
-	for addr := startAddr; addr < endAddr; addr++ {
-		b := make([]byte, 1)
-		innerPVMRam := ctxPair.IntegratedPVMMap[n].Ram
-		err = innerPVMRam.Read(addr, b)
-		require.NoError(t, err)
-		assert.Equal(t, byte(0), b[0])
-	}
-
-	assert.Equal(t, polkavm.Gas(90), gasRemaining)
-}
-
-func TestVoid(t *testing.T) {
+func TestPages_Modes(t *testing.T) {
 	pp := &polkavm.Program{
 		ProgramMemorySizes: polkavm.ProgramMemorySizes{
 			RWDataSize:       256,
@@ -393,44 +339,92 @@ func TestVoid(t *testing.T) {
 		},
 	}
 
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
-	require.NoError(t, err)
-	innerMem, _, err := polkavm.InitializeStandardProgram(pp, nil)
-	require.NoError(t, err)
+	for _, tc := range []struct {
+		name       string
+		mode       uint64
+		wantAccess polkavm.MemoryAccess
+		wantZeroed bool
+	}{
+		{
+			name:       "mode_0", // Inaccessible
+			mode:       0,
+			wantAccess: polkavm.Inaccessible,
+			wantZeroed: true,
+		},
+		{
+			name:       "mode_1", // ReadOnly
+			mode:       1,
+			wantAccess: polkavm.ReadOnly,
+			wantZeroed: true,
+		},
+		{
+			name:       "mode_2", // ReadWrite
+			mode:       2,
+			wantAccess: polkavm.ReadWrite,
+			wantZeroed: true,
+		},
+		{
+			name:       "mode_3", // ReadOnly
+			mode:       3,
+			wantAccess: polkavm.ReadOnly,
+			wantZeroed: false,
+		},
+		{
+			name:       "mode_4", // ReadWrite
+			mode:       4,
+			wantAccess: polkavm.ReadWrite,
+			wantZeroed: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+			require.NoError(t, err)
 
-	p := uint64(32)
-	c := uint64(2)
+			innerMem, _, err := polkavm.InitializeStandardProgram(pp, nil)
+			require.NoError(t, err)
 
-	for pageIndex := p; pageIndex < p+c; pageIndex++ {
-		access := mem.GetAccess(pageIndex)
-		assert.Equal(t, polkavm.ReadWrite, access)
+			p := uint64(32)
+			c := uint64(2)
+
+			// Pre-fill target pages with known values for zeroing check
+			for pageIndex := p; pageIndex < p+c; pageIndex++ {
+				start := pageIndex * uint64(polkavm.PageSize)
+				buf := make([]byte, polkavm.PageSize)
+				for i := range buf {
+					buf[i] = 0xAB
+				}
+				err := innerMem.Write(start, buf)
+				require.NoError(t, err)
+			}
+
+			n := uint64(0)
+			ctxPair := polkavm.RefineContextPair{
+				IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{n: {Ram: innerMem}},
+			}
+
+			initialRegs[polkavm.A0] = n
+			initialRegs[polkavm.A1] = p
+			initialRegs[polkavm.A2] = c
+			initialRegs[polkavm.A3] = tc.mode
+
+			gasRemaining, regsOut, _, _, err := host_call.Pages(
+				initialGas,
+				initialRegs,
+				mem,
+				ctxPair,
+			)
+			require.NoError(t, err)
+			require.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
+
+			innerPVMRam := ctxPair.IntegratedPVMMap[n].Ram
+			for pageIndex := p; pageIndex < p+c; pageIndex++ {
+				access := innerPVMRam.GetAccess(pageIndex)
+				assert.Equal(t, tc.wantAccess, access)
+			}
+
+			assert.Equal(t, polkavm.Gas(90), gasRemaining)
+		})
 	}
-
-	n := uint64(0)
-	ctxPair := polkavm.RefineContextPair{
-		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{n: {Ram: innerMem}},
-	}
-
-	initialRegs[polkavm.A0] = n
-	initialRegs[polkavm.A1] = p
-	initialRegs[polkavm.A2] = c
-
-	gasRemaining, regsOut, _, _, err := host_call.Void(
-		initialGas,
-		initialRegs,
-		mem,
-		ctxPair,
-	)
-	require.NoError(t, err)
-	require.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
-
-	for pageIndex := p; pageIndex < p+c; pageIndex++ {
-		innerPVMRam := ctxPair.IntegratedPVMMap[n].Ram
-		access := innerPVMRam.GetAccess(pageIndex)
-		assert.Equal(t, polkavm.Inaccessible, access)
-	}
-
-	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 }
 
 func TestInvoke(t *testing.T) {
