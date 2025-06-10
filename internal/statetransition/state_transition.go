@@ -2581,9 +2581,6 @@ func (a *Accumulator) ParallelDelta(
 		}(svcId)
 	}
 
-	// d′ = P ((d ∪ n) ∖ m, [⋃s∈s] ∆1(o, w, f , s)p)
-	newAccState.ServiceState = a.preimageIntegration(newAccState.ServiceState, allPreimageProvisions)
-
 	wg.Add(1)
 	go func(serviceId block.ServiceId) {
 		defer wg.Done()
@@ -2625,6 +2622,9 @@ func (a *Accumulator) ParallelDelta(
 
 	// Wait for all goroutines to complete
 	wg.Wait()
+
+	// d′ = P ((d ∪ n) ∖ m, [⋃s∈s] ∆1(o, w, f , s)p)
+	newAccState.ServiceState = a.preimageIntegration(newAccState.ServiceState, allPreimageProvisions)
 
 	// Sort accumulation pairs by service ID to ensure deterministic output
 	sort.Slice(accumHashPairs, func(i, j int) bool {
