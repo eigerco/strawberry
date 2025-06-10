@@ -2523,6 +2523,7 @@ func (a *Accumulator) ParallelDelta(
 	newAccState := state.AccumulationState{
 		ServiceState: initialAccState.ServiceState.Clone(),
 	}
+	var allPreimageProvisions []service.PreimageProvision
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -2533,7 +2534,7 @@ func (a *Accumulator) ParallelDelta(
 			defer wg.Done()
 
 			// Process single service using Delta1
-			accState, deferredTransfers, resultHash, gasUsed := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+			accState, deferredTransfers, resultHash, gasUsed, preimageProvisions := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 			mu.Lock()
 			defer mu.Unlock()
 
@@ -2557,6 +2558,7 @@ func (a *Accumulator) ParallelDelta(
 				Gas:       gasUsed,
 			})
 
+			allPreimageProvisions = append(allPreimageProvisions, preimageProvisions...)
 			// Adds the newly created services after accumulation to the service state set
 			// Removes the deleted services from the state
 			//
@@ -2577,12 +2579,15 @@ func (a *Accumulator) ParallelDelta(
 		}(svcId)
 	}
 
+	// d′ = P ((d ∪ n) ∖ m, [⋃s∈s] ∆1(o, w, f , s)p)
+	newAccState.ServiceState = a.preimageIntegration(newAccState.ServiceState, allPreimageProvisions)
+
 	wg.Add(1)
 	go func(serviceId block.ServiceId) {
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+		accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -2595,7 +2600,7 @@ func (a *Accumulator) ParallelDelta(
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+		accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -2608,7 +2613,7 @@ func (a *Accumulator) ParallelDelta(
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+		accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -2633,7 +2638,7 @@ func (a *Accumulator) Delta1(
 	workReports []block.WorkReport,
 	alwaysAccumulate map[block.ServiceId]uint64, // D⟨NS → NG⟩
 	serviceIndex block.ServiceId, // NS
-) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
+) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64, []service.PreimageProvision) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)
 	if gas, exists := alwaysAccumulate[serviceIndex]; exists {
@@ -2670,6 +2675,31 @@ func (a *Accumulator) Delta1(
 
 	// InvokePVM VM for accumulation (ΨA)
 	return a.InvokePVM(accumulationState, a.newTimeslot, serviceIndex, gasLimit, operands)
+}
+
+// P(d D⟨NS → A⟩,p {(NS , Y)}) → D⟨NS → A⟩
+func (a *Accumulator) preimageIntegration(services service.ServiceState, preimages []service.PreimageProvision) service.ServiceState {
+	servicesWithPreimages := services.Clone()
+
+	// ∀(s, i) ∈ p, s ∈ K(d), d[s]l[H(i), |i|] = []∶
+	for _, preimage := range preimages {
+		preimageHash := crypto.HashData(preimage.Preimage)
+		if _, ok := services[preimage.ServiceId]; ok {
+			key := service.PreImageMetaKey{
+				Hash:   preimageHash,
+				Length: service.PreimageLength(len(preimage.Preimage)),
+			}
+
+			if timeslots := services[preimage.ServiceId].PreimageMeta[key]; len(timeslots) == 0 {
+				// d′ where d′ = d except:
+				// d′[s]l[H(i), |i|] = [τ′]
+				// d′[s]p[H(i)] = i
+				servicesWithPreimages[preimage.ServiceId].PreimageMeta[key] = service.PreimageHistoricalTimeslots{a.newTimeslot}
+				servicesWithPreimages[preimage.ServiceId].PreimageLookup[preimageHash] = preimage.Preimage
+			}
+		}
+	}
+	return servicesWithPreimages
 }
 
 func mod(a, b int) int {

@@ -340,11 +340,12 @@ type Mutator interface {
 
 // AccumulateContext B.6 (v0.5.4)
 type AccumulateContext struct {
-	ServiceId         block.ServiceId            // s
-	AccumulationState state.AccumulationState    // u
-	NewServiceId      block.ServiceId            // i
-	DeferredTransfers []service.DeferredTransfer // t
-	AccumulationHash  *crypto.Hash               // y
+	ServiceId          block.ServiceId             // s
+	AccumulationState  state.AccumulationState     // u
+	NewServiceId       block.ServiceId             // i
+	DeferredTransfers  []service.DeferredTransfer  // t
+	AccumulationHash   *crypto.Hash                // y
+	PreimageProvisions []service.PreimageProvision // p
 }
 
 // ServiceAccount x_s

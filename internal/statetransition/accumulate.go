@@ -31,26 +31,26 @@ func NewAccumulator(state *state.State, header *block.Header, newTimeslot jamtim
 }
 
 type Accumulator struct {
-	header      *block.Header
-	state       *state.State
-	newTimeslot jamtime.Timeslot
+	header      *block.Header    // H
+	state       *state.State     // σ
+	newTimeslot jamtime.Timeslot // τ′
 }
 
-// InvokePVM ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G) Equation (B.8)
-func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64) {
+// InvokePVM ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G, ⟦(N_S, Y)⟧) Equation (B.9)
+func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64, []service.PreimageProvision) {
 	// if ud[s]c = ∅
 	if accState.ServiceState[serviceIndex].EncodedCodeAndMetadata() == nil {
 		ctx, err := a.newCtx(accState, serviceIndex)
 		if err != nil {
 			log.Println("error creating context", "err", err)
 		}
-		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0
+		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0, []service.PreimageProvision{}
 	}
 
 	ctx, err := a.newCtx(accState, serviceIndex)
 	if err != nil {
 		log.Println("error creating context", "err", err)
-		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0
+		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0, []service.PreimageProvision{}
 	}
 
 	// I(u, s), I(u, s)
@@ -71,7 +71,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	})
 	if err != nil {
 		log.Println("error encoding arguments", "err", err)
-		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0
+		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0, []service.PreimageProvision{}
 	}
 
 	// F (equation B.10)
@@ -142,19 +142,19 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		errPanic := &polkavm.ErrPanic{}
 		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {
 			log.Println("Program invocation failed with error:", err)
-			return newCtxPair.ExceptionalCtx.AccumulationState, newCtxPair.ExceptionalCtx.DeferredTransfers, nil, uint64(gasUsed)
+			return newCtxPair.ExceptionalCtx.AccumulationState, newCtxPair.ExceptionalCtx.DeferredTransfers, nil, uint64(gasUsed), newCtxPair.ExceptionalCtx.PreimageProvisions
 		}
 		// halt
-		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(gasUsed)
+		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(gasUsed), newCtxPair.RegularCtx.PreimageProvisions
 	}
 	// if o ∈ Y ∖ H. There is no sure way to check that a byte array is a hash
 	// one way would be to check the shannon entropy but this also not a guarantee, so we just limit to checking the size
 	if len(ret) == crypto.HashSize {
 		h := crypto.Hash(ret)
-		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, &h, uint64(gasUsed)
+		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, &h, uint64(gasUsed), newCtxPair.RegularCtx.PreimageProvisions
 	}
 
-	return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(gasUsed)
+	return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(gasUsed), newCtxPair.RegularCtx.PreimageProvisions
 }
 
 // newCtx (B.9)
