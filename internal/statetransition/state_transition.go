@@ -84,7 +84,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		newPrivilegedServices,
 		newQueuedValidators,
 		newPendingCoreAuthorizations,
-		serviceHashPairs, accumulationStats, transferStats := CalculateWorkReportsAndAccumulate(
+		accumulationOutputLog, accumulationStats, transferStats := CalculateWorkReportsAndAccumulate(
 		&newBlock.Header,
 		s,
 		newTimeSlot,
@@ -100,7 +100,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 		[]block.WorkReport{}, accumulationStats, transferStats)
 
 	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
-	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, serviceHashPairs)
+	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, accumulationOutputLog)
 	if err != nil {
 		return err
 	}
@@ -121,6 +121,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	s.PrivilegedServices = newPrivilegedServices
 	s.AccumulationQueue = newAccumulationQueue
 	s.AccumulationHistory = newAccumulationHistory
+	s.AccumulationOutputLog = state.AccumulationOutputLog(accumulationOutputLog)
 
 	return nil
 }
@@ -1877,7 +1878,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	newPrivilegedServices service.PrivilegedServices,
 	newValidatorKeys safrole.ValidatorsData,
 	newPendingAuthorizersQueues state.PendingAuthorizersQueues,
-	hashPairs ServiceHashPairs,
+	accumulationOutputLog ServiceHashPairs,
 	accumulationStats AccumulationStats,
 	transfersStats DeferredTransfersStats,
 ) {
@@ -1919,7 +1920,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	gasLimit := max(service.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
 
 	// let (n, o, t, θ′, u) = ∆+(g, W∗, (χ, δ, ι, φ), χg) (eq. 12.22)
-	accumulatedCount, newAccumulationState, transfers, hashPairs, gasPairs := NewAccumulator(currentState, header, newTimeslot).
+	accumulatedCount, newAccumulationState, transfers, accumulationOutputLog, gasPairs := NewAccumulator(currentState, header, newTimeslot).
 		SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
 			PrivilegedServices:       currentState.PrivilegedServices,
 			ServiceState:             currentState.Services,
@@ -2384,12 +2385,7 @@ func CalculateNewServiceStatistics(
 }
 
 // ServiceHashPairs B ≡ {(NS , H)} (eq. 12.15)
-type ServiceHashPairs []ServiceHashPair
-
-type ServiceHashPair struct {
-	ServiceId block.ServiceId
-	Hash      crypto.Hash
-}
+type ServiceHashPairs []state.ServiceHashPair
 
 // ServiceGasPairs U ≡ ⟦(NS , NG)⟧
 type ServiceGasPairs []ServiceGasPair
@@ -2551,7 +2547,7 @@ func (a *Accumulator) ParallelDelta(
 
 			// Store accumulation result if present
 			if resultHash != nil {
-				accumHashPairs = append(accumHashPairs, ServiceHashPair{
+				accumHashPairs = append(accumHashPairs, state.ServiceHashPair{
 					ServiceId: serviceId,
 					Hash:      *resultHash,
 				})
