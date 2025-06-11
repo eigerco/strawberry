@@ -100,8 +100,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators,
 		[]block.WorkReport{}, accumulationStats, transferStats)
 
-	intermediateRecentBlocks := calculateIntermediateBlockState(newBlock.Header, s.RecentBlocks)
-	newRecentBlocks, err := calculateNewRecentBlocks(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentBlocks, accumulationOutputLog)
+	newRecentHistory, err := CalculateNewRecentHistory(newBlock.Header, newBlock.Extrinsic.EG, s.RecentHistory, accumulationOutputLog)
 	if err != nil {
 		return err
 	}
@@ -114,7 +113,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	s.ValidatorState = newValidatorState
 	s.ValidatorState.QueuedValidators = newQueuedValidators
 	s.ActivityStatistics = newValidatorStatistics
-	s.RecentBlocks = newRecentBlocks
+	s.RecentHistory = newRecentHistory
 	s.CoreAssignments = newCoreAssignments
 	s.PastJudgements = newJudgements
 	s.CoreAuthorizersPool = newCoreAuthorizations
@@ -128,22 +127,6 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 }
 
 // Intermediate State Calculation Functions
-
-// calculateIntermediateBlockState Equation 17: β† ≺ (H, β)
-func calculateIntermediateBlockState(header block.Header, previousRecentBlocks []state.BlockState) []state.BlockState {
-	intermediateBlocks := make([]state.BlockState, len(previousRecentBlocks))
-
-	// Copy all elements from previousRecentBlocks to intermediateBlocks
-	copy(intermediateBlocks, previousRecentBlocks)
-
-	// Update the state root of the most recent block
-	if len(intermediateBlocks) > 0 {
-		lastIndex := len(intermediateBlocks) - 1
-		intermediateBlocks[lastIndex].StateRoot = header.PriorStateRoot
-	}
-
-	return intermediateBlocks
-}
 
 // preimageHasBeenSolicited checks if a preimage has been solicited but not yet provided
 // R(d, s, h, l) ≡ h ∉ d[s]p ∧ d[s]l[(h, l)] = [] (eq. 12.30 v0.6.3)
@@ -337,86 +320,94 @@ func CalculateNewTimeState(header block.Header) jamtime.Timeslot {
 	return header.TimeSlotIndex
 }
 
-// calculateNewRecentBlocks Equation 18: β′ ≺ (H, EG, β†, C) v0.4.5
-func calculateNewRecentBlocks(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentBlocks []state.BlockState, serviceHashPairs ServiceHashPairs) ([]state.BlockState, error) {
+// CalculateNewRecentHistory
+// Implements equations:
+// 4.6: β†_H ≺ (H, β_H)
+// 4.17: β′_H ≺ (H, EG, β†_H , θ′)
+// 7.5 - 7.8
+func CalculateNewRecentHistory(header block.Header, guarantees block.GuaranteesExtrinsic, recentHistory state.RecentHistory, serviceHashPairs ServiceHashPairs) (state.RecentHistory, error) {
+
 	// Gather all the inputs we need.
 
-	// Equation 83: let n = {p, h ▸▸ H(H), b, s ▸▸ H_0}
+	// Header hash, equation 7.8: H(H)
 	headerBytes, err := jam.Marshal(header)
 	if err != nil {
-		return nil, err
+		return state.RecentHistory{}, err
 	}
 	headerHash := crypto.HashData(headerBytes)
 
+	// H_r
 	priorStateRoot := header.PriorStateRoot
 
-	// Equation 83: let r = M_B([s ^^ E_4(s) ⌢ E(h) | (s, h) ∈ C], H_K)
+	// Equation 7.6: let s = [E_4(s) ⌢ E(h) | (s, h) <− θ′]
+	// And Equation 7.7: M_B(s, H_K)
 	accumulationRoot, err := computeAccumulationRoot(serviceHashPairs)
 	if err != nil {
-		return nil, err
+		return state.RecentHistory{}, err
 	}
 
-	// Equation 83: p = {((g_w)_s)_h ↦ ((g_w)_s)_e | g ∈ E_G}
+	// Equation 7.8: p = {((g_w)_s)_h ↦ ((g_w)_s)_e | g ∈ E_G}
 	workPackageMapping := buildWorkPackageMapping(guarantees.Guarantees)
 
 	// Update β to produce β'.
-	newRecentBlocks, err := UpdateRecentBlocks(headerHash, priorStateRoot, accumulationRoot, intermediateRecentBlocks, workPackageMapping)
+	newRecentHistory, err := UpdateRecentHistory(headerHash, priorStateRoot, accumulationRoot, workPackageMapping, recentHistory)
 	if err != nil {
-		return nil, err
+		return state.RecentHistory{}, err
 	}
 
-	return newRecentBlocks, nil
+	return newRecentHistory, nil
 }
 
-// UpdateRecentBlocks updates β. It takes the final inputs from
-// Equation 83: let n = {p, h ▸▸ H(H), b, s ▸▸ H_0} and
-// produces Equation 84: β′ ≡ ←────── β† n_H.
+// UpdateRecentHistory updates β, i.e β′_B and β′_H.
+// It implements equations:
+// Equation 7.5: β†[SβS − 1]s = Hr
+// Equation 7.7: β′_B ≡ A(β_B , M_B (s, HK ), HK)
+// Equation 7.8: β′_H ≡ β†_H ++ (p, h: H(H), b: M_R(β′_B), s:H0)
 // We separate out this logic for ease of testing aganist the recent history
 // test vectors.
-func UpdateRecentBlocks(
+func UpdateRecentHistory(
 	headerHash crypto.Hash,
 	priorStateRoot crypto.Hash,
 	accumulationRoot crypto.Hash,
-	intermediateRecentBlocks []state.BlockState,
-	workPackageMapping map[crypto.Hash]crypto.Hash) (newRecentBlocks []state.BlockState, err error) {
+	workPackageMapping map[crypto.Hash]crypto.Hash,
+	recentHistory state.RecentHistory) (state.RecentHistory, error) {
 
-	// Equation 82: β†[SβS − 1]s = Hr
-	if len(intermediateRecentBlocks) > 0 {
-		intermediateRecentBlocks[len(intermediateRecentBlocks)-1].StateRoot = priorStateRoot
+	// TODO deep copy
+	newRecentHistory := recentHistory
+
+	// Equation 7.5: β†[SβS − 1]s = Hr
+	if len(newRecentHistory.BlockHistory) > 0 {
+		newRecentHistory.BlockHistory[len(newRecentHistory.BlockHistory)-1].StateRoot = priorStateRoot
 	}
 
-	// Equation 83: let b = A(last([[]] ⌢ [x_b | x <− β]), r, H_K)
-	var lastBlockMMR []*crypto.Hash
-	if len(intermediateRecentBlocks) > 0 {
-		lastBlockMMR = intermediateRecentBlocks[len(intermediateRecentBlocks)-1].AccumulationResultMMR
-	}
-	// Create new MMR instance
 	mountainRange := mountain_ranges.New()
 
-	// Append the accumulation root to the MMR using Keccak hash
-	// A(last([[]] ⌢ [x_b | x <− β]), r, H_K)
-	newMMR := mountainRange.Append(lastBlockMMR, accumulationRoot, crypto.KeccakData)
+	// Equation 7.7: β′_B ≡ A(β_B , M_B (s, HK ), HK)
+	newRecentHistory.AccumulationOutputLog = mountainRange.Append(newRecentHistory.AccumulationOutputLog, accumulationRoot, crypto.KeccakData)
 
 	newBlockState := state.BlockState{
-		HeaderHash:            headerHash,         // h ▸▸ H(H)
-		StateRoot:             crypto.Hash{},      // s ▸▸ H_0
-		AccumulationResultMMR: newMMR,             // b
-		WorkReportHashes:      workPackageMapping, // p
+		HeaderHash: headerHash,                                                                         // h: H(H)
+		StateRoot:  crypto.Hash{},                                                                      // s: H_0
+		BeefyRoot:  mountainRange.SuperPeak(newRecentHistory.AccumulationOutputLog, crypto.KeccakData), // b: M_R(β′_B)
+		Reported:   workPackageMapping,                                                                 // p
 	}
 
-	// Equation 84: β′ ≡ ←────── β† n_H
+	// Equation 7.8: β′_H ≡ β†_H ++ (p, h: H(H), b: M_R(β′_B), s:H0)
 	// First append new block state
-	newRecentBlocks = append(intermediateRecentBlocks, newBlockState)
+	newRecentHistory.BlockHistory = append(newRecentHistory.BlockHistory, newBlockState)
 
 	// Then keep only last H blocks
-	if len(newRecentBlocks) > state.MaxRecentBlocks {
-		newRecentBlocks = newRecentBlocks[len(newRecentBlocks)-state.MaxRecentBlocks:]
+	if len(newRecentHistory.BlockHistory) > state.MaxRecentBlocks {
+		newRecentHistory.BlockHistory = newRecentHistory.BlockHistory[len(newRecentHistory.BlockHistory)-state.MaxRecentBlocks:]
 	}
 
-	return newRecentBlocks, nil
+	return newRecentHistory, nil
 }
 
-// This should create a Merkle tree from the accumulations and return the root ("r" from equation 83, v0.4.5)
+// This should create a Merkle tree from the accumulations and return the root.
+// Implements:
+// Equation 7.6: let s = [E_4(s) ⌢ E(h) | (s, h) <− θ′]
+// Equation 7.7: M_B(s, H_K)
 func computeAccumulationRoot(pairs ServiceHashPairs) (crypto.Hash, error) {
 	if len(pairs) == 0 {
 		return crypto.Hash{}, nil
@@ -455,7 +446,7 @@ func computeAccumulationRoot(pairs ServiceHashPairs) (crypto.Hash, error) {
 	return binary_tree.ComputeWellBalancedRoot(items, crypto.KeccakData), nil
 }
 
-// buildWorkPackageMapping creates the work package mapping p from equation 83:
+// buildWorkPackageMapping creates the work package mapping p from equation 7.8:
 // p = {((gw)s)h ↦ ((gw)s)e | g ∈ EG}
 func buildWorkPackageMapping(guarantees []block.Guarantee) map[crypto.Hash]crypto.Hash {
 	workPackages := make(map[crypto.Hash]crypto.Hash)
@@ -1371,8 +1362,8 @@ func ValidateExtrinsicGuarantees(
 	// [⋃ x∈β] K(xp)
 	recentBlockPrerequisites := make(map[crypto.Hash]crypto.Hash)
 
-	for _, recentBlock := range currentState.RecentBlocks {
-		for key, val := range recentBlock.WorkReportHashes {
+	for _, recentBlock := range currentState.RecentHistory.BlockHistory {
+		for key, val := range recentBlock.Reported {
 			recentBlockPrerequisites[key] = val
 			pastWorkPackages[key] = struct{}{}
 		}
@@ -1584,9 +1575,9 @@ func ValidateExtrinsicGuarantees(
 	}
 
 	// Add recent block work packages to the allowed set
-	for _, block := range currentState.RecentBlocks {
-		for hash := range block.WorkReportHashes {
-			extrinsicWorkPackages[hash] = block.WorkReportHashes[hash]
+	for _, block := range currentState.RecentHistory.BlockHistory {
+		for hash := range block.Reported {
+			extrinsicWorkPackages[hash] = block.Reported[hash]
 		}
 	}
 
@@ -1631,7 +1622,7 @@ func ValidateExtrinsicGuarantees(
 
 // anchorBlockInRecentBlocks ∀x ∈ x ∶ ∃y ∈ β ∶ x_a = y_h ∧ x_s = ys ∧ xb = M_R (yb)) (11.34 v0.5.2)
 func anchorBlockInRecentBlocks(context block.RefinementContext, currentState *state.State) (bool, error) {
-	for _, y := range currentState.RecentBlocks {
+	for _, y := range currentState.RecentHistory.BlockHistory {
 		if context.Anchor.HeaderHash != y.HeaderHash {
 			continue
 		}
@@ -1641,9 +1632,8 @@ func anchorBlockInRecentBlocks(context block.RefinementContext, currentState *st
 			return false, fmt.Errorf("bad state root")
 		}
 
-		// Block found, check MMR
-		mountainRange := mountain_ranges.New()
-		beefyRoot := mountainRange.SuperPeak(y.AccumulationResultMMR, crypto.KeccakData)
+		// Block found, check beefy root
+		beefyRoot := y.BeefyRoot
 		if context.Anchor.PosteriorBeefyRoot == beefyRoot {
 			return true, nil
 		}

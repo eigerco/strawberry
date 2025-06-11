@@ -95,55 +95,6 @@ func TestAddUniqueEdPubKey(t *testing.T) {
 	assert.Equal(t, key2, newSlice[1], "Last element should be the newly added key")
 }
 
-func TestCalculateIntermediateBlockState(t *testing.T) {
-	header := block.Header{
-		PriorStateRoot: crypto.Hash{1, 2, 3},
-	}
-
-	previousRecentBlocks := []state.BlockState{
-		{StateRoot: crypto.Hash{4, 5, 6}},
-		{StateRoot: crypto.Hash{7, 8, 9}},
-	}
-
-	expectedIntermediateBlocks := []state.BlockState{
-		{StateRoot: crypto.Hash{4, 5, 6}},
-		{StateRoot: crypto.Hash{1, 2, 3}},
-	}
-
-	intermediateBlocks := calculateIntermediateBlockState(header, previousRecentBlocks)
-	require.Equal(t, expectedIntermediateBlocks, intermediateBlocks)
-}
-
-func TestCalculateIntermediateBlockStateEmpty(t *testing.T) {
-	header := block.Header{
-		PriorStateRoot: crypto.Hash{1, 2, 3},
-	}
-
-	previousRecentBlocks := []state.BlockState{}
-
-	expectedIntermediateBlocks := []state.BlockState{}
-
-	intermediateBlocks := calculateIntermediateBlockState(header, previousRecentBlocks)
-	require.Equal(t, expectedIntermediateBlocks, intermediateBlocks)
-}
-
-func TestCalculateIntermediateBlockStateSingleElement(t *testing.T) {
-	header := block.Header{
-		PriorStateRoot: crypto.Hash{1, 2, 3},
-	}
-
-	previousRecentBlocks := []state.BlockState{
-		{StateRoot: crypto.Hash{4, 5, 6}},
-	}
-
-	expectedIntermediateBlocks := []state.BlockState{
-		{StateRoot: crypto.Hash{1, 2, 3}},
-	}
-
-	intermediateBlocks := calculateIntermediateBlockState(header, previousRecentBlocks)
-	require.Equal(t, expectedIntermediateBlocks, intermediateBlocks)
-}
-
 func TestCalculateIntermediateServiceState(t *testing.T) {
 	preimageData := []byte{1, 2, 3}
 	preimageHash := crypto.HashData(preimageData)

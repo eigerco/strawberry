@@ -89,7 +89,7 @@ func (aq AuthQueues) To() state.PendingAuthorizersQueues {
 
 type BlockInfo struct {
 	HeaderHash string     `json:"header_hash"`
-	MMR        MMR        `json:"mmr"`
+	BeefyRoot  string     `json:"beefy_root"`
 	StateRoot  string     `json:"state_root"`
 	Reported   []Reported `json:"reported"`
 }
@@ -104,40 +104,22 @@ type Reported struct {
 }
 
 func (bi BlockInfo) To() state.BlockState {
-	peaks := make([]*crypto.Hash, len(bi.MMR.Peaks))
-	for i, peakStr := range bi.MMR.Peaks {
-		if peakStr == nil {
-			continue
-		}
-		hash := hexToHash(*peakStr)
-		peaks[i] = &hash
-	}
-
 	reportHashes := make(map[crypto.Hash]crypto.Hash)
 	for _, reported := range bi.Reported {
 		reportHashes[hexToHash(reported.Hash)] = hexToHash(reported.ExportsRoot)
 	}
 
 	return state.BlockState{
-		HeaderHash:            hexToHash(bi.HeaderHash),
-		StateRoot:             hexToHash(bi.StateRoot),
-		AccumulationResultMMR: peaks,
-		WorkReportHashes:      reportHashes,
+		HeaderHash: hexToHash(bi.HeaderHash),
+		StateRoot:  hexToHash(bi.StateRoot),
+		BeefyRoot:  hexToHash(bi.BeefyRoot),
+		Reported:   reportHashes,
 	}
 }
 
 func NewBlockInfo(blockState state.BlockState) BlockInfo {
-	peaks := make([]*string, len(blockState.AccumulationResultMMR))
-	for i, peak := range blockState.AccumulationResultMMR {
-		if peak == nil {
-			continue
-		}
-		hexStr := hashToHex(*peak)
-		peaks[i] = &hexStr
-	}
-
-	reported := make([]Reported, 0, len(blockState.WorkReportHashes))
-	for hash, exportsRoot := range blockState.WorkReportHashes {
+	reported := make([]Reported, 0, len(blockState.Reported))
+	for hash, exportsRoot := range blockState.Reported {
 		reported = append(reported, Reported{
 			Hash:        hashToHex(hash),
 			ExportsRoot: hashToHex(exportsRoot),
@@ -149,32 +131,59 @@ func NewBlockInfo(blockState state.BlockState) BlockInfo {
 
 	return BlockInfo{
 		HeaderHash: hashToHex(blockState.HeaderHash),
-		MMR: MMR{
-			Peaks: peaks,
-		},
-		StateRoot: hashToHex(blockState.StateRoot),
-		Reported:  reported,
+		StateRoot:  hashToHex(blockState.StateRoot),
+		BeefyRoot:  hashToHex(blockState.BeefyRoot),
+		Reported:   reported,
 	}
 }
 
-type BlockHistory []BlockInfo
+type RecentHistory struct {
+	BlockHistory          []BlockInfo `json:"block_history"`
+	AccumulationOutputLog MMR         `json:"accumulation_output_log"`
+}
 
-func (bh BlockHistory) To() []state.BlockState {
-	blocks := make([]state.BlockState, len(bh))
-	for i, blockInfo := range bh {
+func (rh RecentHistory) To() state.RecentHistory {
+	blocks := make([]state.BlockState, len(rh.BlockHistory))
+	for i, blockInfo := range rh.BlockHistory {
 		blocks[i] = blockInfo.To()
 	}
 
-	return blocks
+	peaks := make([]*crypto.Hash, len(rh.AccumulationOutputLog.Peaks))
+	for i, peakStr := range rh.AccumulationOutputLog.Peaks {
+		if peakStr == nil {
+			continue
+		}
+		hash := hexToHash(*peakStr)
+		peaks[i] = &hash
+	}
+
+	return state.RecentHistory{
+		BlockHistory:          blocks,
+		AccumulationOutputLog: peaks,
+	}
 }
 
-func NewBlockHistory(blocks []state.BlockState) BlockHistory {
-	newBlocks := make([]BlockInfo, len(blocks))
-	for i, blockState := range blocks {
+func NewRecentHistory(recentHistory state.RecentHistory) RecentHistory {
+	newBlocks := make([]BlockInfo, len(recentHistory.BlockHistory))
+	for i, blockState := range recentHistory.BlockHistory {
 		newBlocks[i] = NewBlockInfo(blockState)
 	}
 
-	return newBlocks
+	peaks := make([]*string, len(recentHistory.AccumulationOutputLog))
+	for i, peak := range recentHistory.AccumulationOutputLog {
+		if peak == nil {
+			continue
+		}
+		hexStr := hashToHex(*peak)
+		peaks[i] = &hexStr
+	}
+
+	return RecentHistory{
+		BlockHistory: newBlocks,
+		AccumulationOutputLog: MMR{
+			Peaks: peaks,
+		},
+	}
 }
 
 type ValidatorData struct {
@@ -1212,7 +1221,7 @@ func NewSafroleState(state safrole.State) SafroleState {
 type State struct {
 	AuthPools               AuthPools              `json:"alpha"`
 	AuthQueues              AuthQueues             `json:"varphi"`
-	BlockHistory            BlockHistory           `json:"beta"`
+	RecentHistory           RecentHistory          `json:"beta"`
 	SafroleState            SafroleState           `json:"gamma"`
 	DisputeRecords          DisputeRecords         `json:"psi"`
 	EntropyPool             EntropyPool            `json:"eta"`
@@ -1232,7 +1241,7 @@ func (s State) To() state.State {
 	return state.State{
 		CoreAuthorizersPool:      s.AuthPools.To(),
 		PendingAuthorizersQueues: s.AuthQueues.To(),
-		RecentBlocks:             s.BlockHistory.To(),
+		RecentHistory:            s.RecentHistory.To(),
 		ValidatorState: validator.ValidatorState{
 			QueuedValidators:   s.QueuedValidators.To(),
 			CurrentValidators:  s.ActiveValidators.To(),
@@ -1255,7 +1264,7 @@ func NewState(state state.State) State {
 	return State{
 		AuthPools:               NewAuthPools(state.CoreAuthorizersPool),
 		AuthQueues:              NewAuthQueues(state.PendingAuthorizersQueues),
-		BlockHistory:            NewBlockHistory(state.RecentBlocks),
+		RecentHistory:           NewRecentHistory(state.RecentHistory),
 		SafroleState:            NewSafroleState(state.ValidatorState.SafroleState),
 		DisputeRecords:          NewDisputeRecords(state.PastJudgements),
 		EntropyPool:             NewEntropyPool(state.EntropyPool),

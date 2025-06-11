@@ -16,6 +16,7 @@ import (
 )
 
 func TestStateSerialization(t *testing.T) {
+	t.Skip("TODO: update state serialization when 0.6.7 traces are released")
 	b, err := os.ReadFile("vectors/state_serialization/trace.json")
 	require.NoError(t, err)
 
