@@ -71,9 +71,10 @@ func TestAccumulate(t *testing.T) {
 		err               error
 	}{
 		{
-			name: "empower",
+			name: "bless",
 			fn:   fnStd(Bless),
 			alloc: alloc{
+				A1: make([]byte, uint32(4*common.TotalNumberOfCores)),
 				A3: slices.Concat(
 					encodeNumber(t, uint32(123)),
 					encodeNumber(t, uint64(12341234)),
@@ -85,7 +86,6 @@ func TestAccumulate(t *testing.T) {
 			},
 			initialRegs: deltaRegs{
 				A0: 111,
-				A1: 222,
 				A2: 333,
 				A4: 3,
 			},
@@ -99,7 +99,7 @@ func TestAccumulate(t *testing.T) {
 				AccumulationState: state.AccumulationState{
 					PrivilegedServices: service.PrivilegedServices{
 						ManagerServiceId:   111,
-						AssignServiceId:    222,
+						AssignedServiceIds: [common.TotalNumberOfCores]block.ServiceId{},
 						DesignateServiceId: 333,
 						AmountOfGasPerServiceId: map[block.ServiceId]uint64{
 							123: 12341234,

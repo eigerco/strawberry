@@ -23,7 +23,7 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	gas -= BlessCost
 
 	// let [m, a, v, o, n] = ω7...12
-	managerServiceId, assignServiceId, designateServiceId, addr, servicesNr := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
+	managerServiceId, assignServiceAddr, designateServiceId, addr, servicesNr := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
 	// let g = {(s ↦ g) where E4(s) ⌢ E8(g) = μ_o+12i⋅⋅⋅+12 | i ∈ Nn} if Zo⋅⋅⋅+12n ⊂ Vμ otherwise ∇
 	for i := range servicesNr {
 		serviceId, err := readNumber[block.ServiceId](mem, addr+(12*i), 4)
@@ -41,7 +41,20 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 		ctxPair.RegularCtx.AccumulationState.PrivilegedServices.AmountOfGasPerServiceId[serviceId] = serviceGas
 	}
 	ctxPair.RegularCtx.AccumulationState.PrivilegedServices.ManagerServiceId = block.ServiceId(managerServiceId)
-	ctxPair.RegularCtx.AccumulationState.PrivilegedServices.AssignServiceId = block.ServiceId(assignServiceId)
+
+	// Na⋅⋅⋅+4C ⊆ Vµ
+	assignersBytes := make([]byte, 4*common.TotalNumberOfCores)
+	if err := mem.Read(assignServiceAddr, assignersBytes); err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+	// E−1(4) (µa⋅⋅⋅+4C)
+	var assigners [common.TotalNumberOfCores]block.ServiceId
+	err := jam.Unmarshal(assignersBytes, &assigners)
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+
+	ctxPair.RegularCtx.AccumulationState.PrivilegedServices.AssignedServiceIds = assigners
 	ctxPair.RegularCtx.AccumulationState.PrivilegedServices.DesignateServiceId = block.ServiceId(designateServiceId)
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }

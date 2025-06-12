@@ -1969,10 +1969,9 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 			receiverTransfers,
 		)
 
-		// TODO uncomment when upgrading to v0.6.7
-		//if _, ok := accumulationStats[serviceId]; !ok {
-		//	newService.MostRecentAccumulationTimeslot = newTimeslot
-		//}
+		if _, ok := accumulationStats[serviceId]; !ok {
+			newService.MostRecentAccumulationTimeslot = newTimeslot
+		}
 
 		postAccumulationServiceState[serviceId] = newService
 
@@ -2584,18 +2583,21 @@ func (a *Accumulator) ParallelDelta(
 
 	}(initialAccState.PrivilegedServices.ManagerServiceId)
 
-	wg.Add(1)
-	go func(serviceId block.ServiceId) {
-		defer wg.Done()
+	// ∀c ∈ NC
+	for c := range common.TotalNumberOfCores {
+		wg.Add(1)
+		go func(serviceId block.ServiceId) {
+			defer wg.Done()
 
-		// Process single service using Delta1
-		accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
-		mu.Lock()
-		defer mu.Unlock()
+			// Process single service using Delta1
+			accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+			mu.Lock()
+			defer mu.Unlock()
 
-		newAccState.ValidatorKeys = accState.ValidatorKeys
+			newAccState.ValidatorKeys = accState.ValidatorKeys
 
-	}(initialAccState.PrivilegedServices.AssignServiceId)
+		}(initialAccState.PrivilegedServices.AssignedServiceIds[c])
+	}
 
 	wg.Add(1)
 	go func(serviceId block.ServiceId) {

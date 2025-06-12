@@ -1082,10 +1082,10 @@ type RefineLoad struct {
 }
 
 type PrivilegedServices struct {
-	ManagerService   uint32            `json:"chi_m"`
-	AssignService    uint32            `json:"chi_a"`
-	DesignateService uint32            `json:"chi_v"`
-	GasUsed          map[uint32]uint64 `json:"chi_g"`
+	ManagerService   uint32                                     `json:"chi_m"`
+	AssignServices   [common.TotalNumberOfCores]block.ServiceId `json:"chi_a"`
+	DesignateService uint32                                     `json:"chi_v"`
+	GasUsed          map[uint32]uint64                          `json:"chi_g"`
 }
 
 func (p PrivilegedServices) To() service.PrivilegedServices {
@@ -1096,7 +1096,7 @@ func (p PrivilegedServices) To() service.PrivilegedServices {
 
 	return service.PrivilegedServices{
 		ManagerServiceId:        block.ServiceId(p.ManagerService),
-		AssignServiceId:         block.ServiceId(p.AssignService),
+		AssignedServiceIds:      p.AssignServices,
 		DesignateServiceId:      block.ServiceId(p.DesignateService),
 		AmountOfGasPerServiceId: gasUsed,
 	}
@@ -1110,7 +1110,7 @@ func NewPrivilegedServices(services service.PrivilegedServices) PrivilegedServic
 
 	return PrivilegedServices{
 		ManagerService:   uint32(services.ManagerServiceId),
-		AssignService:    uint32(services.AssignServiceId),
+		AssignServices:   services.AssignedServiceIds,
 		DesignateService: uint32(services.DesignateServiceId),
 		GasUsed:          gasUsed,
 	}
