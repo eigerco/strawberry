@@ -32,7 +32,7 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 	}{
 		{1, &deserializedState.CoreAuthorizersPool},
 		{2, &deserializedState.PendingAuthorizersQueues},
-		{3, &deserializedState.RecentBlocks},
+		{3, &deserializedState.RecentHistory},
 		{4, &deserializedState.ValidatorState.SafroleState},
 		{5, &deserializedState.PastJudgements},
 		{6, &deserializedState.EntropyPool},

@@ -15,7 +15,7 @@ type State struct {
 	CoreAuthorizersPool      CoreAuthorizersPool               // Core authorizers pool (α): authorization requirement which work done on that core must satisfy at the time of being reported on-chain.
 	PendingAuthorizersQueues PendingAuthorizersQueues          // Pending Core authorizers queue (φ): the queue which fills core authorizations.
 	CoreAssignments          CoreAssignments                   // Core assignments (ρ): each of the cores’ currently assigned report, the availability of whose work-package must yet be assured by a super-majority of validators. This is what each core is up to right now, tracks the work-reports which have been reported but not yet accumulated, the identities of the guarantors who reported them and the time at which it was reported.
-	RecentBlocks             []BlockState                      // Block-related state (β): details of the most recent blocks. TODO: Maximum length: MaxRecentBlocks
+	RecentHistory            RecentHistory                     // Block-related state (β): details of the most recent blocks. TODO: Maximum length: MaxRecentBlocks
 	TimeslotIndex            jamtime.Timeslot                  // Time-related state (τ): the most recent block’s slot index.
 	PastJudgements           Judgements                        // PastJudgements (ψ) - past judgements on work-reports and validators.
 	ActivityStatistics       validator.ActivityStatisticsState // Validator statistics (π) - The activity statistics for the validators.

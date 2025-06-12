@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/merkle/mountain_ranges"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
@@ -454,8 +455,10 @@ func mapValidators(validators []ValidatorKey) safrole.ValidatorsData {
 	return data
 }
 
-func mapRecentBlocks(blocks []BlockState) []state.BlockState {
-	result := make([]state.BlockState, len(blocks))
+// TODO this is a temporary mapping for recent history, when we have new test
+// vectors for v0.6.7 this will need to be updated.
+func mapRecentHistory(blocks []BlockState) state.RecentHistory {
+	newBlocks := make([]state.BlockState, len(blocks))
 
 	for i, b := range blocks {
 		// Map work report hashes
@@ -476,18 +479,38 @@ func mapRecentBlocks(blocks []BlockState) []state.BlockState {
 			hash := crypto.Hash(mustStringToHex(peak))
 			mmr[j] = &hash
 		}
+		mountainRange := mountain_ranges.New()
+		beefRoot := mountainRange.SuperPeak(mmr, crypto.KeccakData)
 
 		headerHash := crypto.Hash(mustStringToHex(b.HeaderHash))
 		stateRoot := crypto.Hash(mustStringToHex(b.StateRoot))
 
-		result[i] = state.BlockState{
-			HeaderHash:            headerHash,
-			StateRoot:             stateRoot,
-			AccumulationResultMMR: mmr,
-			WorkReportHashes:      workReportHashes,
+		newBlocks[i] = state.BlockState{
+			HeaderHash: headerHash,
+			StateRoot:  stateRoot,
+			BeefyRoot:  beefRoot,
+			Reported:   workReportHashes,
 		}
 	}
-	return result
+
+	var outputLog []*crypto.Hash
+	if len(blocks) > 0 {
+		lastBlock := blocks[len(blocks)-1]
+		for _, peak := range lastBlock.MMR.Peaks {
+			if peak == "" {
+				outputLog = append(outputLog, nil)
+				continue
+			}
+			hash := crypto.Hash(mustStringToHex(peak))
+			outputLog = append(outputLog, &hash)
+		}
+
+	}
+
+	return state.RecentHistory{
+		BlockHistory:          newBlocks,
+		AccumulationOutputLog: outputLog,
+	}
 }
 
 func mapAuthPools(pools [][]string) state.CoreAuthorizersPool {
@@ -557,7 +580,7 @@ func mapState(s State) state.State {
 			CurrentValidators:  mapValidators(s.CurrValidators),
 			ArchivedValidators: mapValidators(s.PrevValidators),
 		},
-		RecentBlocks:        mapRecentBlocks(s.RecentBlocks),
+		RecentHistory:       mapRecentHistory(s.RecentBlocks),
 		CoreAuthorizersPool: mapAuthPools(s.AuthPools),
 		Services:            mapServices(s.Services),
 		EntropyPool:         mapEntropyPool(s.Entropy),

@@ -4,10 +4,22 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 )
 
-// BlockState represents the details of the most recent blocks. (v0.4.5)
+// β ∈ (βH , βB) equation 7.1
+type RecentHistory struct {
+	// βH , state information for the most recent blocks. Limited to H blocks, i.e. MaxRecentBlocks
+	BlockHistory []BlockState
+	// βB, a merkle mountain range of all accumulation results . Equation 7.3
+	AccumulationOutputLog []*crypto.Hash
+}
+
+// BlockState represents the details of the most recent blocks.
+// Equation 7.2
 type BlockState struct {
-	HeaderHash            crypto.Hash                 // Hash of the block header (h)
-	AccumulationResultMMR []*crypto.Hash              // Accumulation-result MMR (s)
-	StateRoot             crypto.Hash                 // State root (b)
-	WorkReportHashes      map[crypto.Hash]crypto.Hash // Hashes of work-reports (p)
+	HeaderHash crypto.Hash // Hash of the block header (h)
+	// Merkle commitment to the block's accumulation output log, ie, the super peak of the MMR (b)
+	BeefyRoot crypto.Hash
+	// State root (s)
+	StateRoot crypto.Hash
+	// Work-reports included on this block, a map of work package hash to segment-root (p)
+	Reported map[crypto.Hash]crypto.Hash
 }

@@ -37,7 +37,7 @@ func SerializeState(s state.State) (map[statekey.StateKey][]byte, error) {
 	}{
 		{1, s.CoreAuthorizersPool},
 		{2, s.PendingAuthorizersQueues},
-		{3, s.RecentBlocks},
+		{3, s.RecentHistory},
 		{4, s.ValidatorState.SafroleState},
 		{5, s.PastJudgements},
 		{6, s.EntropyPool},

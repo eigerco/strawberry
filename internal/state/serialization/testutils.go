@@ -211,18 +211,25 @@ func RandomHashSet(t *testing.T, maxSize int) map[crypto.Hash]struct{} {
 	return set
 }
 
-func RandomBlockState(t *testing.T) state.BlockState {
-	var blockState state.BlockState
-	blockState.HeaderHash = testutils.RandomHash(t)
-	blockState.StateRoot = testutils.RandomHash(t)
-	h := testutils.RandomHash(t)
-	blockState.AccumulationResultMMR = []*crypto.Hash{&h}
+func RandomRecentHistory(t *testing.T) state.RecentHistory {
 	workReportHashes := make(map[crypto.Hash]crypto.Hash)
 	for i := uint16(0); i < common.TotalNumberOfCores; i++ {
 		workReportHashes[testutils.RandomHash(t)] = testutils.RandomHash(t)
 	}
-	blockState.WorkReportHashes = workReportHashes
-	return blockState
+	accumulationOutputLogHash := testutils.RandomHash(t)
+	return state.RecentHistory{
+		BlockHistory: []state.BlockState{
+			{
+				HeaderHash: testutils.RandomHash(t),
+				StateRoot:  testutils.RandomHash(t),
+				BeefyRoot:  testutils.RandomHash(t),
+				Reported:   workReportHashes,
+			},
+		},
+		AccumulationOutputLog: []*crypto.Hash{
+			&accumulationOutputLogHash,
+		},
+	}
 }
 
 func RandomValidatorState(t *testing.T) validator.ValidatorState {
@@ -304,7 +311,7 @@ func RandomState(t *testing.T) state.State {
 		CoreAuthorizersPool:      RandomCoreAuthorizersPool(t),
 		PendingAuthorizersQueues: RandomPendingAuthorizersQueues(t),
 		CoreAssignments:          RandomCoreAssignments(t),
-		RecentBlocks:             []state.BlockState{RandomBlockState(t)},
+		RecentHistory:            RandomRecentHistory(t),
 		TimeslotIndex:            testutils.RandomTimeslot(),
 		PastJudgements:           RandomJudgements(t),
 		ActivityStatistics:       RandomValidatorStatisticsState(),
