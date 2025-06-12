@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
@@ -34,9 +35,9 @@ type AccumulateState struct {
 	ReadyQueue  [][]ReadyQueueItem `json:"ready_queue"`
 	Accumulated [][]string         `json:"accumulated"`
 	Privileges  struct {
-		Bless     block.ServiceId `json:"bless"`
-		Assign    block.ServiceId `json:"assign"`
-		Designate block.ServiceId `json:"designate"`
+		Bless     block.ServiceId                            `json:"bless"`
+		Assign    [common.TotalNumberOfCores]block.ServiceId `json:"assign"`
+		Designate block.ServiceId                            `json:"designate"`
 		AlwaysAcc []struct {
 			ServiceId block.ServiceId `json:"service_id"`
 			Gas       uint64          `json:"gas"`
@@ -206,7 +207,7 @@ func mapAccumulateState(t *testing.T, s AccumulateState) *state.State {
 		Services: mapAccumulateServices(t, s.Accounts),
 		PrivilegedServices: service.PrivilegedServices{
 			ManagerServiceId:        s.Privileges.Bless,
-			AssignServiceId:         s.Privileges.Assign,
+			AssignedServiceIds:      s.Privileges.Assign,
 			DesignateServiceId:      s.Privileges.Designate,
 			AmountOfGasPerServiceId: privilegedGas,
 		},

@@ -86,7 +86,7 @@ func RandomPrivilegedServices() service.PrivilegedServices {
 	}
 	return service.PrivilegedServices{
 		ManagerServiceId:        block.ServiceId(123),
-		AssignServiceId:         block.ServiceId(234),
+		AssignedServiceIds:      [common.TotalNumberOfCores]block.ServiceId{234},
 		DesignateServiceId:      block.ServiceId(345),
 		AmountOfGasPerServiceId: amountOfGasPerServiceId,
 	}

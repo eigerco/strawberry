@@ -38,17 +38,21 @@ type ServiceAccount struct {
 	// Storage uses a state key for it's key. We have to use the state key
 	// representation as the key because serializing storage keys is lossy and
 	// we'd like to be able to deserialize the storage dictionary later. Host
-	// calls are called by PVM code code with the original storage key. The key
+	// calls are called by PVM code with the original storage key. The key
 	// we end up using is merely an implementation detail. As long as we can
 	// store and retrieve the key we are fine, we don't need to know the
 	// original key here.
-	Storage                map[statekey.StateKey][]byte                    // Dictionary of key-value pairs for storage (s)
-	PreimageLookup         map[crypto.Hash][]byte                          // Dictionary of preimage lookups (p)
-	PreimageMeta           map[PreImageMetaKey]PreimageHistoricalTimeslots // Metadata for preimageLookup (l) Graypaper 0.6.3 - TODO: There is a MaxTimeslotsForPreimage.
-	CodeHash               crypto.Hash                                     // Hash of the service code (c)
-	Balance                uint64                                          // Balance of the service (b)
-	GasLimitForAccumulator uint64                                          // Gas limit for accumulation (g)
-	GasLimitOnTransfer     uint64                                          // Gas limit for on_transfer (m)
+	Storage                        map[statekey.StateKey][]byte                    // Dictionary of key-value pairs for storage (s)
+	PreimageLookup                 map[crypto.Hash][]byte                          // Dictionary of preimage lookups (p)
+	PreimageMeta                   map[PreImageMetaKey]PreimageHistoricalTimeslots // Metadata for preimageLookup (l) Graypaper 0.6.3 - TODO: There is a MaxTimeslotsForPreimage.
+	GratisStorageOffset            uint64                                          // Gratis storage offset (f ∈ N_B)
+	CodeHash                       crypto.Hash                                     // Hash of the service code (c)
+	Balance                        uint64                                          // Balance of the service (b)
+	GasLimitForAccumulator         uint64                                          // Gas limit for accumulation (g)
+	GasLimitOnTransfer             uint64                                          // Gas limit for on_transfer (m)
+	CreationTimeslot               jamtime.Timeslot                                // The time slot at creation (r ∈ NT)
+	MostRecentAccumulationTimeslot jamtime.Timeslot                                // The time slot at the most recent accumulation (a ∈ NT)
+	ParentService                  block.ServiceId                                 // The parent service (p ∈ NS)
 }
 
 type CodeWithMetadata struct {
@@ -64,7 +68,7 @@ func (sa ServiceAccount) EncodedCodeAndMetadata() []byte {
 	return nil
 }
 
-// TotalItems (9.8 v0.6.5) ∀a ∈ V(δ): ai
+// TotalItems (9.8 v0.6.7) ∀a ∈ V(δ): ai
 func (sa ServiceAccount) TotalItems() uint32 {
 	totalPreimages := len(sa.PreimageMeta)
 	totalStorageItems := len(sa.Storage)
@@ -74,16 +78,17 @@ func (sa ServiceAccount) TotalItems() uint32 {
 	return uint32(ai)
 }
 
-// TotalStorageSize (9.8 v0.6.5) ∀a ∈ V(δ): ao
+// TotalStorageSize (9.8 v0.6.7) ∀a ∈ V(δ): ao
 func (sa ServiceAccount) TotalStorageSize() uint64 {
 	var ao uint64 = 0
 
-	// PreimageLookup sizes ∑(h,z)∈K(al) 81 + z
+	// preimage sizes ∑(h,z)∈K(al) 81 + z
 	for k := range sa.PreimageMeta {
 		ao += 81 + uint64(k.Length)
 	}
 
-	// Storage sizes ∑ x∈V(as) 32 + ∣x∣
+	// TODO fix this calculation it should be 34 + ∣y∣ + ∣x∣ ((x,y) ∈ as)
+	// Storage sizes ∑ x ∈ V(as) 32 + ∣x∣
 	for _, x := range sa.Storage {
 		xSize := uint64(len(x))
 		ao += 32 + xSize
@@ -92,12 +97,13 @@ func (sa ServiceAccount) TotalStorageSize() uint64 {
 	return ao
 }
 
-// ThresholdBalance (9.8 v0.6.5) ∀a ∈ V(δ): at
+// ThresholdBalance (9.8 v0.6.7) ∀a ∈ V(δ): at
 func (sa ServiceAccount) ThresholdBalance() uint64 {
 	ai := uint64(sa.TotalItems())
 	ao := sa.TotalStorageSize()
 
-	return BasicMinimumBalance + AdditionalMinimumBalancePerItem*ai + AdditionalMinimumBalancePerOctet*ao
+	// at ∈ NB ≡ max(0,BS + BI ⋅ ai + BL ⋅ ao − af )
+	return max(0, BasicMinimumBalance+AdditionalMinimumBalancePerItem*ai+AdditionalMinimumBalancePerOctet*ao-sa.GratisStorageOffset)
 }
 
 // AddPreimage adds a preimage to the service account's preimage lookup and metadata
@@ -184,10 +190,10 @@ func isPreimageAvailableAt(metadata PreimageHistoricalTimeslots, t jamtime.Times
 }
 
 type PrivilegedServices struct {
-	ManagerServiceId        block.ServiceId            // Manager service ID (m) - the service able to effect an alteration of PrivilegedServices from block to block. Also called Empower service.
-	AssignServiceId         block.ServiceId            // Assign service ID (a) - the service able to effect an alteration of the PendingAuthorizersQueues.
-	DesignateServiceId      block.ServiceId            // Designate service ID (v) - the service able to effect an alteration of the NextValidators in ValidatorState.
-	AmountOfGasPerServiceId map[block.ServiceId]uint64 // Amount of gas per service ID (g) - small dictionary containing the indices of services which automatically accumulate in each block together with a basic amount of gas with which each accumulates.
+	ManagerServiceId        block.ServiceId                            // Manager service ID (m) - the service able to effect an alteration of PrivilegedServices from block to block. Also called Empower service.
+	AssignedServiceIds      [common.TotalNumberOfCores]block.ServiceId // Assigned service ids (a) - the service indices capable of altering the pending authorizer queue φ, one for each core.
+	DesignateServiceId      block.ServiceId                            // Designate service ID (v) - the service able to effect an alteration of the NextValidators in ValidatorState.
+	AmountOfGasPerServiceId map[block.ServiceId]uint64                 // Amount of gas per service ID (g) - small dictionary containing the indices of services which automatically accumulate in each block together with a basic amount of gas with which each accumulates.
 }
 
 type PreimageLength uint32
