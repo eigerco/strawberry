@@ -35,12 +35,12 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
 
-		if ctxPair.RegularCtx.AccumulationState.PrivilegedServices.AmountOfGasPerServiceId == nil {
-			ctxPair.RegularCtx.AccumulationState.PrivilegedServices.AmountOfGasPerServiceId = make(map[block.ServiceId]uint64)
+		if ctxPair.RegularCtx.AccumulationState.AmountOfGasPerServiceId == nil {
+			ctxPair.RegularCtx.AccumulationState.AmountOfGasPerServiceId = make(map[block.ServiceId]uint64)
 		}
-		ctxPair.RegularCtx.AccumulationState.PrivilegedServices.AmountOfGasPerServiceId[serviceId] = serviceGas
+		ctxPair.RegularCtx.AccumulationState.AmountOfGasPerServiceId[serviceId] = serviceGas
 	}
-	ctxPair.RegularCtx.AccumulationState.PrivilegedServices.ManagerServiceId = block.ServiceId(managerServiceId)
+	ctxPair.RegularCtx.AccumulationState.ManagerServiceId = block.ServiceId(managerServiceId)
 
 	// Na⋅⋅⋅+4C ⊆ Vµ
 	assignersBytes := make([]byte, 4*common.TotalNumberOfCores)
@@ -54,8 +54,8 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
-	ctxPair.RegularCtx.AccumulationState.PrivilegedServices.AssignedServiceIds = assigners
-	ctxPair.RegularCtx.AccumulationState.PrivilegedServices.DesignateServiceId = block.ServiceId(designateServiceId)
+	ctxPair.RegularCtx.AccumulationState.AssignedServiceIds = assigners
+	ctxPair.RegularCtx.AccumulationState.DesignateServiceId = block.ServiceId(designateServiceId)
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 

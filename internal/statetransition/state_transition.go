@@ -1914,15 +1914,23 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	// let (n, o, t, θ′, u) = ∆+(g, W∗, (χ, δ, ι, φ), χg) (eq. 12.22)
 	accumulatedCount, newAccumulationState, transfers, accumulationOutputLog, gasPairs := accumulator.
 		SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
-			PrivilegedServices:       currentState.PrivilegedServices,
 			ServiceState:             currentState.Services,
 			ValidatorKeys:            currentState.ValidatorState.QueuedValidators,
 			PendingAuthorizersQueues: currentState.PendingAuthorizersQueues,
+			ManagerServiceId:         currentState.PrivilegedServices.ManagerServiceId,
+			AssignedServiceIds:       currentState.PrivilegedServices.AssignedServiceIds,
+			DesignateServiceId:       currentState.PrivilegedServices.DesignateServiceId,
+			AmountOfGasPerServiceId:  currentState.PrivilegedServices.AmountOfGasPerServiceId,
 		}, currentState.PrivilegedServices.AmountOfGasPerServiceId)
 
 	// (χ′, δ†, ι′, φ′) ≡ o (eq. 12.23)
 	intermediateServiceState := newAccumulationState.ServiceState
-	newPrivilegedServices = newAccumulationState.PrivilegedServices
+	newPrivilegedServices = service.PrivilegedServices{
+		ManagerServiceId:        newAccumulationState.ManagerServiceId,
+		AssignedServiceIds:      newAccumulationState.AssignedServiceIds,
+		DesignateServiceId:      newAccumulationState.DesignateServiceId,
+		AmountOfGasPerServiceId: newAccumulationState.AmountOfGasPerServiceId,
+	}
 	newValidatorKeys = newAccumulationState.ValidatorKeys
 	newPendingAuthorizersQueues = newAccumulationState.PendingAuthorizersQueues
 
@@ -2514,6 +2522,12 @@ func (a *Accumulator) ParallelDelta(
 	newAccState := state.AccumulationState{
 		ServiceState: initialAccState.ServiceState.Clone(),
 	}
+
+	// a*
+	var intermediateAssignServiceId [common.TotalNumberOfCores]block.ServiceId
+	// v*
+	var intermediateDesignateServiceId block.ServiceId
+
 	var allPreimageProvisions []polkavm.ProvidedPreimage
 
 	var mu sync.Mutex
@@ -2579,26 +2593,13 @@ func (a *Accumulator) ParallelDelta(
 		mu.Lock()
 		defer mu.Unlock()
 
-		newAccState.PrivilegedServices = accState.PrivilegedServices
+		newAccState.ManagerServiceId = accState.ManagerServiceId
+		intermediateAssignServiceId = accState.AssignedServiceIds
+		intermediateDesignateServiceId = accState.DesignateServiceId
+		newAccState.AmountOfGasPerServiceId = accState.AmountOfGasPerServiceId
+	}(initialAccState.ManagerServiceId)
 
-	}(initialAccState.PrivilegedServices.ManagerServiceId)
-
-	// ∀c ∈ NC
-	for c := range common.TotalNumberOfCores {
-		wg.Add(1)
-		go func(serviceId block.ServiceId) {
-			defer wg.Done()
-
-			// Process single service using Delta1
-			accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
-			mu.Lock()
-			defer mu.Unlock()
-
-			newAccState.ValidatorKeys = accState.ValidatorKeys
-
-		}(initialAccState.PrivilegedServices.AssignedServiceIds[c])
-	}
-
+	// i′ = (∆1(o, w, f, v)o)i
 	wg.Add(1)
 	go func(serviceId block.ServiceId) {
 		defer wg.Done()
@@ -2608,15 +2609,57 @@ func (a *Accumulator) ParallelDelta(
 		mu.Lock()
 		defer mu.Unlock()
 
-		newAccState.PendingAuthorizersQueues = accState.PendingAuthorizersQueues
+		newAccState.ValidatorKeys = accState.ValidatorKeys
+	}(newAccState.DesignateServiceId)
 
-	}(initialAccState.PrivilegedServices.DesignateServiceId)
+	// ∀c ∈ NC ∶ q′c = (∆1(o, w, f , a_c)o)q
+	for core, assignServiceId := range newAccState.AssignedServiceIds {
+		wg.Add(1)
+		go func(serviceId block.ServiceId) {
+			defer wg.Done()
 
-	// Wait for all goroutines to complete
+			// Process single service using Delta1
+			accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+			mu.Lock()
+			newAccState.PendingAuthorizersQueues[core] = accState.PendingAuthorizersQueues[core]
+			defer mu.Unlock()
+		}(assignServiceId)
+	}
+
+	// Wait for manager, assign, designate and worker services
 	wg.Wait()
 
 	// d′ = P ((d ∪ n) ∖ m, [⋃s∈s] ∆1(o, w, f , s)p)
 	newAccState.ServiceState = a.preimageIntegration(newAccState.ServiceState, allPreimageProvisions)
+
+	// ∀c ∈ NC ∶ a′_c = ((∆1(o, w, f, a*_c )o)a)c
+	for core, assignServiceId := range intermediateAssignServiceId {
+		wg.Add(1)
+		go func(serviceId block.ServiceId) {
+			defer wg.Done()
+
+			// Process single service using Delta1
+			accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+			mu.Lock()
+			newAccState.AssignedServiceIds[core] = accState.AssignedServiceIds[core]
+			defer mu.Unlock()
+		}(assignServiceId)
+	}
+
+	// v′ = (∆1(o, w, f , v*)o)v
+	wg.Add(1)
+	go func(serviceId block.ServiceId) {
+		defer wg.Done()
+
+		// Process single service using Delta1
+		accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+		mu.Lock()
+		defer mu.Unlock()
+		newAccState.DesignateServiceId = accState.DesignateServiceId
+	}(intermediateDesignateServiceId)
+
+	// Wait for the intermediate assign and designate services id assign
+	wg.Wait()
 
 	// Sort accumulation pairs by service ID to ensure deterministic output
 	sort.Slice(accumHashPairs, func(i, j int) bool {

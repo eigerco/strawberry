@@ -40,8 +40,7 @@ func TestAccumulate(t *testing.T) {
 					generate(t, testutils.RandomHash, state.PendingAuthorizersQueueSize),
 				),
 			},
-			ValidatorKeys:      safrole.ValidatorsData(generate(t, testutils.RandomValidatorKey, common.NumberOfValidators)),
-			PrivilegedServices: service.PrivilegedServices{},
+			ValidatorKeys: safrole.ValidatorsData(generate(t, testutils.RandomValidatorKey, common.NumberOfValidators)),
 		},
 		ServiceId: 123,
 	}
@@ -97,15 +96,13 @@ func TestAccumulate(t *testing.T) {
 			expectedGas: 90,
 			expectedX: AccumulateContext{
 				AccumulationState: state.AccumulationState{
-					PrivilegedServices: service.PrivilegedServices{
-						ManagerServiceId:   111,
-						AssignedServiceIds: [common.TotalNumberOfCores]block.ServiceId{},
-						DesignateServiceId: 333,
-						AmountOfGasPerServiceId: map[block.ServiceId]uint64{
-							123: 12341234,
-							234: 23452345,
-							345: 34563456,
-						},
+					ManagerServiceId:   111,
+					AssignedServiceIds: [common.TotalNumberOfCores]block.ServiceId{},
+					DesignateServiceId: 333,
+					AmountOfGasPerServiceId: map[block.ServiceId]uint64{
+						123: 12341234,
+						234: 23452345,
+						345: 34563456,
 					},
 				},
 			},
