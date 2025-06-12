@@ -122,7 +122,10 @@ type AccumulationState struct {
 	ServiceState             service.ServiceState                               // Service accounts δ (d ∈ D⟨NS → A⟩)
 	ValidatorKeys            safrole.ValidatorsData                             // Validator keys ι (i ∈ ⟦K⟧V)
 	PendingAuthorizersQueues [common.TotalNumberOfCores]PendingAuthorizersQueue // Queue of authorizers (q ∈ C⟦H⟧QHC)
-	PrivilegedServices       service.PrivilegedServices                         // Privileges state (x ∈ (NS, NS, NS, D⟨NS → NG⟩))
+	ManagerServiceId         block.ServiceId                                    // (m)
+	AssignedServiceIds       [common.TotalNumberOfCores]block.ServiceId         // (a)
+	DesignateServiceId       block.ServiceId                                    // (v)
+	AmountOfGasPerServiceId  map[block.ServiceId]uint64                         // (z)
 }
 
 // AccumulationOperand represents a single operand for accumulation (eq. 12.19)
