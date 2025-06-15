@@ -17,6 +17,7 @@ import (
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
+	"github.com/eigerco/strawberry/internal/disputes"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
 	"github.com/eigerco/strawberry/internal/merkle/mountain_ranges"
@@ -222,34 +223,53 @@ func CalculateIntermediateServiceState(
 	return newServiceState, nil
 }
 
-// CalculateIntermediateCoreAssignmentsFromExtrinsics Equation 25: ρ† ≺ (ED , ρ)
-func CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes block.DisputeExtrinsic, coreAssignments state.CoreAssignments) state.CoreAssignments {
+// CalculateIntermediateCoreAssignmentsFromExtrinsics Equation 4.12(v0.6.7): ρ† ≺ (ED , ρ)
+// CalculateIntermediateCoreAssignmentsFromExtrinsics processes dispute verdicts to clear
+// work-reports from cores that have been judged as bad or wonky Equation 10.15(v0.6.7):
+//
+//	∀c ∈ NC : ρ†[c] = {
+//	  ∅ if {(H(ρ[c]w), t) ∈ V, t < ⌊2V/3⌋}
+//	  ρ[c] otherwise
+//	}
+//
+// This ensures that work-reports without a 2/3+1 supermajority of positive judgments
+// are removed from their assigned cores before accumulation can occur. This is a critical
+// security mechanism that prevents invalid or disputed work from being accumulated into
+// the chain state.
+func CalculateIntermediateCoreAssignmentsFromExtrinsics(de block.DisputeExtrinsic, coreAssignments state.CoreAssignments) state.CoreAssignments {
 	newAssignments := coreAssignments // Create a copy of the current assignments
 
 	// Process each verdict in the disputes
-	for _, verdict := range disputes.Verdicts {
-		verdictReportHash := verdict.ReportHash
-		positiveJudgments := block.CountPositiveJudgments(verdict.Judgements)
+	for _, v := range de.Verdicts {
+		verdictReportHash := v.ReportHash
+		positiveJudgments := disputes.CountPositiveJudgements(v)
 
-		// If less than 2/3 majority of positive judgments, clear the assignment for matching cores
-		if positiveJudgments < common.ValidatorsSuperMajority {
+		// If less than 2/3+1 supermajority of positive judgments, the work-report is
+		// considered either bad (0 positive) or wonky (1/3 positive), and must be
+		// cleared from its core to prevent accumulation
+		if positiveJudgments < disputes.DisputeVoteGood {
+			// Search all cores to find where this work-report is assigned
 			for c := uint16(0); c < common.TotalNumberOfCores; c++ {
 				if newAssignments[c] == nil {
 					continue
 				}
 
+				// Hash the work-report currently on this core to check if it matches
 				coreReportHash, err := newAssignments[c].WorkReport.Hash()
 				if err != nil {
 					log.Printf("Failed to hash work report on core %d while clearing assignments for verdict with %d/%d positive votes: %v",
-						c, positiveJudgments, common.ValidatorsSuperMajority, err)
+						c, positiveJudgments, disputes.DisputeVoteGood, err)
 					continue
 				}
 
+				// If this core has the disputed work-report, clear it
 				if coreReportHash == verdictReportHash {
 					newAssignments[c] = nil // Clear the assignment
 				}
 			}
 		}
+		// Note: Work-reports with 2/3+1 positive judgments (good) remain on their cores
+		// and can proceed to accumulation
 	}
 
 	return newAssignments
@@ -843,431 +863,19 @@ func addUniqueEdPubKey(slice []ed25519.PublicKey, key ed25519.PublicKey) []ed255
 	return append(slice, key)
 }
 
-// calculateNewJudgements Equation 23: ψ′ ≺ (ED, ψ)
-// Equations 112-115:(v0.4.5)
+// CalculateNewJudgements Equation 4.11(v0.6.7): ψ′ ≺ (ED, ψ)
+// Equations 10.16-10.19(v0.6.7):
 // ψ'g ≡ ψg ∪ {r | {r, ⌊2/3V⌋ + 1} ∈ V}
 // ψ'b ≡ ψb ∪ {r | {r, 0} ∈ V}
 // ψ'w ≡ ψw ∪ {r | {r, ⌊1/3V⌋} ∈ V}
 // ψ'o ≡ ψo ∪ {k | (r, k, s) ∈ c} ∪ {k | (r, v, k, s) ∈ f}
-func CalculateNewJudgements(priorTimeslot jamtime.Timeslot, disputes block.DisputeExtrinsic, stateJudgements state.Judgements, validators validator.ValidatorState) (state.Judgements, error) {
-	if err := verifySortedUnique(disputes); err != nil {
-		return stateJudgements, err
-	}
-
-	if err := verifyAllSignatures(priorTimeslot, disputes, validators); err != nil {
-		return stateJudgements, err
-	}
-
-	if err := verifyNotAlreadyOffending(disputes.Faults, stateJudgements.OffendingValidators); err != nil {
-		return stateJudgements, err
-	}
-
-	if err := verifyNotAlreadyJudged(disputes.Verdicts, stateJudgements); err != nil {
-		return stateJudgements, err
-	}
-
-	newJudgements := copyJudgements(stateJudgements)
-
-	if err := verifyFaults(disputes.Faults, disputes.Verdicts, stateJudgements.OffendingValidators); err != nil {
-		return stateJudgements, err
-	}
-
-	if err := processVerdicts(disputes, &newJudgements); err != nil {
-		return stateJudgements, err
-	}
-
-	if err := processCulprits(disputes.Culprits, disputes.Verdicts, &newJudgements); err != nil {
+func CalculateNewJudgements(prevTimeSlot jamtime.Timeslot, de block.DisputeExtrinsic, stateJudgements state.Judgements, validators validator.ValidatorState) (state.Judgements, error) {
+	newJudgements, err := disputes.ValidateDisputesExtrinsicAndProduceJudgements(prevTimeSlot, de, validators, stateJudgements)
+	if err != nil {
 		return stateJudgements, err
 	}
 
 	return newJudgements, nil
-}
-
-// Equation 101:(v0.4.5)
-// ∀(r, k, s) ∈ c : ⋀{r ∈ ψ'b, k ∈ k, s ∈ Ek⟨XG ⌢ r⟩}
-func verifyNotAlreadyOffending(faults []block.Fault, offendingValidators []ed25519.PublicKey) error {
-	for _, fault := range faults {
-		if containsKey(offendingValidators, fault.ValidatorEd25519PublicKey) {
-			return errors.New("offender already reported")
-		}
-	}
-	return nil
-}
-
-// Equations 103, 104, 106:(v0.4.5)
-// v = [r __ {r, a, j} ∈ v]  (Verdicts must be ordered by report hash)
-// c = [k __ {r, k, s} ∈ c]  (Culprits must be ordered by validator key)
-// f = [k __ {r, v, k, s} ∈ f]  (Faults must be ordered by validator key)
-// ∀(r, a, j) ∈ v : j = [i __ {v, i, s} ∈ j]  (Judgments within verdicts must be ordered by validator index)
-func verifyNotAlreadyJudged(verdicts []block.Verdict, stateJudgements state.Judgements) error {
-	for _, verdict := range verdicts {
-		reportHash := verdict.ReportHash
-		if contains(stateJudgements.GoodWorkReports, reportHash) ||
-			contains(stateJudgements.BadWorkReports, reportHash) ||
-			contains(stateJudgements.WonkyWorkReports, reportHash) {
-			return errors.New("already judged")
-		}
-	}
-	return nil
-}
-
-func copyJudgements(stateJudgements state.Judgements) state.Judgements {
-	newJudgements := state.Judgements{
-		BadWorkReports:      make([]crypto.Hash, len(stateJudgements.BadWorkReports)),
-		GoodWorkReports:     make([]crypto.Hash, len(stateJudgements.GoodWorkReports)),
-		WonkyWorkReports:    make([]crypto.Hash, len(stateJudgements.WonkyWorkReports)),
-		OffendingValidators: make([]ed25519.PublicKey, len(stateJudgements.OffendingValidators)),
-	}
-
-	copy(newJudgements.BadWorkReports, stateJudgements.BadWorkReports)
-	copy(newJudgements.GoodWorkReports, stateJudgements.GoodWorkReports)
-	copy(newJudgements.WonkyWorkReports, stateJudgements.WonkyWorkReports)
-	copy(newJudgements.OffendingValidators, stateJudgements.OffendingValidators)
-
-	return newJudgements
-}
-
-// Equations 109, 110, 111:(v0.4.5)
-// ∀(r, ⌊2/3V⌋ + 1) ∈ V : ∃(r, ...) ∈ f  (For positive verdicts, must have corresponding fault)
-// ∀(r, 0) ∈ V : |{(r, ...) ∈ c}| ≥ 2  (For negative verdicts, must have at least 2 culprits)
-//
-//	∀c ∈ NC : ρ†[c] = {
-//	    ∅ if {(H(ρ[c]w), t) ∈ V, t < ⌊2/3V⌋}
-//	    ρ[c] otherwise
-//	}
-func processVerdicts(disputes block.DisputeExtrinsic, newJudgements *state.Judgements) error {
-	const V = common.NumberOfValidators // Total number of validators
-	twoThirdsPlusOne := (2 * V / 3) + 1 // ⌊2/3V⌋ + 1
-	oneThird := V / 3                   // ⌊1/3V⌋
-
-	for _, verdict := range disputes.Verdicts {
-		positiveJudgments := block.CountPositiveJudgments(verdict.Judgements)
-
-		switch positiveJudgments {
-		case twoThirdsPlusOne:
-			if err := processPositiveVerdict(verdict, disputes.Faults, newJudgements); err != nil {
-				return err
-			}
-
-		case 0:
-			if err := processNegativeVerdict(verdict, disputes.Culprits, newJudgements); err != nil {
-				return err
-			}
-
-		case oneThird:
-			processWonkyVerdict(verdict, newJudgements)
-
-		default:
-			return fmt.Errorf("bad vote split")
-		}
-	}
-
-	return nil
-}
-
-// Equations 109, 110:(v0.4.5)
-// ∀(r, ⌊2/3V⌋ + 1) ∈ V : ∃(r, ...) ∈ f
-func processPositiveVerdict(verdict block.Verdict, faults []block.Fault, newJudgements *state.Judgements) error {
-	validFaults := 0
-	for _, fault := range faults {
-		if fault.ReportHash != verdict.ReportHash || fault.IsValid {
-			continue
-		}
-		validFaults++
-		if !containsKey(newJudgements.OffendingValidators, fault.ValidatorEd25519PublicKey) {
-			newJudgements.OffendingValidators = append(newJudgements.OffendingValidators, fault.ValidatorEd25519PublicKey)
-		}
-	}
-
-	if validFaults == 0 {
-		return errors.New("not enough faults")
-	}
-
-	newJudgements.GoodWorkReports = append(newJudgements.GoodWorkReports, verdict.ReportHash)
-	return nil
-}
-
-// Related to Equation 110:(v0.4.5)
-// ∀(r, 0) ∈ V : |{(r, ...) ∈ c}| ≥ 2
-func processNegativeVerdict(verdict block.Verdict, culprits []block.Culprit, newJudgements *state.Judgements) error {
-	if len(culprits) < 2 {
-		return errors.New("not enough culprits")
-	}
-	newJudgements.BadWorkReports = append(newJudgements.BadWorkReports, verdict.ReportHash)
-	return nil
-}
-
-// Related to Equation 114:(v0.4.5)
-// ψ'w ≡ ψw ∪ {r | {r, ⌊1/3V⌋} ∈ V}
-func processWonkyVerdict(verdict block.Verdict, newJudgements *state.Judgements) {
-	newJudgements.WonkyWorkReports = append(newJudgements.WonkyWorkReports, verdict.ReportHash)
-}
-
-// Equations 101, 102, 104, 105: (v0.4.5)
-// c = [k __ {r, k, s} ∈ c]  (Culprits must be ordered)
-//
-//	∀(r, k, s) ∈ c : ⋀{
-//	    r ∈ ψ'b,  (Report must be in bad reports)
-//	    k ∈ k,    (Key must be valid validator)
-//	    s ∈ Ek⟨XG ⌢ r⟩  (Signature must be valid)
-//	}
-//
-//	∀(r, v, k, s) ∈ f : ⋀{
-//	    r ∈ ψ'b ⇔ r ∉ ψ'g ⇔ v,
-//	    k ∈ k,
-//	    s ∈ Ek⟨Xv ⌢ r⟩
-//	}
-//
-// {r | {r, a, j} ∈ v} ⫰ ψg ∪ ψb ∪ ψw  (Reports must not have been previously judged)
-func processCulprits(culprits []block.Culprit, verdicts []block.Verdict, newJudgements *state.Judgements) error {
-	for _, culprit := range culprits {
-		// Find corresponding verdict
-		var allNegative bool
-		for _, verdict := range verdicts {
-			if verdict.ReportHash == culprit.ReportHash {
-				// Check if all votes are false
-				positiveJudgments := block.CountPositiveJudgments(verdict.Judgements)
-				if positiveJudgments > 0 {
-					return errors.New("bad vote split")
-				}
-				allNegative = true
-				break
-			}
-		}
-		if !allNegative {
-			return errors.New("culprits verdict not bad")
-		}
-	}
-
-	// Process culprits
-	if err := verifyCulprits(culprits, newJudgements.BadWorkReports, newJudgements.OffendingValidators); err != nil {
-		return err
-	}
-
-	for _, culprit := range culprits {
-		if !containsKey(newJudgements.OffendingValidators, culprit.ValidatorEd25519PublicKey) {
-			newJudgements.OffendingValidators = append(newJudgements.OffendingValidators, culprit.ValidatorEd25519PublicKey)
-		}
-	}
-
-	return nil
-}
-
-// Equations 103, 104, 106:
-// v = [r __ {r, a, j} ∈ v]  (Verdicts must be ordered by report hash)
-// c = [k __ {r, k, s} ∈ c]  (Faults must be ordered by validator key)
-// f = [k __ {r, v, k, s} ∈ f]  (Faults must be ordered by validator key)
-// ∀(r, a, j) ∈ v : j = [i __ {v, i, s} ∈ j]  (Judgments within verdicts must be ordered by validator index)
-func verifySortedUnique(disputes block.DisputeExtrinsic) error {
-	// Check faults are sorted unique
-	for i := 1; i < len(disputes.Faults); i++ {
-		if bytes.Compare(disputes.Faults[i-1].ValidatorEd25519PublicKey, disputes.Faults[i].ValidatorEd25519PublicKey) >= 0 {
-			return errors.New("faults not sorted unique")
-		}
-	}
-
-	// Check verdicts are sorted unique
-	for i := 1; i < len(disputes.Verdicts); i++ {
-		if bytes.Compare(disputes.Verdicts[i-1].ReportHash[:], disputes.Verdicts[i].ReportHash[:]) >= 0 {
-			return errors.New("verdicts not sorted unique")
-		}
-	}
-
-	// Check judgements within verdicts are sorted unique
-	for _, verdict := range disputes.Verdicts {
-		for i := 1; i < len(verdict.Judgements); i++ {
-			if verdict.Judgements[i-1].ValidatorIndex >= verdict.Judgements[i].ValidatorIndex {
-				return errors.New("judgements not sorted unique")
-			}
-		}
-	}
-
-	return nil
-}
-
-// Related to Equation 99:(v0.4.5)
-// ∀(r, a, j) ∈ v, ∀(v, i, s) ∈ j : s ∈ Ek[i]e⟨Xv ⌢ r⟩
-func verifyAllSignatures(newTimeslot jamtime.Timeslot, disputes block.DisputeExtrinsic, validators validator.ValidatorState) error {
-	// Verify verdict signatures
-	for _, verdict := range disputes.Verdicts {
-		if err := verifyVerdictSignatures(newTimeslot, verdict, validators.CurrentValidators, validators.ArchivedValidators); err != nil {
-			return err
-		}
-	}
-
-	// Verify culprit signatures
-	for _, culprit := range disputes.Culprits {
-		// Check if the key is in the validator set
-		if !isValidatorKeyInCurrentOrPrevEpoch(culprit.ValidatorEd25519PublicKey,
-			validators.CurrentValidators,
-			validators.ArchivedValidators) {
-			return errors.New("bad guarantor key")
-		}
-		message := append([]byte(state.SignatureContextGuarantee), culprit.ReportHash[:]...)
-		if !ed25519.Verify(culprit.ValidatorEd25519PublicKey, message, culprit.Signature[:]) {
-			return errors.New("bad signature")
-		}
-	}
-
-	// Verify fault signatures
-	for _, fault := range disputes.Faults {
-		// Check if the key is in the validator set
-		if !isValidatorKeyInCurrentOrPrevEpoch(fault.ValidatorEd25519PublicKey,
-			validators.CurrentValidators,
-			validators.ArchivedValidators) {
-			return errors.New("bad auditor key")
-		}
-		context := state.SignatureContextValid
-		if !fault.IsValid {
-			context = state.SignatureContextInvalid
-		}
-		message := append([]byte(context), fault.ReportHash[:]...)
-		if !ed25519.Verify(fault.ValidatorEd25519PublicKey, message, fault.Signature[:]) {
-			return errors.New("bad signature")
-		}
-	}
-
-	return nil
-}
-
-// Related to Equation 99:(v0.4.5)
-// ∀(r, a, j) ∈ v, ∀(v, i, s) ∈ j :
-// s ∈ Ek[i]e⟨Xv ⌢ r⟩ where k = κ if a = ⌊τ/E⌋, λ otherwise
-func verifyVerdictSignatures(newTimeslot jamtime.Timeslot, verdict block.Verdict, currentValidators, archivedValidators safrole.ValidatorsData) error {
-	currentEpoch := uint32(newTimeslot.ToEpoch())
-	validatorSet := currentValidators
-	if verdict.EpochIndex != currentEpoch {
-		validatorSet = archivedValidators
-	}
-
-	// Verify signatures before checking age
-	for _, judgment := range verdict.Judgements {
-		if judgment.ValidatorIndex >= uint16(len(validatorSet)) {
-			return errors.New("invalid validator index")
-		}
-
-		context := state.SignatureContextValid
-		if !judgment.IsValid {
-			context = state.SignatureContextInvalid
-		}
-
-		message := append([]byte(context), verdict.ReportHash[:]...)
-
-		if !ed25519.Verify(validatorSet[judgment.ValidatorIndex].Ed25519, message, judgment.Signature[:]) {
-			return errors.New("bad signature")
-		}
-	}
-	// Age checks come after signature verification
-	if verdict.EpochIndex > currentEpoch {
-		return errors.New("bad judgement age")
-	}
-	if currentEpoch-verdict.EpochIndex > 1 {
-		return errors.New("bad judgement age")
-	}
-
-	return nil
-}
-
-// Related to Equations 101, 102:(v0.4.5)
-// ∀(r, k, s) ∈ c : ⋀{r ∈ ψ'b, k ∈ k, s ∈ Ek⟨XG ⌢ r⟩}
-// ∀(r, v, k, s) ∈ f : ⋀{r ∈ ψ'b ⇔ r ∉ ψ'g ⇔ v, k ∈ k, s ∈ Ek⟨Xv ⌢ r⟩}
-func verifyCulprits(culprits []block.Culprit, badReports []crypto.Hash, offendingValidators []ed25519.PublicKey) error {
-	for i := 1; i < len(culprits); i++ {
-		if bytes.Compare(culprits[i-1].ValidatorEd25519PublicKey, culprits[i].ValidatorEd25519PublicKey) >= 0 {
-			return errors.New("culprits not sorted unique")
-		}
-	}
-	for _, culprit := range culprits {
-		// Verify guarantee signature
-		message := append([]byte(state.SignatureContextGuarantee), culprit.ReportHash[:]...)
-		if !ed25519.Verify(culprit.ValidatorEd25519PublicKey, message, culprit.Signature[:]) {
-			return errors.New("bad signature")
-		}
-		// Must be in bad reports
-		if !contains(badReports, culprit.ReportHash) {
-			return errors.New("culprits verdict not bad")
-		}
-
-		// Must not already be in offending validators
-		if containsKey(offendingValidators, culprit.ValidatorEd25519PublicKey) {
-			return errors.New("offender already reported")
-		}
-	}
-	return nil
-}
-
-// Related to Equations 101, 102:(v0.4.5)
-// ∀(r, k, s) ∈ c : ⋀{r ∈ ψ'b, k ∈ k, s ∈ Ek⟨XG ⌢ r⟩}
-// ∀(r, v, k, s) ∈ f : ⋀{r ∈ ψ'b ⇔ r ∉ ψ'g ⇔ v, k ∈ k, s ∈ Ek⟨Xv ⌢ r⟩}
-func verifyFaults(faults []block.Fault, verdicts []block.Verdict, offendingValidators []ed25519.PublicKey) error {
-	for _, fault := range faults {
-		// Find corresponding verdict
-		var allPositive bool
-		for _, verdict := range verdicts {
-			if verdict.ReportHash == fault.ReportHash {
-				positiveJudgments := block.CountPositiveJudgments(verdict.Judgements)
-				allPositive = positiveJudgments == len(verdict.Judgements)
-				break
-			}
-		}
-
-		// Fault vote should be opposite to verdict
-		// If verdict is all positive, fault vote should be false
-		// If verdict is all negative, fault vote should be true
-		if fault.IsValid == allPositive {
-			return errors.New("fault verdict wrong")
-		}
-
-		// Check that validator isn't already offending
-		if containsKey(offendingValidators, fault.ValidatorEd25519PublicKey) {
-			return errors.New("offender already reported")
-		}
-
-		// Verify signature
-		context := state.SignatureContextValid
-		if !fault.IsValid {
-			context = state.SignatureContextInvalid
-		}
-		message := append([]byte(context), fault.ReportHash[:]...)
-		if !ed25519.Verify(fault.ValidatorEd25519PublicKey, message, fault.Signature[:]) {
-			return errors.New("bad signature")
-		}
-	}
-	return nil
-}
-
-func isValidatorKeyInCurrentOrPrevEpoch(key ed25519.PublicKey, currentValidators, archivedValidators safrole.ValidatorsData) bool {
-	// Check in current validators
-	for _, validator := range currentValidators {
-		if bytes.Equal(validator.Ed25519, key) {
-			return true
-		}
-	}
-	// Check in archived validators
-	for _, validator := range archivedValidators {
-		if bytes.Equal(validator.Ed25519, key) {
-			return true
-		}
-	}
-	return false
-}
-
-func contains(slice []crypto.Hash, item crypto.Hash) bool {
-	for _, hash := range slice {
-		if hash == item {
-			return true
-		}
-	}
-	return false
-}
-
-func containsKey(slice []ed25519.PublicKey, key ed25519.PublicKey) bool {
-	for _, k := range slice {
-		if bytes.Equal(k, key) {
-			return true
-		}
-	}
-	return false
 }
 
 // CalculateNewCoreAssignments updates the core assignments based on new guarantees.
