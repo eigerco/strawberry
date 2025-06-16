@@ -341,25 +341,14 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
-	// k = H(E4(s*) ⌢ µko..ko+kz)
-	serviceIdBytes, err := jam.Marshal(ss)
-	if err != nil {
-		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
-	}
-
-	// Concatenate E4(s) and keyData
-	hashInput := make([]byte, 0, len(serviceIdBytes)+len(keyData))
-	hashInput = append(hashInput, serviceIdBytes...)
-	hashInput = append(hashInput, keyData...)
-
-	// Compute the hash H(E4(s) + keyData) and create a state key from it to use
+	// Compute the hash H(keyData) and create a state key from it to use
 	// as the storage key.
-	k, err := statekey.NewStorage(ss, crypto.HashData(hashInput))
+	k, err := statekey.NewStorage(ss, crypto.HashData(keyData))
 	if err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
-	v, exists := a.Storage[k]
+	v, exists := a.Storage.Get(k)
 	if !exists {
 		return gas, withCode(regs, NONE), mem, nil
 	}
@@ -384,26 +373,21 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 	vo := regs[polkavm.A2]
 	vz := regs[polkavm.A3]
 
+	//µko⋅⋅⋅+kz
 	keyData := make([]byte, kz)
 	err := mem.Read(ko, keyData)
 	if err != nil {
 		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 	}
 
-	serviceIdBytes, err := jam.Marshal(serviceId)
-	if err != nil {
-		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
-	}
-
-	hashInput := append(serviceIdBytes, keyData...)
-	k, err := statekey.NewStorage(serviceId, crypto.HashData(hashInput))
+	k, err := statekey.NewStorage(serviceId, crypto.HashData(keyData))
 	if err != nil {
 		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 	}
 
 	a := s.Clone()
 	if vz == 0 {
-		delete(a.Storage, k)
+		a.Storage.Delete(k)
 	} else {
 		valueData := make([]byte, vz)
 		err = mem.Read(vo, valueData)
@@ -411,12 +395,12 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 			return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 		}
 
-		a.Storage[k] = valueData
+		a.Storage.Set(k, uint32(len(keyData)), valueData)
 	}
 
 	// let l = |s_s[k]| if k ∈ K(s_s); NONE otherwise
 	var storageItemLength uint64
-	storageItem, ok := s.Storage[k]
+	storageItem, ok := s.Storage.Get(k)
 	if ok {
 		storageItemLength = uint64(len(storageItem))
 	} else {

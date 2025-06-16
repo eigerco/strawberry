@@ -33,16 +33,89 @@ func (ss ServiceState) Clone() ServiceState {
 	return cloned
 }
 
-// ServiceAccount represents a service account in the JAM state
-type ServiceAccount struct {
-	// Storage uses a state key for it's key. We have to use the state key
+// AccountStorage encapsulates a service's key-value storage along with
+// metadata required for JAM balance accounting (GP v0.6.7 and later).
+//
+// Because the storage map uses hashed keys (statekey.StateKey) instead of the original
+// raw keys, we must explicitly track the original key lengths at the time of
+// mutation. This enables accurate computation of the storage footprint (ao),
+// which directly affects threshold balance calculations
+type AccountStorage struct {
+	// storage uses a state key for it's key. We have to use the state key
 	// representation as the key because serializing storage keys is lossy and
 	// we'd like to be able to deserialize the storage dictionary later. Host
 	// calls are called by PVM code with the original storage key. The key
 	// we end up using is merely an implementation detail. As long as we can
 	// store and retrieve the key we are fine, we don't need to know the
 	// original key here.
-	Storage                        map[statekey.StateKey][]byte                    // Dictionary of key-value pairs for storage (s)
+	storage           map[statekey.StateKey][]byte // Dictionary of key-value pairs for storage (s)
+	storageKeyLengths map[statekey.StateKey]uint32 // Dictionary that tracks original key lengths for balance calculation, must be updated on every storage operation (insert, update, or removal)
+}
+
+func NewAccountStorage() AccountStorage {
+	return AccountStorage{
+		storage:           make(map[statekey.StateKey][]byte),
+		storageKeyLengths: make(map[statekey.StateKey]uint32),
+	}
+}
+
+// Get fetches value by state key
+func (s AccountStorage) Get(stateKey statekey.StateKey) ([]byte, bool) {
+	val, ok := s.storage[stateKey]
+	return val, ok
+}
+
+// GetOriginalKeySize fetches original key size by state key
+func (s AccountStorage) GetOriginalKeySize(stateKey statekey.StateKey) uint32 {
+	return s.storageKeyLengths[stateKey]
+}
+
+// Set updates or adds to the service storage and records the original key length
+func (s AccountStorage) Set(stateKey statekey.StateKey, originalKeySize uint32, value []byte) {
+	if s.storage == nil {
+		s.storage = make(map[statekey.StateKey][]byte)
+	}
+	if s.storageKeyLengths == nil {
+		s.storageKeyLengths = make(map[statekey.StateKey]uint32)
+	}
+	s.storage[stateKey] = value
+	s.storageKeyLengths[stateKey] = originalKeySize
+}
+
+// Delete removes a value and its original key length from storage
+func (s AccountStorage) Delete(stateKey statekey.StateKey) {
+	delete(s.storageKeyLengths, stateKey)
+	delete(s.storage, stateKey)
+}
+
+// Len returns the number of items in the storage map (∣as∣).
+func (s AccountStorage) Len() int {
+	return len(s.storage)
+}
+
+// Items returns all key-value pairs from storage (as), needed for full footprint calculations.
+func (s AccountStorage) Items() map[statekey.StateKey][]byte {
+	return s.storage
+}
+
+// Clone returns a deep copy of the AccountStorage
+func (s AccountStorage) Clone() AccountStorage {
+	cloned := AccountStorage{
+		storage:           make(map[statekey.StateKey][]byte, len(s.storage)),
+		storageKeyLengths: make(map[statekey.StateKey]uint32, len(s.storageKeyLengths)),
+	}
+	for k, v := range s.storage {
+		cloned.storage[k] = slices.Clone(v)
+	}
+	for k, l := range s.storageKeyLengths {
+		cloned.storageKeyLengths[k] = l
+	}
+	return cloned
+}
+
+// ServiceAccount represents a service account in the JAM state
+type ServiceAccount struct {
+	Storage                        AccountStorage                                  // Encapsulates service storage (s) and tracks original key lengths
 	PreimageLookup                 map[crypto.Hash][]byte                          // Dictionary of preimage lookups (p)
 	PreimageMeta                   map[PreImageMetaKey]PreimageHistoricalTimeslots // Metadata for preimageLookup (l) Graypaper 0.6.3 - TODO: There is a MaxTimeslotsForPreimage.
 	GratisStorageOffset            uint64                                          // Gratis storage offset (f ∈ N_B)
@@ -71,7 +144,7 @@ func (sa ServiceAccount) EncodedCodeAndMetadata() []byte {
 // TotalItems (9.8 v0.6.7) ∀a ∈ V(δ): ai
 func (sa ServiceAccount) TotalItems() uint32 {
 	totalPreimages := len(sa.PreimageMeta)
-	totalStorageItems := len(sa.Storage)
+	totalStorageItems := sa.Storage.Len()
 	// 2 ⋅ ∣ al ∣ + ∣ as ∣
 	ai := 2*totalPreimages + totalStorageItems
 
@@ -87,11 +160,11 @@ func (sa ServiceAccount) TotalStorageSize() uint64 {
 		ao += 81 + uint64(k.Length)
 	}
 
-	// TODO fix this calculation it should be 34 + ∣y∣ + ∣x∣ ((x,y) ∈ as)
-	// Storage sizes ∑ x ∈ V(as) 32 + ∣x∣
-	for _, x := range sa.Storage {
-		xSize := uint64(len(x))
-		ao += 32 + xSize
+	// Storage sizes ∑ x ∈ V(as) 34 + ∣y∣ + ∣x∣
+	for k, x := range sa.Storage.Items() {
+		valueSize := uint64(len(x))
+		keySize := sa.Storage.GetOriginalKeySize(k)
+		ao += 34 + valueSize + uint64(keySize)
 	}
 
 	return ao
@@ -161,7 +234,7 @@ func (sa ServiceAccount) LookupPreimage(t jamtime.Timeslot, h crypto.Hash) []byt
 func (sa ServiceAccount) Clone() ServiceAccount {
 	cloned := sa
 
-	cloned.Storage = cloneMapOfSlices(sa.Storage)
+	cloned.Storage = sa.Storage.Clone()
 	cloned.PreimageLookup = cloneMapOfSlices(sa.PreimageLookup)
 	cloned.PreimageMeta = cloneMapOfSlices(sa.PreimageMeta)
 

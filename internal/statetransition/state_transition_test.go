@@ -143,6 +143,7 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 func TestCalculateIntermediateServiceStateEmptyPreimages(t *testing.T) {
 	serviceState := service.ServiceState{
 		block.ServiceId(0): {
+			Storage: service.NewAccountStorage(),
 			PreimageLookup: map[crypto.Hash][]byte{
 				{4, 5, 6}: {7, 8, 9},
 			},

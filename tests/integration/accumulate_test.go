@@ -321,7 +321,7 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 		sa := service.ServiceAccount{
 			PreimageLookup:         make(map[crypto.Hash][]byte),
 			PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
-			Storage:                make(map[statekey.StateKey][]byte),
+			Storage:                service.NewAccountStorage(),
 			CodeHash:               mapHash(account.Data.Service.CodeHash),
 			Balance:                account.Data.Service.Balance,
 			GasLimitForAccumulator: account.Data.Service.MinItemGas,
@@ -342,7 +342,8 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 			// to create the same result and being able to compare the values properly
 			sk, err := statekey.NewStorage(serviceId, crypto.HashData(append(serviceIdBytes, mustStringToHex(storage.Key)...)))
 			require.NoError(t, err)
-			sa.Storage[sk] = mustStringToHex(storage.Value)
+
+			sa.Storage.Set(sk, uint32(len(mustStringToHex(storage.Key))), mustStringToHex(storage.Value))
 		}
 
 		// Skip this test verification, the storage footprint for this service seems to be wrong in the test vector
