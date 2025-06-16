@@ -15,7 +15,7 @@ import (
 
 func TestServiceAccount_AddAndLookupPreimage(t *testing.T) {
 	serviceAccount := service.ServiceAccount{
-		Storage:                make(map[statekey.StateKey][]byte),
+		Storage:                service.NewAccountStorage(),
 		PreimageLookup:         make(map[crypto.Hash][]byte),
 		PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 		CodeHash:               testutils.RandomHash(t),
@@ -47,12 +47,13 @@ func TestServiceStateClone(t *testing.T) {
 		Length: 8,
 	}
 
+	storage := service.NewAccountStorage()
+	storage.Set(storageKey, 1, []byte("storage"))
+
 	// Original with reference types
 	original := service.ServiceState{
 		0: service.ServiceAccount{
-			Storage: map[statekey.StateKey][]byte{
-				storageKey: []byte("storage"),
-			},
+			Storage: storage,
 			PreimageLookup: map[crypto.Hash][]byte{
 				preimageKey: []byte("preimage"),
 			},
@@ -67,7 +68,9 @@ func TestServiceStateClone(t *testing.T) {
 	cloned := original.Clone()
 
 	// Modify the original's reference types
-	original[0].Storage[storageKey][0] = 'x'
+	val, ok := original[0].Storage.Get(storageKey)
+	require.True(t, ok)
+	val[0] = 'x'
 	original[0].PreimageLookup[preimageKey][0] = 'x'
 	original[0].PreimageMeta[preimageMetaKey][0] = 2
 	// Delete one of the service account entries
@@ -75,10 +78,12 @@ func TestServiceStateClone(t *testing.T) {
 
 	// Verify the copy is unchanged
 	require.Len(t, cloned, 2)
-	require.Equal(t, []byte("storage"), cloned[0].Storage[storageKey])
+	val, ok = cloned[0].Storage.Get(storageKey)
+	require.True(t, ok)
+	require.Equal(t, []byte("storage"), val)
 	require.Equal(t, []byte("preimage"), cloned[0].PreimageLookup[preimageKey])
 	require.Equal(t, service.PreimageHistoricalTimeslots([]jamtime.Timeslot{1}), cloned[0].PreimageMeta[preimageMetaKey])
-	require.Nil(t, cloned[1].Storage)
+	require.Empty(t, cloned[1].Storage.Items())
 	require.Nil(t, cloned[1].PreimageLookup)
 	require.Nil(t, cloned[1].PreimageMeta)
 }

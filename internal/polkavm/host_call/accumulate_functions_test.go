@@ -16,7 +16,6 @@ import (
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
-	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
@@ -183,7 +182,7 @@ func TestAccumulate(t *testing.T) {
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
 						service.CheckIndex(service.BumpIndex(newServiceID), make(service.ServiceState)): {
-							Storage: make(map[statekey.StateKey][]byte),
+							Storage: service.NewAccountStorage(),
 							PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 								{Hash: randomHash, Length: service.PreimageLength(100)}: {},
 							},

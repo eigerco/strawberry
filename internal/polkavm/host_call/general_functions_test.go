@@ -395,20 +395,14 @@ func TestRead(t *testing.T) {
 	keyData := []byte("key_to_read")
 	value := []byte("value_to_read")
 
-	// Compute the hash H(E4(s) || keyData)
-	serviceIdBytes, err := jam.Marshal(serviceId)
+	k, err := statekey.NewStorage(serviceId, crypto.HashData(keyData))
 	require.NoError(t, err)
 
-	hashInput := make([]byte, 0, len(serviceIdBytes)+len(keyData))
-	hashInput = append(hashInput, serviceIdBytes...)
-	hashInput = append(hashInput, keyData...)
-	k, err := statekey.NewStorage(serviceId, crypto.HashData(hashInput))
-	require.NoError(t, err)
+	storage := service.NewAccountStorage()
+	storage.Set(k, uint32(len(keyData)), value)
 
 	sa := service.ServiceAccount{
-		Storage: map[statekey.StateKey][]byte{
-			k: value,
-		},
+		Storage: storage,
 	}
 	serviceState := service.ServiceState{
 		serviceId: sa,
@@ -457,18 +451,15 @@ func TestWrite(t *testing.T) {
 	keyData := []byte("key_to_write")
 	value := []byte("value_to_write")
 
-	serviceIdBytes, err := jam.Marshal(serviceId)
+	k, err := statekey.NewStorage(serviceId, crypto.HashData(keyData))
 	require.NoError(t, err)
 
-	hashInput := append(serviceIdBytes, keyData...)
-	k, err := statekey.NewStorage(serviceId, crypto.HashData(hashInput))
-	require.NoError(t, err)
+	storage := service.NewAccountStorage()
+	storage.Set(k, uint32(len(keyData)), value)
 
 	sa := service.ServiceAccount{
 		Balance: 200,
-		Storage: map[statekey.StateKey][]byte{
-			k: value,
-		},
+		Storage: storage,
 	}
 
 	ko := polkavm.RWAddressBase
@@ -501,7 +492,7 @@ func TestWrite(t *testing.T) {
 
 	require.Equal(t, uint64(len(value)), regs[polkavm.A0])
 	require.NotNil(t, sa)
-	storedValue, keyExists := sa.Storage[k]
+	storedValue, keyExists := sa.Storage.Get(k)
 	require.True(t, keyExists)
 	require.Equal(t, value, storedValue)
 
@@ -527,12 +518,12 @@ func TestInfo(t *testing.T) {
 		Balance:                1000,
 		GasLimitForAccumulator: 5000,
 		GasLimitOnTransfer:     2000,
-		Storage:                make(map[statekey.StateKey][]byte),
+		Storage:                service.NewAccountStorage(),
 		PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 	}
 
-	sampleAccount.Storage[statekey.StateKey{0xAA}] = []byte("value1")
-	sampleAccount.Storage[statekey.StateKey{0xBB}] = []byte("value2")
+	sampleAccount.Storage.Set(statekey.StateKey{0xAA}, 10, []byte("value1"))
+	sampleAccount.Storage.Set(statekey.StateKey{0xAA}, 5, []byte("value2"))
 
 	serviceState := service.ServiceState{
 		serviceId: sampleAccount,

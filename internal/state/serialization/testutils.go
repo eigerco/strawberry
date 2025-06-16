@@ -64,9 +64,11 @@ func RandomStateKey(t *testing.T) statekey.StateKey {
 }
 
 func RandomServiceAccount(t *testing.T) service.ServiceAccount {
+	storage := service.NewAccountStorage()
+	storage.Set(RandomStateKey(t), 10, []byte("data"))
 	preimageData := []byte("preimage data")
 	return service.ServiceAccount{
-		Storage:        map[statekey.StateKey][]byte{RandomStateKey(t): []byte("data")},
+		Storage:        storage,
 		PreimageLookup: map[crypto.Hash][]byte{crypto.HashData(preimageData): preimageData},
 		PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 			{Hash: crypto.HashData(preimageData), Length: service.PreimageLength(len(preimageData))}: {testutils.RandomTimeslot()},

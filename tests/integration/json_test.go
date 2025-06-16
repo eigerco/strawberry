@@ -6,13 +6,16 @@ import (
 	"os"
 	"testing"
 
-	jsonutils "github.com/eigerco/strawberry/internal/testutils/json"
 	"github.com/stretchr/testify/require"
+
+	jsonutils "github.com/eigerco/strawberry/internal/testutils/json"
 )
 
 // Tests that we can decode a JSON state dump and re-encode it.
 // Dump taken from: https://github.com/jam-duna/jamtestnet
 func TestJSONStateShapshotRestoreDump(t *testing.T) {
+	t.Skip("TODO: update this test when 0.6.7 traces are released")
+
 	jsonDumpBytes, err := os.ReadFile("vectors_community/json/statedump.json")
 	if err != nil {
 		t.Fatalf("Error opening file: %v", err)

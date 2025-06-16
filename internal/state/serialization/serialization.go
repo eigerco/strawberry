@@ -125,8 +125,8 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 	return nil
 }
 
-func serializeStorage(storage map[statekey.StateKey][]byte, serializedState map[statekey.StateKey][]byte) error {
-	for stateKey, value := range storage {
+func serializeStorage(storage service.AccountStorage, serializedState map[statekey.StateKey][]byte) error {
+	for stateKey, value := range storage.Items() {
 
 		// Storage keys are state keys. This allows deserialization
 		// later since state key creation for them is lossy. The PVM code knows

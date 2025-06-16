@@ -10,18 +10,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 
 	"github.com/eigerco/strawberry/internal/statetransition"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
 	jsonutils "github.com/eigerco/strawberry/internal/testutils/json"
-	"github.com/stretchr/testify/require"
 )
 
 func ReadPreimageJSONFile(filename string) (*PreimageTestVector, error) {
@@ -159,7 +159,7 @@ func mapServiceState(t *testing.T, state PreimageState) service.ServiceState {
 	for _, account := range state.Accounts {
 		serviceId := block.ServiceId(account.ID)
 		serviceAccount := service.ServiceAccount{
-			Storage:                make(map[statekey.StateKey][]byte),
+			Storage:                service.NewAccountStorage(),
 			PreimageLookup:         make(map[crypto.Hash][]byte),
 			PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 			Balance:                1000, // Default values for fields not in test vector

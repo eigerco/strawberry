@@ -170,11 +170,9 @@ func deserializeStorage(state *state.State, sk statekey.StateKey, encodedValue [
 		return fmt.Errorf("deserializing storage: service ID '%v' does not exist", serviceId)
 	}
 
-	if serviceAccount.Storage == nil {
-		serviceAccount.Storage = map[statekey.StateKey][]byte{}
-	}
+	serviceAccount.Storage = service.NewAccountStorage()
 
-	serviceAccount.Storage[sk] = encodedValue
+	serviceAccount.Storage.Set(sk, uint32(len(sk)), encodedValue)
 
 	state.Services[serviceId] = serviceAccount
 

@@ -11,7 +11,6 @@ import (
 	. "github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
-	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -149,7 +148,7 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Ga
 
 	// let a = (c, s ∶ {}, l ∶ {(c, l) ↦ []}, b ∶ at, g, m) if c ≠ ∇
 	account := service.ServiceAccount{
-		Storage: make(map[statekey.StateKey][]byte),
+		Storage: service.NewAccountStorage(),
 		PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 			{Hash: codeHash, Length: service.PreimageLength(preimageLength)}: {},
 		},

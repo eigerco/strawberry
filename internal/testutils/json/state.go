@@ -395,11 +395,12 @@ type AccountData struct {
 }
 
 func (ad AccountData) To() service.ServiceAccount {
-	storage := map[statekey.StateKey][]byte{}
+	storage := service.NewAccountStorage()
 	if ad.Storage != nil {
 		for k, v := range *ad.Storage {
 			stateKey := hexToBytes(k)
-			storage[statekey.StateKey(stateKey)] = hexToBytes(v)
+			// TODO this is wrong since it uses statekey size, we need to have original key size to produce correct balance results
+			storage.Set(statekey.StateKey(stateKey), uint32(len(stateKey)), hexToBytes(v))
 		}
 	}
 
@@ -434,9 +435,9 @@ func (ad AccountData) To() service.ServiceAccount {
 
 func NewAccountData(account service.ServiceAccount) AccountData {
 	var storage *Storage
-	if len(account.Storage) > 0 {
+	if account.Storage.Len() > 0 {
 		s := Storage{}
-		for sk, blob := range account.Storage {
+		for sk, blob := range account.Storage.Items() {
 			k := bytesToHex(sk[:])
 			s[k] = bytesToHex(blob)
 		}
