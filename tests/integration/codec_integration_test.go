@@ -572,8 +572,8 @@ type ExpectedAssurances struct {
 
 type ExpectedDisputes struct {
 	Verdicts []struct {
-		Target string `json:"target"`
-		Age    uint32 `json:"age"`
+		Target string        `json:"target"`
+		Age    jamtime.Epoch `json:"age"`
 		Votes  []struct {
 			Vote      bool   `json:"vote"`
 			Index     uint16 `json:"index"`

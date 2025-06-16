@@ -8,7 +8,7 @@ const (
 	NumberOfValidators                           = 6
 	AvailabilityThreshold                        = (2 * NumberOfValidators) / 3 // Calculate the availability threshold (2/3 V)
 	TotalNumberOfCores                    uint16 = 2
-	ValidatorsSuperMajority                      = (2 * NumberOfValidators / 3) + 1
+	ValidatorsSuperMajority               uint16 = (2 * NumberOfValidators / 3) + 1
 	WorkReportTimeoutPeriod                      = jamtime.Timeslot(5)
 	MaxTicketExtrinsicSize                       = 3
 	MaxTicketAttempts                            = 3

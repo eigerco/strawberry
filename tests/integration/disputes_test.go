@@ -48,9 +48,9 @@ type Judgement struct {
 }
 
 type Verdict struct {
-	ReportHash string      `json:"target"`
-	EpochIndex int         `json:"age"`
-	Judgements []Judgement `json:"votes"`
+	ReportHash string        `json:"target"`
+	EpochIndex jamtime.Epoch `json:"age"`
+	Judgements []Judgement   `json:"votes"`
 }
 
 type Culprit struct {
@@ -231,7 +231,7 @@ func mapVerdicts(verdicts []Verdict) []block.Verdict {
 	for i, verdict := range verdicts {
 		mappedVerdicts[i] = block.Verdict{
 			ReportHash: crypto.Hash(mustStringToHex(verdict.ReportHash)),
-			EpochIndex: uint32(verdict.EpochIndex),
+			EpochIndex: verdict.EpochIndex,
 			Judgements: mapJudgments(verdict.Judgements),
 		}
 	}
