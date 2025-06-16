@@ -25,7 +25,7 @@ const (
 // Equation 10.3(v0.6.7):
 // ∀(r, a,j) ∈ v,∀(v, i, s) ∈ j : s ∈ Ek[i]e⟨Xv ⌢ r⟩
 func verifyVerdictSignatures(currentTimeslot jamtime.Timeslot, verdict block.Verdict, currentValidators, archivedValidators safrole.ValidatorsData) error {
-	currentEpoch := uint32(currentTimeslot.ToEpoch())
+	currentEpoch := currentTimeslot.ToEpoch()
 	validatorSet := currentValidators
 	if verdict.EpochIndex != currentEpoch {
 		validatorSet = archivedValidators
@@ -304,10 +304,10 @@ func ValidateDisputesExtrinsicAndProduceJudgements(prevTimeslot jamtime.Timeslot
 		// Verify the verdict is from the current or previous epoch only.
 		// Verdicts from future epochs are invalid, and verdicts older than
 		// one epoch are considered stale and rejected.
-		if v.EpochIndex > uint32(prevTimeslot.ToEpoch()) {
+		if v.EpochIndex > prevTimeslot.ToEpoch() {
 			return state.Judgements{}, errors.New("bad judgement age")
 		}
-		if uint32(prevTimeslot.ToEpoch())-v.EpochIndex > 1 {
+		if prevTimeslot.ToEpoch()-v.EpochIndex > 1 {
 			return state.Judgements{}, errors.New("bad judgement age")
 		}
 

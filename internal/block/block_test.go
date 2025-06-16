@@ -11,6 +11,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
@@ -65,7 +66,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 	verdicts := []Verdict{
 		{
 			ReportHash: testutils.RandomHash(t),
-			EpochIndex: uint32(1),
+			EpochIndex: jamtime.Epoch(1),
 			Judgements: [common.ValidatorsSuperMajority]Judgement{
 				{
 					IsValid:        true,

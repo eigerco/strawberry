@@ -395,7 +395,7 @@ type Disputes struct {
 
 type Verdict struct {
 	Target string        `json:"target"`
-	Age    uint32        `json:"age"`
+	Age    jamtime.Epoch `json:"age"`
 	Votes  []VerdictVote `json:"votes"`
 }
 

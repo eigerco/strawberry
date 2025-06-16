@@ -223,9 +223,9 @@ func CalculateIntermediateServiceState(
 	return newServiceState, nil
 }
 
-// CalculateIntermediateCoreAssignmentsFromExtrinsics Equation 4.12(v0.6.7): ρ† ≺ (ED , ρ)
 // CalculateIntermediateCoreAssignmentsFromExtrinsics processes dispute verdicts to clear
 // work-reports from cores that have been judged as bad or wonky Equation 10.15(v0.6.7):
+// Equation 4.12(v0.6.7): ρ† ≺ (ED , ρ)
 //
 //	∀c ∈ NC : ρ†[c] = {
 //	  ∅ if {(H(ρ[c]w), t) ∈ V, t < ⌊2V/3⌋}

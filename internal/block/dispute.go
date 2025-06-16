@@ -5,6 +5,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
 // DisputeExtrinsic represents the structured input for submitting disputes.
@@ -33,7 +34,7 @@ type DisputeExtrinsic struct {
 // It includes the report hash, epoch index, and a super-majority of judgments.
 type Verdict struct {
 	ReportHash crypto.Hash                               // H, hash of the work report
-	EpochIndex uint32                                    // ⌊τ/E⌋ - N2 (current or prev), epoch index
+	EpochIndex jamtime.Epoch                             // ⌊τ/E⌋ - N2 (current or prev), epoch index
 	Judgements [common.ValidatorsSuperMajority]Judgement // ⟦{⊺,⊥},NV,E⟧⌊2/3V⌋+1
 }
 
