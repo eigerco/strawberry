@@ -13,7 +13,7 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.Gas,
 		return nil, err
 	}
 
-	// ϖ ≡ [0] ⌢ [n + 1 + skip(n) | n <− N_|c| ∧ kn = 1 ∧ cn ∈ T ]
+	// ϖ ≡ [0] ⌢ [n + 1 + skip(n) | n <− N_|c| ∧ kn = 1 ∧ cn ∈ T ] (eq. A.5)
 	basicBlockInstructions := map[uint64]struct{}{0: {}}
 
 	for i, b := range bitmask {
@@ -27,7 +27,7 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.Gas,
 		regs:                   regs,
 		instructionCounter:     instructionOffset,
 		gasRemaining:           int64(gasLimit),
-		code:                   append(code, 0), // ζ ≡ c ⌢ [0, 0, ... ]
+		code:                   code,
 		jumpTable:              jumpTable,
 		bitmask:                append(bitmask, true), // k ⌢ [1, 1, ... ]
 		basicBlockInstructions: basicBlockInstructions,
@@ -45,6 +45,7 @@ type Instance struct {
 	basicBlockInstructions map[uint64]struct{} // ϖ
 }
 
+// skip ı′ = ı + 1 + skip(ı) (eq. A.7)
 func (i *Instance) skip() {
 	i.instructionCounter += 1 + polkavm.Skip(i.instructionCounter, i.bitmask)
 }
@@ -89,7 +90,7 @@ func (i *Instance) setAndSkip(dst polkavm.Reg, value uint64) {
 	i.skip()
 }
 
-// branch (b, C) =⇒ (ε, ı′) (eq. A.16)
+// branch (b, C) =⇒ (ε, ı′) (eq. A.17)
 func (i *Instance) branch(condition bool, target uint64) error {
 	if condition {
 		// (☇, ı) if b ∉ ϖ
@@ -105,7 +106,7 @@ func (i *Instance) branch(condition bool, target uint64) error {
 	return nil
 }
 
-// djump (a) =⇒ (ε, ı′) (eq. A.17)
+// djump (a) =⇒ (ε, ı′) (eq. A.18)
 func (i *Instance) djump(address0 uint64) error {
 	address := uint32(address0)
 	// (∎, ı) if a = 2^32 − 2^16

@@ -57,7 +57,7 @@ func (m *Memory) Read(address uint64, data []byte) error {
 		copy(logd, memoryData)
 	}
 
-	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋
+	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋ (eq. A.9)
 	if access == Inaccessible {
 		// find the minimum page that is not readable
 		for i := address / PageSize; i <= (address+uint64(len(data)))/PageSize; i++ {
@@ -183,7 +183,7 @@ type Registers [13]uint64
 
 type Gas uint64
 
-// HostCall the generic Ω function definition Ωx(n, ϱ, ω, μ, x) defined in section A.6
+// HostCall the generic Ω function definition Ω⟨X⟩ ≡ (N, NG, ⟦NR⟧13, M, X) → ({▸, ∎, ☇, ∞}, NG, ⟦NR⟧13, M, X) ∪ {F} × NR (eq. A.36)
 type HostCall[X any] func(hostCall uint64, gasCounter Gas, regs Registers, mem Memory, x X) (Gas, Registers, Memory, X, error)
 
 type Mutator interface {

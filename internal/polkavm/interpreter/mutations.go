@@ -612,7 +612,7 @@ func (i *Instance) DivUnsigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 // DivSigned32 div_s_32 ω′D =
 // ⎧ 2^64 − 1 			if b = 0
 // ⎨ a 					if a = −2^31 ∧ b = −1
-// ⎩ Z−1_8 (⌊ a ÷ b ⌋) 	otherwise
+// ⎩ Z−1_8 (rtz(a ÷ b)) 	otherwise
 // where a = Z4(ωA mod 2^32), b = Z4(ωB mod 2^32)
 func (i *Instance) DivSigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs := int32(uint32(i.regs[regA]))
@@ -702,7 +702,7 @@ func (i *Instance) DivUnsigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 // DivSigned64 div_s_64 ω′D =
 // ⎧ 2^64 − 1 						if ωB = 0
 // ⎨ ωA								if Z8(ωA) = −2^63 ∧ Z8(ωB) = −1
-// ⎩ Z−1_8(⌊ Z8(ωA) ÷ Z8(ωB) ⌋) 	otherwise
+// ⎩ Z−1_8(rtz(Z8(ωA) ÷ Z8(ωB))) 	otherwise
 func (i *Instance) DivSigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs := int64(i.regs[regA])
 	rhs := int64(i.regs[regB])
@@ -905,7 +905,7 @@ func abs64(v int64) int64 {
 	return (v ^ mask) - mask
 }
 
-// smod (a Z, b Z) → Z a if b = 0 otherwise sgn(a)(|a| mod |b|) (eq. A.32)
+// smod (a Z, b Z) → Z a if b = 0 otherwise sgn(a)(|a| mod |b|) (eq. A.33)
 func smod32(a int32, b int32) int32 {
 	if b == 0 {
 		return a

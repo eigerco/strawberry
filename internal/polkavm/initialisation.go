@@ -6,10 +6,10 @@ import (
 
 const (
 	AddressSpaceSize               = 1 << 32
-	DynamicAddressAlignment        = 2                           // Z_A = 2: The pvm dynamic address alignment factor. See equation A.15.
-	InputDataSize                  = 1 << 24                     // Z_I: The standard pvm program initialization input data size (equation A.7)
-	MemoryZoneSize                 = 1 << 16                     // Z_Z: The standard pvm program initialization zone size (section A.7)
-	PageSize                       = 1 << 12                     // Z_P: The pvm memory page size (equation 4.25)
+	DynamicAddressAlignment        = 2                           // Z_A = 2: The pvm dynamic address alignment factor (eq. A.18)
+	InputDataSize                  = 1 << 24                     // Z_I: The standard pvm program initialization input data size (eq. A.39)
+	MemoryZoneSize                 = 1 << 16                     // Z_Z: The standard pvm program initialization zone size (eq. A.39)
+	PageSize                       = 1 << 12                     // Z_P: The pvm memory page size (eq. 4.25)
 	MaxPageIndex                   = AddressSpaceSize / PageSize // p = 2^32 / Z_P = 1 << 20
 	AddressReturnToHost            = AddressSpaceSize - MemoryZoneSize
 	StackAddressHigh               = AddressSpaceSize - 2*MemoryZoneSize - InputDataSize // 2^32 − 2Z_Z − Z_I
@@ -21,7 +21,7 @@ var (
 	ErrMemoryLayoutOverflowsAddressSpace = errors.New("memory layout overflows address space")
 )
 
-// InitializeStandardProgram (A.7)
+// InitializeStandardProgram (eq. A.37)
 func InitializeStandardProgram(program *Program, argsData []byte) (Memory, Registers, error) {
 	ram, err := InitializeMemory(program.ROData, program.RWData, argsData, program.ProgramMemorySizes.StackSize, program.ProgramMemorySizes.InitialHeapPages)
 	if err != nil {
@@ -31,9 +31,9 @@ func InitializeStandardProgram(program *Program, argsData []byte) (Memory, Regis
 	return ram, regs, nil
 }
 
-// InitializeMemory (eq. A.36)
+// InitializeMemory (eq. A.42)
 func InitializeMemory(roData, rwData, argsData []byte, stackSize uint32, initialPages uint16) (Memory, error) {
-	// 5Z_Z + Z(|o|) + Z(|w| + zZ_P) + Z(s) + Z_I ≤ 2^32 (eq. A.35)
+	// 5Z_Z + Z(|o|) + Z(|w| + zZ_P) + Z(s) + Z_I ≤ 2^32 (eq. A.41)
 	if 5*MemoryZoneSize+
 		int(alignToZone(uint64(len(rwData))+uint64(initialPages)*PageSize))+
 		int(alignToZone(uint64(stackSize)))+
@@ -99,7 +99,7 @@ func InitializeCustomMemory(roAddr, rwAddr, stackAddr, argsAddr, roSize, rwSize,
 	}
 }
 
-// InitializeRegisters (eq. A.37)
+// InitializeRegisters (eq. A.43)
 func InitializeRegisters(argsLen int) Registers {
 	return Registers{
 		RA: AddressReturnToHost, // 2^32 − 2^16 		if i = 0
@@ -116,7 +116,7 @@ func copySized(data []byte, size uint64) []byte {
 	return dst
 }
 
-// alignToPage let P(x ∈ N) ≡ ZP⌈x/Z_P⌉ (eq. A.34)
+// alignToPage let P(x ∈ N) ≡ Z_P⌈x/Z_P⌉ (eq. A.40)
 func alignToPage(value uint64) uint64 {
 	if value&(PageSize-1) == 0 {
 		return value
@@ -125,7 +125,7 @@ func alignToPage(value uint64) uint64 {
 	return (value + PageSize) & ^(uint64(PageSize) - 1)
 }
 
-// alignToPage let P(x ∈ N) ≡ ZP⌈x/Z_P⌉ (eq. A.34)
+// alignToZone let Z(x ∈ N) ≡ Z_Z⌈x/Z_Z⌉ (eq. A.40)
 func alignToZone(value uint64) uint64 {
 	if value&(MemoryZoneSize-1) == 0 {
 		return value
