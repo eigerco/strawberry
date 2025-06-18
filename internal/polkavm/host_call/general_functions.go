@@ -347,7 +347,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 
 	// Compute the hash H(keyData) and create a state key from it to use
 	// as the storage key.
-	k, err := statekey.NewStorage(ss, crypto.HashData(keyData))
+	k, err := statekey.NewStorage(ss, keyData)
 	if err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
@@ -384,7 +384,7 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 	}
 
-	k, err := statekey.NewStorage(serviceId, crypto.HashData(keyData))
+	k, err := statekey.NewStorage(serviceId, keyData)
 	if err != nil {
 		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 	}
