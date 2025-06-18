@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -73,17 +74,18 @@ func TestNewService(t *testing.T) {
 // TestNewServiceDict verifies that the interleaving function works as expected.
 func TestNewServiceDict(t *testing.T) {
 	serviceId := block.ServiceId(1234)
-	hash := HashComponent{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+	hashComponent := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 
 	// Get encoded service ID for verification
 	encodedServiceId, err := jam.Marshal(serviceId)
 	require.NoError(t, err)
 
 	// Generate the interleaved state key
-	stateKey, err := NewServiceDict(serviceId, hash)
+	stateKey, err := NewServiceDict(serviceId, hashComponent)
 	require.NoError(t, err)
 
-	// Verify that the first 8 bytes are interleaved between serviceId and hash
+	// Verify that the first 8 bytes are interleaved between serviceId and the hash of the hash component
+	hash := crypto.HashData(hashComponent)
 	assert.Equal(t, encodedServiceId[0], stateKey[0])
 	assert.Equal(t, hash[0], stateKey[1])
 	assert.Equal(t, encodedServiceId[1], stateKey[2])

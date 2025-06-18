@@ -3,7 +3,6 @@ package serialization
 import (
 	"fmt"
 
-	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
@@ -54,26 +53,14 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 		}
 	}
 
-	// Sort keys into service account keys and preimage lookup keys.
-	var serviceKeys, storageKeys, preimageLookupKeys []statekey.StateKey
+	// Find service keys
+	var serviceKeys []statekey.StateKey
 	for sk := range serializedState {
-		isStorageKey, err := sk.IsStorageKey()
-		if err != nil {
-			return deserializedState, fmt.Errorf("error checking if key is storage key: %w", err)
-		}
-		isPreimageLookupKey, err := sk.IsPreimageLookupKey()
-		if err != nil {
-			return deserializedState, fmt.Errorf("error checking if key is preimage lookup key: %w", err)
-		}
-
 		if sk.IsChapterKey() {
 			continue
-		} else if sk.IsServiceKey() {
+		}
+		if sk.IsServiceKey() {
 			serviceKeys = append(serviceKeys, sk)
-		} else if isStorageKey {
-			storageKeys = append(storageKeys, sk)
-		} else if isPreimageLookupKey {
-			preimageLookupKeys = append(preimageLookupKeys, sk)
 		}
 	}
 
@@ -84,26 +71,13 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 		}
 	}
 
-	// Deserialize Preimage Lookups
-	for _, preimageLookupKey := range preimageLookupKeys {
-		if err := deserializePreimageLookup(&deserializedState, preimageLookupKey, serializedState[preimageLookupKey]); err != nil {
-			return deserializedState, err
-		}
-	}
-
-	/// Deserialize Storage
-	for _, storageKey := range storageKeys {
-		if err := deserializeStorage(&deserializedState, storageKey, serializedState[storageKey]); err != nil {
-			return deserializedState, err
-		}
-	}
-
-	// Deserialize Preimage Meta
-	err := deserializePreimageMeta(&deserializedState, serializedState)
-	if err != nil {
-		return deserializedState, err
-	}
-
+	// TODO deserializing preimage lookup, preimage meta and storage keys
+	// requires a change to how we store service dicts. They should all be
+	// stored in a single dict, and as the host we shouldn't care about knowing
+	// which key is which, as long as each host call can read and write it's
+	// value. This requires a reasonable refactor, but until then, given 0.6.7
+	// changes, we can no longer tell storage keys apart from preimage meta
+	// keys.
 	return deserializedState, nil
 }
 
@@ -140,140 +114,6 @@ func deserializeService(state *state.State, sk statekey.StateKey, encodedValue [
 	}
 
 	state.Services[serviceId] = serviceAccount
-
-	return nil
-}
-
-// deserializeStorage deserializes a storage account from the given state key and encoded value.
-func deserializeStorage(state *state.State, sk statekey.StateKey, encodedValue []byte) error {
-	ok, err := sk.IsStorageKey()
-	if err != nil {
-		return fmt.Errorf("deserialize storage: error checking if key is storage key: %w", err)
-	}
-	if !ok {
-		return fmt.Errorf("deserialize storage: expected storage key, got '%x'", sk[:])
-	}
-
-	serviceId, _, err := sk.ExtractServiceIDHash()
-	if err != nil {
-		return fmt.Errorf("deserialize storage: error extracting service ID: %w", err)
-	}
-
-	if state.Services == nil {
-		return fmt.Errorf("deserializing storage: services map empty")
-	}
-
-	serviceAccount, ok := state.Services[serviceId]
-	if !ok {
-		return fmt.Errorf("deserializing storage: service ID '%v' does not exist", serviceId)
-	}
-
-	serviceAccount.Storage = service.NewAccountStorage()
-
-	serviceAccount.Storage.Set(sk, uint32(len(sk)), encodedValue)
-
-	state.Services[serviceId] = serviceAccount
-
-	return nil
-}
-
-// deserializePreimageLookup deserializes a preimage lookup from the given state key and encoded value.
-// The original preimage lookup hash is found by simply hashing the decoded value.
-func deserializePreimageLookup(state *state.State, sk statekey.StateKey, encodedValue []byte) error {
-	ok, err := sk.IsPreimageLookupKey()
-	if err != nil {
-		return fmt.Errorf("deserialize preimage lookup: error checking if key is preimage lookup key: %w", err)
-	}
-	if !ok {
-		return fmt.Errorf("deserialize preimage lookup: expected preimage lookup key, got '%x'", sk[:])
-	}
-
-	serviceId, _, err := sk.ExtractServiceIDHash()
-	if err != nil {
-		return fmt.Errorf("deserialize preimage lookup: error extracting service ID: %w", err)
-	}
-
-	if state.Services == nil {
-		return fmt.Errorf("deserializing preimage lookup: services map empty")
-	}
-
-	serviceAccount, ok := state.Services[serviceId]
-	if !ok {
-		return fmt.Errorf("deserializing preimage lookup: service ID '%v' does not exist", serviceId)
-	}
-
-	if serviceAccount.PreimageLookup == nil {
-		serviceAccount.PreimageLookup = map[crypto.Hash][]byte{}
-	}
-
-	key := crypto.HashData(encodedValue)
-	// Check that the incoming state key matches one constructed from this key.
-	// I.e we are checking that the incoming partial hash in the state key
-	// h1..24 matches ours. If not then the state key is invalid even though it
-	// might have had a valid blob.
-	newSk, err := statekey.NewPreimageLookup(serviceId, key)
-	if err != nil {
-		return fmt.Errorf("deserializing preimage lookup: error creating preimage lookup key: %w", err)
-	}
-	if sk != newSk {
-		return fmt.Errorf("deserializing preimage lookup: preimage hash does not match original hash")
-	}
-
-	serviceAccount.PreimageLookup[key] = encodedValue
-
-	state.Services[serviceId] = serviceAccount
-
-	return nil
-}
-
-// desserializePreimageMeta deserializes the preimage meta from the given serialized state.
-// PreimageMeta is a special case. We know that for each preimage in a service,
-// there should be a corresponding preimage meta entry (See equation 9.6 of the
-// GP v0.6.6). Knowing that we loop through each preimage and create a preimage
-// meta state key for it using it's length and hash. We can then look that key
-// up in the serialized state, and fetch it's value, and use that to rebuild the
-// preimage meta entry.
-func deserializePreimageMeta(state *state.State, serializedState map[statekey.StateKey][]byte) error {
-	if state.Services == nil {
-		return fmt.Errorf("deserialize preimage meta: services map empty")
-	}
-
-	for serviceId, serviceAccount := range state.Services {
-		if serviceAccount.PreimageLookup == nil {
-			return fmt.Errorf("deserializing preimage meta: service account '%v' empty preimage meta map", serviceId)
-		}
-
-		for preimageHash, preimageBlob := range serviceAccount.PreimageLookup {
-			preimageLength := uint32(len(preimageBlob))
-			sk, err := statekey.NewPreimageMeta(serviceId, preimageHash, preimageLength)
-			if err != nil {
-				return fmt.Errorf("deserialize preimage meta: error creating preimage meta state key: %w", err)
-			}
-
-			encodedValue, ok := serializedState[sk]
-			if !ok {
-				return fmt.Errorf("deserialize preimage meta: missing preimage meta state key %v", sk)
-			}
-
-			key := service.PreImageMetaKey{
-				Hash:   preimageHash,
-				Length: service.PreimageLength(preimageLength),
-			}
-
-			historicalPreimageMeta := service.PreimageHistoricalTimeslots{}
-			if err := jam.Unmarshal(encodedValue, &historicalPreimageMeta); err != nil {
-				return fmt.Errorf("deserialize preimage meta: error unmarshalling historical timeslots: %w", err)
-			}
-
-			if serviceAccount.PreimageMeta == nil {
-				serviceAccount.PreimageMeta = make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots)
-			}
-
-			serviceAccount.PreimageMeta[key] = historicalPreimageMeta
-		}
-
-		state.Services[serviceId] = serviceAccount
-	}
 
 	return nil
 }

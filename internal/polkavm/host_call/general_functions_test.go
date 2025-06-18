@@ -396,7 +396,7 @@ func TestRead(t *testing.T) {
 	keyData := []byte("key_to_read")
 	value := []byte("value_to_read")
 
-	k, err := statekey.NewStorage(serviceId, crypto.HashData(keyData))
+	k, err := statekey.NewStorage(serviceId, keyData)
 	require.NoError(t, err)
 
 	storage := service.NewAccountStorage()
@@ -452,7 +452,7 @@ func TestWrite(t *testing.T) {
 	keyData := []byte("key_to_write")
 	value := []byte("value_to_write")
 
-	k, err := statekey.NewStorage(serviceId, crypto.HashData(keyData))
+	k, err := statekey.NewStorage(serviceId, keyData)
 	require.NoError(t, err)
 
 	storage := service.NewAccountStorage()

@@ -340,7 +340,7 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 			// our code however implements the storage keys correctly as the output of C not the raw value
 			// this creates a discrepancy which fails the tests, so we use the same logic here
 			// to create the same result and being able to compare the values properly
-			sk, err := statekey.NewStorage(serviceId, crypto.HashData(append(serviceIdBytes, mustStringToHex(storage.Key)...)))
+			sk, err := statekey.NewStorage(serviceId, append(serviceIdBytes, mustStringToHex(storage.Key)...))
 			require.NoError(t, err)
 
 			sa.Storage.Set(sk, uint32(len(mustStringToHex(storage.Key))), mustStringToHex(storage.Value))
