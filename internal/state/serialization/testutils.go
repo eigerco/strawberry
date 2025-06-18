@@ -73,10 +73,14 @@ func RandomServiceAccount(t *testing.T) service.ServiceAccount {
 		PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 			{Hash: crypto.HashData(preimageData), Length: service.PreimageLength(len(preimageData))}: {testutils.RandomTimeslot()},
 		},
-		CodeHash:               testutils.RandomHash(t),
-		Balance:                testutils.RandomUint64(),
-		GasLimitForAccumulator: testutils.RandomUint64(),
-		GasLimitOnTransfer:     testutils.RandomUint64(),
+		CodeHash:                       testutils.RandomHash(t),
+		Balance:                        testutils.RandomUint64(),
+		GasLimitForAccumulator:         testutils.RandomUint64(),
+		GasLimitOnTransfer:             testutils.RandomUint64(),
+		GratisStorageOffset:            testutils.RandomUint64(),
+		CreationTimeslot:               testutils.RandomTimeslot(),
+		MostRecentAccumulationTimeslot: testutils.RandomTimeslot(),
+		ParentService:                  block.ServiceId(testutils.RandomUint32()),
 	}
 }
 
@@ -298,6 +302,18 @@ func RandomSafroleStateWithEpochKeys(t *testing.T) safrole.State {
 	}
 }
 
+func RandomAccumulationOutputLog(t *testing.T, maxSize int) state.AccumulationOutputLog {
+	accumulationOutputLog := state.AccumulationOutputLog{}
+	numEntries := testutils.RandomUint32()%uint32(maxSize) + 1
+	for i := 0; i < int(numEntries); i++ {
+		accumulationOutputLog = append(accumulationOutputLog, state.ServiceHashPair{
+			ServiceId: block.ServiceId(testutils.RandomUint32()),
+			Hash:      testutils.RandomHash(t),
+		})
+	}
+	return accumulationOutputLog
+}
+
 func RandomState(t *testing.T) state.State {
 	services := make(service.ServiceState)
 	for i := 0; i < 10; i++ {
@@ -319,5 +335,6 @@ func RandomState(t *testing.T) state.State {
 		ActivityStatistics:       RandomValidatorStatisticsState(),
 		AccumulationQueue:        RandomAccumulationQueue(t),
 		AccumulationHistory:      RandomAccumulationHistory(t),
+		AccumulationOutputLog:    RandomAccumulationOutputLog(t, 10),
 	}
 }

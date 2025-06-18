@@ -40,6 +40,10 @@ func TestSerializeState(t *testing.T) {
 		assert.Equal(t, originalService.Balance, decodedService.Balance)
 		assert.Equal(t, originalService.GasLimitForAccumulator, decodedService.GasLimitForAccumulator)
 		assert.Equal(t, originalService.GasLimitOnTransfer, decodedService.GasLimitOnTransfer)
+		assert.Equal(t, originalService.GratisStorageOffset, decodedService.GratisStorageOffset)
+		assert.Equal(t, originalService.CreationTimeslot, decodedService.CreationTimeslot)
+		assert.Equal(t, originalService.MostRecentAccumulationTimeslot, decodedService.MostRecentAccumulationTimeslot)
+		assert.Equal(t, originalService.ParentService, decodedService.ParentService)
 	}
 
 	// Check for extra services in decoded state
@@ -58,6 +62,9 @@ func TestSerializeState(t *testing.T) {
 	// Compare Accumulation Queue and History
 	assert.Equal(t, state.AccumulationQueue, decodedState.AccumulationQueue, "AccumulationQueue mismatch")
 	assert.Equal(t, state.AccumulationHistory, decodedState.AccumulationHistory, "AccumulationHistory mismatch")
+
+	// Compare Accumulation Output Log
+	assert.Equal(t, state.AccumulationOutputLog, decodedState.AccumulationOutputLog, "AccumulationOutputLog mismatch")
 }
 
 func TestSerializeSafroleState(t *testing.T) {
@@ -270,16 +277,4 @@ func TestSerializeStateServices(t *testing.T) {
 		assert.Contains(t, serializedState, hashKey)
 		assert.NotEmpty(t, serializedState[hashKey])
 	}
-}
-
-// TestCombineEncoded verifies that combining multiple encoded fields works as expected.
-func TestCombineEncoded(t *testing.T) {
-	field1 := []byte{0x01, 0x02}
-	field2 := []byte{0x03, 0x04}
-
-	// Combine the fields
-	combined := combineEncoded(field1, field2)
-
-	// Verify the combined result
-	assert.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, combined)
 }

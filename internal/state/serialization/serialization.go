@@ -8,6 +8,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
@@ -46,10 +47,11 @@ func SerializeState(s state.State) (map[statekey.StateKey][]byte, error) {
 		{9, s.ValidatorState.ArchivedValidators},
 		{10, s.CoreAssignments},
 		{11, s.TimeslotIndex},
-		{12, s.PrivilegedServices},
+		{12, s.PrivilegedServices}, // TODO update when GP updates for this are released.
 		{13, s.ActivityStatistics},
 		{14, s.AccumulationQueue},
 		{15, s.AccumulationHistory},
+		{16, s.AccumulationOutputLog},
 	}
 
 	for _, field := range basicFields {
@@ -68,42 +70,26 @@ func SerializeState(s state.State) (map[statekey.StateKey][]byte, error) {
 	return serializedState, nil
 }
 
+// C(255, s) ↦ a_c ⌢ E_8(a_b, a_g , a_m, a_o, a_f ) ⌢ E4(a_i, a_r , a_a, a_p)
 func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[statekey.StateKey][]byte) error {
-	encodedCodeHash, err := jam.Marshal(serviceAccount.CodeHash)
-	if err != nil {
-		return err
+	encodedServiceAccount := encodedServiceAccount{
+		CodeHash:                       serviceAccount.CodeHash,
+		Balance:                        serviceAccount.Balance,
+		GasLimitForAccumulator:         serviceAccount.GasLimitForAccumulator,
+		GasLimitOnTransfer:             serviceAccount.GasLimitOnTransfer,
+		FootprintStorage:               serviceAccount.TotalStorageSize(),
+		GratisStorageOffset:            serviceAccount.GratisStorageOffset,
+		FootprintItems:                 serviceAccount.TotalItems(),
+		CreationTimeslot:               serviceAccount.CreationTimeslot,
+		MostRecentAccumulationTimeslot: serviceAccount.MostRecentAccumulationTimeslot,
+		ParentService:                  serviceAccount.ParentService,
 	}
-	encodedBalance, err := jam.Marshal(serviceAccount.Balance)
-	if err != nil {
-		return err
-	}
-	encodedGasLimitForAccumulator, err := jam.Marshal(serviceAccount.GasLimitForAccumulator)
-	if err != nil {
-		return err
-	}
-	encodedGasLimitOnTransfer, err := jam.Marshal(serviceAccount.GasLimitOnTransfer)
+
+	encodedServiceValue, err := jam.Marshal(encodedServiceAccount)
 	if err != nil {
 		return err
 	}
 
-	encodedTotalStorageSize, err := jam.Marshal(serviceAccount.TotalStorageSize())
-	if err != nil {
-		return err
-	}
-
-	encodedTotalItems, err := jam.Marshal(serviceAccount.TotalItems())
-	if err != nil {
-		return err
-	}
-
-	encodedServiceValue := combineEncoded(
-		encodedCodeHash,
-		encodedBalance,
-		encodedGasLimitForAccumulator,
-		encodedGasLimitOnTransfer,
-		encodedTotalStorageSize,
-		encodedTotalItems,
-	)
 	stateKey, err := statekey.NewService(serviceId)
 	if err != nil {
 		return err
@@ -123,6 +109,21 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 	}
 
 	return nil
+}
+
+type encodedServiceAccount struct {
+	CodeHash crypto.Hash // a_c
+
+	Balance                uint64 // a_b
+	GasLimitForAccumulator uint64 // a_g
+	GasLimitOnTransfer     uint64 // a_m
+	FootprintStorage       uint64 // a_o
+	GratisStorageOffset    uint64 // a_f
+
+	FootprintItems                 uint32           // a_i
+	CreationTimeslot               jamtime.Timeslot // a_r
+	MostRecentAccumulationTimeslot jamtime.Timeslot // a_a
+	ParentService                  block.ServiceId  // a_p
 }
 
 func serializeStorage(storage service.AccountStorage, serializedState map[statekey.StateKey][]byte) error {
@@ -167,17 +168,6 @@ func serializePreimageMeta(serviceId block.ServiceId, preimageMeta map[service.P
 	}
 
 	return nil
-}
-
-// combineEncoded takes multiple encoded byte arrays and concatenates them into a single byte array.
-func combineEncoded(components ...[]byte) []byte {
-	var buffer bytes.Buffer
-
-	for _, component := range components {
-		buffer.Write(component)
-	}
-
-	return buffer.Bytes()
 }
 
 // sortByteSlicesCopy returns a sorted copy of a slice of some byte-based types
