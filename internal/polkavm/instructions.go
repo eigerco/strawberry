@@ -2,6 +2,7 @@ package polkavm
 
 type Opcode byte
 
+// GasCosts delta gas for each operation (ϱ∆)
 var GasCosts = map[Opcode]Gas{
 	Trap:                            1,
 	Fallthrough:                     1,
