@@ -254,22 +254,22 @@ func (i *Instance) CountSetBits32(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(bits.OnesCount32(uint32(i.regs[s]))))
 }
 
-// LeadingZeroBits64 leading_zero_bits_64 ω′D = max(n ∈ N65) where {i<n;i=0}∑ B8(ωA)_i = 0
+// LeadingZeroBits64 leading_zero_bits_64 ω′D = max(n ∈ N65) where {i<n;i=0}∑ ←B8(ωA)_i = 0
 func (i *Instance) LeadingZeroBits64(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(bits.LeadingZeros64(i.regs[s])))
 }
 
-// LeadingZeroBits32 leading_zero_bits_32 ω′D = max(n ∈ N33) where {i<n;i=0}∑ B4(ωA mod 232)_i = 0
+// LeadingZeroBits32 leading_zero_bits_32 ω′D = max(n ∈ N33) where {i<n;i=0}∑ ←B4(ωA mod 232)_i = 0
 func (i *Instance) LeadingZeroBits32(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(bits.LeadingZeros32(uint32(i.regs[s]))))
 }
 
-// TrailingZeroBits64 trailing_zero_bits_64 ω′D = max(n ∈ N65) where {i<n;i=0}∑ B8(ωA)_63−i = 0
+// TrailingZeroBits64 trailing_zero_bits_64 ω′D = max(n ∈ N65) where {i<n;i=0}∑ B8(ωA)_i = 0
 func (i *Instance) TrailingZeroBits64(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(bits.TrailingZeros64(i.regs[s])))
 }
 
-// TrailingZeroBits32 trailing_zero_bits_32 ω′D = max(n ∈ N33) where {i<n;i=0}∑ B4(ωA mod 232)_31−i = 0
+// TrailingZeroBits32 trailing_zero_bits_32 ω′D = max(n ∈ N33) where {i<n;i=0}∑ B4(ωA mod 232)_i = 0
 func (i *Instance) TrailingZeroBits32(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(bits.TrailingZeros32(uint32(i.regs[s]))))
 }
@@ -611,8 +611,8 @@ func (i *Instance) DivUnsigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 
 // DivSigned32 div_s_32 ω′D =
 // ⎧ 2^64 − 1 			if b = 0
-// ⎨ a 					if a = −2^31 ∧ b = −1
-// ⎩ Z−1_8 (rtz(a ÷ b)) 	otherwise
+// ⎨ Z−1_8(a) 			if a = −2^31 ∧ b = −1
+// ⎩ Z−1_8 (rtz(a ÷ b)) otherwise
 // where a = Z4(ωA mod 2^32), b = Z4(ωB mod 2^32)
 func (i *Instance) DivSigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs := int32(uint32(i.regs[regA]))
@@ -639,16 +639,14 @@ func (i *Instance) RemUnsigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 }
 
 // RemSigned32 rem_s_32 ω′D =
-// ⎧ Z−1_8(a) 			if b = 0
-// ⎨ 0			 		if a = −2^31 ∧ b = −1
+// ⎧ 0			 		if a = −2^31 ∧ b = −1
+// ⎨
 // ⎩ Z−1_8 (smod(a, b)) otherwise
-// where a = Z4(ωA mod 2^32) , b = Z4(ωB mod 2^32)
+// where a = Z4(ωA mod 2^32), b = Z4(ωB mod 2^32)
 func (i *Instance) RemSigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs := int32(uint32(i.regs[regA]))
 	rhs := int32(uint32(i.regs[regB]))
-	if rhs == 0 {
-		i.regs[dst] = uint64(lhs)
-	} else if lhs == math.MinInt32 && rhs == -1 {
+	if lhs == math.MinInt32 && rhs == -1 {
 		i.regs[dst] = uint64(0)
 	} else {
 		i.regs[dst] = uint64(smod32(lhs, rhs))
@@ -709,7 +707,7 @@ func (i *Instance) DivSigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	if rhs == 0 {
 		i.regs[dst] = math.MaxUint64
 	} else if lhs == math.MinInt64 && rhs == -1 {
-		i.regs[dst] = uint64(lhs)
+		i.regs[dst] = i.regs[regA]
 	} else {
 		i.regs[dst] = uint64(lhs / rhs)
 	}
@@ -733,9 +731,7 @@ func (i *Instance) RemUnsigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 // ⎩ Z−1_8(smod(Z8(ωA), Z8(ωB))) otherwise
 func (i *Instance) RemSigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs, rhs := int64(i.regs[regA]), int64(i.regs[regB])
-	if rhs == 0 {
-		i.regs[dst] = uint64(lhs)
-	} else if lhs == math.MinInt32 && rhs == -1 {
+	if lhs == math.MinInt64 && rhs == -1 {
 		i.regs[dst] = 0
 	} else {
 		i.regs[dst] = uint64(smod64(lhs, rhs))
@@ -862,7 +858,7 @@ func (i *Instance) Xnor(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, ^(i.regs[regA] ^ i.regs[regB]))
 }
 
-// Max max ω′D = max(Z8(ωA), Z8(ωB))
+// Max max ω′D = Z−1_8(max(Z8(ωA), Z8(ωB)))
 func (i *Instance) Max(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, uint64(max(int64(i.regs[regA]), int64(i.regs[regB]))))
 }
@@ -872,7 +868,7 @@ func (i *Instance) MaxUnsigned(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, max(i.regs[regA], i.regs[regB]))
 }
 
-// Min min ω′D = min(Z8(ωA), Z8(ωB))
+// Min min ω′D = Z8^-1(min(Z8(ωA), Z8(ωB)))
 func (i *Instance) Min(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, uint64(min(int64(i.regs[regA]), int64(i.regs[regB]))))
 }
