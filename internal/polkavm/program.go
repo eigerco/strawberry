@@ -24,7 +24,7 @@ type Program struct {
 	Metadata           []byte
 }
 
-// ParseBlob let E3(|o|) ⌢ E3(|w|) ⌢ E2(z) ⌢ E3(s) ⌢ o ⌢ w ⌢ E4(|c|) ⌢ c = p (eq. A.32)
+// ParseBlob let E3(|o|) ⌢ E3(|w|) ⌢ E2(z) ⌢ E3(s) ⌢ o ⌢ w ⌢ E4(|c|) ⌢ c = p (eq. A.38)
 func ParseBlob(data []byte) (program *Program, err error) {
 	program = &Program{ProgramMemorySizes: ProgramMemorySizes{}}
 	buff := bytes.NewBuffer(data)
@@ -65,7 +65,7 @@ type CodeAndJumpTableLengths struct {
 	CodeLength          uint
 }
 
-// Deblob p = Ε(|j|) ⌢ E1(z) ⌢ E(|c|) ⌢ E_z(j) ⌢ E(c) ⌢ E(k), |k| = |c| (A.2 v6.0.2)
+// Deblob p = Ε(|j|) ⌢ E1(z) ⌢ E(|c|) ⌢ E_z(j) ⌢ E(c) ⌢ E(k), |k| = |c| (eq. A.2)
 func Deblob(bytecode []byte) ([]byte, jam.BitSequence, []uint64, error) {
 	sizes := &CodeAndJumpTableLengths{}
 
@@ -100,7 +100,7 @@ func Deblob(bytecode []byte) ([]byte, jam.BitSequence, []uint64, error) {
 	return code, bitmask, jumpTable, nil
 }
 
-// Skip skip(i N) → N (A.2)
+// Skip skip(i N) → N (eq. A.3)
 func Skip(instructionOffset uint64, bitmask []bool) uint64 {
 	for i, b := range bitmask[instructionOffset+1:] {
 		if i > BitmaskMax {
