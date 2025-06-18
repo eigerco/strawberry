@@ -19,13 +19,17 @@ import (
 )
 
 type AccountInfo struct {
-	CodeHash               crypto.Hash // tc
-	Balance                uint64      // tb
-	ThresholdBalance       uint64      // tt
-	GasLimitForAccumulator uint64      // tg
-	GasLimitOnTransfer     uint64      // tm
-	TotalStorageSize       uint64      // tl
-	TotalItems             uint32      // ti
+	CodeHash                       crypto.Hash      // ac
+	Balance                        uint64           // ab
+	ThresholdBalance               uint64           // at
+	GasLimitForAccumulator         uint64           // ag
+	GasLimitOnTransfer             uint64           // am
+	TotalStorageSize               uint64           // ao
+	TotalItems                     uint32           // ai
+	GratisStorageOffset            uint64           // af
+	CreationTimeslot               jamtime.Timeslot // ar
+	MostRecentAccumulationTimeslot jamtime.Timeslot // aa
+	ParentService                  block.ServiceId  // ap
 }
 
 // WorkItemMetadata is used for custom serialization of a work item in the fetch host call, following the S(w) format
@@ -424,37 +428,44 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 	gas -= InfoCost
 
 	omega7 := regs[polkavm.A0]
-	omega8 := regs[polkavm.A1]
+	o := regs[polkavm.A1]
 
-	t, exists := serviceState[serviceId]
+	account, exists := serviceState[serviceId]
 	if uint64(omega7) != math.MaxUint64 {
-		t, exists = serviceState[block.ServiceId(omega7)]
+		account, exists = serviceState[block.ServiceId(omega7)]
 	}
 	if !exists {
 		return gas, withCode(regs, NONE), mem, nil
 	}
 
 	accountInfo := AccountInfo{
-		CodeHash:               t.CodeHash,
-		Balance:                t.Balance,
-		ThresholdBalance:       t.ThresholdBalance(),
-		GasLimitForAccumulator: t.GasLimitForAccumulator,
-		GasLimitOnTransfer:     t.GasLimitOnTransfer,
-		TotalStorageSize:       t.TotalStorageSize(),
-		TotalItems:             t.TotalItems(),
+		CodeHash:                       account.CodeHash,
+		Balance:                        account.Balance,
+		ThresholdBalance:               account.ThresholdBalance(),
+		GasLimitForAccumulator:         account.GasLimitForAccumulator,
+		GasLimitOnTransfer:             account.GasLimitOnTransfer,
+		TotalStorageSize:               account.TotalStorageSize(),
+		TotalItems:                     account.TotalItems(),
+		GratisStorageOffset:            account.GratisStorageOffset,
+		CreationTimeslot:               account.CreationTimeslot,
+		MostRecentAccumulationTimeslot: account.MostRecentAccumulationTimeslot,
+		ParentService:                  account.ParentService,
 	}
 
-	// E(tc, tb, tt, tg , tm, tl, ti)
-	m, err := jam.Marshal(accountInfo)
+	// E(ac, E8(ab, at, ag, am, ao), E4(ai), E8(af), E4(ar, aa, ap))
+	v, err := jam.Marshal(accountInfo)
 	if err != nil {
-		return gas, regs, mem, err
-	}
-
-	if err = mem.Write(omega8, m); err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
-	return gas, withCode(regs, OK), mem, nil
+	if err = writeFromOffset(mem, o, v, regs[polkavm.A4], regs[polkavm.A5]); err != nil {
+		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
+	}
+
+	// ω′7 = |v|
+	regs[polkavm.A0] = uint64(len(v))
+
+	return gas, regs, mem, nil
 }
 
 // Log A host call for passing a debugging message from the service/authorizer to the hosting environment for logging to the node operator

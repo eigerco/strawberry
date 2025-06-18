@@ -8,6 +8,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/service"
@@ -514,12 +515,16 @@ func TestInfo(t *testing.T) {
 	serviceId := block.ServiceId(1)
 
 	sampleAccount := service.ServiceAccount{
-		CodeHash:               crypto.Hash{0x01, 0x02, 0x03},
-		Balance:                1000,
-		GasLimitForAccumulator: 5000,
-		GasLimitOnTransfer:     2000,
-		Storage:                service.NewAccountStorage(),
-		PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
+		CodeHash:                       crypto.Hash{0x01, 0x02, 0x03},
+		Balance:                        1000,
+		GasLimitForAccumulator:         5000,
+		GasLimitOnTransfer:             2000,
+		Storage:                        service.NewAccountStorage(),
+		PreimageMeta:                   make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
+		GratisStorageOffset:            10,
+		CreationTimeslot:               jamtime.Timeslot(10),
+		MostRecentAccumulationTimeslot: jamtime.Timeslot(10),
+		ParentService:                  1,
 	}
 
 	sampleAccount.Storage.Set(statekey.StateKey{0xAA}, 10, []byte("value1"))
@@ -529,14 +534,19 @@ func TestInfo(t *testing.T) {
 		serviceId: sampleAccount,
 	}
 
+	// E(ac, E8(ab, at, ag, am, ao), E4(ai), E8(af), E4(ar, aa, ap)) = 96 bytes
+	expectedByteLength := uint64(96)
+
 	omega1 := polkavm.RWAddressBase
 	initialRegs[polkavm.A0] = uint64(serviceId)
 	initialRegs[polkavm.A1] = uint64(omega1)
+	initialRegs[polkavm.A4] = 0
+	initialRegs[polkavm.A5] = expectedByteLength
 
 	gasRemaining, regs, mem, err := host_call.Info(initialGas, initialRegs, mem, serviceId, serviceState)
 	require.NoError(t, err)
 
-	require.Equal(t, uint64(host_call.OK), regs[polkavm.A0])
+	require.Equal(t, expectedByteLength, regs[polkavm.A0])
 
 	var accountInfo host_call.AccountInfo
 	m, err := jam.Marshal(accountInfo)
@@ -551,13 +561,17 @@ func TestInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedAccountInfo := host_call.AccountInfo{
-		CodeHash:               crypto.Hash(sampleAccount.CodeHash[:]),
-		Balance:                sampleAccount.Balance,
-		ThresholdBalance:       sampleAccount.ThresholdBalance(),
-		GasLimitForAccumulator: sampleAccount.GasLimitForAccumulator,
-		GasLimitOnTransfer:     sampleAccount.GasLimitOnTransfer,
-		TotalStorageSize:       sampleAccount.TotalStorageSize(),
-		TotalItems:             sampleAccount.TotalItems(),
+		CodeHash:                       crypto.Hash(sampleAccount.CodeHash[:]),
+		Balance:                        sampleAccount.Balance,
+		ThresholdBalance:               sampleAccount.ThresholdBalance(),
+		GasLimitForAccumulator:         sampleAccount.GasLimitForAccumulator,
+		GasLimitOnTransfer:             sampleAccount.GasLimitOnTransfer,
+		TotalStorageSize:               sampleAccount.TotalStorageSize(),
+		TotalItems:                     sampleAccount.TotalItems(),
+		GratisStorageOffset:            sampleAccount.GratisStorageOffset,
+		CreationTimeslot:               sampleAccount.CreationTimeslot,
+		MostRecentAccumulationTimeslot: sampleAccount.MostRecentAccumulationTimeslot,
+		ParentService:                  sampleAccount.ParentService,
 	}
 
 	require.Equal(t, expectedAccountInfo, receivedAccountInfo)
