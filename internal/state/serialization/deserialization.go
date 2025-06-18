@@ -45,6 +45,7 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 		{13, &deserializedState.ActivityStatistics},
 		{14, &deserializedState.AccumulationQueue},
 		{15, &deserializedState.AccumulationHistory},
+		{16, &deserializedState.AccumulationOutputLog},
 	}
 
 	for _, field := range basicFields {
@@ -122,23 +123,20 @@ func deserializeService(state *state.State, sk statekey.StateKey, encodedValue [
 	}
 
 	// Deserialize the combined fields (CodeHash, Balance, etc.)
-	var combined struct {
-		CodeHash               crypto.Hash
-		Balance                uint64
-		GasLimitForAccumulator uint64
-		GasLimitOnTransfer     uint64
-		FootprintSize          uint64
-		FootprintItems         uint32
-	}
-	if err := jam.Unmarshal(encodedValue, &combined); err != nil {
+	encodedServiceAccount := encodedServiceAccount{}
+	if err := jam.Unmarshal(encodedValue, &encodedServiceAccount); err != nil {
 		return fmt.Errorf("deserialize service: error unmarshalling: %w", err)
 	}
 
 	serviceAccount := service.ServiceAccount{
-		CodeHash:               combined.CodeHash,
-		Balance:                combined.Balance,
-		GasLimitForAccumulator: combined.GasLimitForAccumulator,
-		GasLimitOnTransfer:     combined.GasLimitOnTransfer,
+		CodeHash:                       encodedServiceAccount.CodeHash,
+		Balance:                        encodedServiceAccount.Balance,
+		GasLimitForAccumulator:         encodedServiceAccount.GasLimitForAccumulator,
+		GasLimitOnTransfer:             encodedServiceAccount.GasLimitOnTransfer,
+		GratisStorageOffset:            encodedServiceAccount.GratisStorageOffset,
+		CreationTimeslot:               encodedServiceAccount.CreationTimeslot,
+		MostRecentAccumulationTimeslot: encodedServiceAccount.MostRecentAccumulationTimeslot,
+		ParentService:                  encodedServiceAccount.ParentService,
 	}
 
 	state.Services[serviceId] = serviceAccount
