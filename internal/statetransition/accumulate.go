@@ -113,7 +113,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		case host_call.CheckpointID:
 			gasCounter, regs, mem, ctx, err = host_call.Checkpoint(gasCounter, regs, mem, ctx)
 		case host_call.NewID:
-			gasCounter, regs, mem, ctx, err = host_call.New(gasCounter, regs, mem, ctx)
+			gasCounter, regs, mem, ctx, err = host_call.New(gasCounter, regs, mem, ctx, a.header.TimeSlotIndex)
 		case host_call.UpgradeID:
 			gasCounter, regs, mem, ctx, err = host_call.Upgrade(gasCounter, regs, mem, ctx)
 		case host_call.TransferID:

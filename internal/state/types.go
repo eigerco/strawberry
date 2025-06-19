@@ -124,7 +124,7 @@ type AccumulationState struct {
 	PendingAuthorizersQueues [common.TotalNumberOfCores]PendingAuthorizersQueue // Queue of authorizers (q ∈ C⟦H⟧QHC)
 	ManagerServiceId         block.ServiceId                                    // (m)
 	AssignedServiceIds       [common.TotalNumberOfCores]block.ServiceId         // (a)
-	DesignateServiceId       block.ServiceId                                    // (v)
+	DesignateServiceId       block.ServiceId                                    // (u)
 	AmountOfGasPerServiceId  map[block.ServiceId]uint64                         // (z)
 }
 

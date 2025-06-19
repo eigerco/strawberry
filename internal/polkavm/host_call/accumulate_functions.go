@@ -21,6 +21,13 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	}
 	gas -= BlessCost
 
+	xs := ctxPair.RegularCtx.ServiceId
+	manager := ctxPair.RegularCtx.AccumulationState.ManagerServiceId
+	// if f ≠ 0 ∧ xs ≠ (xu)m
+	if xs != manager {
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
+	}
+
 	// let [m, a, v, o, n] = ω7...12
 	managerServiceId, assignServiceAddr, designateServiceId, addr, servicesNr := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
 	// let g = {(s ↦ g) where E4(s) ⌢ E8(g) = μ_o+12i⋅⋅⋅+12 | i ∈ Nn} if Zo⋅⋅⋅+12n ⊂ Vμ otherwise ∇
@@ -65,19 +72,33 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 	}
 	gas -= AssignCost
 
-	// let o = ω8
-	addr := regs[A1]
-	core := regs[A0]
+	// let [c, o, a] = ω7⋅⋅⋅+3
+	core, addr, newAssigner := regs[A0], regs[A1], regs[A2]
+
 	if core >= uint64(common.TotalNumberOfCores) {
 		return gas, withCode(regs, CORE), mem, ctxPair, nil
 	}
+
+	xs := ctxPair.RegularCtx.ServiceId
+	currentAssigned := ctxPair.RegularCtx.AccumulationState.AssignedServiceIds[core]
+	//  if xs ≠ (xu)a[c]
+	if currentAssigned != xs {
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
+	}
+
+	var queue [state.PendingAuthorizersQueueSize]crypto.Hash
 	for i := 0; i < state.PendingAuthorizersQueueSize; i++ {
 		bytes := make([]byte, 32)
 		if err := mem.Read(addr+uint64(32*i), bytes); err != nil {
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
 		ctxPair.RegularCtx.AccumulationState.PendingAuthorizersQueues[core][i] = crypto.Hash(bytes)
+		queue[i] = crypto.Hash(bytes)
 	}
+
+	ctxPair.RegularCtx.AccumulationState.PendingAuthorizersQueues[core] = queue
+	ctxPair.RegularCtx.AccumulationState.AssignedServiceIds[core] = block.ServiceId(newAssigner)
+
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
@@ -94,6 +115,14 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 		bls          = ed25519 + crypto.BLSSize
 		metadata     = bls + crypto.MetadataSize
 	)
+
+	xs := ctxPair.RegularCtx.ServiceId
+	designator := ctxPair.RegularCtx.AccumulationState.DesignateServiceId
+	if xs != designator {
+		// if xs ≠ (xu)v
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
+	}
+
 	// let o = ω7
 	addr := regs[A0]
 	for i := 0; i < common.NumberOfValidators; i++ {
@@ -128,15 +157,22 @@ func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPa
 	return gas, regs, mem, ctxPair, nil
 }
 
-// New ΩN(ϱ, ω, μ, (x, y))
-func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
+// New ΩN(ϱ, ω, μ, (x, y), t)
+func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < NewCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= NewCost
 
-	// let [o, l, g, m] = ω7..11
-	addr, preimageLength, gasLimitAccumulator, gasLimitTransfer := regs[A0], regs[A1], regs[A2], regs[A3]
+	// let [o, l, g, m, f] = ω7..+5
+	addr, preimageLength, gasLimitAccumulator, gasLimitTransfer, gratisStorageOffset := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
+
+	xs := ctxPair.RegularCtx.ServiceId
+	manager := ctxPair.RegularCtx.AccumulationState.ManagerServiceId
+	// if f ≠ 0 ∧ xs ≠ (xu)m
+	if gratisStorageOffset != 0 && xs != manager {
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
+	}
 
 	// c = μo⋅⋅⋅+32 if No⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	codeHashBytes := make([]byte, 32)
@@ -146,16 +182,20 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Ga
 
 	codeHash := crypto.Hash(codeHashBytes)
 
-	// let a = (c, s ∶ {}, l ∶ {(c, l) ↦ []}, b ∶ at, g, m) if c ≠ ∇
+	// let a = (c, s : {},l : {(c, l) ↦ []}, b : at, g, m,p : {}, r : t, f, a : 0, p : xs) if c ≠ ∇
 	account := service.ServiceAccount{
-		Storage: service.NewAccountStorage(),
+		CodeHash: codeHash,
+		Storage:  service.NewAccountStorage(),
 		PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
 			{Hash: codeHash, Length: service.PreimageLength(preimageLength)}: {},
 		},
-		CodeHash:               codeHash,
 		GasLimitForAccumulator: gasLimitAccumulator,
 		GasLimitOnTransfer:     gasLimitTransfer,
+		GratisStorageOffset:    gratisStorageOffset,
+		CreationTimeslot:       timeslot,
+		ParentService:          xs,
 	}
+	// b: at
 	account.Balance = account.ThresholdBalance()
 
 	// let s_b = (Xs)b − at
