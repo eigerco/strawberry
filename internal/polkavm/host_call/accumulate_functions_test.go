@@ -112,7 +112,8 @@ func TestAccumulate(t *testing.T) {
 				A1: slices.Concat(transform(authHashes, hash2bytes)...),
 			},
 			initialRegs: deltaRegs{
-				A0: 1, // core id
+				A0: 1,   // core id
+				A2: 340, // new assigner
 			},
 			initialGas:  100,
 			expectedGas: 90,
@@ -123,6 +124,9 @@ func TestAccumulate(t *testing.T) {
 				AccumulationState: state.AccumulationState{
 					PendingAuthorizersQueues: state.PendingAuthorizersQueues{
 						1: [state.PendingAuthorizersQueueSize]crypto.Hash(authHashes),
+					},
+					AssignedServiceIds: [common.TotalNumberOfCores]block.ServiceId{
+						1: 340,
 					},
 				},
 			},
@@ -156,8 +160,9 @@ func TestAccumulate(t *testing.T) {
 			expectedY: checkpointCtx,
 		},
 		{
-			name: "new",
-			fn:   fnStd(New),
+			name:       "new",
+			fn:         fnWithExtra[jamtime.Timeslot](New),
+			extraParam: jamtime.Timeslot(200),
 			alloc: alloc{
 				A0: hash2bytes(randomHash),
 			},
@@ -190,6 +195,8 @@ func TestAccumulate(t *testing.T) {
 							GasLimitForAccumulator: 100,
 							GasLimitOnTransfer:     100,
 							Balance:                service.BasicMinimumBalance + service.AdditionalMinimumBalancePerItem*2 + service.AdditionalMinimumBalancePerOctet*(100+81), // =301 balance of the new service
+							CreationTimeslot:       200,
+							ParentService:          currentServiceID,
 						},
 						currentServiceID: {
 							Balance: 500 - 301, // initial balance minus balance of the new service
