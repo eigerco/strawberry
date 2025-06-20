@@ -350,8 +350,7 @@ func CalculateNewTimeState(header block.Header) jamtime.Timeslot {
 // Computes the intermediate recent history.
 func CalculateIntermediateRecentHistory(header block.Header, priorRecentHistory state.RecentHistory) state.RecentHistory {
 
-	// TODO deep copy
-	intermediateRecentHistory := priorRecentHistory
+	intermediateRecentHistory := priorRecentHistory.Clone()
 
 	// Equation 7.5: β†[SβS − 1]s = Hr
 	if len(intermediateRecentHistory.BlockHistory) > 0 {
@@ -407,8 +406,7 @@ func UpdateRecentHistory(
 	workPackageMapping map[crypto.Hash]crypto.Hash,
 	intermediateRecentHistory state.RecentHistory) (state.RecentHistory, error) {
 
-	// TODO deep copy
-	newRecentHistory := intermediateRecentHistory
+	newRecentHistory := intermediateRecentHistory.Clone()
 
 	mountainRange := mountain_ranges.New()
 
