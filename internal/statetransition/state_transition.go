@@ -42,6 +42,10 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	prevTimeSlot := s.TimeslotIndex
 	newTimeSlot := CalculateNewTimeState(newBlock.Header)
 
+	intermediateRecentHistory := CalculateIntermediateRecentHistory(newBlock.Header, s.RecentHistory)
+	// TODO: this should probably be passed it explicitly to functions below that need it.
+	s.RecentHistory = intermediateRecentHistory
+
 	if err := ValidateExtrinsicGuarantees(newBlock.Header, s, newBlock.Extrinsic.EG, s.CoreAssignments, newTimeSlot, chain); err != nil {
 		return fmt.Errorf("extrinsic guarantees validation failed, err: %w", err)
 	}
@@ -101,7 +105,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain) error
 	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators,
 		[]block.WorkReport{}, accumulationStats, transferStats)
 
-	newRecentHistory, err := CalculateNewRecentHistory(newBlock.Header, newBlock.Extrinsic.EG, s.RecentHistory, accumulationOutputLog)
+	newRecentHistory, err := CalculateNewRecentHistory(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentHistory, accumulationOutputLog)
 	if err != nil {
 		return err
 	}
@@ -340,12 +344,28 @@ func CalculateNewTimeState(header block.Header) jamtime.Timeslot {
 	return header.TimeSlotIndex
 }
 
-// CalculateNewRecentHistory
-// Implements equations:
+// CalculateIntermediateRecentHistory implements equations:
 // 4.6: β†_H ≺ (H, β_H)
+// Equation 7.5: β†[SβS − 1]s = Hr
+// Computes the intermediate recent history.
+func CalculateIntermediateRecentHistory(header block.Header, priorRecentHistory state.RecentHistory) state.RecentHistory {
+
+	// TODO deep copy
+	intermediateRecentHistory := priorRecentHistory
+
+	// Equation 7.5: β†[SβS − 1]s = Hr
+	if len(intermediateRecentHistory.BlockHistory) > 0 {
+		intermediateRecentHistory.BlockHistory[len(intermediateRecentHistory.BlockHistory)-1].StateRoot = header.PriorStateRoot
+	}
+
+	return intermediateRecentHistory
+}
+
+// CalculateNewRecentHistory implements equations:
 // 4.17: β′_H ≺ (H, EG, β†_H , θ′)
 // 7.5 - 7.8
-func CalculateNewRecentHistory(header block.Header, guarantees block.GuaranteesExtrinsic, recentHistory state.RecentHistory, serviceHashPairs ServiceHashPairs) (state.RecentHistory, error) {
+// Computes the final recent history.
+func CalculateNewRecentHistory(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentHistory state.RecentHistory, serviceHashPairs ServiceHashPairs) (state.RecentHistory, error) {
 
 	// Gather all the inputs we need.
 
@@ -355,9 +375,6 @@ func CalculateNewRecentHistory(header block.Header, guarantees block.GuaranteesE
 		return state.RecentHistory{}, err
 	}
 	headerHash := crypto.HashData(headerBytes)
-
-	// H_r
-	priorStateRoot := header.PriorStateRoot
 
 	// Equation 7.6: let s = [E_4(s) ⌢ E(h) | (s, h) <− θ′]
 	// And Equation 7.7: M_B(s, H_K)
@@ -370,7 +387,7 @@ func CalculateNewRecentHistory(header block.Header, guarantees block.GuaranteesE
 	workPackageMapping := buildWorkPackageMapping(guarantees.Guarantees)
 
 	// Update β to produce β'.
-	newRecentHistory, err := UpdateRecentHistory(headerHash, priorStateRoot, accumulationRoot, workPackageMapping, recentHistory)
+	newRecentHistory, err := UpdateRecentHistory(headerHash, accumulationRoot, workPackageMapping, intermediateRecentHistory)
 	if err != nil {
 		return state.RecentHistory{}, err
 	}
@@ -380,25 +397,18 @@ func CalculateNewRecentHistory(header block.Header, guarantees block.GuaranteesE
 
 // UpdateRecentHistory updates β, i.e β′_B and β′_H.
 // It implements equations:
-// Equation 7.5: β†[SβS − 1]s = Hr
 // Equation 7.7: β′_B ≡ A(β_B , M_B (s, HK ), HK)
 // Equation 7.8: β′_H ≡ β†_H ++ (p, h: H(H), b: M_R(β′_B), s:H0)
 // We separate out this logic for ease of testing aganist the recent history
 // test vectors.
 func UpdateRecentHistory(
 	headerHash crypto.Hash,
-	priorStateRoot crypto.Hash,
 	accumulationRoot crypto.Hash,
 	workPackageMapping map[crypto.Hash]crypto.Hash,
-	recentHistory state.RecentHistory) (state.RecentHistory, error) {
+	intermediateRecentHistory state.RecentHistory) (state.RecentHistory, error) {
 
 	// TODO deep copy
-	newRecentHistory := recentHistory
-
-	// Equation 7.5: β†[SβS − 1]s = Hr
-	if len(newRecentHistory.BlockHistory) > 0 {
-		newRecentHistory.BlockHistory[len(newRecentHistory.BlockHistory)-1].StateRoot = priorStateRoot
-	}
+	newRecentHistory := intermediateRecentHistory
 
 	mountainRange := mountain_ranges.New()
 
