@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/merkle/mountain_ranges"
 	"github.com/eigerco/strawberry/internal/state"
@@ -55,7 +56,10 @@ func TestRecentHistory(t *testing.T) {
 				workPackages[hash] = exportsRoot
 			}
 
-			newRecentHistory, err := statetransition.UpdateRecentHistory(headerHash, parentStateRoot, accumulateRoot, workPackages, preRecentHistory)
+			intermediateRecentHistory := statetransition.CalculateIntermediateRecentHistory(block.Header{
+				PriorStateRoot: parentStateRoot,
+			}, preRecentHistory)
+			newRecentHistory, err := statetransition.UpdateRecentHistory(headerHash, accumulateRoot, workPackages, intermediateRecentHistory)
 			require.NoError(t, err)
 
 			postRecentHistory := toRecentHistory(t, tv.PostState)
