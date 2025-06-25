@@ -36,8 +36,9 @@ type Accumulator struct {
 
 // InvokePVM ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G, ⟦(N_S, Y)⟧) Equation (B.9)
 func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64, []polkavm.ProvidedPreimage) {
+	account := accState.ServiceState[serviceIndex]
 	// if ud[s]c = ∅
-	if accState.ServiceState[serviceIndex].EncodedCodeAndMetadata() == nil {
+	if account.EncodedCodeAndMetadata() == nil {
 		ctx, err := a.newCtx(accState, serviceIndex)
 		if err != nil {
 			log.Println("error creating context", "err", err)
@@ -76,13 +77,9 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	hostCallFunc := func(hostCall uint64, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctx polkavm.AccumulateContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.AccumulateContextPair, error) {
 		// s
 		currentService := accState.ServiceState[serviceIndex]
-		currentService.Storage = service.NewAccountStorage()
 
 		if currentService.PreimageLookup == nil {
 			currentService.PreimageLookup = make(map[crypto.Hash][]byte)
-		}
-		if currentService.PreimageMeta == nil {
-			currentService.PreimageMeta = make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots)
 		}
 
 		var err error
@@ -139,7 +136,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		return gasCounter, regs, mem, ctx, err
 	}
 
-	gasUsed, ret, newCtxPair, err := interpreter.InvokeWholeProgram(accState.ServiceState[serviceIndex].EncodedCodeAndMetadata(), 5, polkavm.Gas(gas), args, hostCallFunc, newCtxPair)
+	gasUsed, ret, newCtxPair, err := interpreter.InvokeWholeProgram(account.EncodedCodeAndMetadata(), 5, polkavm.Gas(gas), args, hostCallFunc, newCtxPair)
 	if err != nil {
 		errPanic := &polkavm.ErrPanic{}
 		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {

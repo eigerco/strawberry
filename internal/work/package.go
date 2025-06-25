@@ -103,7 +103,7 @@ func (wp *Package) GetAuthorizationCode(serviceState service.ServiceState) ([]by
 	}
 
 	// E(↕pm, pc) = Λ(δ[p.h], (p.x)^t, p.u)
-	authorizationCode := sa.LookupPreimage(wp.Context.LookupAnchor.Timeslot, wp.AuthCodeHash)
+	authorizationCode := sa.LookupPreimage(block.ServiceId(wp.AuthorizerService), wp.Context.LookupAnchor.Timeslot, wp.AuthCodeHash)
 	if authorizationCode == nil {
 		return nil, fmt.Errorf("unable to find preimage for AuthCodeHash at given timeslot")
 	}

@@ -25,6 +25,7 @@ import (
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -138,8 +139,11 @@ func preimageHasBeenSolicited(serviceState service.ServiceState, serviceIndex bl
 	}
 	_, preimageLookupExists := account.PreimageLookup[preimageHash]
 
-	metaKey := service.PreImageMetaKey{Hash: preimageHash, Length: preimageLength}
-	meta, metaExists := account.PreimageMeta[metaKey]
+	k, err := statekey.NewPreimageMeta(serviceIndex, preimageHash, uint32(preimageLength))
+	if err != nil {
+		return false
+	}
+	meta, metaExists := account.GetPreimageMeta(k)
 
 	return !preimageLookupExists && (metaExists && len(meta) == 0)
 }
@@ -212,10 +216,15 @@ func CalculateIntermediateServiceState(
 		}
 		account.PreimageLookup[preimageHash] = preimage.Data
 
-		if account.PreimageMeta == nil {
-			account.PreimageMeta = make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots)
+		k, err := statekey.NewPreimageMeta(serviceId, preimageHash, uint32(preimageLength))
+		if err != nil {
+			return nil, err
 		}
-		account.PreimageMeta[service.PreImageMetaKey{Hash: preimageHash, Length: preimageLength}] = []jamtime.Timeslot{newTimeslot}
+
+		err = account.InsertPreimageMeta(k, uint64(preimageLength), service.PreimageHistoricalTimeslots{newTimeslot})
+		if err != nil {
+			return nil, err
+		}
 
 		newServiceState[serviceId] = account
 	}
@@ -2329,18 +2338,26 @@ func (a *Accumulator) preimageIntegration(services service.ServiceState, preimag
 	// ∀(s, i) ∈ p, s ∈ K(d), d[s]l[H(i), |i|] = []∶
 	for _, preimage := range preimages {
 		preimageHash := crypto.HashData(preimage.Data)
-		if _, ok := services[preimage.ServiceId]; ok {
-			key := service.PreImageMetaKey{
-				Hash:   preimageHash,
-				Length: service.PreimageLength(len(preimage.Data)),
+		if srv, ok := services[preimage.ServiceId]; ok {
+			k, err := statekey.NewPreimageMeta(preimage.ServiceId, preimageHash, uint32(len(preimage.Data)))
+			if err != nil {
+				log.Printf("failed to create state key: %v", err)
 			}
 
-			if timeslots := services[preimage.ServiceId].PreimageMeta[key]; len(timeslots) == 0 {
+			timeslots, exists := srv.GetPreimageMeta(k)
+
+			if exists && len(timeslots) == 0 {
 				// d′ where d′ = d except:
 				// d′[s]l[H(i), |i|] = [τ′]
 				// d′[s]p[H(i)] = i
-				servicesWithPreimages[preimage.ServiceId].PreimageMeta[key] = service.PreimageHistoricalTimeslots{a.newTimeslot}
-				servicesWithPreimages[preimage.ServiceId].PreimageLookup[preimageHash] = preimage.Data
+				serviceWithPreimage := servicesWithPreimages[preimage.ServiceId]
+
+				err = serviceWithPreimage.InsertPreimageMeta(k, uint64(len(preimage.Data)), service.PreimageHistoricalTimeslots{a.newTimeslot})
+				if err != nil {
+					log.Printf("failed to insert preimage meta: %v", err)
+				}
+
+				serviceWithPreimage.PreimageLookup[preimageHash] = preimage.Data
 			}
 		}
 	}

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
+	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
-
-	"github.com/eigerco/strawberry/internal/statetransition"
 
 	"github.com/stretchr/testify/require"
 
@@ -145,6 +145,7 @@ func TestPreimage(t *testing.T) {
 			}, statetransition.AccumulationStats{}, statetransition.DeferredTransfersStats{})
 
 			expectedPostServiceState := mapServiceState(t, data.PostState)
+
 			require.Equal(t, expectedPostServiceState, newServiceState, "State after transition does not match expected state")
 			expectedPostServiceStats := data.PostState.ServiceStatistics.To()
 			require.Equal(t, expectedPostServiceStats, newServiceStats, "Service statistics after transition do not match expected statistics")
@@ -159,9 +160,7 @@ func mapServiceState(t *testing.T, state PreimageState) service.ServiceState {
 	for _, account := range state.Accounts {
 		serviceId := block.ServiceId(account.ID)
 		serviceAccount := service.ServiceAccount{
-			Storage:                service.NewAccountStorage(),
 			PreimageLookup:         make(map[crypto.Hash][]byte),
-			PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 			Balance:                1000, // Default values for fields not in test vector
 			GasLimitForAccumulator: 100,
 			GasLimitOnTransfer:     50,
@@ -185,10 +184,10 @@ func mapServiceState(t *testing.T, state PreimageState) service.ServiceState {
 				timeslots = append(timeslots, jamtime.Timeslot(slot))
 			}
 
-			serviceAccount.PreimageMeta[service.PreImageMetaKey{
-				Hash:   hash,
-				Length: length,
-			}] = timeslots
+			key, err := statekey.NewPreimageMeta(serviceId, hash, uint32(length))
+			require.NoError(t, err)
+
+			serviceAccount.InsertPreimageMeta(key, uint64(length), timeslots)
 		}
 
 		serviceState[serviceId] = serviceAccount

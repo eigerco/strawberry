@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -15,9 +16,7 @@ import (
 
 func TestServiceAccount_AddAndLookupPreimage(t *testing.T) {
 	serviceAccount := service.ServiceAccount{
-		Storage:                service.NewAccountStorage(),
 		PreimageLookup:         make(map[crypto.Hash][]byte),
-		PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 		CodeHash:               testutils.RandomHash(t),
 		Balance:                1000,
 		GasLimitForAccumulator: common.MaxAllocatedGasAccumulation,
@@ -28,13 +27,15 @@ func TestServiceAccount_AddAndLookupPreimage(t *testing.T) {
 	preimageHash := crypto.HashData(preimage)
 	currentTimeslot := jamtime.CurrentTimeslot()
 
+	serviceID := block.ServiceId(1)
+
 	// Preimage unavailable
-	p := serviceAccount.LookupPreimage(currentTimeslot, preimageHash)
+	p := serviceAccount.LookupPreimage(serviceID, currentTimeslot, preimageHash)
 	require.Nil(t, p)
 
-	err := serviceAccount.AddPreimage(preimage, currentTimeslot)
+	err := serviceAccount.AddPreimage(serviceID, preimage, currentTimeslot)
 	require.NoError(t, err)
-	p = serviceAccount.LookupPreimage(currentTimeslot, preimageHash)
+	p = serviceAccount.LookupPreimage(serviceID, currentTimeslot, preimageHash)
 	require.NotNil(t, p)
 	require.Equal(t, preimage, p)
 }
@@ -42,25 +43,18 @@ func TestServiceAccount_AddAndLookupPreimage(t *testing.T) {
 func TestServiceStateClone(t *testing.T) {
 	storageKey := statekey.StateKey{0x1}
 	preimageKey := crypto.Hash{0x2}
-	preimageMetaKey := service.PreImageMetaKey{
-		Hash:   preimageKey,
-		Length: 8,
+
+	sa := service.ServiceAccount{
+		PreimageLookup: map[crypto.Hash][]byte{
+			preimageKey: []byte("preimage"),
+		},
 	}
 
-	storage := service.NewAccountStorage()
-	storage.Set(storageKey, 1, []byte("storage"))
+	sa.InsertStorage(storageKey, 1, []byte("storage"))
 
 	// Original with reference types
 	original := service.ServiceState{
-		0: service.ServiceAccount{
-			Storage: storage,
-			PreimageLookup: map[crypto.Hash][]byte{
-				preimageKey: []byte("preimage"),
-			},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				preimageMetaKey: service.PreimageHistoricalTimeslots([]jamtime.Timeslot{1}),
-			},
-		},
+		0: sa,
 		1: service.ServiceAccount{},
 	}
 
@@ -68,22 +62,20 @@ func TestServiceStateClone(t *testing.T) {
 	cloned := original.Clone()
 
 	// Modify the original's reference types
-	val, ok := original[0].Storage.Get(storageKey)
+	original0 := original[0]
+	val, ok := original0.GetStorage(storageKey)
 	require.True(t, ok)
 	val[0] = 'x'
 	original[0].PreimageLookup[preimageKey][0] = 'x'
-	original[0].PreimageMeta[preimageMetaKey][0] = 2
 	// Delete one of the service account entries
 	delete(original, 0)
 
 	// Verify the copy is unchanged
 	require.Len(t, cloned, 2)
-	val, ok = cloned[0].Storage.Get(storageKey)
+	account0 := cloned[0]
+	val, ok = account0.GetStorage(storageKey)
 	require.True(t, ok)
 	require.Equal(t, []byte("storage"), val)
 	require.Equal(t, []byte("preimage"), cloned[0].PreimageLookup[preimageKey])
-	require.Equal(t, service.PreimageHistoricalTimeslots([]jamtime.Timeslot{1}), cloned[0].PreimageMeta[preimageMetaKey])
-	require.Empty(t, cloned[1].Storage.Items())
 	require.Nil(t, cloned[1].PreimageLookup)
-	require.Nil(t, cloned[1].PreimageMeta)
 }

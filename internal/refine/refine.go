@@ -79,7 +79,7 @@ func (r *Refine) InvokePVM(
 	}
 
 	// E(↕m, c) = Λ(δ[ws], (px)t, wc)
-	encodedCodeWithMeta := s.LookupPreimage(workPackage.Context.LookupAnchor.Timeslot, w.CodeHash)
+	encodedCodeWithMeta := s.LookupPreimage(w.ServiceId, workPackage.Context.LookupAnchor.Timeslot, w.CodeHash)
 	if encodedCodeWithMeta == nil {
 		return nil, nil, 0, ErrBad
 	}

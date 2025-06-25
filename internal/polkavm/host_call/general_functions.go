@@ -352,7 +352,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
-	v, exists := a.Storage.Get(k)
+	v, exists := a.GetStorage(k)
 	if !exists {
 		return gas, withCode(regs, NONE), mem, nil
 	}
@@ -391,7 +391,9 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 
 	a := s.Clone()
 	if vz == 0 {
-		a.Storage.Delete(k)
+		if val, ok := s.GetStorage(k); ok {
+			a.DeleteStorage(k, kz, uint64(len(val)))
+		}
 	} else {
 		valueData := make([]byte, vz)
 		err = mem.Read(vo, valueData)
@@ -399,12 +401,12 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 			return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 		}
 
-		a.Storage.Set(k, uint32(len(keyData)), valueData)
+		a.InsertStorage(k, kz, valueData)
 	}
 
 	// let l = |s_s[k]| if k ∈ K(s_s); NONE otherwise
 	var storageItemLength uint64
-	storageItem, ok := s.Storage.Get(k)
+	storageItem, ok := s.GetStorage(k)
 	if ok {
 		storageItemLength = uint64(len(storageItem))
 	} else {
@@ -444,8 +446,8 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 		ThresholdBalance:               account.ThresholdBalance(),
 		GasLimitForAccumulator:         account.GasLimitForAccumulator,
 		GasLimitOnTransfer:             account.GasLimitOnTransfer,
-		TotalStorageSize:               account.TotalStorageSize(),
-		TotalItems:                     account.TotalItems(),
+		TotalStorageSize:               account.GetTotalNumberOfOctets(),
+		TotalItems:                     account.GetTotalNumberOfItems(),
 		GratisStorageOffset:            account.GratisStorageOffset,
 		CreationTimeslot:               account.CreationTimeslot,
 		MostRecentAccumulationTimeslot: account.MostRecentAccumulationTimeslot,

@@ -399,12 +399,10 @@ func TestRead(t *testing.T) {
 	k, err := statekey.NewStorage(serviceId, keyData)
 	require.NoError(t, err)
 
-	storage := service.NewAccountStorage()
-	storage.Set(k, uint32(len(keyData)), value)
+	sa := service.NewServiceAccount()
 
-	sa := service.ServiceAccount{
-		Storage: storage,
-	}
+	sa.InsertStorage(k, uint64(len(keyData)), value)
+
 	serviceState := service.ServiceState{
 		serviceId: sa,
 	}
@@ -455,13 +453,8 @@ func TestWrite(t *testing.T) {
 	k, err := statekey.NewStorage(serviceId, keyData)
 	require.NoError(t, err)
 
-	storage := service.NewAccountStorage()
-	storage.Set(k, uint32(len(keyData)), value)
-
-	sa := service.ServiceAccount{
-		Balance: 200,
-		Storage: storage,
-	}
+	sa := service.NewServiceAccount()
+	sa.Balance = 200
 
 	ko := polkavm.RWAddressBase
 	kz := uint32(len(keyData))
@@ -478,7 +471,7 @@ func TestWrite(t *testing.T) {
 	err = mem.Write(vo, value)
 	require.NoError(t, err)
 
-	gasRemaining, regs, mem, _, err := host_call.Write(initialGas, initialRegs, mem, sa, serviceId)
+	gasRemaining, regs, mem, updatedSa, err := host_call.Write(initialGas, initialRegs, mem, sa, serviceId)
 	require.NoError(t, err)
 
 	actualValue := make([]byte, len(value))
@@ -492,12 +485,27 @@ func TestWrite(t *testing.T) {
 	require.Equal(t, keyData, actualKey)
 
 	require.Equal(t, uint64(len(value)), regs[polkavm.A0])
-	require.NotNil(t, sa)
-	storedValue, keyExists := sa.Storage.Get(k)
+	require.NotNil(t, updatedSa)
+	storedValue, keyExists := updatedSa.GetStorage(k)
 	require.True(t, keyExists)
 	require.Equal(t, value, storedValue)
 
+	require.Equal(t, uint32(1), updatedSa.GetTotalNumberOfItems())
+	require.Equal(t, 34+uint64(len(keyData))+uint64(len(value)), updatedSa.GetTotalNumberOfOctets())
+
 	require.Equal(t, polkavm.Gas(90), gasRemaining)
+
+	// Second call: Delete
+	initialRegs[polkavm.A3] = 0 // vz = 0 → delete
+
+	gasRemaining, _, mem, updatedSa, err = host_call.Write(gasRemaining, initialRegs, mem, updatedSa, serviceId)
+	require.NoError(t, err)
+
+	require.Equal(t, uint32(0), updatedSa.GetTotalNumberOfItems())
+	require.Equal(t, uint64(0), updatedSa.GetTotalNumberOfOctets())
+	_, ok := updatedSa.GetStorage(k)
+	require.False(t, ok)
+	require.Equal(t, polkavm.Gas(80), gasRemaining)
 }
 
 func TestInfo(t *testing.T) {
@@ -519,16 +527,11 @@ func TestInfo(t *testing.T) {
 		Balance:                        1000,
 		GasLimitForAccumulator:         5000,
 		GasLimitOnTransfer:             2000,
-		Storage:                        service.NewAccountStorage(),
-		PreimageMeta:                   make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 		GratisStorageOffset:            10,
 		CreationTimeslot:               jamtime.Timeslot(10),
 		MostRecentAccumulationTimeslot: jamtime.Timeslot(10),
 		ParentService:                  1,
 	}
-
-	sampleAccount.Storage.Set(statekey.StateKey{0xAA}, 10, []byte("value1"))
-	sampleAccount.Storage.Set(statekey.StateKey{0xAA}, 5, []byte("value2"))
 
 	serviceState := service.ServiceState{
 		serviceId: sampleAccount,
@@ -566,8 +569,8 @@ func TestInfo(t *testing.T) {
 		ThresholdBalance:               sampleAccount.ThresholdBalance(),
 		GasLimitForAccumulator:         sampleAccount.GasLimitForAccumulator,
 		GasLimitOnTransfer:             sampleAccount.GasLimitOnTransfer,
-		TotalStorageSize:               sampleAccount.TotalStorageSize(),
-		TotalItems:                     sampleAccount.TotalItems(),
+		TotalStorageSize:               sampleAccount.GetTotalNumberOfOctets(),
+		TotalItems:                     sampleAccount.GetTotalNumberOfItems(),
 		GratisStorageOffset:            sampleAccount.GratisStorageOffset,
 		CreationTimeslot:               sampleAccount.CreationTimeslot,
 		MostRecentAccumulationTimeslot: sampleAccount.MostRecentAccumulationTimeslot,
