@@ -50,6 +50,9 @@ func TestSimulateGuarantee(t *testing.T) {
 		require.NoError(t, err, "failed to close db")
 	}()
 
+	trieDB := store.NewTrie(db)
+	require.NoError(t, err)
+
 	chainDB := store.NewChain(db)
 	require.NoError(t, err)
 
@@ -63,6 +66,7 @@ func TestSimulateGuarantee(t *testing.T) {
 		currentState,
 		testBlock,
 		chainDB,
+		trieDB,
 	)
 	require.NoError(t, err)
 

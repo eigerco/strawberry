@@ -51,6 +51,7 @@ func TestSimulateSAFROLE(t *testing.T) {
 		err := db.Close()
 		require.NoError(t, err, "failed to close db")
 	}()
+
 	trieDB := store.NewTrie(db)
 	require.NoError(t, err)
 
@@ -118,11 +119,12 @@ func TestSimulateSAFROLE(t *testing.T) {
 		t.Logf("block prior state root: %v", hex.EncodeToString(newBlock.Header.PriorStateRoot[:]))
 		t.Logf("block parent hash: %v", hex.EncodeToString(newBlock.Header.ParentHash[:]))
 
-		// Update state
+		// Update state.
 		err = statetransition.UpdateState(
 			currentState,
 			newBlock,
 			chainDB,
+			trieDB,
 		)
 		require.NoError(t, err)
 
