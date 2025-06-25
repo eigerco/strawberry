@@ -60,6 +60,11 @@ func NewServiceAccount() ServiceAccount {
 	}
 }
 
+// GetGlobalKVItems returns all items stores in globalKV map
+func (sa *ServiceAccount) GetGlobalKVItems() map[statekey.StateKey][]byte {
+	return sa.globalKV
+}
+
 // GetStorage retrieves the preimage storage associated with the given key
 func (sa *ServiceAccount) GetStorage(key statekey.StateKey) ([]byte, bool) {
 	value, ok := sa.globalKV[key]
@@ -86,20 +91,25 @@ func (sa *ServiceAccount) InsertStorage(key statekey.StateKey, originalKeySize u
 		sa.globalKV = make(map[statekey.StateKey][]byte)
 	}
 
+	if _, ok := sa.GetStorage(key); !ok {
+		sa.totalNumberOfItems += 1
+		sa.totalNumberOfOctets += 34 + originalKeySize + uint64(len(value))
+	}
+
 	sa.globalKV[key] = value
-	sa.totalNumberOfItems += 1
-	sa.totalNumberOfOctets += 34 + originalKeySize + uint64(len(value))
 }
 
 // DeleteStorage removes a storage entry and updates both the item and octet counters accordingly (9.8 v0.6.7)
 func (sa *ServiceAccount) DeleteStorage(key statekey.StateKey, keyLen uint64, valueLen uint64) {
-	delete(sa.globalKV, key)
-	if sa.totalNumberOfItems >= 1 {
-		sa.totalNumberOfItems -= 1
-	}
-	sizeToSubtract := 34 + keyLen + valueLen
-	if sa.totalNumberOfOctets >= sizeToSubtract {
-		sa.totalNumberOfOctets -= 34 + keyLen + valueLen
+	if _, ok := sa.GetStorage(key); ok {
+		delete(sa.globalKV, key)
+		if sa.totalNumberOfItems >= 1 {
+			sa.totalNumberOfItems -= 1
+		}
+		sizeToSubtract := 34 + keyLen + valueLen
+		if sa.totalNumberOfOctets >= sizeToSubtract {
+			sa.totalNumberOfOctets -= 34 + keyLen + valueLen
+		}
 	}
 }
 
@@ -160,13 +170,15 @@ func (sa *ServiceAccount) UpdatePreimageMeta(key statekey.StateKey, newValue Pre
 
 // DeletePreimageMeta removes a preimage entry and updates both the item and octet counters accordingly (9.8 v0.6.7)
 func (sa *ServiceAccount) DeletePreimageMeta(key statekey.StateKey, length uint64) {
-	delete(sa.globalKV, key)
-	if sa.totalNumberOfItems >= 2 {
-		sa.totalNumberOfItems -= 2
-	}
-	sizeToSubtract := 81 + length
-	if sa.totalNumberOfOctets >= sizeToSubtract {
-		sa.totalNumberOfOctets -= sizeToSubtract
+	if _, ok := sa.GetPreimageMeta(key); ok {
+		delete(sa.globalKV, key)
+		if sa.totalNumberOfItems >= 2 {
+			sa.totalNumberOfItems -= 2
+		}
+		sizeToSubtract := 81 + length
+		if sa.totalNumberOfOctets >= sizeToSubtract {
+			sa.totalNumberOfOctets -= sizeToSubtract
+		}
 	}
 }
 

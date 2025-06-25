@@ -2349,7 +2349,7 @@ func (a *Accumulator) preimageIntegration(services service.ServiceState, preimag
 		if srv, ok := services[preimage.ServiceId]; ok {
 			k, err := statekey.NewPreimageMeta(preimage.ServiceId, preimageHash, uint32(len(preimage.Data)))
 			if err != nil {
-				log.Printf("failed to create state key: %v", err)
+				panic("failed to create state key")
 			}
 
 			timeslots, exists := srv.GetPreimageMeta(k)
@@ -2362,7 +2362,7 @@ func (a *Accumulator) preimageIntegration(services service.ServiceState, preimag
 
 				err = serviceWithPreimage.InsertPreimageMeta(k, uint64(len(preimage.Data)), service.PreimageHistoricalTimeslots{a.newTimeslot})
 				if err != nil {
-					log.Printf("failed to insert preimage meta: %v", err)
+					panic("failed to insert preimage meta")
 				}
 
 				serviceWithPreimage.PreimageLookup[preimageHash] = preimage.Data
