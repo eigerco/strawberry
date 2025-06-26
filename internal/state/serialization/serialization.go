@@ -72,6 +72,7 @@ func SerializeState(s state.State) (map[statekey.StateKey][]byte, error) {
 
 // C(255, s) ↦ a_c ⌢ E_8(a_b, a_g , a_m, a_o, a_f ) ⌢ E4(a_i, a_r , a_a, a_p)
 func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[statekey.StateKey][]byte) error {
+	// Serialize the service account itself.
 	encodedServiceAccount := encodedServiceAccount{
 		CodeHash:                       serviceAccount.CodeHash,
 		Balance:                        serviceAccount.Balance,
@@ -96,8 +97,16 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 	}
 	serializedState[stateKey] = encodedServiceValue
 
+	// Serialize the service's preimage lookups.
 	if err := serializePreimageLookup(serviceId, serviceAccount.PreimageLookup, serializedState); err != nil {
 		return err
+	}
+
+	// Serialize the service's storage and preimage meta keys. We can't tell
+	// these apart in all cases, and we don't need to since they are already in
+	// the serialized key value format.
+	for sk, value := range serviceAccount.GetGlobalKVItems() {
+		serializedState[sk] = value
 	}
 
 	return nil
@@ -119,7 +128,6 @@ type encodedServiceAccount struct {
 }
 
 func serializePreimageLookup(serviceId block.ServiceId, preimages map[crypto.Hash][]byte, serializedState map[statekey.StateKey][]byte) error {
-
 	for hash, value := range preimages {
 		stateKey, err := statekey.NewPreimageLookup(serviceId, hash)
 		if err != nil {

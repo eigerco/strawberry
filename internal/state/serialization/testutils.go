@@ -2,7 +2,6 @@ package serialization
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/state"
@@ -56,13 +55,6 @@ func RandomEpochKeys(t *testing.T) crypto.EpochKeys {
 	return epochKeys
 }
 
-func RandomStateKey(t *testing.T) statekey.StateKey {
-	hash := make([]byte, 31)
-	_, err := rand.Read(hash)
-	require.NoError(t, err)
-	return statekey.StateKey(hash)
-}
-
 func RandomServiceAccount(t *testing.T, svcID block.ServiceId) service.ServiceAccount {
 	preimageData := []byte("preimage data")
 	sa := service.ServiceAccount{
@@ -77,12 +69,16 @@ func RandomServiceAccount(t *testing.T, svcID block.ServiceId) service.ServiceAc
 		ParentService:                  block.ServiceId(testutils.RandomUint32()),
 	}
 
-	sa.InsertStorage(RandomStateKey(t), 4, []byte("data"))
-
-	k, err := statekey.NewPreimageMeta(svcID, crypto.HashData(preimageData), uint32(len(preimageData)))
+	// Insert a storage key.
+	originalStorageKey := []byte("storage key")
+	storageKey, err := statekey.NewStorage(svcID, originalStorageKey)
 	require.NoError(t, err)
+	sa.InsertStorage(storageKey, uint64(len(originalStorageKey)), []byte("storage value"))
 
-	err = sa.InsertPreimageMeta(k, uint64(len(preimageData)), service.PreimageHistoricalTimeslots{testutils.RandomTimeslot()})
+	// Insert a preimage meta key.
+	preimageMetaKey, err := statekey.NewPreimageMeta(svcID, crypto.HashData(preimageData), uint32(len(preimageData)))
+	require.NoError(t, err)
+	err = sa.InsertPreimageMeta(preimageMetaKey, uint64(len(preimageData)), service.PreimageHistoricalTimeslots{testutils.RandomTimeslot()})
 	require.NoError(t, err)
 
 	return sa

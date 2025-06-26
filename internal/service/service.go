@@ -60,9 +60,15 @@ func NewServiceAccount() ServiceAccount {
 	}
 }
 
-// GetGlobalKVItems returns all items stores in globalKV map
+// GetGlobalKVItems returns the global KV map.
 func (sa *ServiceAccount) GetGlobalKVItems() map[statekey.StateKey][]byte {
 	return sa.globalKV
+}
+
+// SetGlobalKVItems sets the global KV map, this should only be used when
+// deserializing state for now.
+func (sa *ServiceAccount) SetGlobalKVItems(globalKV map[statekey.StateKey][]byte) {
+	sa.globalKV = globalKV
 }
 
 // GetStorage retrieves the preimage storage associated with the given key
@@ -80,9 +86,21 @@ func (sa *ServiceAccount) GetTotalNumberOfItems() uint32 {
 	return sa.totalNumberOfItems
 }
 
+// SetTotalNumberOfItems sets `ai` total number of items in storage. This should
+// only be used when deserializing state for now.
+func (sa *ServiceAccount) SetTotalNumberOfItems(n uint32) {
+	sa.totalNumberOfItems = n
+}
+
 // GetTotalNumberOfOctets return `ao` total number of octets/bytes in storage
 func (sa *ServiceAccount) GetTotalNumberOfOctets() uint64 {
 	return sa.totalNumberOfOctets
+}
+
+// SetTotalNumberOfOctets sets `ao` total number of octets/bytes in storage.
+// This should only be used when deserializing state for now.
+func (sa *ServiceAccount) SetTotalNumberOfOctets(n uint64) {
+	sa.totalNumberOfOctets = n
 }
 
 // InsertStorage adds a new storage entry and updates item and octet counters accordingly (9.8 v0.6.7)

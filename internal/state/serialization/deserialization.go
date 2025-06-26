@@ -3,6 +3,7 @@ package serialization
 import (
 	"fmt"
 
+	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
@@ -54,30 +55,54 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 	}
 
 	// Find service keys
-	var serviceKeys []statekey.StateKey
-	for sk := range serializedState {
+	var serviceKeys, preimageLookupKeys, storageOrPreimageMetaKeys []statekey.StateKey
+	for sk, value := range serializedState {
 		if sk.IsChapterKey() {
 			continue
 		}
+
 		if sk.IsServiceKey() {
 			serviceKeys = append(serviceKeys, sk)
+			continue
 		}
+
+		ok, err := sk.IsPreimageLookupKey(value)
+		if err != nil {
+			return deserializedState, fmt.Errorf("error checking if key is preimage lookup key: %w", err)
+		}
+		if ok {
+			preimageLookupKeys = append(preimageLookupKeys, sk)
+			continue
+		}
+
+		// Any remaining keys must be storage or preimage meta keys, and we have
+		// no way to distinguish them in all cases.
+		storageOrPreimageMetaKeys = append(storageOrPreimageMetaKeys, sk)
+
 	}
 
-	// Deserialize Services
+	// Deserialize services.
 	for _, serviceKey := range serviceKeys {
 		if err := deserializeService(&deserializedState, serviceKey, serializedState[serviceKey]); err != nil {
 			return deserializedState, err
 		}
 	}
 
-	// TODO deserializing preimage lookup, preimage meta and storage keys
-	// requires a change to how we store service dicts. They should all be
-	// stored in a single dict, and as the host we shouldn't care about knowing
-	// which key is which, as long as each host call can read and write it's
-	// value. This requires a reasonable refactor, but until then, given 0.6.7
-	// changes, we can no longer tell storage keys apart from preimage meta
-	// keys.
+	// Deserialize preimage lookup keys.
+
+	for _, preimageLookupKey := range preimageLookupKeys {
+		if err := deserializePreimageLookup(&deserializedState, preimageLookupKey, serializedState[preimageLookupKey]); err != nil {
+			return deserializedState, err
+		}
+	}
+
+	// Deserialize storage or preimage meta keys, these just get put into the global kv items map.
+	for _, storageOrPreimageMetaKey := range storageOrPreimageMetaKeys {
+		if err := deserializeStorageOrPreimageMeta(&deserializedState, storageOrPreimageMetaKey, serializedState[storageOrPreimageMetaKey]); err != nil {
+			return deserializedState, err
+		}
+	}
+
 	return deserializedState, nil
 }
 
@@ -112,6 +137,67 @@ func deserializeService(state *state.State, sk statekey.StateKey, encodedValue [
 		MostRecentAccumulationTimeslot: encodedServiceAccount.MostRecentAccumulationTimeslot,
 		ParentService:                  encodedServiceAccount.ParentService,
 	}
+
+	// Deserialize the footprint.
+	serviceAccount.SetTotalNumberOfItems(encodedServiceAccount.FootprintItems)
+	serviceAccount.SetTotalNumberOfOctets(encodedServiceAccount.FootprintStorage)
+
+	state.Services[serviceId] = serviceAccount
+
+	return nil
+}
+
+// deserializePreimageLookup deserializes a preimage lookup from the given state key and encoded value.
+// The original preimage lookup hash is found by simply hashing the decoded value.
+func deserializePreimageLookup(state *state.State, sk statekey.StateKey, encodedValue []byte) error {
+	serviceId, _, err := sk.ExtractServiceIDHash()
+	if err != nil {
+		return fmt.Errorf("deserialize preimage lookup: error extracting service ID: %w", err)
+	}
+
+	if state.Services == nil {
+		return fmt.Errorf("deserializing preimage lookup: services map empty")
+	}
+
+	serviceAccount, ok := state.Services[serviceId]
+	if !ok {
+		return fmt.Errorf("deserializing preimage lookup: service ID '%v' does not exist", serviceId)
+	}
+
+	if serviceAccount.PreimageLookup == nil {
+		serviceAccount.PreimageLookup = map[crypto.Hash][]byte{}
+	}
+
+	key := crypto.HashData(encodedValue)
+	serviceAccount.PreimageLookup[key] = encodedValue
+
+	state.Services[serviceId] = serviceAccount
+
+	return nil
+}
+
+func deserializeStorageOrPreimageMeta(state *state.State, sk statekey.StateKey, encodedValue []byte) error {
+	serviceId, _, err := sk.ExtractServiceIDHash()
+	if err != nil {
+		return fmt.Errorf("deserialize storage or preimage meta: error extracting service ID: %w", err)
+	}
+
+	if state.Services == nil {
+		return fmt.Errorf("deserializing storage or preimage meta: services map empty")
+	}
+
+	serviceAccount, ok := state.Services[serviceId]
+	if !ok {
+		return fmt.Errorf("deserializing storage or preimage meta: service ID '%v' does not exist", serviceId)
+	}
+
+	globalKVItems := serviceAccount.GetGlobalKVItems()
+	if globalKVItems == nil {
+		globalKVItems = map[statekey.StateKey][]byte{}
+
+	}
+	globalKVItems[sk] = encodedValue
+	serviceAccount.SetGlobalKVItems(globalKVItems)
 
 	state.Services[serviceId] = serviceAccount
 

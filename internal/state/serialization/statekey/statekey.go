@@ -135,8 +135,8 @@ func NewPreimageMeta(serviceId block.ServiceId, originalHash crypto.Hash, origin
 
 // Checks if the given state key is a chapter key of the format: [i, 0, 0,...]
 func (s StateKey) IsChapterKey() bool {
-	// Chapter keys start with 1-15.
-	if !(s[0] > 0 && s[0] < 16) {
+	// Chapter keys should be between 1 and 254
+	if !(s[0] > 0 && s[0] < 255) {
 		return false
 	}
 
@@ -165,6 +165,22 @@ func (s StateKey) IsServiceKey() bool {
 	}
 
 	return true
+}
+
+// Checks if the given state key is a preimage lookup key. We can exploit the fact
+// that the preimage key is always the hash of it's value.
+func (s StateKey) IsPreimageLookupKey(preimageValue []byte) (bool, error) {
+	serviceID, _, err := s.ExtractServiceIDHash()
+	if err != nil {
+		return false, err
+	}
+
+	preimageStateKey, err := NewPreimageLookup(serviceID, crypto.HashData(preimageValue))
+	if err != nil {
+		return false, err
+	}
+
+	return preimageStateKey == s, nil
 }
 
 // Extracts the chapter and service ID components from a state key of airty 2.
@@ -208,7 +224,8 @@ func (s StateKey) ExtractServiceIDHash() (block.ServiceId, []byte, error) {
 		return 0, []byte{}, err
 	}
 
-	hash := []byte{}
+	// 31 byte state key  - 4 bytes for the service ID = 27 bytes for the hash component
+	hash := make([]byte, 27)
 	hash[0] = s[1]
 	hash[1] = s[3]
 	hash[2] = s[5]
