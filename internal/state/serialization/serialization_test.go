@@ -44,6 +44,11 @@ func TestSerializeState(t *testing.T) {
 		assert.Equal(t, originalService.CreationTimeslot, decodedService.CreationTimeslot)
 		assert.Equal(t, originalService.MostRecentAccumulationTimeslot, decodedService.MostRecentAccumulationTimeslot)
 		assert.Equal(t, originalService.ParentService, decodedService.ParentService)
+
+		assert.Equal(t, originalService.PreimageLookup, decodedService.PreimageLookup)
+		assert.Equal(t, originalService.GetGlobalKVItems(), decodedService.GetGlobalKVItems())
+		assert.Equal(t, originalService.GetTotalNumberOfItems(), decodedService.GetTotalNumberOfItems())
+		assert.Equal(t, originalService.GetTotalNumberOfOctets(), decodedService.GetTotalNumberOfOctets())
 	}
 
 	// Check for extra services in decoded state
