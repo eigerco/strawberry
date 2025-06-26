@@ -6,15 +6,17 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/store"
 	jsonutils "github.com/eigerco/strawberry/internal/testutils/json"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
-	"github.com/stretchr/testify/require"
 )
 
 // TestSimulatePreimage tests a very simple happy path for adding a preimage.
@@ -59,10 +61,6 @@ func TestSimulatePreimage(t *testing.T) {
 	serviceID := block.ServiceId(testBlock.Extrinsic.EP[0].ServiceIndex)
 	preimageData := testBlock.Extrinsic.EP[0].Data
 	preimageHash := crypto.HashData(preimageData)
-	preimageMetaKey := service.PreImageMetaKey{
-		Hash:   preimageHash,
-		Length: service.PreimageLength(len(preimageData)),
-	}
 
 	if currentState.Services == nil {
 		t.Fatalf("post state services map empty")
@@ -73,7 +71,14 @@ func TestSimulatePreimage(t *testing.T) {
 
 	// Preimage was correctly added to the service and it's lookup meta updated.
 	require.Equal(t, svc.PreimageLookup[preimageHash], preimageData)
-	require.Equal(t, svc.PreimageMeta[preimageMetaKey], service.PreimageHistoricalTimeslots{testBlock.Header.TimeSlotIndex})
+
+	k, err := statekey.NewPreimageMeta(serviceID, preimageHash, uint32(len(preimageData)))
+	require.NoError(t, err)
+
+	meta, ok := svc.GetPreimageMeta(k)
+	require.True(t, ok)
+
+	require.Equal(t, meta, service.PreimageHistoricalTimeslots{testBlock.Header.TimeSlotIndex})
 
 	// TODO check activity stats once they are updated.
 }

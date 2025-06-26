@@ -55,7 +55,7 @@ func HistoricalLookup(
 	}
 
 	// Compute v = Λ(a, t, h) using the provided LookupPreimage function
-	v := a.LookupPreimage(t, crypto.Hash(hashData))
+	v := a.LookupPreimage(serviceId, t, crypto.Hash(hashData))
 
 	if len(v) == 0 {
 		return gas, withCode(regs, NONE), mem, ctxPair, nil

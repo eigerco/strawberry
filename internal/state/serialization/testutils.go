@@ -63,16 +63,10 @@ func RandomStateKey(t *testing.T) statekey.StateKey {
 	return statekey.StateKey(hash)
 }
 
-func RandomServiceAccount(t *testing.T) service.ServiceAccount {
-	storage := service.NewAccountStorage()
-	storage.Set(RandomStateKey(t), 10, []byte("data"))
+func RandomServiceAccount(t *testing.T, svcID block.ServiceId) service.ServiceAccount {
 	preimageData := []byte("preimage data")
-	return service.ServiceAccount{
-		Storage:        storage,
-		PreimageLookup: map[crypto.Hash][]byte{crypto.HashData(preimageData): preimageData},
-		PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-			{Hash: crypto.HashData(preimageData), Length: service.PreimageLength(len(preimageData))}: {testutils.RandomTimeslot()},
-		},
+	sa := service.ServiceAccount{
+		PreimageLookup:                 map[crypto.Hash][]byte{crypto.HashData(preimageData): preimageData},
 		CodeHash:                       testutils.RandomHash(t),
 		Balance:                        testutils.RandomUint64(),
 		GasLimitForAccumulator:         testutils.RandomUint64(),
@@ -82,6 +76,16 @@ func RandomServiceAccount(t *testing.T) service.ServiceAccount {
 		MostRecentAccumulationTimeslot: testutils.RandomTimeslot(),
 		ParentService:                  block.ServiceId(testutils.RandomUint32()),
 	}
+
+	sa.InsertStorage(RandomStateKey(t), 4, []byte("data"))
+
+	k, err := statekey.NewPreimageMeta(svcID, crypto.HashData(preimageData), uint32(len(preimageData)))
+	require.NoError(t, err)
+
+	err = sa.InsertPreimageMeta(k, uint64(len(preimageData)), service.PreimageHistoricalTimeslots{testutils.RandomTimeslot()})
+	require.NoError(t, err)
+
+	return sa
 }
 
 func RandomPrivilegedServices() service.PrivilegedServices {
@@ -318,7 +322,8 @@ func RandomState(t *testing.T) state.State {
 	services := make(service.ServiceState)
 	for i := 0; i < 10; i++ {
 		// Use different service IDs for each iteration
-		services[block.ServiceId(uint32(i+789))] = RandomServiceAccount(t)
+		sID := block.ServiceId(uint32(i + 789))
+		services[sID] = RandomServiceAccount(t, sID)
 	}
 
 	return state.State{

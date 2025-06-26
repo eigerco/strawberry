@@ -15,6 +15,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
@@ -56,13 +57,13 @@ func TestHistoricalLookup(t *testing.T) {
 		PreimageLookup: map[crypto.Hash][]byte{
 			crypto.Hash(hashKey): preimage,
 		},
-		PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-			{
-				Hash:   crypto.Hash(hashKey),
-				Length: service.PreimageLength(len(preimage)),
-			}: {0, 10},
-		},
 	}
+
+	k, err := statekey.NewPreimageMeta(serviceId, crypto.Hash(hashKey), uint32(len(preimage)))
+	require.NoError(t, err)
+
+	err = sa.InsertPreimageMeta(k, uint64(len(preimage)), service.PreimageHistoricalTimeslots{0, 10})
+	require.NoError(t, err)
 
 	serviceState := service.ServiceState{
 		serviceId: sa,

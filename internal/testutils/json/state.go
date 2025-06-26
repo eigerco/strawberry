@@ -351,7 +351,7 @@ type Accounts []Account
 func (a Accounts) To() service.ServiceState {
 	accounts := service.ServiceState{}
 	for _, account := range a {
-		accountData := account.Data.To()
+		accountData := account.Data.To(block.ServiceId(account.ID))
 		accounts[block.ServiceId(account.ID)] = accountData
 	}
 
@@ -394,13 +394,20 @@ type AccountData struct {
 	Storage    *Storage         `json:"storage"`
 }
 
-func (ad AccountData) To() service.ServiceAccount {
-	storage := service.NewAccountStorage()
+func (ad AccountData) To(id block.ServiceId) service.ServiceAccount {
+	account := service.ServiceAccount{
+		CodeHash:               hexToHash(ad.Service.CodeHash),
+		Balance:                ad.Service.Balance,
+		GasLimitForAccumulator: ad.Service.MinItemGas,
+		GasLimitOnTransfer:     ad.Service.MinMemoGas,
+	}
+
 	if ad.Storage != nil {
 		for k, v := range *ad.Storage {
 			stateKey := hexToBytes(k)
 			// TODO this is wrong since it uses statekey size, we need to have original key size to produce correct balance results
-			storage.Set(statekey.StateKey(stateKey), uint32(len(stateKey)), hexToBytes(v))
+			account.InsertStorage(statekey.StateKey(stateKey), uint64(len(stateKey)), hexToBytes(v))
+
 		}
 	}
 
@@ -409,41 +416,28 @@ func (ad AccountData) To() service.ServiceAccount {
 		preimages[hexToHash(preimage.Hash)] = hexToBytes(preimage.Blob)
 	}
 
-	lookupMeta := map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{}
+	account.PreimageLookup = preimages
+
 	for _, meta := range ad.LookupMeta {
-		key := service.PreImageMetaKey{
-			Hash:   hexToHash(meta.Key.Hash),
-			Length: service.PreimageLength(meta.Key.Length),
-		}
 		values := make(service.PreimageHistoricalTimeslots, len(meta.Value))
 		for i, slot := range meta.Value {
 			values[i] = jamtime.Timeslot(slot)
 		}
-		lookupMeta[key] = values
+
+		k, err := statekey.NewPreimageMeta(id, hexToHash(meta.Key.Hash), meta.Key.Length)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create preimage meta key: %v", err))
+		}
+
+		if err := account.InsertPreimageMeta(k, uint64(meta.Key.Length), values); err != nil {
+			panic(fmt.Sprintf("failed to insert preimage meta: %v", err))
+		}
 	}
 
-	return service.ServiceAccount{
-		Storage:                storage,
-		PreimageLookup:         preimages,
-		PreimageMeta:           lookupMeta,
-		CodeHash:               hexToHash(ad.Service.CodeHash),
-		Balance:                ad.Service.Balance,
-		GasLimitForAccumulator: ad.Service.MinItemGas,
-		GasLimitOnTransfer:     ad.Service.MinMemoGas,
-	}
+	return account
 }
 
 func NewAccountData(account service.ServiceAccount) AccountData {
-	var storage *Storage
-	if account.Storage.Len() > 0 {
-		s := Storage{}
-		for sk, blob := range account.Storage.Items() {
-			k := bytesToHex(sk[:])
-			s[k] = bytesToHex(blob)
-		}
-		storage = &s
-	}
-
 	preimages := make([]PreimageInfo, 0, len(account.PreimageLookup))
 	for hash, blob := range account.PreimageLookup {
 		preimages = append(preimages, PreimageInfo{
@@ -459,52 +453,16 @@ func NewAccountData(account service.ServiceAccount) AccountData {
 		return bytes.Compare(hi[1:29+1], hj[1:29+1]) < 0
 	})
 
-	lookupMeta := make([]LookupMetaInfo, 0, len(account.PreimageMeta))
-	for preimageKey, values := range account.PreimageMeta {
-		newValues := make([]uint32, len(values))
-		for i, slot := range values {
-			newValues[i] = uint32(slot)
-		}
-		lookupMeta = append(lookupMeta, LookupMetaInfo{
-			Key: LookupMetaKey{
-				Hash:   hashToHex(preimageKey.Hash),
-				Length: uint32(preimageKey.Length),
-			},
-			Value: newValues,
-		})
-	}
-	// Sort as per state serialization in the GP (D.2)
-	// H(h)_2...30
-	sort.Slice(lookupMeta, func(i, j int) bool {
-		lengthi, err := jam.Marshal(lookupMeta[i].Key.Length)
-		if err != nil {
-			panic(fmt.Sprintf("failed to jam marshal lookup meta key length: %v", err))
-		}
-		hashi := crypto.HashData(hexToBytes(lookupMeta[i].Key.Hash))
-		keyi := append(lengthi, hashi[2:30+1]...)
-
-		lengthj, err := jam.Marshal(lookupMeta[j].Key.Length)
-		if err != nil {
-			panic(fmt.Sprintf("failed to jam marshal lookup meta key length: %v", err))
-		}
-		hashj := crypto.HashData(hexToBytes(lookupMeta[j].Key.Hash))
-		keyj := append(lengthj, hashj[2:30+1]...)
-
-		return bytes.Compare(keyi, keyj) < 0
-	})
-
 	return AccountData{
 		Service: ServiceInfo{
 			CodeHash:   bytesToHex(account.CodeHash[:]),
 			Balance:    account.Balance,
 			MinItemGas: account.GasLimitForAccumulator,
 			MinMemoGas: account.GasLimitOnTransfer,
-			Bytes:      account.TotalStorageSize(),
-			Items:      account.TotalItems(),
+			Bytes:      account.GetTotalNumberOfOctets(),
+			Items:      account.GetTotalNumberOfItems(),
 		},
-		Preimages:  preimages,
-		LookupMeta: lookupMeta,
-		Storage:    storage,
+		Preimages: preimages,
 	}
 }
 

@@ -320,8 +320,6 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 	for _, account := range accounts {
 		sa := service.ServiceAccount{
 			PreimageLookup:         make(map[crypto.Hash][]byte),
-			PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
-			Storage:                service.NewAccountStorage(),
 			CodeHash:               mapHash(account.Data.Service.CodeHash),
 			Balance:                account.Data.Service.Balance,
 			GasLimitForAccumulator: account.Data.Service.MinItemGas,
@@ -329,7 +327,12 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 		}
 		for _, preimage := range account.Data.Preimages {
 			sa.PreimageLookup[mapHash(preimage.Hash)] = mustStringToHex(preimage.Blob)
-			sa.PreimageMeta[service.PreImageMetaKey{Hash: mapHash(preimage.Hash), Length: service.PreimageLength(len(mustStringToHex(preimage.Blob)))}] = service.PreimageHistoricalTimeslots{}
+
+			k, err := statekey.NewPreimageMeta(account.Id, mapHash(preimage.Hash), uint32(len(mustStringToHex(preimage.Blob))))
+			require.NoError(t, err)
+
+			err = sa.InsertPreimageMeta(k, uint64(len(mustStringToHex(preimage.Blob))), service.PreimageHistoricalTimeslots{})
+			require.NoError(t, err)
 		}
 		for _, storage := range account.Data.Storage {
 			serviceId := account.Id
@@ -343,7 +346,7 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 			sk, err := statekey.NewStorage(serviceId, append(serviceIdBytes, mustStringToHex(storage.Key)...))
 			require.NoError(t, err)
 
-			sa.Storage.Set(sk, uint32(len(mustStringToHex(storage.Key))), mustStringToHex(storage.Value))
+			sa.InsertStorage(sk, uint64(len(mustStringToHex(storage.Key))), mustStringToHex(storage.Value))
 		}
 
 		// Skip this test verification, the storage footprint for this service seems to be wrong in the test vector
@@ -351,8 +354,8 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 		// see issue: https://github.com/w3f/jamtestvectors/issues/50
 		t.Log("ignoring TestAccumulate/same_code_different_services-1.json threshold verification!")
 		if t.Name() != "TestAccumulate/same_code_different_services-1.json" {
-			assert.Equal(t, account.Data.Service.Bytes, sa.TotalStorageSize())
-			assert.Equal(t, account.Data.Service.Items, sa.TotalItems())
+			assert.Equal(t, account.Data.Service.Bytes, sa.GetTotalNumberOfOctets())
+			assert.Equal(t, account.Data.Service.Items, sa.GetTotalNumberOfItems())
 		}
 		serviceAccounts[account.Id] = sa
 	}

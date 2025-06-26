@@ -7,24 +7,27 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/d3l"
-	"github.com/eigerco/strawberry/internal/erasurecoding"
-	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
 	"net"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/eigerco/strawberry/internal/d3l"
+	"github.com/eigerco/strawberry/internal/erasurecoding"
+	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
+
+	"github.com/quic-go/quic-go"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
-	"github.com/quic-go/quic-go"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -519,7 +522,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 
 	// Generate validator key for mainGuarantor
 	pub, prv, _ := ed25519.GenerateKey(nil)
-	serviceState := getServiceState()
+	serviceState := getServiceState(t)
 
 	// Add the auth hash to the core's authorization pool
 	pool := state.CoreAuthorizersPool{}
@@ -634,7 +637,7 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	requester := handlers.NewWorkReportRequester()
 
 	mockRefine := NewMockRefine([]byte("out"))
-	shardData, expectedWorkReport, err := results.ProduceWorkReport(mockRefine, getServiceState(), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
+	shardData, expectedWorkReport, err := results.ProduceWorkReport(mockRefine, getServiceState(t), []byte("Authorized"), coreIndex, bundle, make(map[crypto.Hash]crypto.Hash))
 	require.NoError(t, err)
 	require.NotNil(t, shardData)
 
@@ -778,24 +781,25 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	})
 }
 
-func getServiceState() service.ServiceState {
+func getServiceState(t *testing.T) service.ServiceState {
 	authCode := []byte("auth token")
 	hash := crypto.HashData(authCode)
 	timeslot := jamtime.Timeslot(0)
 
-	metaKey := service.PreImageMetaKey{
-		Hash:   hash,
-		Length: service.PreimageLength(len(authCode)),
-	}
-	return service.ServiceState{
-		1: {
-			PreimageLookup: map[crypto.Hash][]byte{
-				hash: authCode,
-			},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				metaKey: {timeslot},
-			},
+	account := service.ServiceAccount{
+		PreimageLookup: map[crypto.Hash][]byte{
+			hash: authCode,
 		},
+	}
+
+	k, err := statekey.NewPreimageMeta(block.ServiceId(1), hash, uint32(len(authCode)))
+	require.NoError(t, err)
+
+	err = account.InsertPreimageMeta(k, uint64(len(authCode)), service.PreimageHistoricalTimeslots{timeslot})
+	require.NoError(t, err)
+
+	return service.ServiceState{
+		1: account,
 	}
 }
 

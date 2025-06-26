@@ -11,6 +11,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/work"
 )
 
@@ -88,21 +89,25 @@ func Test_ComputeAuthorizerHashes(t *testing.T) {
 
 	h := crypto.HashData(preimage)
 	sa := service.ServiceAccount{
-		Storage:        service.NewAccountStorage(),
 		PreimageLookup: make(map[crypto.Hash][]byte),
-		PreimageMeta:   make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 	}
 
+	svcID := block.ServiceId(1)
+
 	sa.PreimageLookup[h] = preimage
-	metaKey := service.PreImageMetaKey{Hash: h, Length: service.PreimageLength(len(preimage))}
-	sa.PreimageMeta[metaKey] = service.PreimageHistoricalTimeslots{timeslot}
+	//metaKey := service.PreImageMetaKey{Hash: h, Length: service.PreimageLength(len(preimage))}
+	//sa.PreimageMeta[metaKey] = service.PreimageHistoricalTimeslots{timeslot}
+	k, err := statekey.NewPreimageMeta(svcID, h, uint32(len(preimage)))
+	require.NoError(t, err)
+	err = sa.InsertPreimageMeta(k, uint64(len(preimage)), service.PreimageHistoricalTimeslots{timeslot})
+	require.NoError(t, err)
 
 	serviceState := service.ServiceState{
-		1: sa,
+		svcID: sa,
 	}
 
 	p := work.Package{
-		AuthorizerService: 1,
+		AuthorizerService: uint32(svcID),
 		AuthCodeHash:      crypto.HashData(preimage),
 		Parameterization:  []byte("param"),
 		Context: block.RefinementContext{

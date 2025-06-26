@@ -77,9 +77,9 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 		Balance:                        serviceAccount.Balance,
 		GasLimitForAccumulator:         serviceAccount.GasLimitForAccumulator,
 		GasLimitOnTransfer:             serviceAccount.GasLimitOnTransfer,
-		FootprintStorage:               serviceAccount.TotalStorageSize(),
+		FootprintStorage:               serviceAccount.GetTotalNumberOfOctets(),
 		GratisStorageOffset:            serviceAccount.GratisStorageOffset,
-		FootprintItems:                 serviceAccount.TotalItems(),
+		FootprintItems:                 serviceAccount.GetTotalNumberOfItems(),
 		CreationTimeslot:               serviceAccount.CreationTimeslot,
 		MostRecentAccumulationTimeslot: serviceAccount.MostRecentAccumulationTimeslot,
 		ParentService:                  serviceAccount.ParentService,
@@ -96,15 +96,7 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 	}
 	serializedState[stateKey] = encodedServiceValue
 
-	if err := serializeStorage(serviceAccount.Storage, serializedState); err != nil {
-		return err
-	}
-
 	if err := serializePreimageLookup(serviceId, serviceAccount.PreimageLookup, serializedState); err != nil {
-		return err
-	}
-
-	if err := serializePreimageMeta(serviceId, serviceAccount.PreimageMeta, serializedState); err != nil {
 		return err
 	}
 
@@ -126,19 +118,6 @@ type encodedServiceAccount struct {
 	ParentService                  block.ServiceId  // a_p
 }
 
-func serializeStorage(storage service.AccountStorage, serializedState map[statekey.StateKey][]byte) error {
-	for stateKey, value := range storage.Items() {
-
-		// Storage keys are state keys. This allows deserialization
-		// later since state key creation for them is lossy. The PVM code knows
-		// the actual key it wants, as long as we always "hash" it into a state
-		// key in the same way we can always retrieve it again.
-		serializedState[stateKey] = value
-	}
-
-	return nil
-}
-
 func serializePreimageLookup(serviceId block.ServiceId, preimages map[crypto.Hash][]byte, serializedState map[statekey.StateKey][]byte) error {
 
 	for hash, value := range preimages {
@@ -148,23 +127,6 @@ func serializePreimageLookup(serviceId block.ServiceId, preimages map[crypto.Has
 		}
 
 		serializedState[stateKey] = value
-	}
-
-	return nil
-}
-
-func serializePreimageMeta(serviceId block.ServiceId, preimageMeta map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots, serializedState map[statekey.StateKey][]byte) error {
-	for key, preImageHistoricalTimeslots := range preimageMeta {
-		encodedPreImageHistoricalTimeslots, err := jam.Marshal(preImageHistoricalTimeslots)
-		if err != nil {
-			return err
-		}
-
-		stateKey, err := statekey.NewPreimageMeta(serviceId, key.Hash, uint32(key.Length))
-		if err != nil {
-			return err
-		}
-		serializedState[stateKey] = encodedPreImageHistoricalTimeslots
 	}
 
 	return nil

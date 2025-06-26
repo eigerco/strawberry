@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -8,6 +9,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 const (
@@ -33,99 +35,151 @@ func (ss ServiceState) Clone() ServiceState {
 	return cloned
 }
 
-// AccountStorage encapsulates a service's key-value storage along with
-// metadata required for JAM balance accounting (GP v0.6.7 and later).
-//
-// Because the storage map uses hashed keys (statekey.StateKey) instead of the original
-// raw keys, we must explicitly track the original key lengths at the time of
-// mutation. This enables accurate computation of the storage footprint (ao),
-// which directly affects threshold balance calculations
-type AccountStorage struct {
-	// storage uses a state key for it's key. We have to use the state key
-	// representation as the key because serializing storage keys is lossy and
-	// we'd like to be able to deserialize the storage dictionary later. Host
-	// calls are called by PVM code with the original storage key. The key
-	// we end up using is merely an implementation detail. As long as we can
-	// store and retrieve the key we are fine, we don't need to know the
-	// original key here.
-	storage           map[statekey.StateKey][]byte // Dictionary of key-value pairs for storage (s)
-	storageKeyLengths map[statekey.StateKey]uint32 // Dictionary that tracks original key lengths for balance calculation, must be updated on every storage operation (insert, update, or removal)
-}
-
-func NewAccountStorage() AccountStorage {
-	return AccountStorage{
-		storage:           make(map[statekey.StateKey][]byte),
-		storageKeyLengths: make(map[statekey.StateKey]uint32),
-	}
-}
-
-// Get fetches value by state key
-func (s AccountStorage) Get(stateKey statekey.StateKey) ([]byte, bool) {
-	val, ok := s.storage[stateKey]
-	return val, ok
-}
-
-// GetOriginalKeySize fetches original key size by state key
-func (s AccountStorage) GetOriginalKeySize(stateKey statekey.StateKey) uint32 {
-	return s.storageKeyLengths[stateKey]
-}
-
-// Set updates or adds to the service storage and records the original key length
-func (s AccountStorage) Set(stateKey statekey.StateKey, originalKeySize uint32, value []byte) {
-	if s.storage == nil {
-		s.storage = make(map[statekey.StateKey][]byte)
-	}
-	if s.storageKeyLengths == nil {
-		s.storageKeyLengths = make(map[statekey.StateKey]uint32)
-	}
-	s.storage[stateKey] = value
-	s.storageKeyLengths[stateKey] = originalKeySize
-}
-
-// Delete removes a value and its original key length from storage
-func (s AccountStorage) Delete(stateKey statekey.StateKey) {
-	delete(s.storageKeyLengths, stateKey)
-	delete(s.storage, stateKey)
-}
-
-// Len returns the number of items in the storage map (∣as∣).
-func (s AccountStorage) Len() int {
-	return len(s.storage)
-}
-
-// Items returns all key-value pairs from storage (as), needed for full footprint calculations.
-func (s AccountStorage) Items() map[statekey.StateKey][]byte {
-	return s.storage
-}
-
-// Clone returns a deep copy of the AccountStorage
-func (s AccountStorage) Clone() AccountStorage {
-	cloned := AccountStorage{
-		storage:           make(map[statekey.StateKey][]byte, len(s.storage)),
-		storageKeyLengths: make(map[statekey.StateKey]uint32, len(s.storageKeyLengths)),
-	}
-	for k, v := range s.storage {
-		cloned.storage[k] = slices.Clone(v)
-	}
-	for k, l := range s.storageKeyLengths {
-		cloned.storageKeyLengths[k] = l
-	}
-	return cloned
-}
-
 // ServiceAccount represents a service account in the JAM state
 type ServiceAccount struct {
-	Storage                        AccountStorage                                  // Encapsulates service storage (s) and tracks original key lengths
-	PreimageLookup                 map[crypto.Hash][]byte                          // Dictionary of preimage lookups (p)
-	PreimageMeta                   map[PreImageMetaKey]PreimageHistoricalTimeslots // Metadata for preimageLookup (l) Graypaper 0.6.3 - TODO: There is a MaxTimeslotsForPreimage.
-	GratisStorageOffset            uint64                                          // Gratis storage offset (f ∈ N_B)
-	CodeHash                       crypto.Hash                                     // Hash of the service code (c)
-	Balance                        uint64                                          // Balance of the service (b)
-	GasLimitForAccumulator         uint64                                          // Gas limit for accumulation (g)
-	GasLimitOnTransfer             uint64                                          // Gas limit for on_transfer (m)
-	CreationTimeslot               jamtime.Timeslot                                // The time slot at creation (r ∈ NT)
-	MostRecentAccumulationTimeslot jamtime.Timeslot                                // The time slot at the most recent accumulation (a ∈ NT)
-	ParentService                  block.ServiceId                                 // The parent service (p ∈ NS)
+	PreimageLookup                 map[crypto.Hash][]byte // Dictionary of preimage lookups (p)
+	GratisStorageOffset            uint64                 // Gratis storage offset (f ∈ N_B)
+	CodeHash                       crypto.Hash            // Hash of the service code (c)
+	Balance                        uint64                 // Balance of the service (b)
+	GasLimitForAccumulator         uint64                 // Gas limit for accumulation (g)
+	GasLimitOnTransfer             uint64                 // Gas limit for on_transfer (m)
+	CreationTimeslot               jamtime.Timeslot       // The time slot at creation (r ∈ NT)
+	MostRecentAccumulationTimeslot jamtime.Timeslot       // The time slot at the most recent accumulation (a ∈ NT)
+	ParentService                  block.ServiceId        // The parent service (p ∈ NS)
+	// globalKV stores all service storage (s) and preimage meta (l) entries keyed by statekey.StateKey
+	// This unification simplifies serialization and total footprint calculation
+	globalKV            map[statekey.StateKey][]byte
+	totalNumberOfItems  uint32 // ai total number of items in storage, maintained incrementally
+	totalNumberOfOctets uint64 // ao total number of octets/bytes in storage, maintained incrementally
+}
+
+func NewServiceAccount() ServiceAccount {
+	return ServiceAccount{
+		PreimageLookup: map[crypto.Hash][]byte{},
+		globalKV:       map[statekey.StateKey][]byte{},
+	}
+}
+
+// GetGlobalKVItems returns all items stores in globalKV map
+func (sa *ServiceAccount) GetGlobalKVItems() map[statekey.StateKey][]byte {
+	return sa.globalKV
+}
+
+// GetStorage retrieves the preimage storage associated with the given key
+func (sa *ServiceAccount) GetStorage(key statekey.StateKey) ([]byte, bool) {
+	value, ok := sa.globalKV[key]
+	if !ok {
+		return nil, false
+	}
+
+	return value, true
+}
+
+// GetTotalNumberOfItems returns `ai` total number of items in storage
+func (sa *ServiceAccount) GetTotalNumberOfItems() uint32 {
+	return sa.totalNumberOfItems
+}
+
+// GetTotalNumberOfOctets return `ao` total number of octets/bytes in storage
+func (sa *ServiceAccount) GetTotalNumberOfOctets() uint64 {
+	return sa.totalNumberOfOctets
+}
+
+// InsertStorage adds a new storage entry and updates item and octet counters accordingly (9.8 v0.6.7)
+func (sa *ServiceAccount) InsertStorage(key statekey.StateKey, originalKeySize uint64, value []byte) {
+	if sa.globalKV == nil {
+		sa.globalKV = make(map[statekey.StateKey][]byte)
+	}
+
+	if _, ok := sa.GetStorage(key); !ok {
+		sa.totalNumberOfItems += 1
+		sa.totalNumberOfOctets += 34 + originalKeySize + uint64(len(value))
+	}
+
+	sa.globalKV[key] = value
+}
+
+// DeleteStorage removes a storage entry and updates both the item and octet counters accordingly (9.8 v0.6.7)
+func (sa *ServiceAccount) DeleteStorage(key statekey.StateKey, keyLen uint64, valueLen uint64) {
+	if _, ok := sa.GetStorage(key); ok {
+		delete(sa.globalKV, key)
+		if sa.totalNumberOfItems >= 1 {
+			sa.totalNumberOfItems -= 1
+		}
+		sizeToSubtract := 34 + keyLen + valueLen
+		if sa.totalNumberOfOctets >= sizeToSubtract {
+			sa.totalNumberOfOctets -= 34 + keyLen + valueLen
+		}
+	}
+}
+
+// GetPreimageMeta retrieves and unmarshals the preimage metadata (historical timeslots) associated with the given key
+func (sa *ServiceAccount) GetPreimageMeta(key statekey.StateKey) (PreimageHistoricalTimeslots, bool) {
+	value, ok := sa.globalKV[key]
+	if !ok {
+		return nil, false
+	}
+
+	var timeslots PreimageHistoricalTimeslots
+	if err := jam.Unmarshal(value, &timeslots); err != nil {
+		return nil, false
+	}
+
+	return timeslots, true
+}
+
+// InsertPreimageMeta adds a new preimage entry and updates the item and octet counters accordingly (9.8 v0.6.7)
+func (sa *ServiceAccount) InsertPreimageMeta(key statekey.StateKey, length uint64, timeslots PreimageHistoricalTimeslots) error {
+	data, err := jam.Marshal(timeslots)
+	if err != nil {
+		return err
+	}
+	if sa.globalKV == nil {
+		sa.globalKV = make(map[statekey.StateKey][]byte)
+	}
+
+	if _, ok := sa.GetPreimageMeta(key); !ok {
+		// Update footprint
+		sa.totalNumberOfItems += 2
+		sa.totalNumberOfOctets += 81 + length
+	}
+
+	sa.globalKV[key] = data
+
+	return nil
+}
+
+// UpdatePreimageMeta updates the value for an existing key without altering accounting fields (9.8 v0.6.7)
+func (sa *ServiceAccount) UpdatePreimageMeta(key statekey.StateKey, newValue PreimageHistoricalTimeslots) error {
+	if sa.globalKV == nil {
+		return fmt.Errorf("cannot update preimage meta: globalKV map is nil")
+	}
+	if _, exists := sa.globalKV[key]; !exists {
+		return fmt.Errorf("cannot update preimage meta: key does not exist")
+	}
+
+	newBytes, err := jam.Marshal(newValue)
+	if err != nil {
+		return err
+	}
+
+	sa.globalKV[key] = newBytes
+
+	return nil
+}
+
+// DeletePreimageMeta removes a preimage entry and updates both the item and octet counters accordingly (9.8 v0.6.7)
+func (sa *ServiceAccount) DeletePreimageMeta(key statekey.StateKey, length uint64) {
+	if _, ok := sa.GetPreimageMeta(key); ok {
+		delete(sa.globalKV, key)
+		if sa.totalNumberOfItems >= 2 {
+			sa.totalNumberOfItems -= 2
+		}
+		sizeToSubtract := 81 + length
+		if sa.totalNumberOfOctets >= sizeToSubtract {
+			sa.totalNumberOfOctets -= sizeToSubtract
+		}
+	}
 }
 
 type CodeWithMetadata struct {
@@ -134,46 +188,17 @@ type CodeWithMetadata struct {
 }
 
 // EncodedCodeAndMetadata encoded code and metadata as per Equation (9.4 v0.6.3)
-func (sa ServiceAccount) EncodedCodeAndMetadata() []byte {
+func (sa *ServiceAccount) EncodedCodeAndMetadata() []byte {
 	if code, exists := sa.PreimageLookup[sa.CodeHash]; exists {
 		return code
 	}
 	return nil
 }
 
-// TotalItems (9.8 v0.6.7) ∀a ∈ V(δ): ai
-func (sa ServiceAccount) TotalItems() uint32 {
-	totalPreimages := len(sa.PreimageMeta)
-	totalStorageItems := sa.Storage.Len()
-	// 2 ⋅ ∣ al ∣ + ∣ as ∣
-	ai := 2*totalPreimages + totalStorageItems
-
-	return uint32(ai)
-}
-
-// TotalStorageSize (9.8 v0.6.7) ∀a ∈ V(δ): ao
-func (sa ServiceAccount) TotalStorageSize() uint64 {
-	var ao uint64 = 0
-
-	// preimage sizes ∑(h,z)∈K(al) 81 + z
-	for k := range sa.PreimageMeta {
-		ao += 81 + uint64(k.Length)
-	}
-
-	// Storage sizes ∑ x ∈ V(as) 34 + ∣y∣ + ∣x∣
-	for k, x := range sa.Storage.Items() {
-		valueSize := uint64(len(x))
-		keySize := sa.Storage.GetOriginalKeySize(k)
-		ao += 34 + valueSize + uint64(keySize)
-	}
-
-	return ao
-}
-
 // ThresholdBalance (9.8 v0.6.7) ∀a ∈ V(δ): at
-func (sa ServiceAccount) ThresholdBalance() uint64 {
-	ai := uint64(sa.TotalItems())
-	ao := sa.TotalStorageSize()
+func (sa *ServiceAccount) ThresholdBalance() uint64 {
+	ai := uint64(sa.totalNumberOfItems)
+	ao := sa.totalNumberOfOctets
 
 	// at ∈ NB ≡ max(0,BS + BI ⋅ ai + BL ⋅ ao − af )
 	return max(0, BasicMinimumBalance+AdditionalMinimumBalancePerItem*ai+AdditionalMinimumBalancePerOctet*ao-sa.GratisStorageOffset)
@@ -181,17 +206,25 @@ func (sa ServiceAccount) ThresholdBalance() uint64 {
 
 // AddPreimage adds a preimage to the service account's preimage lookup and metadata
 // (9.6 v0.5.0) ∀a ∈ A, (h ↦ p) ∈ ap ⇒ h = H(p) ∧ {h, |p|} ∈ K(al)
-func (sa ServiceAccount) AddPreimage(p []byte, currentTimeslot jamtime.Timeslot) error {
+func (sa *ServiceAccount) AddPreimage(serviceID block.ServiceId, p []byte, currentTimeslot jamtime.Timeslot) error {
 	h := crypto.HashData(p)
+	k, err := statekey.NewPreimageMeta(serviceID, h, uint32(len(p)))
+	if err != nil {
+		return err
+	}
+
 	if _, exists := sa.PreimageLookup[h]; exists {
-		metaKey := PreImageMetaKey{Hash: h, Length: PreimageLength(len(p))}
-		metadata, exists := sa.PreimageMeta[metaKey]
+		metadata, exists := sa.GetPreimageMeta(k)
 		if !exists {
 			return nil
 		}
 
 		if len(metadata) < common.MaxHistoricalTimeslotsForPreimageMeta {
-			sa.PreimageMeta[metaKey] = append(metadata, currentTimeslot)
+			metadata = append(metadata, currentTimeslot)
+			err = sa.UpdatePreimageMeta(k, metadata)
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -200,22 +233,23 @@ func (sa ServiceAccount) AddPreimage(p []byte, currentTimeslot jamtime.Timeslot)
 	// Add new preimage
 	sa.PreimageLookup[h] = p
 
-	// Initialize metadata
-	metaKey := PreImageMetaKey{Hash: h, Length: PreimageLength(len(p))}
-	sa.PreimageMeta[metaKey] = PreimageHistoricalTimeslots{currentTimeslot}
-
-	return nil
+	return sa.InsertPreimageMeta(k, uint64(len(p)), PreimageHistoricalTimeslots{currentTimeslot})
 }
 
 // LookupPreimage implements the historical lookup function (Λ) as defined in Equation (9.7 v0.5.4).
-func (sa ServiceAccount) LookupPreimage(t jamtime.Timeslot, h crypto.Hash) []byte {
+func (sa *ServiceAccount) LookupPreimage(serviceID block.ServiceId, t jamtime.Timeslot, h crypto.Hash) []byte {
 	p, exists := sa.PreimageLookup[h]
 	if !exists {
 		return nil
 	}
 
-	metaKey := PreImageMetaKey{Hash: h, Length: PreimageLength(len(p))}
-	metadata, exists := sa.PreimageMeta[metaKey]
+	key, err := statekey.NewPreimageMeta(serviceID, h, uint32(len(p)))
+	if err != nil {
+		return nil
+	}
+
+	metadata, exists := sa.GetPreimageMeta(key)
+
 	if !exists {
 		return nil
 	}
@@ -231,14 +265,13 @@ func (sa ServiceAccount) LookupPreimage(t jamtime.Timeslot, h crypto.Hash) []byt
 }
 
 // Clone returns a deep copy of the service account
-func (sa ServiceAccount) Clone() ServiceAccount {
+func (sa *ServiceAccount) Clone() ServiceAccount {
 	cloned := sa
 
-	cloned.Storage = sa.Storage.Clone()
+	cloned.globalKV = cloneMapOfSlices(cloned.globalKV)
 	cloned.PreimageLookup = cloneMapOfSlices(sa.PreimageLookup)
-	cloned.PreimageMeta = cloneMapOfSlices(sa.PreimageMeta)
 
-	return cloned
+	return *cloned
 }
 
 // isPreimageAvailableAt determines availability based on historical timeslots

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/service"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -108,31 +109,40 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 		},
 	}
 
+	k, err := statekey.NewPreimageMeta(0, preimageHash, uint32(preimageLength))
+	require.NoError(t, err)
+
 	// For a preimage to be considered solicited, the PreimageMeta entry must exist and be empty.
 	serviceState := service.ServiceState{
-		block.ServiceId(0): {
-			PreimageLookup: map[crypto.Hash][]byte{
-				{4, 5, 6}: {7, 8, 9},
-			},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				// Mark our preimage as solicited (empty historical timeslots).
-				{Hash: preimageHash, Length: preimageLength}: {},
-			},
-		},
+		block.ServiceId(0): func() service.ServiceAccount {
+			account := service.ServiceAccount{
+				PreimageLookup: map[crypto.Hash][]byte{
+					{4, 5, 6}: {7, 8, 9},
+				},
+			}
+
+			err = account.InsertPreimageMeta(k, uint64(preimageLength), service.PreimageHistoricalTimeslots{})
+			require.NoError(t, err)
+
+			return account
+		}(),
 	}
 
 	// Expected state: preimage is added to lookup and metadata updated with newTimeslot.
 	expectedServiceState := service.ServiceState{
-		block.ServiceId(0): {
-			PreimageLookup: map[crypto.Hash][]byte{
-				{4, 5, 6}:    {7, 8, 9},
-				preimageHash: preimageData,
-			},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				// The solicited preimage metadata is replaced with newTimeslot.
-				{Hash: preimageHash, Length: preimageLength}: {newTimeslot},
-			},
-		},
+		block.ServiceId(0): func() service.ServiceAccount {
+			account := service.ServiceAccount{
+				PreimageLookup: map[crypto.Hash][]byte{
+					{4, 5, 6}:    {7, 8, 9},
+					preimageHash: preimageData,
+				},
+			}
+
+			err := account.InsertPreimageMeta(k, uint64(preimageLength), service.PreimageHistoricalTimeslots{newTimeslot})
+			require.NoError(t, err)
+
+			return account
+		}(),
 	}
 
 	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
@@ -141,16 +151,19 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 }
 
 func TestCalculateIntermediateServiceStateEmptyPreimages(t *testing.T) {
-	serviceState := service.ServiceState{
-		block.ServiceId(0): {
-			Storage: service.NewAccountStorage(),
-			PreimageLookup: map[crypto.Hash][]byte{
-				{4, 5, 6}: {7, 8, 9},
-			},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				{Hash: crypto.Hash{4, 5, 6}, Length: service.PreimageLength(3)}: {jamtime.Timeslot(50)},
-			},
+	sa := service.ServiceAccount{
+		PreimageLookup: map[crypto.Hash][]byte{
+			{4, 5, 6}: {7, 8, 9},
 		},
+	}
+	k, err := statekey.NewPreimageMeta(0, crypto.Hash{4, 5, 6}, uint32(3))
+	require.NoError(t, err)
+
+	err = sa.InsertPreimageMeta(k, uint64(3), service.PreimageHistoricalTimeslots{jamtime.Timeslot(50)})
+	require.NoError(t, err)
+
+	serviceState := service.ServiceState{
+		block.ServiceId(0): sa,
 	}
 
 	expectedServiceState := serviceState
@@ -171,16 +184,20 @@ func TestCalculateIntermediateServiceStateNonExistentService(t *testing.T) {
 		},
 	}
 
+	sa := service.ServiceAccount{
+		PreimageLookup: map[crypto.Hash][]byte{
+			{4, 5, 6}: {7, 8, 9},
+		},
+	}
+	k, err := statekey.NewPreimageMeta(0, crypto.Hash{4, 5, 6}, uint32(3))
+	require.NoError(t, err)
+
+	err = sa.InsertPreimageMeta(k, uint64(3), service.PreimageHistoricalTimeslots{jamtime.Timeslot(50)})
+	require.NoError(t, err)
+
 	// Since service 1 does not exist, preimageHasBeenSolicited will return false.
 	serviceState := service.ServiceState{
-		block.ServiceId(0): {
-			PreimageLookup: map[crypto.Hash][]byte{
-				{4, 5, 6}: {7, 8, 9},
-			},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				{Hash: crypto.Hash{4, 5, 6}, Length: service.PreimageLength(3)}: {jamtime.Timeslot(50)},
-			},
-		},
+		block.ServiceId(0): sa,
 	}
 
 	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
@@ -209,28 +226,41 @@ func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
 		},
 	}
 
+	k1, err := statekey.NewPreimageMeta(0, preimageHash1, uint32(preimageLength1))
+	require.NoError(t, err)
+
+	k2, err := statekey.NewPreimageMeta(0, preimageHash2, uint32(preimageLength2))
+	require.NoError(t, err)
+
+	account := service.NewServiceAccount()
+	err = account.InsertPreimageMeta(k1, uint64(preimageLength1), service.PreimageHistoricalTimeslots{})
+	require.NoError(t, err)
+
+	err = account.InsertPreimageMeta(k2, uint64(preimageLength2), service.PreimageHistoricalTimeslots{})
+	require.NoError(t, err)
+
 	// For both preimages to be solicited, add empty metadata entries.
 	serviceState := service.ServiceState{
-		block.ServiceId(0): {
-			PreimageLookup: map[crypto.Hash][]byte{},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				{Hash: preimageHash1, Length: preimageLength1}: {},
-				{Hash: preimageHash2, Length: preimageLength2}: {},
-			},
-		},
+		block.ServiceId(0): account,
 	}
 
 	expectedServiceState := service.ServiceState{
-		block.ServiceId(0): {
-			PreimageLookup: map[crypto.Hash][]byte{
+		block.ServiceId(0): func() service.ServiceAccount {
+			// Marshal historical timeslot with the newTimeslot
+			sa := service.NewServiceAccount()
+			err = sa.InsertPreimageMeta(k1, uint64(preimageLength1), service.PreimageHistoricalTimeslots{newTimeslot})
+			require.NoError(t, err)
+
+			err = sa.InsertPreimageMeta(k2, uint64(preimageLength2), service.PreimageHistoricalTimeslots{newTimeslot})
+			require.NoError(t, err)
+
+			sa.PreimageLookup = map[crypto.Hash][]byte{
 				preimageHash1: preimageData1,
 				preimageHash2: preimageData2,
-			},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				{Hash: preimageHash1, Length: preimageLength1}: {newTimeslot},
-				{Hash: preimageHash2, Length: preimageLength2}: {newTimeslot},
-			},
-		},
+			}
+
+			return sa
+		}(),
 	}
 
 	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
@@ -256,19 +286,28 @@ func TestCalculateIntermediateServiceStateExistingPreimage(t *testing.T) {
 		},
 	}
 
+	sa := service.ServiceAccount{
+		PreimageLookup: map[crypto.Hash][]byte{
+			existingPreimageHash: existingPreimageData,
+		},
+	}
+	// New preimage is solicited.
+	k, err := statekey.NewPreimageMeta(0, crypto.HashData(newPreimageData), uint32(len(existingPreimageData)))
+	require.NoError(t, err)
+
+	err = sa.InsertPreimageMeta(k, uint64(len(newPreimageData)), service.PreimageHistoricalTimeslots{})
+	require.NoError(t, err)
+
+	// Existing preimage metadata is non-empty (already provided).
+	k, err = statekey.NewPreimageMeta(0, existingPreimageHash, uint32(len(existingPreimageData)))
+	require.NoError(t, err)
+
+	err = sa.InsertPreimageMeta(k, uint64(len(existingPreimageHash)), service.PreimageHistoricalTimeslots{jamtime.Timeslot(50)})
+	require.NoError(t, err)
+
 	// In serviceState, mark the new preimage as solicited but the existing one is already provided.
 	serviceState := service.ServiceState{
-		block.ServiceId(0): {
-			PreimageLookup: map[crypto.Hash][]byte{
-				existingPreimageHash: existingPreimageData,
-			},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				// New preimage is solicited.
-				{Hash: crypto.HashData(newPreimageData), Length: service.PreimageLength(len(newPreimageData))}: {},
-				// Existing preimage metadata is non-empty (already provided).
-				{Hash: existingPreimageHash, Length: service.PreimageLength(len(existingPreimageData))}: {jamtime.Timeslot(50)},
-			},
-		},
+		block.ServiceId(0): sa,
 	}
 
 	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
@@ -289,14 +328,18 @@ func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
 		},
 	}
 
+	sa := service.ServiceAccount{
+		PreimageLookup: map[crypto.Hash][]byte{},
+	}
+	k, err := statekey.NewPreimageMeta(0, preimageHash, uint32(len(preimageData)))
+	require.NoError(t, err)
+
+	err = sa.InsertPreimageMeta(k, uint64(len(preimageData)), service.PreimageHistoricalTimeslots{jamtime.Timeslot(50)})
+	require.NoError(t, err)
+
 	// The metadata already exists with a non-empty slice, so the preimage is not solicited.
 	serviceState := service.ServiceState{
-		block.ServiceId(0): {
-			PreimageLookup: map[crypto.Hash][]byte{},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				{Hash: preimageHash, Length: service.PreimageLength(len(preimageData))}: {jamtime.Timeslot(50)},
-			},
-		},
+		block.ServiceId(0): sa,
 	}
 
 	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)

@@ -431,9 +431,7 @@ func mapServices(services []ServiceInfo) service.ServiceState {
 
 	for _, s := range services {
 		serviceState[block.ServiceId(s.ID)] = service.ServiceAccount{
-			Storage:                service.NewAccountStorage(),
 			PreimageLookup:         make(map[crypto.Hash][]byte),
-			PreimageMeta:           make(map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots),
 			CodeHash:               crypto.Hash(mustStringToHex(s.Data.Service.CodeHash)),
 			Balance:                uint64(s.Data.Service.Balance),
 			GasLimitForAccumulator: uint64(s.Data.Service.MinItemGas),

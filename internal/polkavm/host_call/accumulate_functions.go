@@ -11,6 +11,7 @@ import (
 	. "github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -184,17 +185,24 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 
 	// let a = (c, s : {},l : {(c, l) ↦ []}, b : at, g, m,p : {}, r : t, f, a : 0, p : xs) if c ≠ ∇
 	account := service.ServiceAccount{
-		CodeHash: codeHash,
-		Storage:  service.NewAccountStorage(),
-		PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-			{Hash: codeHash, Length: service.PreimageLength(preimageLength)}: {},
-		},
+		CodeHash:               codeHash,
 		GasLimitForAccumulator: gasLimitAccumulator,
 		GasLimitOnTransfer:     gasLimitTransfer,
 		GratisStorageOffset:    gratisStorageOffset,
 		CreationTimeslot:       timeslot,
 		ParentService:          xs,
 	}
+
+	k, err := statekey.NewPreimageMeta(xs, codeHash, uint32(preimageLength))
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+
+	err = account.InsertPreimageMeta(k, preimageLength, service.PreimageHistoricalTimeslots{})
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+
 	// b: at
 	account.Balance = account.ThresholdBalance()
 
@@ -205,7 +213,9 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 	currentAccount := ctxPair.RegularCtx.ServiceAccount()
 
 	// if a ≠ ∇ ∧ s_b ≥ (xs)t
-	if b >= ctxPair.RegularCtx.ServiceAccount().ThresholdBalance() {
+	a := ctxPair.RegularCtx.ServiceAccount()
+
+	if b >= a.ThresholdBalance() {
 		// ω′7 = x_i
 		regs[A0] = uint64(ctxPair.RegularCtx.NewServiceId)
 		currentAccount.Balance = b
@@ -295,7 +305,8 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 
 	// let b = (xs)b − a
 	// if b < (xs)t
-	if ctxPair.RegularCtx.ServiceAccount().Balance-newBalance < ctxPair.RegularCtx.ServiceAccount().ThresholdBalance() {
+	account := ctxPair.RegularCtx.ServiceAccount()
+	if ctxPair.RegularCtx.ServiceAccount().Balance-newBalance < account.ThresholdBalance() {
 		return gas, withCode(regs, CASH), mem, ctxPair, nil
 	}
 
@@ -338,7 +349,7 @@ func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, t
 		return gas, withCode(regs, WHO), mem, ctxPair, err
 	}
 
-	if serviceAccount.TotalItems() != 2 {
+	if serviceAccount.GetTotalNumberOfItems() != 2 {
 		// d_i ≠ 2 => HUH
 		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
@@ -346,15 +357,18 @@ func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, t
 	// l = max(81, d_o) - 81
 	l := max(81, len(serviceAccount.EncodedCodeAndMetadata())) - 81
 
-	key := service.PreImageMetaKey{Hash: crypto.Hash(h), Length: service.PreimageLength(l)}
-	dL, ok := serviceAccount.PreimageMeta[key]
+	k, err := statekey.NewPreimageMeta(ctxPair.RegularCtx.ServiceId, crypto.Hash(h), uint32(l))
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+	historicalTimeslots, ok := serviceAccount.GetPreimageMeta(k)
 	if !ok {
 		// (h, l) ∉ d_l => HUH
 		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
 	// if d_l[h, l] = [x, y], y < t − D => OK
-	if len(dL) == 2 && dL[1] < timeslot-jamtime.PreimageExpulsionPeriod {
+	if len(historicalTimeslots) == 2 && historicalTimeslots[1] < timeslot-jamtime.PreimageExpulsionPeriod {
 		xs := ctxPair.RegularCtx.ServiceAccount()
 		// s'_b = ((x_u)d)[x_s]b + d_b
 		xs.Balance += serviceAccount.Balance
@@ -387,11 +401,13 @@ func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 
 	// let a = (xs)l[h, z] if (h, z) ∈ K((xs)l)
 	serviceAccount := ctxPair.RegularCtx.ServiceAccount()
-	key := service.PreImageMetaKey{
-		Hash:   crypto.Hash(h),
-		Length: service.PreimageLength(preimageMetaKeyLength),
+
+	k, err := statekey.NewPreimageMeta(ctxPair.RegularCtx.ServiceId, crypto.Hash(h), uint32(preimageMetaKeyLength))
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
-	a, exists := serviceAccount.PreimageMeta[key]
+
+	a, exists := serviceAccount.GetPreimageMeta(k)
 	if !exists {
 		// a = ∇ => (NONE, 0)
 		regs[A1] = 0
@@ -434,15 +450,27 @@ func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	// let a = xs
 	serviceAccount := ctxPair.RegularCtx.ServiceAccount()
 	preimageHash := crypto.Hash(preimageHashBytes)
-	// (h, z)
-	key := service.PreImageMetaKey{Hash: preimageHash, Length: service.PreimageLength(preimageLength)}
 
-	if _, ok := serviceAccount.PreimageMeta[key]; !ok {
+	// (h, z)
+	k, err := statekey.NewPreimageMeta(ctxPair.RegularCtx.ServiceId, preimageHash, uint32(preimageLength))
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+	preimageMeta, ok := serviceAccount.GetPreimageMeta(k)
+
+	if !ok {
 		// except: al[(h, z)] = [] if h ≠ ∇ ∧ (h, z) !∈ (xs)l
-		serviceAccount.PreimageMeta[key] = service.PreimageHistoricalTimeslots{}
-	} else if len(serviceAccount.PreimageMeta[key]) == 2 {
+		err = serviceAccount.InsertPreimageMeta(k, preimageLength, service.PreimageHistoricalTimeslots{})
+		if err != nil {
+			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+		}
+	} else if len(preimageMeta) == 2 {
 		// except: al[(h, z)] = (xs)l[(h, z)] ++ t if (xs)l[(h, z)] = [X, Y]
-		serviceAccount.PreimageMeta[key] = append(serviceAccount.PreimageMeta[key], timeslot)
+		preimageMeta = append(preimageMeta, timeslot)
+		err = serviceAccount.UpdatePreimageMeta(k, preimageMeta)
+		if err != nil {
+			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+		}
 	} else {
 		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
@@ -477,25 +505,33 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 	preimageHash := crypto.Hash(preimageHashBytes)
 
 	// (h, z)
-	key := service.PreImageMetaKey{Hash: preimageHash, Length: service.PreimageLength(preimageLength)}
+	key, err := statekey.NewPreimageMeta(ctxPair.RegularCtx.ServiceId, preimageHash, uint32(preimageLength))
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
 
-	switch len(serviceAccount.PreimageMeta[key]) {
+	historicalTimeslots, ok := serviceAccount.GetPreimageMeta(key)
+	if !ok {
+		return gas, regs, mem, ctxPair, ErrPanicf("preimage historical timeslots not found")
+	}
+
+	switch len(historicalTimeslots) {
 	case 0: // if (xs)l[h, z] ∈ {[]}
 
 		// except: K(al) = K((xs)l) ∖ {(h, z)}
 		// except: K(ap) = K((xs)p) ∖ {h}
-		delete(serviceAccount.PreimageMeta, key)
+		serviceAccount.DeletePreimageMeta(key, preimageLength)
 		delete(serviceAccount.PreimageLookup, preimageHash)
 
 		ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = serviceAccount
 		return gas, withCode(regs, OK), mem, ctxPair, nil
 
 	case 2: // if (xs)l[h, z] ∈ {[], [X, Y]}, Y < t − D
-		if serviceAccount.PreimageMeta[key][1] < timeslot-jamtime.PreimageExpulsionPeriod {
+		if historicalTimeslots[1] < timeslot-jamtime.PreimageExpulsionPeriod {
 
 			// except: K(al) = K((xs)l) ∖ {(h, z)}
 			// except: K(ap) = K((xs)p) ∖ {h}
-			delete(serviceAccount.PreimageMeta, key)
+			serviceAccount.DeletePreimageMeta(key, preimageLength)
 			delete(serviceAccount.PreimageLookup, preimageHash)
 
 			ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = serviceAccount
@@ -505,16 +541,27 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 	case 1: // if S(xs)l[h, z]S = 1
 
 		// except: al[h, z] = (xs)l[h, z] ++ t
-		serviceAccount.PreimageMeta[key] = append(serviceAccount.PreimageMeta[key], timeslot)
+		historicalTimeslots = append(historicalTimeslots, timeslot)
+		err = serviceAccount.UpdatePreimageMeta(key, historicalTimeslots)
+		if err != nil {
+			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+		}
 
 		ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = serviceAccount
 		return gas, withCode(regs, OK), mem, ctxPair, nil
 
 	case 3: // if (xs)l[h, z] = [X, Y, w]
-		if serviceAccount.PreimageMeta[key][1] < timeslot-jamtime.PreimageExpulsionPeriod { // if Y < t − D
+		if historicalTimeslots[1] < timeslot-jamtime.PreimageExpulsionPeriod { // if Y < t − D
 
-			// except: al[h, z] = [(xs)l[h, z]2, t]
-			serviceAccount.PreimageMeta[key] = service.PreimageHistoricalTimeslots{serviceAccount.PreimageMeta[key][2], timeslot}
+			// except: al[h, z] = [w, t] if (xs)l[h, z] = [x, y, w], y < t − D
+			newHistoricalTimeslots := service.PreimageHistoricalTimeslots{historicalTimeslots[2], timeslot}
+			err = serviceAccount.UpdatePreimageMeta(key, newHistoricalTimeslots)
+			if err != nil {
+				return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+			}
+
+			ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = serviceAccount
+
 			return gas, withCode(regs, OK), mem, ctxPair, nil
 		}
 	}
@@ -578,12 +625,15 @@ func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
-	k := service.PreImageMetaKey{
-		Hash:   crypto.HashData(i),
-		Length: service.PreimageLength(z),
+	k, err := statekey.NewPreimageMeta(ss, crypto.HashData(i), uint32(z))
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+	meta, ok := a.GetPreimageMeta(k)
+	if !ok {
+		return gas, regs, mem, ctxPair, ErrPanicf("preimage meta not found")
 	}
 
-	meta := a.PreimageMeta[k]
 	// if al[H(i), z] ≠ []
 	if len(meta) > 0 {
 		return gas, withCode(regs, HUH), mem, ctxPair, nil

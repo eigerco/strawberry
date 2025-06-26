@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
-	"github.com/eigerco/strawberry/internal/validator"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
+	"github.com/eigerco/strawberry/internal/validator"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -110,7 +112,7 @@ func TestHandleWorkPackage(t *testing.T) {
 	pool := state.CoreAuthorizersPool{}
 	pool[coreIndex] = []crypto.Hash{pkg.AuthCodeHash}
 	currentState := state.State{
-		Services:            getServiceState(),
+		Services:            getServiceState(t),
 		CoreAuthorizersPool: pool,
 	}
 
@@ -193,7 +195,7 @@ func TestHandleWorkPackage(t *testing.T) {
 	bundle, err := builder.Build()
 	require.NoError(t, err)
 
-	shards, workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(), []byte("Authorized"), coreIndex, bundle, segmentRootLookup)
+	shards, workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(t), []byte("Authorized"), coreIndex, bundle, segmentRootLookup)
 	require.NoError(t, err)
 	assert.NotNil(t, shards)
 
@@ -329,7 +331,7 @@ func TestHandleStream_Success(t *testing.T) {
 	pool := state.CoreAuthorizersPool{}
 	pool[coreIndex] = []crypto.Hash{pkg.AuthCodeHash, crypto.HashData([]byte("another hash"))}
 	currentState := state.State{
-		Services:            getServiceState(),
+		Services:            getServiceState(t),
 		CoreAuthorizersPool: pool,
 	}
 
@@ -396,7 +398,7 @@ func TestHandleStream_Success(t *testing.T) {
 	bundle, err := builder.Build()
 	require.NoError(t, err)
 
-	shards, workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(), []byte("Authorized"), coreIndex, bundle, segmentRootLookup)
+	shards, workReport, err := results.ProduceWorkReport(mockRefineInvoker{}, getServiceState(t), []byte("Authorized"), coreIndex, bundle, segmentRootLookup)
 	require.NoError(t, err)
 	assert.NotNil(t, shards)
 
@@ -463,24 +465,21 @@ func (m mockRefineInvoker) InvokePVM(
 	return out, exported, 0, nil
 }
 
-func getServiceState() service.ServiceState {
+func getServiceState(t *testing.T) service.ServiceState {
 	authCodeHash := pkg.AuthCodeHash
 	timeslot := jamtime.Timeslot(0)
-
-	metaKey := service.PreImageMetaKey{
-		Hash:   authCodeHash,
-		Length: service.PreimageLength(len(pkg.AuthorizationToken)),
-	}
-	meta := service.PreimageHistoricalTimeslots{timeslot}
 
 	sa := service.ServiceAccount{
 		PreimageLookup: map[crypto.Hash][]byte{
 			authCodeHash: pkg.AuthorizationToken,
 		},
-		PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-			metaKey: meta,
-		},
 	}
+
+	k, err := statekey.NewPreimageMeta(block.ServiceId(1), authCodeHash, uint32(len(pkg.AuthorizationToken)))
+	require.NoError(t, err)
+
+	err = sa.InsertPreimageMeta(k, uint64(len(pkg.AuthorizationToken)), service.PreimageHistoricalTimeslots{timeslot})
+	require.NoError(t, err)
 
 	services := make(service.ServiceState)
 	services[1] = sa

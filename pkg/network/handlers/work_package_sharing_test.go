@@ -3,8 +3,10 @@ package handlers_test
 import (
 	"context"
 	"crypto/ed25519"
-	"github.com/eigerco/strawberry/internal/validator"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
+	"github.com/eigerco/strawberry/internal/validator"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -90,18 +92,20 @@ func TestHandleSharingStream_Success(t *testing.T) {
 
 	authCode := pkg.AuthorizationToken
 	authCodeHash := pkg.AuthCodeHash
-	serviceState := service.ServiceState{
-		block.ServiceId(pkg.AuthorizerService): service.ServiceAccount{
-			PreimageLookup: map[crypto.Hash][]byte{
-				authCodeHash: authCode,
-			},
-			PreimageMeta: map[service.PreImageMetaKey]service.PreimageHistoricalTimeslots{
-				{
-					Hash:   authCodeHash,
-					Length: service.PreimageLength(len(authCode)),
-				}: {pkg.Context.LookupAnchor.Timeslot},
-			},
+	sa := service.ServiceAccount{
+		PreimageLookup: map[crypto.Hash][]byte{
+			authCodeHash: authCode,
 		},
+	}
+
+	k, err := statekey.NewPreimageMeta(block.ServiceId(pkg.AuthorizerService), authCodeHash, uint32(len(authCode)))
+	require.NoError(t, err)
+
+	err = sa.InsertPreimageMeta(k, uint64(len(authCode)), service.PreimageHistoricalTimeslots{pkg.Context.LookupAnchor.Timeslot})
+	require.NoError(t, err)
+
+	serviceState := service.ServiceState{
+		block.ServiceId(pkg.AuthorizerService): sa,
 	}
 
 	kvStore, err := pebble.NewKVStore()
