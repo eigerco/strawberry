@@ -87,6 +87,7 @@ func TestBlockGenerator(t *testing.T) {
 		currentState,
 		newBlock,
 		chainDB,
+		trieDB,
 	)
 	require.NoError(t, err)
 

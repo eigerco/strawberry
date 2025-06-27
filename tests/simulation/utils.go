@@ -17,30 +17,7 @@ import (
 	"github.com/eigerco/strawberry/internal/state/merkle"
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/store"
-	"github.com/eigerco/strawberry/internal/validator"
 )
-
-// Determines the next SAFROLE state. Useful for functions that need to determine the SAFROLE
-// state outside of the main UpdateState function.
-func NextSafroleState(currentState *state.State, nextTimeslot jamtime.Timeslot) (
-	validator.ValidatorState,
-	statetransition.SafroleOutput,
-	error) {
-	input := statetransition.SafroleInput{
-		TimeSlot: nextTimeslot,
-		// Empty because at this point we don't yet have Y(Hv) nor do we ever
-		// need it for anything that might use this function. We only ever care
-		// about the entropy pool's 1st to 3rd indexes.
-		Entropy: crypto.BandersnatchOutputHash{},
-	}
-	// TODO handle disputes/offenders
-	_, validatorState, output, err := statetransition.UpdateSafroleState(input, currentState.TimeslotIndex, currentState.EntropyPool, currentState.ValidatorState, nil)
-	if err != nil {
-		return validator.ValidatorState{}, statetransition.SafroleOutput{}, err
-	}
-
-	return validatorState, output, nil
-}
 
 // Figures out the current slot leader by checking each of the validator keys. Useful only for testing.
 func FindSlotLeader(timeslot jamtime.Timeslot, currentState *state.State, keys []ValidatorKeys) (string, crypto.BandersnatchPrivateKey, error) {
@@ -69,7 +46,7 @@ func FindSlotLeader(timeslot jamtime.Timeslot, currentState *state.State, keys [
 
 // Determines if the given private key is the slot leader for the given timeslot.
 func IsSlotLeader(timeslot jamtime.Timeslot, currentState *state.State, privateKey crypto.BandersnatchPrivateKey) (bool, error) {
-	validatorState, output, err := NextSafroleState(currentState, timeslot)
+	validatorState, output, err := statetransition.NextSafroleState(currentState, timeslot, block.DisputeExtrinsic{})
 	if err != nil {
 		return false, err
 	}
@@ -89,7 +66,7 @@ func ProduceBlock(
 	extrinsics block.Extrinsic,
 ) (block.Block, error) {
 
-	validatorState, output, err := NextSafroleState(currentState, timeslot)
+	validatorState, output, err := statetransition.NextSafroleState(currentState, timeslot, extrinsics.ED)
 	if err != nil {
 		return block.Block{}, err
 	}

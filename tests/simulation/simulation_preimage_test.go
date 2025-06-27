@@ -47,6 +47,10 @@ func TestSimulatePreimage(t *testing.T) {
 		err := db.Close()
 		require.NoError(t, err, "failed to close db")
 	}()
+
+	trieDB := store.NewTrie(db)
+	require.NoError(t, err)
+
 	chainDB := store.NewChain(db)
 	require.NoError(t, err)
 
@@ -55,6 +59,7 @@ func TestSimulatePreimage(t *testing.T) {
 		currentState,
 		testBlock,
 		chainDB,
+		trieDB,
 	)
 	require.NoError(t, err)
 

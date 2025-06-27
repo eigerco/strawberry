@@ -1,7 +1,7 @@
 {
     "header": {
         "parent": "0xf34d3d85e230da354db78ef5755a9ed53448847c5a5ccf4f6dec917d544a48c0",
-        "parent_state_root": "0xf985e05b5d128ff353842b1fa1f50764f584c4be3a918c56f78bd7558af43377",
+        "parent_state_root": "0x56082660f30ba1538fea8cca7d2e3c26c7a89a8c060bd53ae27288622de8c3cb",
         "extrinsic_hash": "0xf77bc3fb3a25c8e9b1b26c07a738ddf6e81c65ae60483cbcd851d36aad81dd68",
         "slot": 24,
         "epoch_mark": {
@@ -38,7 +38,7 @@
         "offenders_mark": [],
         "author_index": 2,
         "entropy_source": "0xcf74e8792ab2b10faecd1df7a0a66b93230408c16ba5cb2ec199eeb75e26cbd1ab9bfeedce7d6312dedae8fcabbcb8c5a7fa2f48f0919fdc85a5ebba4d12680785e29524e32ed25baf7fe74af82a0509f1e81247bcfa1d299d48ea775fa7af15",
-        "seal": "0x98853cdfca6cda5238fc065a678421737782fffbc986819b67dfe96786febdba06ded3620679db6a918b0172f3c2f13517ba07253ba2394cab840e7185f58913506a99b19dc645e74a74b1eeb1f3e0f4643e33c0c68101957fa90ab68d944614"
+        "seal": "0x98853cdfca6cda5238fc065a678421737782fffbc986819b67dfe96786febdba9667fad9a258c8e761206ebde413be397a92e377ba319fb495243d474f8f4e1c054c56bd30cbcbce62e55fd9696d16dc8210dfb83c7a84a0fe14b237df85861a"
     },
     "extrinsic": {
         "tickets": [
