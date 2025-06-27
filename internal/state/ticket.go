@@ -14,7 +14,7 @@ import (
 // Creates a ticket proof as per equation 6.29 in the graypaper (v0.6.4)
 // The ticket extrinic is a sequence of ticket proofs.
 func CreateTicketProof(pendingValidators safrole.ValidatorsData, entropy crypto.Hash, privateKey crypto.BandersnatchPrivateKey, attempt uint8) (block.TicketProof, error) {
-	if attempt > common.MaxTicketAttempts {
+	if attempt > common.MaxTicketAttemptsPerValidator {
 		return block.TicketProof{}, errors.New("attempts exceeded")
 	}
 
@@ -53,7 +53,7 @@ func VerifyTicketProof(ringCommitment crypto.RingCommitment, entropy crypto.Hash
 		return crypto.BandersnatchOutputHash{}, err
 	}
 
-	if ticket.EntryIndex >= common.MaxTicketAttempts {
+	if ticket.EntryIndex >= common.MaxTicketAttemptsPerValidator {
 		return crypto.BandersnatchOutputHash{}, errors.New("bad ticket attempt")
 	}
 

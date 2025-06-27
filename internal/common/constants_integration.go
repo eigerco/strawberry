@@ -11,7 +11,7 @@ const (
 	ValidatorsSuperMajority               uint16 = (2 * NumberOfValidators / 3) + 1
 	WorkReportTimeoutPeriod                      = jamtime.Timeslot(5)
 	MaxTicketExtrinsicSize                       = 3
-	MaxTicketAttempts                            = 3
+	MaxTicketAttemptsPerValidator                = 3
 	MaxHistoricalTimeslotsForPreimageMeta        = 3
 	SizeOfSegment                                = NumberOfErasureCodecPiecesInSegment * ErasureCodingChunkSize
 	MaxWorkPackageSize                           = 13_794_305

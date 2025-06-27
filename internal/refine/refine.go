@@ -95,7 +95,7 @@ func (r *Refine) InvokePVM(
 		return nil, nil, 0, ErrBig
 	}
 
-	// F ∈ Ω⟨(D⟨N → M⟩, ⟦G⟧)⟩∶ (n, ϱ, ω, μ, (m, e))
+	// F ∈ Ω⟨(D⟨N → M⟩, ⟦G⟧)⟩∶ (n, ϱ, φ, μ, (m, e))
 	hostCall := func(hostCall uint64, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctxPair polkavm.RefineContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.RefineContextPair, error) {
 		switch hostCall {
 		case host_call.GasID:

@@ -36,7 +36,7 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.Gas,
 
 type Instance struct {
 	memory                 polkavm.Memory      // The memory sequence; a member of the set M (μ)
-	regs                   polkavm.Registers   // The registers (ω)
+	regs                   polkavm.Registers   // The registers (φ)
 	instructionCounter     uint64              // The instruction counter (ı)
 	gasRemaining           int64               // The gas counter (ϱ). For single step and basic invocation use Z_G (int64) according to GP the gas result can be negative
 	code                   []byte              // ζ

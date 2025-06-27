@@ -60,7 +60,7 @@ func (i *Instance) step() (uint64, error) {
 		if codeLength < i.instructionCounter+10 {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
-		// let rA = min(12, ζı+1 mod 16), ω′A ≡ ω′rA
+		// let rA = min(12, ζı+1 mod 16), φ′A ≡ φ′rA
 		regA := min(12, i.code[i.instructionCounter+1]%16)
 		// νX ≡ E−1_8(ζı+2⋅⋅⋅+8)
 		valueX := uint64(0)
@@ -138,7 +138,7 @@ func (i *Instance) step() (uint64, error) {
 		if codeLength < i.instructionCounter+2+lenX {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
-		// let rA = min(12, ζı+1 mod 16), ω′A ≡ ω′rA
+		// let rA = min(12, ζı+1 mod 16), φ′A ≡ φ′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 
 		// νX ≡ X_lX(E−1_lX(ζı+2...+lX))
@@ -183,7 +183,7 @@ func (i *Instance) step() (uint64, error) {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
 
-		// let rA = min(12, ζı+1 mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
+		// let rA = min(12, ζı+1 mod 16), φA ≡ φrA, φ′A ≡ φ′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 		// let lX = min(4, ⌊ ζı+1 / 16 ⌋ mod 8)
 		lenX := uint64(min(4, (i.code[i.instructionCounter+1]/16)%8))
@@ -225,7 +225,7 @@ func (i *Instance) step() (uint64, error) {
 		if codeLength < i.instructionCounter+2 {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
-		// let rA = min(12, ζı+1 mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
+		// let rA = min(12, ζı+1 mod 16), φA ≡ φrA, φ′A ≡ φ′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 		// let lX = min(4, ⌊ ζı+1 / 16 ⌋ mod 8)
 		lenX := uint64(min(4, (i.code[i.instructionCounter+1]/16)%8))
@@ -280,10 +280,10 @@ func (i *Instance) step() (uint64, error) {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
 
-		// let rD = min(12, (ζı+1) mod 16) , ωD ≡ ωrD , ω′D ≡ ω′rD
+		// let rD = min(12, (ζı+1) mod 16) , φD ≡ φrD , φ′D ≡ φ′rD
 		regDst := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 
-		// let rA = min(12, ⌊ ζı+1 / 16 ⌋) , ωA ≡ ωrA , ω′A ≡ ω′rA
+		// let rA = min(12, ⌊ ζı+1 / 16 ⌋) , φA ≡ φrA , φ′A ≡ φ′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
 
 		switch opcode {
@@ -320,9 +320,9 @@ func (i *Instance) step() (uint64, error) {
 		if codeLength < i.instructionCounter+2+lenX {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
-		// let rA = min(12, (ζı+1) mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
+		// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), ωB ≡ ωrB, ω′B ≡ ω′rB
+		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
 		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
 
 		// νX ≡ X_lX(E−1lX(ζı+2...+lX))
@@ -426,9 +426,9 @@ func (i *Instance) step() (uint64, error) {
 		if codeLength < i.instructionCounter+2+lenX {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
-		// let rA = min(12, (ζı+1) mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
+		// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), ωB ≡ ωrB, ω′B ≡ ω′rB
+		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
 		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
 
 		// νX ≡ ı + Z_lX(E−1lX(ζı+2...+lX))
@@ -458,9 +458,9 @@ func (i *Instance) step() (uint64, error) {
 		if codeLength < i.instructionCounter+3 {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
-		// let rA = min(12, (ζı+1) mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
+		// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), ωB ≡ ωrB, ω′B ≡ ω′rB
+		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
 		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
 		// let lX = min(4, ζı+2 mod 8)
 		lenX := uint64(min(4, i.code[i.instructionCounter+2]%8))
@@ -494,11 +494,11 @@ func (i *Instance) step() (uint64, error) {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
 
-		// let rA = min(12, (ζı+1) mod 16), ωA ≡ ωrA, ω′A ≡ ω′rA
+		// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), ωB ≡ ωrB, ω′B ≡ ω′rB
+		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
 		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
-		// let rD = min(12, ζı+2), ωD ≡ ωrD, ω′D ≡ ω′rD
+		// let rD = min(12, ζı+2), φD ≡ φrD, φ′D ≡ φ′rD
 		regDst := polkavm.Reg(min(12, i.code[i.instructionCounter+2]))
 
 		switch opcode {
