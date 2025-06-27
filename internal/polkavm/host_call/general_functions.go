@@ -44,23 +44,23 @@ type WorkItemMetadata struct {
 	PayloadLength          uint32          // |w_y|
 }
 
-// GasRemaining ΩG(ϱ, ω, ...)
+// GasRemaining ΩG(ϱ, φ, ...)
 func GasRemaining(gas polkavm.Gas, regs polkavm.Registers) (polkavm.Gas, polkavm.Registers, error) {
 	if gas < GasRemainingCost {
 		return gas, regs, polkavm.ErrOutOfGas
 	}
 	gas -= GasRemainingCost
 
-	// Set the new ϱ' value into ω′7
+	// Set the new ϱ' value into φ′7
 	regs[polkavm.A0] = uint64(gas)
 
 	return gas, regs, nil
 }
 
-// Fetch ΩY(ρ, ω, µ, p, n, r, i, i, x, o, t, ...)
+// Fetch ΩY(ρ, φ, µ, p, n, r, i, i, x, o, t, ...)
 func Fetch(
 	gas polkavm.Gas, // ρ
-	regs polkavm.Registers, // ω
+	regs polkavm.Registers, // φ
 	mem polkavm.Memory, // µ
 	workPackage *work.Package, // p
 	entropy *crypto.Hash, // n
@@ -76,55 +76,55 @@ func Fetch(
 	}
 	gas -= FetchCost
 
-	output := regs[polkavm.A0] // ω7
-	offset := regs[polkavm.A1] // ω8
-	length := regs[polkavm.A2] // ω9
-	dataID := regs[polkavm.A3] // ω10
-	idx1 := regs[polkavm.A4]   // ω11
-	idx2 := regs[polkavm.A5]   // ω12
+	output := regs[polkavm.A0] // φ7
+	offset := regs[polkavm.A1] // φ8
+	length := regs[polkavm.A2] // φ9
+	dataID := regs[polkavm.A3] // φ10
+	idx1 := regs[polkavm.A4]   // φ11
+	idx2 := regs[polkavm.A5]   // φ12
 
 	var v []byte
 
 	switch dataID {
 	case 0:
-		// if ω10 = 0
+		// if φ10 = 0
 		out, err := GetChainConstants()
 		if err != nil {
 			return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 		}
 		v = out
 	case 1:
-		// if n ≠ ∅ ∧ ω10 = 1
+		// if n ≠ ∅ ∧ φ10 = 1
 		if entropy != nil {
 			v = entropy[:]
 		}
 	case 2:
-		// if r ≠ ∅ ∧ ω10 = 2
+		// if r ≠ ∅ ∧ φ10 = 2
 		if len(authorizerHashOutput) > 0 {
 			v = authorizerHashOutput
 		}
 	case 3:
-		// if i ≠ ∅ ∧ ω10 = 3 ∧ ω11 < ∣x∣ ∧ ω12 < ∣x[ω11]∣
+		// if i ≠ ∅ ∧ φ10 = 3 ∧ φ11 < ∣x∣ ∧ φ12 < ∣x[φ11]∣
 		if itemIndex != nil && int(idx1) < len(extrinsicPreimages) && int(idx2) < len(extrinsicPreimages[idx1]) {
 			v = []byte{extrinsicPreimages[idx1][idx2]}
 		}
 	case 4:
-		// if i ≠ ∅ ∧ ω10 = 4 ∧ ω11 < ∣x[i]∣
+		// if i ≠ ∅ ∧ φ10 = 4 ∧ φ11 < ∣x[i]∣
 		if itemIndex != nil && int(idx1) < len(extrinsicPreimages[*itemIndex]) {
 			v = []byte{extrinsicPreimages[*itemIndex][idx1]}
 		}
 	case 5:
-		// if i ≠ ∅ ∧ ω10 = 5 ∧ ω11 < ∣i∣ ∧ ω12 < ∣i[ω11]∣
+		// if i ≠ ∅ ∧ φ10 = 5 ∧ φ11 < ∣i∣ ∧ φ12 < ∣i[φ11]∣
 		if itemIndex != nil && int(idx1) < len(importedSegments) && int(idx2) < len(importedSegments[idx1]) {
 			v = []byte{importedSegments[idx1][idx2]}
 		}
 	case 6:
-		// if i ≠ ∅ ∧ ω10 = 6 ∧ ω11 < ∣i[i]∣
+		// if i ≠ ∅ ∧ φ10 = 6 ∧ φ11 < ∣i[i]∣
 		if itemIndex != nil && int(idx1) < len(importedSegments[*itemIndex]) {
 			v = []byte{importedSegments[*itemIndex][idx1]}
 		}
 	case 7:
-		// if p ≠ ∅ ∧ ω10 = 7
+		// if p ≠ ∅ ∧ φ10 = 7
 		if workPackage != nil {
 			out, err := jam.Marshal(workPackage)
 			if err != nil {
@@ -133,7 +133,7 @@ func Fetch(
 			v = out
 		}
 	case 8:
-		// if p ≠ ∅ ∧ ω10 = 8
+		// if p ≠ ∅ ∧ φ10 = 8
 		if workPackage != nil {
 			// E(pu, ↕pp)
 			out, err := jam.Marshal(struct {
@@ -149,13 +149,13 @@ func Fetch(
 			v = out
 		}
 	case 9:
-		// if p ≠ ∅ ∧ ω10 = 9
+		// if p ≠ ∅ ∧ φ10 = 9
 		if workPackage != nil {
 			// pj
 			v = workPackage.AuthorizationToken
 		}
 	case 10:
-		// if p ≠ ∅ ∧ ω10 = 10
+		// if p ≠ ∅ ∧ φ10 = 10
 		if workPackage != nil {
 			out, err := jam.Marshal(workPackage.Context)
 			if err != nil {
@@ -164,7 +164,7 @@ func Fetch(
 			v = out
 		}
 	case 11:
-		// if p ≠ ∅ ∧ ω10 = 11
+		// if p ≠ ∅ ∧ φ10 = 11
 		if workPackage != nil {
 			var sw [][]byte
 			for _, item := range workPackage.WorkItems {
@@ -192,7 +192,7 @@ func Fetch(
 			v = out
 		}
 	case 12:
-		// f p ≠ ∅ ∧ ω10 = 12 ∧ ω11 < ∣pw∣
+		// f p ≠ ∅ ∧ φ10 = 12 ∧ φ11 < ∣pw∣
 		if workPackage != nil && int(idx1) < len(workPackage.WorkItems) {
 			item := workPackage.WorkItems[idx1]
 			metadata := WorkItemMetadata{
@@ -212,12 +212,12 @@ func Fetch(
 			v = bytes
 		}
 	case 13:
-		// if p ≠ ∅ ∧ ω10 = 13 ∧ ω11 < ∣pw∣
+		// if p ≠ ∅ ∧ φ10 = 13 ∧ φ11 < ∣pw∣
 		if workPackage != nil && int(idx1) < len(workPackage.WorkItems) {
 			v = workPackage.WorkItems[idx1].Payload
 		}
 	case 14:
-		// if o ≠ ∅ ∧ ω10 = 14
+		// if o ≠ ∅ ∧ φ10 = 14
 		if len(operand) > 0 {
 			out, err := jam.Marshal(operand)
 			if err != nil {
@@ -226,7 +226,7 @@ func Fetch(
 			v = out
 		}
 	case 15:
-		// if o ≠ ∅ ∧ ω10 = 15 ∧ ω11 < |o|
+		// if o ≠ ∅ ∧ φ10 = 15 ∧ φ11 < |o|
 		if len(operand) > 0 && int(idx1) < len(operand) {
 			out, err := jam.Marshal(operand[idx1])
 			if err != nil {
@@ -235,7 +235,7 @@ func Fetch(
 			v = out
 		}
 	case 16:
-		// if t ≠ ∅ ∧ ω10 = 16
+		// if t ≠ ∅ ∧ φ10 = 16
 		if len(transfers) > 0 {
 			out, err := jam.Marshal(transfers)
 			if err != nil {
@@ -244,7 +244,7 @@ func Fetch(
 			v = out
 		}
 	case 17:
-		// if t ≠ ∅ ∧ ω10 = 17 ∧ ω11 < ∣t∣
+		// if t ≠ ∅ ∧ φ10 = 17 ∧ φ11 < ∣t∣
 		if len(transfers) > 0 && int(idx1) < len(transfers) {
 			out, err := jam.Marshal(transfers[idx1])
 			if err != nil {
@@ -268,7 +268,7 @@ func Fetch(
 	return gas, regs, mem, nil
 }
 
-// Lookup ΩL(ϱ, ω, μ, s, s, d)
+// Lookup ΩL(ϱ, φ, μ, s, s, d)
 func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < LookupCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
@@ -289,7 +289,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 		}
 	}
 
-	// let [h, o] = ω8..+2
+	// let [h, o] = φ8..+2
 	h, o := regs[polkavm.A1], regs[polkavm.A2]
 
 	key := make([]byte, 32)
@@ -312,7 +312,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 	return gas, regs, mem, nil
 }
 
-// Read ΩR(ϱ, ω, μ, s, s, d)
+// Read ΩR(ϱ, φ, μ, s, s, d)
 func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < ReadCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
@@ -320,7 +320,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 	gas -= ReadCost
 
 	omega7 := regs[polkavm.A0]
-	// s* = ω7
+	// s* = φ7
 	ss := block.ServiceId(omega7)
 	if uint64(omega7) == math.MaxUint64 {
 		ss = serviceId // s* = s
@@ -335,7 +335,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		}
 	}
 
-	// let [ko, kz, o] = ω8..+3
+	// let [ko, kz, o] = φ8..+3
 	ko, kz, o := regs[polkavm.A1], regs[polkavm.A2], regs[polkavm.A3]
 
 	// read key data from memory at ko..ko+kz
@@ -365,7 +365,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 	return gas, regs, mem, nil
 }
 
-// Write ΩW(ϱ, ω, μ, s, s)
+// Write ΩW(ϱ, φ, μ, s, s)
 func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
 	if gas < WriteCost {
 		return gas, regs, mem, s, polkavm.ErrOutOfGas
@@ -422,7 +422,7 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 	return gas, regs, mem, a, err        // return service account 'a' as opposed to 's' for not successful paths
 }
 
-// Info ΩI(ϱ, ω, μ, s, d)
+// Info ΩI(ϱ, φ, μ, s, d)
 func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < InfoCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
@@ -464,7 +464,7 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
-	// ω′7 = |v|
+	// φ′7 = |v|
 	regs[polkavm.A0] = uint64(len(v))
 
 	return gas, regs, mem, nil
@@ -546,39 +546,39 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 // )
 func GetChainConstants() ([]byte, error) {
 	return jam.Marshal(struct {
-		AdditionalMinimumBalancePerItem         uint64 // BI
-		AdditionalMinimumBalancePerOctet        uint64 // BL
-		BasicMinimumBalance                     uint64 // BS
-		TotalNumberOfCores                      uint16 // C
-		PreimageExpulsionPeriod                 uint32 // D
-		TimeslotsPerEpoch                       uint32 // E
-		MaxAllocatedGasAccumulation             uint64 // GA
-		MaxAllocatedGasIsAuthorized             uint64 // GI
-		MaxAllocatedGasRefine                   uint64 // GR
-		TotalGasAccumulation                    uint64 // GT
-		MaxRecentBlocks                         uint16 // H
-		MaxNumberOfItems                        uint16 // I
-		MaxNumberOfDependencyItems              uint16 // J
-		MaxTimeslotsForPreimage                 uint32 // L
-		MaxAuthorizersPerCore                   uint16 // O
-		SlotPeriodInSeconds                     uint16 // P
-		PendingAuthorizersQueueSize             uint16 // Q
-		ValidatorRotationPeriod                 uint16 // R
-		MaximumNumberOfEntriesAccumulationQueue uint16 // S
-		MaxNumberOfExtrinsics                   uint16 // T
-		WorkReportTimeoutPeriod                 uint16 // U
-		NumberOfValidators                      uint16 // V
-		MaximumSizeIsAuthorizedCode             uint16 // W_A
-		MaxWorkPackageSize                      uint32 // W_B
-		MaxSizeServiceCode                      uint32 // W_C
-		ErasureCodingChunkSize                  uint32 // W_E
-		SizeOfSegment                           uint32 // W_G
-		MaxNumberOfImportsExports               uint32 // W_M
-		NumberOfErasureCodecPiecesInSegment     uint32 // W_P
-		MaxWorkPackageSizeBytes                 uint32 // W_R
-		TransferMemoSizeBytes                   uint32 // W_T
-		MaxNumberOfExports                      uint32 // WX
-		TicketSubmissionTimeSlots               uint32 // Y
+		AdditionalMinimumBalancePerItem     uint64 // BI
+		AdditionalMinimumBalancePerOctet    uint64 // BL
+		BasicMinimumBalance                 uint64 // BS
+		TotalNumberOfCores                  uint16 // C
+		PreimageExpulsionPeriod             uint32 // D
+		TimeslotsPerEpoch                   uint32 // E
+		MaxAllocatedGasAccumulation         uint64 // GA
+		MaxAllocatedGasIsAuthorized         uint64 // GI
+		MaxAllocatedGasRefine               uint64 // GR
+		TotalGasAccumulation                uint64 // GT
+		MaxRecentBlocks                     uint16 // H
+		MaxNumberOfItems                    uint16 // I
+		MaxNumberOfDependencyItems          uint16 // J
+		MaxTicketsPerBlock                  uint16 // K
+		MaxTimeslotsForPreimage             uint32 // L
+		MaxTicketAttemptsPerValidator       uint16 // N
+		MaxAuthorizersPerCore               uint16 // O
+		SlotPeriodInSeconds                 uint16 // P
+		PendingAuthorizersQueueSize         uint16 // Q
+		ValidatorRotationPeriod             uint16 // R
+		MaxNumberOfExtrinsics               uint16 // T
+		WorkReportTimeoutPeriod             uint16 // U
+		NumberOfValidators                  uint16 // V
+		MaximumSizeIsAuthorizedCode         uint32 // W_A
+		MaxWorkPackageSize                  uint32 // W_B
+		MaxSizeServiceCode                  uint32 // W_C
+		ErasureCodingChunkSize              uint32 // W_E
+		MaxNumberOfImportsExports           uint32 // W_M
+		NumberOfErasureCodecPiecesInSegment uint32 // W_P
+		MaxWorkPackageSizeBytes             uint32 // W_R
+		TransferMemoSizeBytes               uint32 // W_T
+		MaxNumberOfExports                  uint32 // W_X
+		TicketSubmissionTimeSlots           uint32 // Y
 	}{
 		service.AdditionalMinimumBalancePerItem,
 		service.AdditionalMinimumBalancePerOctet,
@@ -593,12 +593,13 @@ func GetChainConstants() ([]byte, error) {
 		state.MaxRecentBlocks,
 		work.MaxNumberOfItems,
 		work.MaxNumberOfDependencyItems,
+		block.MaxTicketsPerBlock,
 		state.MaxTimeslotsForPreimage,
+		common.MaxTicketAttemptsPerValidator,
 		state.MaxAuthorizersPerCore,
 		jamtime.SlotPeriodInSeconds,
 		state.PendingAuthorizersQueueSize,
 		uint16(jamtime.ValidatorRotationPeriod),
-		state.MaximumNumberOfEntriesAccumulationQueue,
 		work.MaxNumberOfExtrinsics,
 		uint16(common.WorkReportTimeoutPeriod),
 		common.NumberOfValidators,
@@ -606,7 +607,6 @@ func GetChainConstants() ([]byte, error) {
 		common.MaxWorkPackageSize,
 		work.MaxSizeServiceCode,
 		common.ErasureCodingChunkSize,
-		common.SizeOfSegment,
 		work.MaxNumberOfImports,
 		common.NumberOfErasureCodecPiecesInSegment,
 		common.MaxWorkPackageSizeBytes,

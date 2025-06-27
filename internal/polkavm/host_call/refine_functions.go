@@ -19,7 +19,7 @@ type PreimageFetcher interface {
 	FetchPreimage(hash crypto.Hash) ([]byte, error)
 }
 
-// HistoricalLookup ΩH(ϱ, ω, µ, (m, e), s, d, t)
+// HistoricalLookup ΩH(ϱ, φ, µ, (m, e), s, d, t)
 func HistoricalLookup(
 	gas Gas,
 	regs Registers,
@@ -46,7 +46,7 @@ func HistoricalLookup(
 		return gas, regs, mem, RefineContextPair{}, ErrAccountNotFound
 	}
 
-	// let [h, o] = ω8..+2
+	// let [h, o] = φ8..+2
 	addressToRead, addressToWrite := regs[A1], regs[A2]
 
 	hashData := make([]byte, 32)
@@ -65,13 +65,13 @@ func HistoricalLookup(
 		return gas, regs, mem, ctxPair, err
 	}
 
-	// set ω7 to |v|
+	// set φ7 to |v|
 	regs[A0] = uint64(len(v))
 
 	return gas, regs, mem, ctxPair, nil
 }
 
-// Export ΩE(ϱ, ω, µ, (m, e), ς)
+// Export ΩE(ϱ, φ, µ, (m, e), ς)
 func Export(
 	gas Gas,
 	regs Registers,
@@ -84,10 +84,10 @@ func Export(
 	}
 	gas -= ExportCost
 
-	p := regs[A0]               // ω7
-	requestedLength := regs[A1] // ω8
+	p := regs[A0]               // φ7
+	requestedLength := regs[A1] // φ8
 
-	// let z = min(ω8,WG)
+	// let z = min(φ8,WG)
 	z := min(requestedLength, common.SizeOfSegment)
 
 	data := make([]byte, z)
@@ -110,13 +110,13 @@ func Export(
 	// Append x to e
 	ctxPair.Segments = append(ctxPair.Segments, segmentData)
 
-	// ω7 = ς + |e|
+	// φ7 = ς + |e|
 	regs[A0] = exportOffset + uint64(len(ctxPair.Segments))
 
 	return gas, regs, mem, ctxPair, nil
 }
 
-// Machine ΩM(ϱ, ω, µ, (m, e))
+// Machine ΩM(ϱ, φ, µ, (m, e))
 func Machine(
 	gas Gas,
 	regs Registers,
@@ -128,7 +128,7 @@ func Machine(
 	}
 	gas -= MachineCost
 
-	// let [po, pz, i] = ω7...10
+	// let [po, pz, i] = φ7...10
 	po := regs[A0]
 	pz := regs[A1]
 	i := regs[A2]
@@ -155,14 +155,14 @@ func Machine(
 		InstructionCounter: i,
 	}
 
-	// (ω′7,m′) = (n, m ∪ {n ↦ {p,u,i}})
+	// (φ′7,m′) = (n, m ∪ {n ↦ {p,u,i}})
 	regs[A0] = n
 	ctxPair.IntegratedPVMMap[n] = pvm
 
 	return gas, regs, mem, ctxPair, nil
 }
 
-// Peek ΩP(ϱ, ω, µ, (m, e))
+// Peek ΩP(ϱ, φ, µ, (m, e))
 func Peek(
 	gas Gas,
 	regs Registers,
@@ -189,7 +189,7 @@ func Peek(
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
-	// (ω′7, µ′) = (OK, µ′o...o+z = s)
+	// (φ′7, µ′) = (OK, µ′o...o+z = s)
 	err = mem.Write(o, s)
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
@@ -198,7 +198,7 @@ func Peek(
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Poke ΩO(ϱ, ω, µ, (m, e))
+// Poke ΩO(ϱ, φ, µ, (m, e))
 func Poke(
 	gas Gas,
 	regs Registers,
@@ -229,12 +229,12 @@ func Poke(
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
-	// (ω′7,m′) = (OK, (m′[n]u)[o..o+z]=s)
+	// (φ′7,m′) = (OK, (m′[n]u)[o..o+z]=s)
 	ctxPair.IntegratedPVMMap[n] = innerPVM
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Pages ΩZ (ϱ, ω, µ, (m, e))
+// Pages ΩZ (ϱ, φ, µ, (m, e))
 func Pages(
 	gas Gas,
 	regs Registers,
@@ -246,7 +246,7 @@ func Pages(
 	}
 	gas -= PagesCost
 
-	// let [n, p, c, r] = ω7⋅⋅⋅+4
+	// let [n, p, c, r] = φ7⋅⋅⋅+4
 	n, p, c, r := regs[A0], regs[A1], regs[A2], regs[A3]
 
 	// m[n]u if n ∈ K(m);
@@ -308,7 +308,7 @@ func Pages(
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Invoke ΩK(ϱ, ω, µ, (m, e))
+// Invoke ΩK(ϱ, φ, µ, (m, e))
 func Invoke(
 	gas Gas,
 	regs Registers,
@@ -319,7 +319,7 @@ func Invoke(
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= InvokeCost
-	// let [n, o] = ω7,8
+	// let [n, o] = φ7,8
 	pvmKey, addr := regs[A0], regs[A1]
 
 	// let (g, w) = (g, w) ∶ E8(g) ⌢ E#8(w) = μo⋅⋅⋅+112 if No⋅⋅⋅+112 ⊂ V∗μ
@@ -339,7 +339,7 @@ func Invoke(
 	// let (c, i′, g′, w′, u′) = Ψ(m[n]p, m[n]i, g, w, m[n]u)
 	pvm, ok := ctxPair.IntegratedPVMMap[pvmKey]
 	if !ok { // if n ∉ m
-		return gas, withCode(regs, WHO), mem, ctxPair, nil // (WHO, ω8, μ, m)
+		return gas, withCode(regs, WHO), mem, ctxPair, nil // (WHO, φ8, μ, m)
 	}
 	updateIntegratedPVM := func(isHostCall bool, resultInstr uint64, resultMem Memory) {
 		pvm.Ram = resultMem
@@ -360,18 +360,18 @@ func Invoke(
 	hostCall, invokeErr := interpreter.Invoke(i)
 	resultInstr, resultGas, resultRegs, resultMem := i.Results()
 	if bb, err := jam.Marshal([14]uint64(append([]uint64{uint64(resultGas)}, resultRegs[:]...))); err != nil {
-		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, ω8, μ, m)
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, φ8, μ, m)
 	} else if err := mem.Write(addr, bb); err != nil {
-		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, ω8, μ, m)
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, φ8, μ, m)
 	}
 	if invokeErr != nil {
 		if errors.Is(invokeErr, ErrOutOfGas) {
 			updateIntegratedPVM(false, resultInstr, resultMem)
-			return gas, withCode(regs, OOG), mem, ctxPair, nil // (OOG, ω8, μ*, m*)
+			return gas, withCode(regs, OOG), mem, ctxPair, nil // (OOG, φ8, μ*, m*)
 		}
 		if errors.Is(invokeErr, ErrHalt) {
 			updateIntegratedPVM(false, resultInstr, resultMem)
-			return gas, withCode(regs, HALT), mem, ctxPair, nil // (HALT, ω8, μ*, m*)
+			return gas, withCode(regs, HALT), mem, ctxPair, nil // (HALT, φ8, μ*, m*)
 		}
 		if errors.Is(invokeErr, ErrHostCall) {
 			updateIntegratedPVM(true, resultInstr, resultMem)
@@ -395,10 +395,10 @@ func Invoke(
 	}
 
 	updateIntegratedPVM(false, resultInstr, resultMem)
-	return gas, withCode(regs, HALT), mem, ctxPair, nil // (HALT, ω8, μ*, m*)
+	return gas, withCode(regs, HALT), mem, ctxPair, nil // (HALT, φ8, μ*, m*)
 }
 
-// Expunge ΩX(ϱ, ω, µ, (m, e))
+// Expunge ΩX(ϱ, φ, µ, (m, e))
 func Expunge(
 	gas Gas,
 	regs Registers,
@@ -417,7 +417,7 @@ func Expunge(
 		return gas, withCode(regs, WHO), mem, ctxPair, nil
 	}
 
-	// (ω′7, m′) = (m[n]i, m ∖ n)
+	// (φ′7, m′) = (m[n]i, m ∖ n)
 	regs[A0] = uint64(pvm.InstructionCounter)
 	delete(ctxPair.IntegratedPVMMap, n)
 

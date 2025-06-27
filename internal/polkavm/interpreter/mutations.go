@@ -18,7 +18,7 @@ func (i *Instance) Fallthrough() {
 	i.skip()
 }
 
-// LoadImm64 load_imm_64 ω′A = νX
+// LoadImm64 load_imm_64 φ′A = νX
 func (i *Instance) LoadImm64(dst polkavm.Reg, imm uint64) {
 	i.setAndSkip(dst, imm)
 }
@@ -48,17 +48,17 @@ func (i *Instance) Jump(target uint64) error {
 	return i.branch(true, target)
 }
 
-// JumpIndirect jump_ind djump((ωA + νX) mod 2^32)
+// JumpIndirect jump_ind djump((φA + νX) mod 2^32)
 func (i *Instance) JumpIndirect(base polkavm.Reg, offset uint64) error {
 	return i.djump(i.regs[base] + offset)
 }
 
-// LoadImm load_imm ω′A = νX
+// LoadImm load_imm φ′A = νX
 func (i *Instance) LoadImm(dst polkavm.Reg, imm uint64) {
 	i.setAndSkip(dst, imm)
 }
 
-// LoadU8 load_u8 ω′A = μ↺_νX
+// LoadU8 load_u8 φ′A = μ↺_νX
 func (i *Instance) LoadU8(dst polkavm.Reg, address uint64) error {
 	slice := make([]byte, 1)
 	if err := i.memory.Read(address, slice); err != nil {
@@ -68,7 +68,7 @@ func (i *Instance) LoadU8(dst polkavm.Reg, address uint64) error {
 	return nil
 }
 
-// LoadI8 load_i8 ω′A = X1(μ↺_νX)
+// LoadI8 load_i8 φ′A = X1(μ↺_νX)
 func (i *Instance) LoadI8(dst polkavm.Reg, address uint64) error {
 	slice := make([]byte, 1)
 	if err := i.memory.Read(address, slice); err != nil {
@@ -78,7 +78,7 @@ func (i *Instance) LoadI8(dst polkavm.Reg, address uint64) error {
 	return nil
 }
 
-// LoadU16 load_u16 ω′A = E−1_2 (μ↺_{νX...+2})
+// LoadU16 load_u16 φ′A = E−1_2 (μ↺_{νX...+2})
 func (i *Instance) LoadU16(dst polkavm.Reg, address uint64) error {
 	var v uint16
 	if err := i.load(address, 2, &v); err != nil {
@@ -88,7 +88,7 @@ func (i *Instance) LoadU16(dst polkavm.Reg, address uint64) error {
 	return nil
 }
 
-// LoadI16 load_i16 ω′A = X2(E−1_2 (μ↺_{νX...+2})
+// LoadI16 load_i16 φ′A = X2(E−1_2 (μ↺_{νX...+2})
 func (i *Instance) LoadI16(dst polkavm.Reg, address uint64) error {
 	var v int16
 	if err := i.load(address, 2, &v); err != nil {
@@ -98,7 +98,7 @@ func (i *Instance) LoadI16(dst polkavm.Reg, address uint64) error {
 	return nil
 }
 
-// LoadU32 load_u32 ω′A = E−1_4 (μ↺_{νX...+4})
+// LoadU32 load_u32 φ′A = E−1_4 (μ↺_{νX...+4})
 func (i *Instance) LoadU32(dst polkavm.Reg, address uint64) error {
 	var v uint32
 	if err := i.load(address, 4, &v); err != nil {
@@ -108,7 +108,7 @@ func (i *Instance) LoadU32(dst polkavm.Reg, address uint64) error {
 	return nil
 }
 
-// LoadI32 load_i32 ω′A = X4(E−1_4(μ↺_{νX...+4}))
+// LoadI32 load_i32 φ′A = X4(E−1_4(μ↺_{νX...+4}))
 func (i *Instance) LoadI32(dst polkavm.Reg, address uint64) error {
 	var v uint32
 	if err := i.load(address, 4, &v); err != nil {
@@ -118,7 +118,7 @@ func (i *Instance) LoadI32(dst polkavm.Reg, address uint64) error {
 	return nil
 }
 
-// LoadU64 load_u64 ω′A = E−1_8 (μ↺_{νX...+8})
+// LoadU64 load_u64 φ′A = E−1_8 (μ↺_{νX...+8})
 func (i *Instance) LoadU64(dst polkavm.Reg, address uint64) error {
 	var v uint64
 	if err := i.load(address, 8, &v); err != nil {
@@ -128,111 +128,111 @@ func (i *Instance) LoadU64(dst polkavm.Reg, address uint64) error {
 	return nil
 }
 
-// StoreU8 store_u8 μ′↺_νX = ωA mod 2^8
+// StoreU8 store_u8 μ′↺_νX = φA mod 2^8
 func (i *Instance) StoreU8(src polkavm.Reg, address uint64) error {
 	return i.store(address, uint8(i.regs[src]))
 }
 
-// StoreU16 store_u16 μ′↺_{νX...+2} = E2(ωA mod 2^16)
+// StoreU16 store_u16 μ′↺_{νX...+2} = E2(φA mod 2^16)
 func (i *Instance) StoreU16(src polkavm.Reg, address uint64) error {
 	return i.store(address, uint16(i.regs[src]))
 }
 
-// StoreU32 store_u32 μ′↺_{νX...+4} = E4(ωA mod 2^32)
+// StoreU32 store_u32 μ′↺_{νX...+4} = E4(φA mod 2^32)
 func (i *Instance) StoreU32(src polkavm.Reg, address uint64) error {
 	return i.store(address, uint32(i.regs[src]))
 }
 
-// StoreU64 store_u64 μ′↺_{νX...+8} = E8(ωA)
+// StoreU64 store_u64 μ′↺_{νX...+8} = E8(φA)
 func (i *Instance) StoreU64(src polkavm.Reg, address uint64) error {
 	return i.store(address, i.regs[src])
 }
 
-// StoreImmIndirectU8 store_imm_ind_u8 μ′↺_{ωA+νX} = νY mod 2^8
+// StoreImmIndirectU8 store_imm_ind_u8 μ′↺_{φA+νX} = νY mod 2^8
 func (i *Instance) StoreImmIndirectU8(base polkavm.Reg, offset uint64, value uint64) error {
 	return i.store(i.regs[base]+offset, uint8(value))
 }
 
-// StoreImmIndirectU16 store_imm_ind_u16 μ′↺_{ωA+νX...+2} = E2(νY mod 2^16)
+// StoreImmIndirectU16 store_imm_ind_u16 μ′↺_{φA+νX...+2} = E2(νY mod 2^16)
 func (i *Instance) StoreImmIndirectU16(base polkavm.Reg, offset uint64, value uint64) error {
 	return i.store(i.regs[base]+offset, uint16(value))
 }
 
-// StoreImmIndirectU32 store_imm_ind_u32 μ′↺_{ωA+νX...+4} = E4(νY mod 2^32)
+// StoreImmIndirectU32 store_imm_ind_u32 μ′↺_{φA+νX...+4} = E4(νY mod 2^32)
 func (i *Instance) StoreImmIndirectU32(base polkavm.Reg, offset uint64, value uint64) error {
 	return i.store(i.regs[base]+offset, uint32(value))
 }
 
-// StoreImmIndirectU64 store_imm_ind_u64 μ′↺_{ωA+νX...+8} = E8(νY)
+// StoreImmIndirectU64 store_imm_ind_u64 μ′↺_{φA+νX...+8} = E8(νY)
 func (i *Instance) StoreImmIndirectU64(base polkavm.Reg, offset uint64, value uint64) error {
 	return i.store(i.regs[base]+offset, value)
 }
 
-// LoadImmAndJump load_imm_jump branch(νY , ⊺), ω′A = νX
+// LoadImmAndJump load_imm_jump branch(νY , ⊺), φ′A = νX
 func (i *Instance) LoadImmAndJump(ra polkavm.Reg, value uint64, target uint64) error {
 	i.LoadImm(ra, value)
 	return i.Jump(target)
 }
 
-// BranchEqImm branch_eq_imm branch(νY, ωA = νX)
+// BranchEqImm branch_eq_imm branch(νY, φA = νX)
 func (i *Instance) BranchEqImm(regA polkavm.Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] == valueX, target)
 }
 
-// BranchNotEqImm branch_ne_imm branch(νY, ωA ≠ νX)
+// BranchNotEqImm branch_ne_imm branch(νY, φA ≠ νX)
 func (i *Instance) BranchNotEqImm(regA polkavm.Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] != valueX, target)
 }
 
-// BranchLessUnsignedImm branch_lt_u_imm branch(νY , ωA < νX)
+// BranchLessUnsignedImm branch_lt_u_imm branch(νY , φA < νX)
 func (i *Instance) BranchLessUnsignedImm(regA polkavm.Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] < valueX, target)
 }
 
-// BranchLessOrEqualUnsignedImm branch_le_u_imm branch(νY, ωA ≤ νX)
+// BranchLessOrEqualUnsignedImm branch_le_u_imm branch(νY, φA ≤ νX)
 func (i *Instance) BranchLessOrEqualUnsignedImm(regA polkavm.Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] <= valueX, target)
 }
 
-// BranchGreaterOrEqualUnsignedImm branch_ge_u_imm branch(νY, ωA ≥ νX)
+// BranchGreaterOrEqualUnsignedImm branch_ge_u_imm branch(νY, φA ≥ νX)
 func (i *Instance) BranchGreaterOrEqualUnsignedImm(regA polkavm.Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] >= valueX, target)
 }
 
-// BranchGreaterUnsignedImm branch_gt_u_imm branch(νY, ωA > νX)
+// BranchGreaterUnsignedImm branch_gt_u_imm branch(νY, φA > νX)
 func (i *Instance) BranchGreaterUnsignedImm(regA polkavm.Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] > valueX, target)
 }
 
-// BranchLessSignedImm branch_lt_s_imm branch(νY, Z8(ωA) < Z8(νX))
+// BranchLessSignedImm branch_lt_s_imm branch(νY, Z8(φA) < Z8(νX))
 func (i *Instance) BranchLessSignedImm(regA polkavm.Reg, valueX uint64, target uint64) error {
 	return i.branch(int64(i.regs[regA]) < int64(valueX), target)
 }
 
-// BranchLessOrEqualSignedImm branch_le_s_imm branch(νY , Z8(ωA) ≤ Z8(νX))
+// BranchLessOrEqualSignedImm branch_le_s_imm branch(νY , Z8(φA) ≤ Z8(νX))
 func (i *Instance) BranchLessOrEqualSignedImm(regA polkavm.Reg, valueX uint64, target uint64) error {
 	return i.branch(int64(i.regs[regA]) <= int64(valueX), target)
 }
 
-// BranchGreaterOrEqualSignedImm branch_ge_s_imm branch(νY, Z8(ωA) ≥ Z8(νX))
+// BranchGreaterOrEqualSignedImm branch_ge_s_imm branch(νY, Z8(φA) ≥ Z8(νX))
 func (i *Instance) BranchGreaterOrEqualSignedImm(regA polkavm.Reg, valueX uint64, target uint64) error {
 	return i.branch(int64(i.regs[regA]) >= int64(valueX), target)
 }
 
-// BranchGreaterSignedImm branch_gt_s_imm branch(νY, Z8(ωA) > Z8(νX))
+// BranchGreaterSignedImm branch_gt_s_imm branch(νY, Z8(φA) > Z8(νX))
 func (i *Instance) BranchGreaterSignedImm(regA polkavm.Reg, valueX uint64, target uint64) error {
 	return i.branch(int64(i.regs[regA]) > int64(valueX), target)
 }
 
-// MoveReg move_reg ω′D = ωA
+// MoveReg move_reg φ′D = φA
 func (i *Instance) MoveReg(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, i.regs[s])
 }
 
-// Sbrk sbrk ω′D ≡ min(x ∈ NR) ∶
+// Sbrk sbrk φ′D ≡ min(x ∈ NR) ∶
 // x ≥ h
-// Nx⋅⋅⋅+ωA ~⊆ Vμ
-// Nx⋅⋅⋅+ωA ⊆ V∗μ′
+// Nx⋅⋅⋅+φA ~⊆ Vμ
+// Nx⋅⋅⋅+φA ⊆ V∗μ′
 // The term h above refers to the beginning of the heap
 func (i *Instance) Sbrk(dst polkavm.Reg, sizeReg polkavm.Reg) error {
 	size := i.regs[sizeReg]
@@ -244,77 +244,77 @@ func (i *Instance) Sbrk(dst polkavm.Reg, sizeReg polkavm.Reg) error {
 	return nil
 }
 
-// CountSetBits64 count_set_bits_64 ω′D = {63;i=0}∑ B8(ωA)_i
+// CountSetBits64 count_set_bits_64 φ′D = {63;i=0}∑ B8(φA)_i
 func (i *Instance) CountSetBits64(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(bits.OnesCount64(i.regs[s])))
 }
 
-// CountSetBits32 count_set_bits_32 ω′D = {31;i=0}∑ B4(ωA mod 2^32)_i
+// CountSetBits32 count_set_bits_32 φ′D = {31;i=0}∑ B4(φA mod 2^32)_i
 func (i *Instance) CountSetBits32(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(bits.OnesCount32(uint32(i.regs[s]))))
 }
 
-// LeadingZeroBits64 leading_zero_bits_64 ω′D = max(n ∈ N65) where {i<n;i=0}∑ ←B8(ωA)_i = 0
+// LeadingZeroBits64 leading_zero_bits_64 φ′D = max(n ∈ N65) where {i<n;i=0}∑ ←B8(φA)_i = 0
 func (i *Instance) LeadingZeroBits64(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(bits.LeadingZeros64(i.regs[s])))
 }
 
-// LeadingZeroBits32 leading_zero_bits_32 ω′D = max(n ∈ N33) where {i<n;i=0}∑ ←B4(ωA mod 232)_i = 0
+// LeadingZeroBits32 leading_zero_bits_32 φ′D = max(n ∈ N33) where {i<n;i=0}∑ ←B4(φA mod 232)_i = 0
 func (i *Instance) LeadingZeroBits32(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(bits.LeadingZeros32(uint32(i.regs[s]))))
 }
 
-// TrailingZeroBits64 trailing_zero_bits_64 ω′D = max(n ∈ N65) where {i<n;i=0}∑ B8(ωA)_i = 0
+// TrailingZeroBits64 trailing_zero_bits_64 φ′D = max(n ∈ N65) where {i<n;i=0}∑ B8(φA)_i = 0
 func (i *Instance) TrailingZeroBits64(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(bits.TrailingZeros64(i.regs[s])))
 }
 
-// TrailingZeroBits32 trailing_zero_bits_32 ω′D = max(n ∈ N33) where {i<n;i=0}∑ B4(ωA mod 232)_i = 0
+// TrailingZeroBits32 trailing_zero_bits_32 φ′D = max(n ∈ N33) where {i<n;i=0}∑ B4(φA mod 232)_i = 0
 func (i *Instance) TrailingZeroBits32(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(bits.TrailingZeros32(uint32(i.regs[s]))))
 }
 
-// SignExtend8 sign_extend_8 ω′D = Z−1_8(Z_1(ωA mod 2^8))
+// SignExtend8 sign_extend_8 φ′D = Z−1_8(Z_1(φA mod 2^8))
 func (i *Instance) SignExtend8(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(int8(uint8(i.regs[s]))))
 }
 
-// SignExtend16 sign_extend_16 ω′D = Z−1_8(Z_2(ωA mod 2^16))
+// SignExtend16 sign_extend_16 φ′D = Z−1_8(Z_2(φA mod 2^16))
 func (i *Instance) SignExtend16(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(int16(uint16(i.regs[s]))))
 }
 
-// ZeroExtend16 zero_extend_16 ω′D = ωA mod 2^16
+// ZeroExtend16 zero_extend_16 φ′D = φA mod 2^16
 func (i *Instance) ZeroExtend16(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, uint64(uint16(i.regs[s])))
 }
 
-// ReverseBytes reverse_bytes ∀i ∈ N8 ∶ E8(ω′D)i = E8(ωA)_7−i
+// ReverseBytes reverse_bytes ∀i ∈ N8 ∶ E8(φ′D)i = E8(φA)_7−i
 func (i *Instance) ReverseBytes(dst polkavm.Reg, s polkavm.Reg) {
 	i.setAndSkip(dst, bits.ReverseBytes64(i.regs[s]))
 }
 
-// StoreIndirectU8 store_ind_u8 μ′↺_{ωB+νX} = ωA mod 2^8
+// StoreIndirectU8 store_ind_u8 μ′↺_{φB+νX} = φA mod 2^8
 func (i *Instance) StoreIndirectU8(src polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	return i.store(i.regs[base]+offset, uint8(i.regs[src]))
 }
 
-// StoreIndirectU16 store_ind_u16 μ′↺_{ωB+νX...+2} = E2(ωA mod 2^16)
+// StoreIndirectU16 store_ind_u16 μ′↺_{φB+νX...+2} = E2(φA mod 2^16)
 func (i *Instance) StoreIndirectU16(src polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	return i.store(i.regs[base]+offset, uint16(i.regs[src]))
 }
 
-// StoreIndirectU32 store_ind_u32 μ′↺_{ωB+νX...+4} = E4(ωA mod 2^32)
+// StoreIndirectU32 store_ind_u32 μ′↺_{φB+νX...+4} = E4(φA mod 2^32)
 func (i *Instance) StoreIndirectU32(src polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	return i.store(i.regs[base]+offset, uint32(i.regs[src]))
 }
 
-// StoreIndirectU64 store_ind_u64 μ′↺_{ωB+νX...+8} = E8(ωA)
+// StoreIndirectU64 store_ind_u64 μ′↺_{φB+νX...+8} = E8(φA)
 func (i *Instance) StoreIndirectU64(src polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	return i.store(i.regs[base]+offset, i.regs[src])
 }
 
-// LoadIndirectU8 load_ind_u8 ω′A = μ↺_{ωB+νX}
+// LoadIndirectU8 load_ind_u8 φ′A = μ↺_{φB+νX}
 func (i *Instance) LoadIndirectU8(dst polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	slice := make([]byte, 1)
 	if err := i.memory.Read(i.regs[base]+offset, slice); err != nil {
@@ -324,7 +324,7 @@ func (i *Instance) LoadIndirectU8(dst polkavm.Reg, base polkavm.Reg, offset uint
 	return nil
 }
 
-// LoadIndirectI8 load_ind_i8 ω′A = Z−1_8(Z1(μ↺_{ωB+νX}))
+// LoadIndirectI8 load_ind_i8 φ′A = Z−1_8(Z1(μ↺_{φB+νX}))
 func (i *Instance) LoadIndirectI8(dst polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	slice := make([]byte, 1)
 	if err := i.memory.Read(i.regs[base]+offset, slice); err != nil {
@@ -334,7 +334,7 @@ func (i *Instance) LoadIndirectI8(dst polkavm.Reg, base polkavm.Reg, offset uint
 	return nil
 }
 
-// LoadIndirectU16 load_ind_u16 ω′A = E−1_2 (μ↺_{ωB+νX...+2})
+// LoadIndirectU16 load_ind_u16 φ′A = E−1_2 (μ↺_{φB+νX...+2})
 func (i *Instance) LoadIndirectU16(dst polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	var v uint16
 	if err := i.load(i.regs[base]+offset, 2, &v); err != nil {
@@ -344,7 +344,7 @@ func (i *Instance) LoadIndirectU16(dst polkavm.Reg, base polkavm.Reg, offset uin
 	return nil
 }
 
-// LoadIndirectI16 load_ind_i16 ω′A = Z−1_8(Z2(E−1_2(μ↺_{ωB+νX...+2})))
+// LoadIndirectI16 load_ind_i16 φ′A = Z−1_8(Z2(E−1_2(μ↺_{φB+νX...+2})))
 func (i *Instance) LoadIndirectI16(dst polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	var v int16
 	if err := i.load(i.regs[base]+offset, 2, &v); err != nil {
@@ -354,7 +354,7 @@ func (i *Instance) LoadIndirectI16(dst polkavm.Reg, base polkavm.Reg, offset uin
 	return nil
 }
 
-// LoadIndirectU32 load_ind_u32 ω′A = E−1_4(μ↺_{ωB+νX...+4})
+// LoadIndirectU32 load_ind_u32 φ′A = E−1_4(μ↺_{φB+νX...+4})
 func (i *Instance) LoadIndirectU32(dst polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	var v uint32
 	if err := i.load(i.regs[base]+offset, 4, &v); err != nil {
@@ -364,7 +364,7 @@ func (i *Instance) LoadIndirectU32(dst polkavm.Reg, base polkavm.Reg, offset uin
 	return nil
 }
 
-// LoadIndirectI32 load_ind_i32 ω′A = Z−1_8(Z4(E−1_4(μ↺_{ωB+νX...+4})))
+// LoadIndirectI32 load_ind_i32 φ′A = Z−1_8(Z4(E−1_4(μ↺_{φB+νX...+4})))
 func (i *Instance) LoadIndirectI32(dst polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	var v int32
 	if err := i.load(i.regs[base]+offset, 4, &v); err != nil {
@@ -374,7 +374,7 @@ func (i *Instance) LoadIndirectI32(dst polkavm.Reg, base polkavm.Reg, offset uin
 	return nil
 }
 
-// LoadIndirectU64 load_ind_u64 ω′A = E−1_8(μ↺_{ωB+νX...+8})
+// LoadIndirectU64 load_ind_u64 φ′A = E−1_8(μ↺_{φB+νX...+8})
 func (i *Instance) LoadIndirectU64(dst polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	var v uint64
 	if err := i.load(i.regs[base]+offset, 8, &v); err != nil {
@@ -384,87 +384,87 @@ func (i *Instance) LoadIndirectU64(dst polkavm.Reg, base polkavm.Reg, offset uin
 	return nil
 }
 
-// AddImm32 add_imm_32 ω′A = X4((ωB + νX) mod 2^32)
+// AddImm32 add_imm_32 φ′A = X4((φB + νX) mod 2^32)
 func (i *Instance) AddImm32(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]+value)), 4))
 }
 
-// AndImm and_imm ∀i ∈ N64 ∶ B8(ω′A)_i = B8(ωB)_i ∧ B8(νX)_i
+// AndImm and_imm ∀i ∈ N64 ∶ B8(φ′A)_i = B8(φB)_i ∧ B8(νX)_i
 func (i *Instance) AndImm(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, (i.regs[regA])&value)
 }
 
-// XorImm xor_imm ∀i ∈ N64 ∶ B8(ω′A)i = B8(ωB)_i ⊕ B8(νX)_i
+// XorImm xor_imm ∀i ∈ N64 ∶ B8(φ′A)i = B8(φB)_i ⊕ B8(νX)_i
 func (i *Instance) XorImm(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, (i.regs[regA])^value)
 }
 
-// OrImm or_imm ∀i ∈ N64 ∶ B8(ω′A)i = B8(ωB)_i ∨ B8(νX)_i
+// OrImm or_imm ∀i ∈ N64 ∶ B8(φ′A)i = B8(φB)_i ∨ B8(νX)_i
 func (i *Instance) OrImm(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, (i.regs[regA])|value)
 }
 
-// MulImm32 mul_imm_32 ω′A = X4((ωB ⋅ νX) mod 2^32)
+// MulImm32 mul_imm_32 φ′A = X4((φB ⋅ νX) mod 2^32)
 func (i *Instance) MulImm32(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]*value)), 4))
 }
 
-// SetLessThanUnsignedImm set_lt_u_imm ω′A = ωB < νX
+// SetLessThanUnsignedImm set_lt_u_imm φ′A = φB < νX
 func (i *Instance) SetLessThanUnsignedImm(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, bool2uint64((i.regs[regA]) < value))
 }
 
-// SetLessThanSignedImm set_lt_s_imm ω′A = Z8(ωB) < Z8(νX)
+// SetLessThanSignedImm set_lt_s_imm φ′A = Z8(φB) < Z8(νX)
 func (i *Instance) SetLessThanSignedImm(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, bool2uint64(int64(i.regs[regA]) < int64(value)))
 }
 
-// ShiftLogicalLeftImm32 shlo_l_imm_32 ω′A = X4((ωB ⋅ 2^νX mod 32) mod 2^32)
+// ShiftLogicalLeftImm32 shlo_l_imm_32 φ′A = X4((φB ⋅ 2^νX mod 32) mod 2^32)
 func (i *Instance) ShiftLogicalLeftImm32(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])<<value), 4))
 }
 
-// ShiftLogicalRightImm32 shlo_r_imm_32 ω′A = X4(⌊ ωB mod 2^32 ÷ 2^νX mod 32 ⌋)
+// ShiftLogicalRightImm32 shlo_r_imm_32 φ′A = X4(⌊ φB mod 2^32 ÷ 2^νX mod 32 ⌋)
 func (i *Instance) ShiftLogicalRightImm32(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])>>value), 4))
 }
 
-// ShiftArithmeticRightImm32 shar_r_imm_32 ω′A = Z−1_8(⌊ Z4(ωB mod 2^32) ÷ 2^νX mod 32 ⌋)
+// ShiftArithmeticRightImm32 shar_r_imm_32 φ′A = Z−1_8(⌊ Z4(φB mod 2^32) ÷ 2^νX mod 32 ⌋)
 func (i *Instance) ShiftArithmeticRightImm32(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, uint64(int32(uint32(i.regs[regA]))>>value))
 }
 
-// NegateAndAddImm32 neg_add_imm_32 ω′A = X4((νX + 2^32 − ωB) mod 2^32)
+// NegateAndAddImm32 neg_add_imm_32 φ′A = X4((νX + 2^32 − φB) mod 2^32)
 func (i *Instance) NegateAndAddImm32(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(value-i.regs[regA])), 4))
 }
 
-// SetGreaterThanUnsignedImm set_gt_u_imm ω′A = ωB > νX
+// SetGreaterThanUnsignedImm set_gt_u_imm φ′A = φB > νX
 func (i *Instance) SetGreaterThanUnsignedImm(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, bool2uint64(i.regs[regA] > value))
 }
 
-// SetGreaterThanSignedImm set_gt_s_imm ω′A = Z8(ωB) > Z8(νX)
+// SetGreaterThanSignedImm set_gt_s_imm φ′A = Z8(φB) > Z8(νX)
 func (i *Instance) SetGreaterThanSignedImm(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, bool2uint64(int64(i.regs[regA]) > int64(value)))
 }
 
-// ShiftLogicalLeftImmAlt32 shlo_l_imm_alt_32 ω′A = X4((νX ⋅ 2ωB mod 32) mod 2^32)
+// ShiftLogicalLeftImmAlt32 shlo_l_imm_alt_32 φ′A = X4((νX ⋅ 2φB mod 32) mod 2^32)
 func (i *Instance) ShiftLogicalLeftImmAlt32(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(value<<i.regs[regB])), 4))
 }
 
-// ShiftLogicalRightImmAlt32 shlo_r_imm_alt_32 ω′A = X4(⌊ νX mod 2^32 ÷ 2^ωB mod 32 ⌋)
+// ShiftLogicalRightImmAlt32 shlo_r_imm_alt_32 φ′A = X4(⌊ νX mod 2^32 ÷ 2^φB mod 32 ⌋)
 func (i *Instance) ShiftLogicalRightImmAlt32(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(value)>>uint32(i.regs[regB])), 4))
 }
 
-// ShiftArithmeticRightImmAlt32 shar_r_imm_alt_32 ω′A = Z−1_8(⌊ Z4(νX mod 2^32) ÷ 2ωB mod 32 ⌋)
+// ShiftArithmeticRightImmAlt32 shar_r_imm_alt_32 φ′A = Z−1_8(⌊ Z4(νX mod 2^32) ÷ 2φB mod 32 ⌋)
 func (i *Instance) ShiftArithmeticRightImmAlt32(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, uint64(int32(uint32(value))>>uint32(i.regs[regB])))
 }
 
-// CmovIfZeroImm cmov_iz_imm ω′A = νX if ωB = 0 otherwise ωA
+// CmovIfZeroImm cmov_iz_imm φ′A = νX if φB = 0 otherwise φA
 func (i *Instance) CmovIfZeroImm(dst polkavm.Reg, c polkavm.Reg, s uint64) {
 	if i.regs[c] == 0 {
 		i.regs[dst] = s
@@ -472,7 +472,7 @@ func (i *Instance) CmovIfZeroImm(dst polkavm.Reg, c polkavm.Reg, s uint64) {
 	i.skip()
 }
 
-// CmovIfNotZeroImm cmov_nz_imm ω′A = νX if ωB ≠ 0 otherwise ωA
+// CmovIfNotZeroImm cmov_nz_imm φ′A = νX if φB ≠ 0 otherwise φA
 func (i *Instance) CmovIfNotZeroImm(dst polkavm.Reg, c polkavm.Reg, s uint64) {
 	if i.regs[c] != 0 {
 		i.regs[dst] = s
@@ -481,124 +481,124 @@ func (i *Instance) CmovIfNotZeroImm(dst polkavm.Reg, c polkavm.Reg, s uint64) {
 	i.skip()
 }
 
-// AddImm64 add_imm_64 ω′A = (ωB + νX) mod 2^64
+// AddImm64 add_imm_64 φ′A = (φB + νX) mod 2^64
 func (i *Instance) AddImm64(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, i.regs[regA]+value)
 }
 
-// MulImm64 mul_imm_64 ω′A = (ωB ⋅ νX) mod 2^64
+// MulImm64 mul_imm_64 φ′A = (φB ⋅ νX) mod 2^64
 func (i *Instance) MulImm64(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, i.regs[regA]*value)
 }
 
-// ShiftLogicalLeftImm64 shlo_l_imm_64 ω′A = X8((ωB ⋅ 2^νX mod 64) mod 2^64)
+// ShiftLogicalLeftImm64 shlo_l_imm_64 φ′A = X8((φB ⋅ 2^νX mod 64) mod 2^64)
 func (i *Instance) ShiftLogicalLeftImm64(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, sext(i.regs[regA]<<value, 8))
 }
 
-// ShiftLogicalRightImm64 shlo_r_imm_64 ω′A = X8(⌊ ωB ÷ 2^νX mod 64 ⌋)
+// ShiftLogicalRightImm64 shlo_r_imm_64 φ′A = X8(⌊ φB ÷ 2^νX mod 64 ⌋)
 func (i *Instance) ShiftLogicalRightImm64(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, sext(i.regs[regA]>>value, 8))
 }
 
-// ShiftArithmeticRightImm64 shar_r_imm_64 ω′A = Z−1_8(⌊ Z8(ωB) ÷ 2νX mod 64 ⌋)
+// ShiftArithmeticRightImm64 shar_r_imm_64 φ′A = Z−1_8(⌊ Z8(φB) ÷ 2νX mod 64 ⌋)
 func (i *Instance) ShiftArithmeticRightImm64(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, uint64(int64(i.regs[regA])>>value))
 }
 
-// NegateAndAddImm64 neg_add_imm_64 ω′A = (νX + 2^64 − ωB) mod 2^64
+// NegateAndAddImm64 neg_add_imm_64 φ′A = (νX + 2^64 − φB) mod 2^64
 func (i *Instance) NegateAndAddImm64(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, value-i.regs[regA])
 }
 
-// ShiftLogicalLeftImmAlt64 shlo_l_imm_alt_64 ω′A = (νX ⋅ 2ωB mod 64) mod 2^64
+// ShiftLogicalLeftImmAlt64 shlo_l_imm_alt_64 φ′A = (νX ⋅ 2φB mod 64) mod 2^64
 func (i *Instance) ShiftLogicalLeftImmAlt64(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, value<<i.regs[regB])
 }
 
-// ShiftLogicalRightImmAlt64 shlo_r_imm_alt_64 ω′A = ⌊ νX ÷ 2^ωB mod 64 ⌋
+// ShiftLogicalRightImmAlt64 shlo_r_imm_alt_64 φ′A = ⌊ νX ÷ 2^φB mod 64 ⌋
 func (i *Instance) ShiftLogicalRightImmAlt64(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, value>>i.regs[regB])
 }
 
-// ShiftArithmeticRightImmAlt64 shar_r_imm_alt_64 ω′A = Z−1_8(⌊ Z8(νX) ÷ 2ωB mod 64 ⌋)
+// ShiftArithmeticRightImmAlt64 shar_r_imm_alt_64 φ′A = Z−1_8(⌊ Z8(νX) ÷ 2φB mod 64 ⌋)
 func (i *Instance) ShiftArithmeticRightImmAlt64(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, uint64(int32(value)>>i.regs[regB]))
 }
 
-// RotateRight64Imm rot_r_64_imm ∀i ∈ N64 ∶ B8(ω′A)_i = B8(ωB)_{(i+νX) mod 64}
+// RotateRight64Imm rot_r_64_imm ∀i ∈ N64 ∶ B8(φ′A)_i = B8(φB)_{(i+νX) mod 64}
 func (i *Instance) RotateRight64Imm(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, bits.RotateLeft64(i.regs[regA], -int(value)))
 }
 
-// RotateRight64ImmAlt rot_r_64_imm_alt ∀i ∈ N64 ∶ B8(ω′A)i = B8(νX)_{(i+ωB) mod 64}
+// RotateRight64ImmAlt rot_r_64_imm_alt ∀i ∈ N64 ∶ B8(φ′A)i = B8(νX)_{(i+φB) mod 64}
 func (i *Instance) RotateRight64ImmAlt(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, bits.RotateLeft64(value, -int(i.regs[regA])))
 }
 
-// RotateRight32Imm rot_r_32_imm ω′A = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_i = B4(ωB)_{(i+νX ) mod 32}
+// RotateRight32Imm rot_r_32_imm φ′A = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_i = B4(φB)_{(i+νX ) mod 32}
 func (i *Instance) RotateRight32Imm(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(bits.RotateLeft32(uint32(i.regs[regA]), -int(value))), 4))
 }
 
-// RotateRight32ImmAlt rot_r_32_imm_alt ω′A = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_i = B4(νX)_{(i+ωB) mod 32}
+// RotateRight32ImmAlt rot_r_32_imm_alt φ′A = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_i = B4(νX)_{(i+φB) mod 32}
 func (i *Instance) RotateRight32ImmAlt(dst polkavm.Reg, regA polkavm.Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(bits.RotateLeft32(uint32(value), -int(uint32(i.regs[regA])))), 4))
 }
 
-// BranchEq branch_eq branch(νX, ωA = ωB)
+// BranchEq branch_eq branch(νX, φA = φB)
 func (i *Instance) BranchEq(regA polkavm.Reg, regB polkavm.Reg, target uint64) error {
 	return i.branch(i.regs[regA] == i.regs[regB], target)
 }
 
-// BranchNotEq branch_ne branch(νX, ωA ≠ ωB)
+// BranchNotEq branch_ne branch(νX, φA ≠ φB)
 func (i *Instance) BranchNotEq(regA polkavm.Reg, regB polkavm.Reg, target uint64) error {
 	return i.branch(i.regs[regA] != i.regs[regB], target)
 }
 
-// BranchLessUnsigned branch_lt_u branch(νX, ωA < ωB)
+// BranchLessUnsigned branch_lt_u branch(νX, φA < φB)
 func (i *Instance) BranchLessUnsigned(regA polkavm.Reg, regB polkavm.Reg, target uint64) error {
 	return i.branch(i.regs[regA] < i.regs[regB], target)
 }
 
-// BranchLessSigned branch_lt_s branch(νX, Z8(ωA) < Z8(ωB))
+// BranchLessSigned branch_lt_s branch(νX, Z8(φA) < Z8(φB))
 func (i *Instance) BranchLessSigned(regA polkavm.Reg, regB polkavm.Reg, target uint64) error {
 	return i.branch(int64(i.regs[regA]) < int64(i.regs[regB]), target)
 }
 
-// BranchGreaterOrEqualUnsigned branch_ge_u branch(νX, ωA ≥ ωB)
+// BranchGreaterOrEqualUnsigned branch_ge_u branch(νX, φA ≥ φB)
 func (i *Instance) BranchGreaterOrEqualUnsigned(regA polkavm.Reg, regB polkavm.Reg, target uint64) error {
 	return i.branch(i.regs[regA] >= i.regs[regB], target)
 }
 
-// BranchGreaterOrEqualSigned branch_ge_s branch(νX, Z8(ωA) ≥ Z8(ωB))
+// BranchGreaterOrEqualSigned branch_ge_s branch(νX, Z8(φA) ≥ Z8(φB))
 func (i *Instance) BranchGreaterOrEqualSigned(regA polkavm.Reg, regB polkavm.Reg, target uint64) error {
 	return i.branch(int64(i.regs[regA]) >= int64(i.regs[regB]), target)
 }
 
-// LoadImmAndJumpIndirect load_imm_jump_ind djump((ωB + νY) mod 232), ω′A = νX
+// LoadImmAndJumpIndirect load_imm_jump_ind djump((φB + νY) mod 232), φ′A = νX
 func (i *Instance) LoadImmAndJumpIndirect(ra polkavm.Reg, base polkavm.Reg, value, offset uint64) error {
 	target := i.regs[base] + offset
 	i.regs[ra] = value
 	return i.djump(target)
 }
 
-// Add32 add_32 ω′D = X4((ωA + ωB) mod 2^32)
+// Add32 add_32 φ′D = X4((φA + φB) mod 2^32)
 func (i *Instance) Add32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]+i.regs[regB])), 4))
 }
 
-// Sub32 sub_32 ω′D = X4((ωA + 2^32 − (ωB mod 2^32)) mod 2^32)
+// Sub32 sub_32 φ′D = X4((φA + 2^32 − (φB mod 2^32)) mod 2^32)
 func (i *Instance) Sub32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]-i.regs[regB])), 4))
 }
 
-// Mul32 mul_32 ω′D = X4((ωA ⋅ ωB) mod 2^32)
+// Mul32 mul_32 φ′D = X4((φA ⋅ φB) mod 2^32)
 func (i *Instance) Mul32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]*i.regs[regB])), 4))
 }
 
-// DivUnsigned32 div_u_32 ω′D = 2^64 − 1 if ωB mod 2^32 = 0 otherwise X4(⌊ (ωA mod 2^32) ÷ (ωB mod 2^32) ⌋)
+// DivUnsigned32 div_u_32 φ′D = 2^64 − 1 if φB mod 2^32 = 0 otherwise X4(⌊ (φA mod 2^32) ÷ (φB mod 2^32) ⌋)
 func (i *Instance) DivUnsigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs, rhs := uint32(i.regs[regA]), uint32(i.regs[regB])
 	if rhs == 0 {
@@ -609,11 +609,11 @@ func (i *Instance) DivUnsigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.skip()
 }
 
-// DivSigned32 div_s_32 ω′D =
+// DivSigned32 div_s_32 φ′D =
 // ⎧ 2^64 − 1 			if b = 0
 // ⎨ Z−1_8(a) 			if a = −2^31 ∧ b = −1
 // ⎩ Z−1_8 (rtz(a ÷ b)) otherwise
-// where a = Z4(ωA mod 2^32), b = Z4(ωB mod 2^32)
+// where a = Z4(φA mod 2^32), b = Z4(φB mod 2^32)
 func (i *Instance) DivSigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs := int32(uint32(i.regs[regA]))
 	rhs := int32(uint32(i.regs[regB]))
@@ -627,7 +627,7 @@ func (i *Instance) DivSigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.skip()
 }
 
-// RemUnsigned32 rem_u_32 ω′D = X4(ωA mod 2^32) if ωB mod 2^32 = 0 otherwise X4((ωA mod 2^32) mod (ωB mod 2^32))
+// RemUnsigned32 rem_u_32 φ′D = X4(φA mod 2^32) if φB mod 2^32 = 0 otherwise X4((φA mod 2^32) mod (φB mod 2^32))
 func (i *Instance) RemUnsigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs, rhs := uint32(i.regs[regA]), uint32(i.regs[regB])
 	if rhs == 0 {
@@ -638,11 +638,11 @@ func (i *Instance) RemUnsigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.skip()
 }
 
-// RemSigned32 rem_s_32 ω′D =
+// RemSigned32 rem_s_32 φ′D =
 // ⎧ 0			 		if a = −2^31 ∧ b = −1
 // ⎨
 // ⎩ Z−1_8 (smod(a, b)) otherwise
-// where a = Z4(ωA mod 2^32), b = Z4(ωB mod 2^32)
+// where a = Z4(φA mod 2^32), b = Z4(φB mod 2^32)
 func (i *Instance) RemSigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs := int32(uint32(i.regs[regA]))
 	rhs := int32(uint32(i.regs[regB]))
@@ -654,39 +654,39 @@ func (i *Instance) RemSigned32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.skip()
 }
 
-// ShiftLogicalLeft32 shlo_l_32 ω′D = X4((ωA ⋅ 2ωB mod 32) mod 2^32)
+// ShiftLogicalLeft32 shlo_l_32 φ′D = X4((φA ⋅ 2φB mod 32) mod 2^32)
 func (i *Instance) ShiftLogicalLeft32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])<<(uint32(i.regs[regB])%32)), 4))
 }
 
-// ShiftLogicalRight32 shlo_r_32 ω′D = X4(⌊ (ωA mod 2^32) ÷ 2ωB mod 32 ⌋)
+// ShiftLogicalRight32 shlo_r_32 φ′D = X4(⌊ (φA mod 2^32) ÷ 2φB mod 32 ⌋)
 func (i *Instance) ShiftLogicalRight32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])>>(uint32(i.regs[regB])%32)), 4))
 }
 
-// ShiftArithmeticRight32 shar_r_32 ω′D = Z−1_8(⌊ Z4(ωA mod 2^32) ÷ 2ωB mod 32 ⌋)
+// ShiftArithmeticRight32 shar_r_32 φ′D = Z−1_8(⌊ Z4(φA mod 2^32) ÷ 2φB mod 32 ⌋)
 func (i *Instance) ShiftArithmeticRight32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	shiftAmount := uint32(i.regs[regB]) % 32
 	shiftedValue := int32(uint32(i.regs[regA])) >> shiftAmount
 	i.setAndSkip(dst, uint64(shiftedValue))
 }
 
-// Add64 add_64 ω′D = (ωA + ωB) mod 2^64
+// Add64 add_64 φ′D = (φA + φB) mod 2^64
 func (i *Instance) Add64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, i.regs[regA]+i.regs[regB])
 }
 
-// Sub64 sub_64 ω′D = (ωA + 2^64 − ωB) mod 2^64
+// Sub64 sub_64 φ′D = (φA + 2^64 − φB) mod 2^64
 func (i *Instance) Sub64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, i.regs[regA]-i.regs[regB])
 }
 
-// Mul64 mul_64 ω′D = (ωA ⋅ ωB) mod 2^64
+// Mul64 mul_64 φ′D = (φA ⋅ φB) mod 2^64
 func (i *Instance) Mul64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, i.regs[regA]*i.regs[regB])
 }
 
-// DivUnsigned64 div_u_64 ω′D = 2^64 − 1 if ωB = 0 otherwise ⌊ ωA ÷ ωB ⌋
+// DivUnsigned64 div_u_64 φ′D = 2^64 − 1 if φB = 0 otherwise ⌊ φA ÷ φB ⌋
 func (i *Instance) DivUnsigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs, rhs := i.regs[regA], i.regs[regB]
 	if rhs == 0 {
@@ -697,10 +697,10 @@ func (i *Instance) DivUnsigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.skip()
 }
 
-// DivSigned64 div_s_64 ω′D =
-// ⎧ 2^64 − 1 						if ωB = 0
-// ⎨ ωA								if Z8(ωA) = −2^63 ∧ Z8(ωB) = −1
-// ⎩ Z−1_8(rtz(Z8(ωA) ÷ Z8(ωB))) 	otherwise
+// DivSigned64 div_s_64 φ′D =
+// ⎧ 2^64 − 1 						if φB = 0
+// ⎨ φA								if Z8(φA) = −2^63 ∧ Z8(φB) = −1
+// ⎩ Z−1_8(rtz(Z8(φA) ÷ Z8(φB))) 	otherwise
 func (i *Instance) DivSigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs := int64(i.regs[regA])
 	rhs := int64(i.regs[regB])
@@ -714,7 +714,7 @@ func (i *Instance) DivSigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.skip()
 }
 
-// RemUnsigned64 rem_u_64 ω′D = ωA if ωB = 0 otherwise ωA mod ωB
+// RemUnsigned64 rem_u_64 φ′D = φA if φB = 0 otherwise φA mod φB
 func (i *Instance) RemUnsigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs, rhs := i.regs[regA], i.regs[regB]
 	if rhs == 0 {
@@ -725,10 +725,10 @@ func (i *Instance) RemUnsigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.skip()
 }
 
-// RemSigned64 rem_s_64 ω′D =
-// ⎧ ωA						 	 if ωB = 0
-// ⎨ 0 							 if Z8(ωA) = −2^63 ∧ Z8(ωB) = −1
-// ⎩ Z−1_8(smod(Z8(ωA), Z8(ωB))) otherwise
+// RemSigned64 rem_s_64 φ′D =
+// ⎧ φA						 	 if φB = 0
+// ⎨ 0 							 if Z8(φA) = −2^63 ∧ Z8(φB) = −1
+// ⎩ Z−1_8(smod(Z8(φA), Z8(φB))) otherwise
 func (i *Instance) RemSigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs, rhs := int64(i.regs[regA]), int64(i.regs[regB])
 	if lhs == math.MinInt64 && rhs == -1 {
@@ -739,41 +739,41 @@ func (i *Instance) RemSigned64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.skip()
 }
 
-// ShiftLogicalLeft64 shlo_l_64 ω′D = (ωA ⋅ 2ωB mod 64) mod 2^64
+// ShiftLogicalLeft64 shlo_l_64 φ′D = (φA ⋅ 2φB mod 64) mod 2^64
 func (i *Instance) ShiftLogicalLeft64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	shiftAmount := i.regs[regB] % 64
 	shiftedValue := i.regs[regA] << shiftAmount
 	i.setAndSkip(dst, shiftedValue)
 }
 
-// ShiftLogicalRight64 shlo_r_64 ω′D = ⌊ ωA ÷ 2ωB mod 64 ⌋
+// ShiftLogicalRight64 shlo_r_64 φ′D = ⌊ φA ÷ 2φB mod 64 ⌋
 func (i *Instance) ShiftLogicalRight64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, i.regs[regA]>>(i.regs[regB]%64))
 }
 
-// ShiftArithmeticRight64 shar_r_64 ω′D = Z−1_8(⌊ Z8(ωA) ÷ 2ωB mod 64 ⌋)
+// ShiftArithmeticRight64 shar_r_64 φ′D = Z−1_8(⌊ Z8(φA) ÷ 2φB mod 64 ⌋)
 func (i *Instance) ShiftArithmeticRight64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	shiftAmount := i.regs[regB] % 64
 	shiftedValue := int64(i.regs[regA]) >> shiftAmount
 	i.setAndSkip(dst, uint64(shiftedValue))
 }
 
-// And and ∀i ∈ N64 ∶ B8(ω′D)_i = B8(ωA)_i ∧ B8(ωB)_i
+// And and ∀i ∈ N64 ∶ B8(φ′D)_i = B8(φA)_i ∧ B8(φB)_i
 func (i *Instance) And(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, i.regs[regA]&i.regs[regB])
 }
 
-// Xor xor ∀i ∈ N64 ∶ B8(ω′D)_i = B8(ωA)_i ⊕ B8(ωB)_i
+// Xor xor ∀i ∈ N64 ∶ B8(φ′D)_i = B8(φA)_i ⊕ B8(φB)_i
 func (i *Instance) Xor(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, i.regs[regA]^i.regs[regB])
 }
 
-// Or or ∀i ∈ N64 ∶ B8(ω′D)_i = B8(ωA)_i ∨ B8(ωB)_i
+// Or or ∀i ∈ N64 ∶ B8(φ′D)_i = B8(φA)_i ∨ B8(φB)_i
 func (i *Instance) Or(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, i.regs[regA]|i.regs[regB])
 }
 
-// MulUpperSignedSigned mul_upper_s_s ω′D = Z−1_8(⌊ (Z8(ωA) ⋅ Z8(ωB)) ÷ 2^64 ⌋)
+// MulUpperSignedSigned mul_upper_s_s φ′D = Z−1_8(⌊ (Z8(φA) ⋅ Z8(φB)) ÷ 2^64 ⌋)
 func (i *Instance) MulUpperSignedSigned(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs := big.NewInt(int64(i.regs[regA]))
 	rhs := big.NewInt(int64(i.regs[regB]))
@@ -781,7 +781,7 @@ func (i *Instance) MulUpperSignedSigned(dst polkavm.Reg, regA, regB polkavm.Reg)
 	i.setAndSkip(dst, uint64(mul.Rsh(mul, 64).Int64()))
 }
 
-// MulUpperUnsignedUnsigned mul_upper_u_u ω′D = ⌊ (ωA ⋅ ωB ) ÷ 2^64 ⌋
+// MulUpperUnsignedUnsigned mul_upper_u_u φ′D = ⌊ (φA ⋅ φB ) ÷ 2^64 ⌋
 func (i *Instance) MulUpperUnsignedUnsigned(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs := (&big.Int{}).SetUint64(i.regs[regA])
 	rhs := (&big.Int{}).SetUint64(i.regs[regB])
@@ -789,7 +789,7 @@ func (i *Instance) MulUpperUnsignedUnsigned(dst polkavm.Reg, regA, regB polkavm.
 	i.setAndSkip(dst, uint64(mul.Rsh(mul, 64).Int64()))
 }
 
-// MulUpperSignedUnsigned mul_upper_s_u ω′D = Z−1_8(⌊ (Z8(ωA) ⋅ ωB) ÷ 2^64 ⌋)
+// MulUpperSignedUnsigned mul_upper_s_u φ′D = Z−1_8(⌊ (Z8(φA) ⋅ φB) ÷ 2^64 ⌋)
 func (i *Instance) MulUpperSignedUnsigned(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	lhs := big.NewInt(int64(i.regs[regA]))
 	rhs := (&big.Int{}).SetUint64(i.regs[regB])
@@ -797,17 +797,17 @@ func (i *Instance) MulUpperSignedUnsigned(dst polkavm.Reg, regA, regB polkavm.Re
 	i.setAndSkip(dst, uint64(mul.Rsh(mul, 64).Int64()))
 }
 
-// SetLessThanUnsigned set_lt_u ω′D = ωA < ωB
+// SetLessThanUnsigned set_lt_u φ′D = φA < φB
 func (i *Instance) SetLessThanUnsigned(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, bool2uint64(i.regs[regA] < i.regs[regB]))
 }
 
-// SetLessThanSigned set_lt_s ω′D = Z8(ωA) < Z8(ωB)
+// SetLessThanSigned set_lt_s φ′D = Z8(φA) < Z8(φB)
 func (i *Instance) SetLessThanSigned(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, bool2uint64(int32(i.regs[regA]) < int32(i.regs[regB])))
 }
 
-// CmovIfZero cmov_iz ω′D = ωA if ωB = 0 otherwise ωD
+// CmovIfZero cmov_iz φ′D = φA if φB = 0 otherwise φD
 func (i *Instance) CmovIfZero(dst polkavm.Reg, s, c polkavm.Reg) {
 	if i.regs[c] == 0 {
 		i.regs[dst] = i.regs[s]
@@ -815,7 +815,7 @@ func (i *Instance) CmovIfZero(dst polkavm.Reg, s, c polkavm.Reg) {
 	i.skip()
 }
 
-// CmovIfNotZero cmov_nz ω′D = ωA if ωB ≠ 0 otherwise ωD
+// CmovIfNotZero cmov_nz φ′D = φA if φB ≠ 0 otherwise φD
 func (i *Instance) CmovIfNotZero(dst polkavm.Reg, s, c polkavm.Reg) {
 	if i.regs[c] != 0 {
 		i.regs[dst] = i.regs[s]
@@ -823,57 +823,57 @@ func (i *Instance) CmovIfNotZero(dst polkavm.Reg, s, c polkavm.Reg) {
 	i.skip()
 }
 
-// RotateLeft64 rot_l_64 ∀i ∈ N64 ∶ B8(ω′D)_{(i+ωB) mod 64} = B8(ωA)_i
+// RotateLeft64 rot_l_64 ∀i ∈ N64 ∶ B8(φ′D)_{(i+φB) mod 64} = B8(φA)_i
 func (i *Instance) RotateLeft64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, bits.RotateLeft64(i.regs[regA], int(i.regs[regB])))
 }
 
-// RotateLeft32 rot_l_32 ω′D = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_{(i+ωB) mod 32} = B4(ωA)_i
+// RotateLeft32 rot_l_32 φ′D = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_{(i+φB) mod 32} = B4(φA)_i
 func (i *Instance) RotateLeft32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, sext(uint64(bits.RotateLeft32(uint32(i.regs[regA]), int(i.regs[regB]))), 4))
 }
 
-// RotateRight64 rot_r_64 ∀i ∈ N64 ∶ B8(ω′D)_i = B8(ωA)_{(i+ωB ) mod 64}
+// RotateRight64 rot_r_64 ∀i ∈ N64 ∶ B8(φ′D)_i = B8(φA)_{(i+φB ) mod 64}
 func (i *Instance) RotateRight64(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, bits.RotateLeft64(i.regs[regA], -int(i.regs[regB])))
 }
 
-// RotateRight32 rot_r_32 ω′D = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_i = B4(ωA)_{(i+ωB) mod 32}
+// RotateRight32 rot_r_32 φ′D = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_i = B4(φA)_{(i+φB) mod 32}
 func (i *Instance) RotateRight32(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, sext(uint64(bits.RotateLeft32(uint32(i.regs[regA]), -int(i.regs[regB]))), 4))
 }
 
-// AndInverted and_inv ∀i ∈ N64 ∶ B8(ω′D)_i = B8(ωA)i ∧ ¬B8(ωB)_i
+// AndInverted and_inv ∀i ∈ N64 ∶ B8(φ′D)_i = B8(φA)i ∧ ¬B8(φB)_i
 func (i *Instance) AndInverted(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, i.regs[regA]&^i.regs[regB])
 }
 
-// OrInverted or_inv ∀i ∈ N64 ∶ B8(ω′D)_i = B8(ωA)i ∨ ¬B8(ωB)_i
+// OrInverted or_inv ∀i ∈ N64 ∶ B8(φ′D)_i = B8(φA)i ∨ ¬B8(φB)_i
 func (i *Instance) OrInverted(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, i.regs[regA]|^i.regs[regB])
 }
 
-// Xnor xnor ∀i ∈ N64 ∶ B8(ω′D)_i = ¬(B8(ωA)_i ⊕ B8(ωB)_i)
+// Xnor xnor ∀i ∈ N64 ∶ B8(φ′D)_i = ¬(B8(φA)_i ⊕ B8(φB)_i)
 func (i *Instance) Xnor(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, ^(i.regs[regA] ^ i.regs[regB]))
 }
 
-// Max max ω′D = Z−1_8(max(Z8(ωA), Z8(ωB)))
+// Max max φ′D = Z−1_8(max(Z8(φA), Z8(φB)))
 func (i *Instance) Max(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, uint64(max(int64(i.regs[regA]), int64(i.regs[regB]))))
 }
 
-// MaxUnsigned max_u ω′D = max(ωA, ωB)
+// MaxUnsigned max_u φ′D = max(φA, φB)
 func (i *Instance) MaxUnsigned(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, max(i.regs[regA], i.regs[regB]))
 }
 
-// Min min ω′D = Z8^-1(min(Z8(ωA), Z8(ωB)))
+// Min min φ′D = Z8^-1(min(Z8(φA), Z8(φB)))
 func (i *Instance) Min(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, uint64(min(int64(i.regs[regA]), int64(i.regs[regB]))))
 }
 
-// MinUnsigned min_u ω′D = min(ωA, ωB)
+// MinUnsigned min_u φ′D = min(φA, φB)
 func (i *Instance) MinUnsigned(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	i.setAndSkip(dst, min(i.regs[regA], i.regs[regB]))
 }

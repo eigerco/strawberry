@@ -3,7 +3,7 @@ package block
 import "github.com/eigerco/strawberry/internal/crypto"
 
 const (
-	maxTicketsPerBlock = 16  // `K` in the paper. The maximum number of tickets which may be submitted in a single extrinsic.
+	MaxTicketsPerBlock = 16  // `K` in the paper. The maximum number of tickets which may be submitted in a single extrinsic.
 	TicketProofSize    = 784 // Size of F̄[]γz⟨XT ⌢ η′2 r⟩
 )
 

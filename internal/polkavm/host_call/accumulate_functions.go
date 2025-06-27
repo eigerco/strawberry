@@ -15,7 +15,7 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-// Bless ΩB(ϱ, ω, μ, (x, y))
+// Bless ΩB(ϱ, φ, μ, (x, y))
 func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < BlessCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -29,7 +29,7 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
-	// let [m, a, v, o, n] = ω7...12
+	// let [m, a, v, o, n] = φ7...12
 	managerServiceId, assignServiceAddr, designateServiceId, addr, servicesNr := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
 	// let g = {(s ↦ g) where E4(s) ⌢ E8(g) = μ_o+12i⋅⋅⋅+12 | i ∈ Nn} if Zo⋅⋅⋅+12n ⊂ Vμ otherwise ∇
 	for i := range servicesNr {
@@ -66,14 +66,14 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Assign ΩA(ϱ, ω, μ, (x, y))
+// Assign ΩA(ϱ, φ, μ, (x, y))
 func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < AssignCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= AssignCost
 
-	// let [c, o, a] = ω7⋅⋅⋅+3
+	// let [c, o, a] = φ7⋅⋅⋅+3
 	core, addr, newAssigner := regs[A0], regs[A1], regs[A2]
 
 	if core >= uint64(common.TotalNumberOfCores) {
@@ -103,7 +103,7 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Designate ΩD (ϱ, ω, μ, (x, y))
+// Designate ΩD (ϱ, φ, μ, (x, y))
 func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < DesignateCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -124,7 +124,7 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
-	// let o = ω7
+	// let o = φ7
 	addr := regs[A0]
 	for i := 0; i < common.NumberOfValidators; i++ {
 		bytes := make([]byte, 336)
@@ -143,7 +143,7 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Checkpoint ΩC(ϱ, ω, μ, (x, y))
+// Checkpoint ΩC(ϱ, φ, μ, (x, y))
 func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < CheckpointCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -152,20 +152,20 @@ func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPa
 
 	ctxPair.ExceptionalCtx = ctxPair.RegularCtx
 
-	// Set the new ϱ' value into ω′7
+	// Set the new ϱ' value into φ′7
 	regs[A0] = uint64(gas)
 
 	return gas, regs, mem, ctxPair, nil
 }
 
-// New ΩN(ϱ, ω, μ, (x, y), t)
+// New ΩN(ϱ, φ, μ, (x, y), t)
 func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < NewCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= NewCost
 
-	// let [o, l, g, m, f] = ω7..+5
+	// let [o, l, g, m, f] = φ7..+5
 	addr, preimageLength, gasLimitAccumulator, gasLimitTransfer, gratisStorageOffset := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
 
 	xs := ctxPair.RegularCtx.ServiceId
@@ -216,7 +216,7 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 	a := ctxPair.RegularCtx.ServiceAccount()
 
 	if b >= a.ThresholdBalance() {
-		// ω′7 = x_i
+		// φ′7 = x_i
 		regs[A0] = uint64(ctxPair.RegularCtx.NewServiceId)
 		currentAccount.Balance = b
 
@@ -238,13 +238,13 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 	return gas, withCode(regs, CASH), mem, ctxPair, nil
 }
 
-// Upgrade ΩU(ϱ, ω, μ, (x, y))
+// Upgrade ΩU(ϱ, φ, μ, (x, y))
 func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < UpgradeCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= UpgradeCost
-	// let [o, g, m] = ω7...10
+	// let [o, g, m] = φ7...10
 	addr, gasLimitAccumulator, gasLimitTransfer := regs[A0], regs[A1], regs[A2]
 
 	// c = μo⋅⋅⋅+32 if No⋅⋅⋅+32 ⊂ Vμ otherwise ∇
@@ -253,7 +253,7 @@ func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair)
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
-	// (ω′7, (X′s)c, (X′s)g , (X′s)m) = (OK, c, g, m) if c ≠ ∇
+	// (φ′7, (X′s)c, (X′s)g , (X′s)m) = (OK, c, g, m) if c ≠ ∇
 	currentService := ctxPair.RegularCtx.ServiceAccount()
 	currentService.CodeHash = crypto.Hash(codeHash)
 	currentService.GasLimitForAccumulator = gasLimitAccumulator
@@ -262,12 +262,12 @@ func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair)
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Transfer ΩT(ϱ, ω, μ, (x, y))
+// Transfer ΩT(ϱ, φ, μ, (x, y))
 func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	// let (d, a, l, o) = ω7..11
+	// let (d, a, l, o) = φ7..11
 	receiverId, newBalance, gasLimit, o := regs[A0], regs[A1], regs[A2], regs[A3]
 
-	// g = 10 + ω9
+	// g = 10 + φ9
 	transferCost := TransferBaseCost + Gas(gasLimit)
 	if gas < transferCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -314,7 +314,7 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Eject ΩJ(ϱ, ω, μ, (x, y), t)
+// Eject ΩJ(ϱ, φ, μ, (x, y), t)
 func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < EjectCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -383,7 +383,7 @@ func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, t
 	return gas, withCode(regs, HUH), mem, ctxPair, nil
 }
 
-// Query ΩQ(ϱ, ω, μ, (x, y))
+// Query ΩQ(ϱ, φ, μ, (x, y))
 func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < QueryCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -432,14 +432,14 @@ func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	return gas, regs, mem, ctxPair, nil
 }
 
-// Solicit ΩS(ϱ, ω, μ, (x, y), t)
+// Solicit ΩS(ϱ, φ, μ, (x, y), t)
 func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < SolicitCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= SolicitCost
 
-	// let [o, z] = ω7,8
+	// let [o, z] = φ7,8
 	addr, preimageLength := regs[A0], regs[A1]
 	// let h = μo⋅⋅⋅+32 if Zo⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	preimageHashBytes := make([]byte, 32)
@@ -484,14 +484,14 @@ func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Forget ΩF(ϱ, ω, μ, (x, y), t)
+// Forget ΩF(ϱ, φ, μ, (x, y), t)
 func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < ForgetCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= ForgetCost
 
-	// let [o, z] = ω0,1
+	// let [o, z] = φ0,1
 	addr, preimageLength := regs[A0], regs[A1]
 
 	// let h = μo⋅⋅⋅+32 if Zo⋅⋅⋅+32 ⊂ Vμ otherwise ∇
@@ -569,7 +569,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 	return gas, withCode(regs, HUH), mem, ctxPair, nil
 }
 
-// Yield Ω_Taurus(ϱ, ω, μ, (x, y))
+// Yield Ω_Taurus(ϱ, φ, μ, (x, y))
 func Yield(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < YieldCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
@@ -581,32 +581,32 @@ func Yield(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	// let h = μo..o+32 if Zo..o+32 ⊂ Vμ otherwise ∇
 	hBytes := make([]byte, 32)
 	if err := mem.Read(addr, hBytes); err != nil {
-		// (ε', ω′7, x′_y) = (panic, ω7, x_y) if h = ∇
+		// (ε', φ′7, x′_y) = (panic, φ7, x_y) if h = ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
-	// (ω′7, x′_y) = (OK, h) otherwise
+	// (φ′7, x′_y) = (OK, h) otherwise
 	h := crypto.Hash(hBytes)
 	ctxPair.RegularCtx.AccumulationHash = &h
 
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Provide Ω_Aries(ϱ, ω, µ, (x,y), s)
+// Provide Ω_Aries(ϱ, φ, µ, (x,y), s)
 func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceId block.ServiceId) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < ProvideCost {
 		return gas, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= ProvideCost
 
-	// let [o, z] = ω8,9
+	// let [o, z] = φ8,9
 	o, z := regs[A1], regs[A2]
 	omega7 := regs[A0]
 
 	// let d = xd ∪ (xu)d
 	allServices := ctxPair.RegularCtx.AccumulationState.ServiceState
 
-	// s* = ω7
+	// s* = φ7
 	ss := block.ServiceId(omega7)
 	if uint64(omega7) == math.MaxUint64 {
 		ss = serviceId // s* = s

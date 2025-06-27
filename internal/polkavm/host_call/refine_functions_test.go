@@ -144,7 +144,7 @@ func TestExport(t *testing.T) {
 		exportOffset,
 	)
 	require.NoError(t, err)
-	// We expect ω7 = ς + |e| = 10 + 1 = 11
+	// We expect φ7 = ς + |e| = 10 + 1 = 11
 	assert.Equal(t, exportOffset+1, regsOut[polkavm.A0])
 
 	require.Len(t, ctxPair.Segments, 1)

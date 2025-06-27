@@ -46,7 +46,7 @@ func (a *Authorization) InvokePVM(
 		return nil, err
 	}
 
-	// F ∈ Ω⟨{}⟩∶ (n, ϱ, ω, µ)
+	// F ∈ Ω⟨{}⟩∶ (n, ϱ, φ, µ)
 	hostCall := func(
 		hostCall uint64,
 		gasCounter polkavm.Gas,
@@ -60,7 +60,7 @@ func (a *Authorization) InvokePVM(
 		case host_call.FetchID:
 			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, &workPackage, nil, nil, nil, nil, nil, nil, nil)
 		default:
-			// (▸, ϱ−10, [ω0,…,ω6, WHAT, ω8,…], µ)
+			// (▸, ϱ−10, [φ0,…,φ6, WHAT, φ8,…], µ)
 			regs[polkavm.A0] = uint64(host_call.WHAT)
 			gasCounter -= isAuthorizedCost
 		}

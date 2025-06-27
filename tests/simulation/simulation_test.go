@@ -151,7 +151,7 @@ func submitTickets(
 
 	ticketProofs := []block.TicketProof{}
 	for _, key := range keys {
-		if ticketAttempts[key.Name] < common.MaxTicketAttempts {
+		if ticketAttempts[key.Name] < common.MaxTicketAttemptsPerValidator {
 			attempt := ticketAttempts[key.Name]
 			// TODO this will need fancier logic too. Needs to use the right yk and eta depending on epoch change.
 			ticketProof, err := state.CreateTicketProof(pendingValidators, entropy, key.BandersnatchPrivate, uint8(attempt))

@@ -85,7 +85,7 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 	tickets := make([]block.Ticket, len(ticketProofs))
 	for i, tp := range ticketProofs {
 		// Equation 6.29: r ∈ N_N (v.0.5.4)
-		if tp.EntryIndex >= common.MaxTicketAttempts {
+		if tp.EntryIndex >= common.MaxTicketAttemptsPerValidator {
 			return []block.Ticket{}, errors.New("bad ticket attempt")
 		}
 
