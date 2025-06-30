@@ -244,7 +244,7 @@ func mapWorkReport(r Report) block.WorkReport {
 		},
 		CoreIndex:         uint16(r.CoreIndex),
 		AuthorizerHash:    crypto.Hash(mustStringToHex(r.AuthorizerHash)),
-		Output:            mustStringToHex(r.AuthOutput),
+		Trace:             mustStringToHex(r.AuthOutput),
 		SegmentRootLookup: segmentRootLookup,
 		WorkResults:       mapWorkResults(r.Results),
 	}

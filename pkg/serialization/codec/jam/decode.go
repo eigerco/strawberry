@@ -540,7 +540,7 @@ func (br *byteReader) decodeBitsFixedLength(v *BitSequence, bytesLength uint) (e
 	return nil
 }
 
-// decodeFixedWidth E_{l∈N}(N_{2^8l} → Yl) (eq. C.5)
+// decodeFixedWidth E_{l∈N}(N_{2^8l} → Bl) (eq. C.12)
 func (br *byteReader) decodeFixedWidth(dstv reflect.Value, length uint) error {
 	typ := dstv.Type()
 

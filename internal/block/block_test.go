@@ -121,7 +121,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 					},
 					CoreIndex:      uint16(1),
 					AuthorizerHash: testutils.RandomHash(t),
-					Output:         []byte("output data"),
+					Trace:          []byte("output data"),
 					WorkResults: []WorkResult{
 						{
 							ServiceId:              ServiceId(1),

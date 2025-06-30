@@ -41,7 +41,7 @@ func New(state state.State) *Refine {
 	return &Refine{state: state}
 }
 
-// InvokePVM ΨR(N,P,Y, ⟦⟦G⟧⟧, N) → (Y ∪ J, ⟦G⟧, N_G)
+// InvokePVM ΨR(N,P,B, ⟦⟦G⟧⟧, N) → (B ∪ E, ⟦G⟧, N_G)
 func (r *Refine) InvokePVM(
 	itemIndex uint32, // i
 	workPackage work.Package, // p

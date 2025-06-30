@@ -30,7 +30,7 @@ func TestWorkReportStore(t *testing.T) {
 		},
 		CoreIndex:         1,
 		AuthorizerHash:    testutils.RandomHash(t),
-		Output:            []byte("output"),
+		Trace:             []byte("output"),
 		SegmentRootLookup: make(map[crypto.Hash]crypto.Hash),
 		WorkResults: []block.WorkResult{
 			{

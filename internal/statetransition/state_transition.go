@@ -1877,7 +1877,8 @@ func (a *Accumulator) ParallelDelta(
 			defer wg.Done()
 
 			// Process single service using Delta1
-			accState, deferredTransfers, resultHash, gasUsed, preimageProvisions := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+			output := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+			accState, deferredTransfers, resultHash, gasUsed, preimageProvisions := output.AccumulationState, output.DeferredTransfers, output.Result, output.GasUsed, output.ProvidedPreimages
 			mu.Lock()
 			defer mu.Unlock()
 
@@ -1927,14 +1928,14 @@ func (a *Accumulator) ParallelDelta(
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+		output := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
 
-		newAccState.ManagerServiceId = accState.ManagerServiceId
-		intermediateAssignServiceId = accState.AssignedServiceIds
-		intermediateDesignateServiceId = accState.DesignateServiceId
-		newAccState.AmountOfGasPerServiceId = accState.AmountOfGasPerServiceId
+		newAccState.ManagerServiceId = output.AccumulationState.ManagerServiceId
+		intermediateAssignServiceId = output.AccumulationState.AssignedServiceIds
+		intermediateDesignateServiceId = output.AccumulationState.DesignateServiceId
+		newAccState.AmountOfGasPerServiceId = output.AccumulationState.AmountOfGasPerServiceId
 	}(initialAccState.ManagerServiceId)
 
 	// i′ = (∆1(o, w, f, v)o)i
@@ -1943,11 +1944,11 @@ func (a *Accumulator) ParallelDelta(
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+		output := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
 
-		newAccState.ValidatorKeys = accState.ValidatorKeys
+		newAccState.ValidatorKeys = output.AccumulationState.ValidatorKeys
 	}(newAccState.DesignateServiceId)
 
 	// ∀c ∈ NC ∶ q′c = (∆1(o, w, f , a_c)o)q
@@ -1957,9 +1958,9 @@ func (a *Accumulator) ParallelDelta(
 			defer wg.Done()
 
 			// Process single service using Delta1
-			accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+			output := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 			mu.Lock()
-			newAccState.PendingAuthorizersQueues[core] = accState.PendingAuthorizersQueues[core]
+			newAccState.PendingAuthorizersQueues[core] = output.AccumulationState.PendingAuthorizersQueues[core]
 			defer mu.Unlock()
 		}(assignServiceId)
 	}
@@ -1977,9 +1978,9 @@ func (a *Accumulator) ParallelDelta(
 			defer wg.Done()
 
 			// Process single service using Delta1
-			accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+			output := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 			mu.Lock()
-			newAccState.AssignedServiceIds[core] = accState.AssignedServiceIds[core]
+			newAccState.AssignedServiceIds[core] = output.AccumulationState.AssignedServiceIds[core]
 			defer mu.Unlock()
 		}(assignServiceId)
 	}
@@ -1990,10 +1991,10 @@ func (a *Accumulator) ParallelDelta(
 		defer wg.Done()
 
 		// Process single service using Delta1
-		accState, _, _, _, _ := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
+		output := a.Delta1(initialAccState, workReports, alwaysAccumulate, serviceId)
 		mu.Lock()
 		defer mu.Unlock()
-		newAccState.DesignateServiceId = accState.DesignateServiceId
+		newAccState.DesignateServiceId = output.AccumulationState.DesignateServiceId
 	}(intermediateDesignateServiceId)
 
 	// Wait for the intermediate assign and designate services id assign
@@ -2007,13 +2008,13 @@ func (a *Accumulator) ParallelDelta(
 	return newAccState, allTransfers, accumHashPairs, accumGasPairs
 }
 
-// Delta1 implements equation 12.19 ∆1 (U, ⟦W⟧, D⟨NS → NG⟩, NS ) → (U, ⟦T⟧, H?, NG)
+// Delta1 implements equation 12.19 ∆1 (S, ⟦R⟧, D⟨NS → NG⟩, NS) → O
 func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
 	alwaysAccumulate map[block.ServiceId]uint64, // D⟨NS → NG⟩
 	serviceIndex block.ServiceId, // NS
-) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64, []polkavm.ProvidedPreimage) {
+) AccumulationOutput {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)
 	if gas, exists := alwaysAccumulate[serviceIndex]; exists {
@@ -2038,7 +2039,7 @@ func (a *Accumulator) Delta1(
 					WorkPackageHash:   report.WorkPackageSpecification.WorkPackageHash,
 					SegmentRoot:       report.WorkPackageSpecification.SegmentRoot,
 					AuthorizationHash: report.AuthorizerHash,
-					Output:            report.Output,
+					Trace:             report.Trace,
 					PayloadHash:       result.PayloadHash,
 					GasLimit:          result.GasPrioritizationRatio,
 					OutputOrError:     result.Output,
@@ -2052,7 +2053,7 @@ func (a *Accumulator) Delta1(
 	return a.InvokePVM(accumulationState, a.newTimeslot, serviceIndex, gasLimit, operands)
 }
 
-// P(d D⟨NS → A⟩,p {(NS , Y)}) → D⟨NS → A⟩
+// P(d D⟨NS → A⟩,p {(NS , B)}) → D⟨NS → A⟩
 func (a *Accumulator) preimageIntegration(services service.ServiceState, preimages []polkavm.ProvidedPreimage) service.ServiceState {
 	servicesWithPreimages := services.Clone()
 

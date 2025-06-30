@@ -293,7 +293,7 @@ func mapAccumulateWorkReport(r AccumulateReport) block.WorkReport {
 		},
 		CoreIndex:         r.CoreIndex,
 		AuthorizerHash:    mapHash(r.AuthorizerHash),
-		Output:            mustStringToHex(r.AuthOutput),
+		Trace:             mustStringToHex(r.AuthOutput),
 		SegmentRootLookup: segmentRootLookup,
 		WorkResults: mapSlice(r.Results, func(rr AccumulateReportResult) block.WorkResult {
 			return block.WorkResult{

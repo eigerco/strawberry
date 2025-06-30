@@ -56,8 +56,8 @@ func NewService(s block.ServiceId) (StateKey, error) {
 	return result, nil
 }
 
-// Last airity of the stake-key constructor function, (N_S, Y)
-// See equation D.1 in the graypaper v0.6.7
+// Last airity of the stake-key constructor function, (N_S, B)
+// See equation D.1 in the graypaper v0.7.0
 func NewServiceDict(s block.ServiceId, hashComponent []byte) (StateKey, error) {
 	encodedServiceId, err := jam.Marshal(s)
 	if err != nil {

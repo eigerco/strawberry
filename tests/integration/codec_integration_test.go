@@ -347,7 +347,7 @@ func compareWorkReportFields(t *testing.T, expected ExpectedWorkReport, actual b
 
 	require.Equal(t, expected.CoreIndex, actual.CoreIndex)
 	require.Equal(t, expected.AuthorizerHash, toHex(actual.AuthorizerHash))
-	require.Equal(t, expected.AuthOutput, toHex(actual.Output))
+	require.Equal(t, expected.AuthOutput, toHex(actual.Trace))
 
 	for j := range expected.Results {
 		compareWorkResultFields(t, expected.Results[j], actual.WorkResults[j])

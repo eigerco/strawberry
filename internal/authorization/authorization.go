@@ -29,7 +29,7 @@ func New(state state.State) *Authorization {
 	return &Authorization{state: state}
 }
 
-// InvokePVM ΨI(P, NC) → Y ∪ J
+// InvokePVM ΨI(P, NC) → B ∪ E
 func (a *Authorization) InvokePVM(
 	workPackage work.Package, // p
 	coreCode uint16, // c

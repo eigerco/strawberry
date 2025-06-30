@@ -16,7 +16,7 @@ const (
 	ReadWrite                        // W (Read-Write)
 )
 
-// Memory M ≡ (V ∈ Y_(2^32), A ∈ ⟦{W, R, ∅}⟧p) (eq. 4.24)
+// Memory M ≡ (V ∈ B_(2^32), A ∈ ⟦{W, R, ∅}⟧p) (eq. 4.24)
 // for practical reasons we define each memory segment separately
 // so we don't have to allocate [2^32]byte unnecessarily
 type Memory struct {
