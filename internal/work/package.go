@@ -11,10 +11,10 @@ import (
 
 // Package represents P (14.2 v0.5.4)
 type Package struct {
-	AuthorizationToken []byte                  // j ∈ Y
+	AuthorizationToken []byte                  // j ∈ B
 	AuthorizerService  uint32                  // h ∈ N_S
 	AuthCodeHash       crypto.Hash             // u ∈ H
-	Parameterization   []byte                  // p ∈ Y
+	Parameterization   []byte                  // p ∈ B
 	Context            block.RefinementContext // x ∈ X
 	WorkItems          []Item                  // w ∈ ⟦I⟧
 }

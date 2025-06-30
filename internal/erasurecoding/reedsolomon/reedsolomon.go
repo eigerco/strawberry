@@ -102,7 +102,7 @@ func (r *Encoder) Chunk(data []byte) ([][]byte, error) {
 // Takes shards and fills in the recovery shards. The first original shard count
 // indexes should contain the original shards, the remaining recovery shard
 // indexes are then filled with recovery shards.
-// This can be used to implement C ∶ ⟦Y2⟧342 → ⟦Y2⟧1023 in the graypaper. (Apendix H, v0.5.2-4)
+// This can be used to implement C ∶ ⟦B2⟧342 → ⟦B2⟧1023 in the graypaper. (Apendix H, v0.5.2-4)
 func (r *Encoder) Encode(
 	shards [][]byte) error {
 	if ShardCount(shards[:r.originalShardsCount]) != r.originalShardsCount {
@@ -151,7 +151,7 @@ func (r *Encoder) Encode(
 // Takes a slice of shards which should have at least original shard count
 // shards and fills in the missing original shards. Missing shards are with nil
 // or a length of zero before decoding.
-// This can be used to implement R ∶ ℘⟨⎧⎩Y2, N1023⎫⎭⟩342 → ⟦Y2⟧342 in the graypaper. (Apendix H, v0.5.2-4)
+// This can be used to implement R ∶ ℘⟨⎧⎩B2, N1023⎫⎭⟩342 → ⟦B2⟧342 in the graypaper. (Apendix H, v0.5.2-4)
 func (r *Encoder) Decode(shards [][]byte) error {
 	if ShardCount(shards) < r.originalShardsCount {
 		return errors.New("too few shards")

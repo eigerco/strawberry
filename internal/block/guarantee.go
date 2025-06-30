@@ -27,15 +27,15 @@ type CredentialSignature struct {
 	Signature      crypto.Ed25519Signature // The Ed25519 signature
 }
 
-// WorkReport represents a work report in the JAM state (equation 11.2 v0.5.4)
+// WorkReport represents a work report in the JAM state (equation 11.2 v0.7.0)
 type WorkReport struct {
 	WorkPackageSpecification WorkPackageSpecification    // Work-package specification (s)
-	RefinementContext        RefinementContext           // Refinement context (x)
+	RefinementContext        RefinementContext           // Refinement context (c)
 	CoreIndex                uint16                      `jam:"encoding=compact"` // Core index (c) - Max value: TotalNumberOfCores
 	AuthorizerHash           crypto.Hash                 // HeaderHash of the authorizer (a)
-	Output                   []byte                      // Output of the work report (o)
+	Trace                    []byte                      // Trace (t)
 	SegmentRootLookup        map[crypto.Hash]crypto.Hash // A segment-root lookup dictionary (l ∈ D⟨H → H⟩)
-	WorkResults              []WorkResult                // Results of the evaluation of each of the items in the work-package (r) - Min value: MinWorkPackageResultsSize. Max value: MaxWorkPackageResultsSize.
+	WorkResults              []WorkResult                // Results of the evaluation of each of the items in the work-package (d) - Min value: MinWorkPackageResultsSize. Max value: MaxWorkPackageResultsSize.
 	AuthGasUsed              uint64                      `jam:"encoding=compact"` // The amount of gas used during authorization (g)
 }
 
@@ -80,13 +80,13 @@ const (
 type ServiceId uint32
 
 // WorkResult is the data conduit by which services’ states may be altered through the computation done within a work-package.
-// L ≡ (s ∈ NS, c ∈ H, y ∈ H, g ∈ NG, d ∈ Y ∪ J, u ∈ NG, i ∈ N, x ∈ N, z ∈ N, e ∈ N) (equation 11.6)
+// D ≡ (s ∈ NS, c ∈ H, y ∈ H, g ∈ NG, l ∈ B ∪ E, u ∈ NG, i ∈ N, x ∈ N, z ∈ N, e ∈ N) (equation 11.6)
 type WorkResult struct {
 	ServiceId              ServiceId               // Service ID (s) - The index of the service whose state is to be altered and thus whose refine code was already executed.
 	ServiceHashCode        crypto.Hash             // Hash of the service code (c) - The hash of the code of the service at the time of being reported.
 	PayloadHash            crypto.Hash             // Hash of the payload (y) - The hash of the payload within the work item which was executed in the refine stage to give this result. Provided to the accumulation logic of the service later on.
 	GasPrioritizationRatio uint64                  // Gas prioritization ratio (g) - used when determining how much gas should be allocated to execute of this item’s accumulate.
-	Output                 WorkResultOutputOrError // Output of the work result (d) ∈ Y ∪ J: Output or error (Y is the set of octet strings, J is the set of work execution errors)
+	Output                 WorkResultOutputOrError // Output of the work result (l) ∈ B ∪ J: Output or error (B is the set of octet strings, E is the set of work execution errors)
 	GasUsed                uint64                  `jam:"encoding=compact"` // (u) the actual amount of gas used during refinement
 	ImportsCount           uint16                  `jam:"encoding=compact"` // (i) the number of segments imported from
 	ExtrinsicCount         uint16                  `jam:"encoding=compact"` // (x) the number of the extrinsics used in computing the workload
@@ -193,7 +193,7 @@ func (w *WorkReport) OutputSizeIsValid() bool {
 			totalOutputSize += len(result.Output.Inner.([]byte))
 		}
 	}
-	totalOutputSize += len(w.Output)
+	totalOutputSize += len(w.Trace)
 
 	return totalOutputSize <= common.MaxWorkPackageSizeBytes
 }

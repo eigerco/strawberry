@@ -10,6 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -18,8 +21,6 @@ import (
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 //go:embed vectors/assurances
@@ -150,7 +151,7 @@ func mapReport(r *Report) *block.WorkReport {
 		},
 		CoreIndex:         r.CoreIndex,
 		AuthorizerHash:    mapHash(r.AuthorizerHash),
-		Output:            mustStringToHex(r.AuthOutput),
+		Trace:             mustStringToHex(r.AuthOutput),
 		SegmentRootLookup: segmentRootLookup,
 		WorkResults: mapSlice(r.Results, func(rr ReportResult) block.WorkResult {
 			return block.WorkResult{

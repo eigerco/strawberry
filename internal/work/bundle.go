@@ -183,7 +183,7 @@ type PackageBundleBuilder struct {
 	segmentRootLookup SegmentRootLookup
 	// The mapping of import segments' merkle root to the import segments in question (M(b) -> [G])
 	importedSegments map[crypto.Hash][]Segment
-	// External data or preimage (H -> Y)
+	// External data or preimage (H -> B)
 	extrinsics map[crypto.Hash][]byte
 }
 

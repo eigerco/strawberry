@@ -113,7 +113,7 @@ func ProduceWorkReport(
 		},
 		RefinementContext: bundle.Package().Context,
 		CoreIndex:         coreIndex,
-		Output:            authOutput,
+		Trace:             authOutput,
 		AuthorizerHash:    authHash,
 		SegmentRootLookup: reportSegmentRootLookup,
 		WorkResults:       allWorkResults,

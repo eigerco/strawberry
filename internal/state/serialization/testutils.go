@@ -135,7 +135,7 @@ func RandomCoreAssignments(t *testing.T) state.CoreAssignments {
 				},
 				CoreIndex:         uint16(i),
 				AuthorizerHash:    testutils.RandomHash(t),
-				Output:            []byte("output"),
+				Trace:             []byte("output"),
 				SegmentRootLookup: make(map[crypto.Hash]crypto.Hash),
 				WorkResults:       []block.WorkResult{RandomWorkResult(t)},
 			},
@@ -202,7 +202,7 @@ func RandomWorkReport(t *testing.T) block.WorkReport {
 		},
 		CoreIndex:         testutils.RandomUint16(),
 		AuthorizerHash:    testutils.RandomHash(t),
-		Output:            []byte("random output"),
+		Trace:             []byte("random output"),
 		SegmentRootLookup: make(map[crypto.Hash]crypto.Hash),
 		WorkResults:       []block.WorkResult{RandomWorkResult(t)},
 	}

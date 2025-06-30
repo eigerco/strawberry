@@ -12,6 +12,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -19,6 +20,15 @@ const (
 	OnTransferCost = 10
 	AccumulateCost = 10
 )
+
+// AccumulationOutput (O)
+type AccumulationOutput struct {
+	AccumulationState state.AccumulationState    // e ∈ S
+	DeferredTransfers []service.DeferredTransfer // t ∈ ⟦X⟧
+	Result            *crypto.Hash               // y ∈ H?
+	GasUsed           uint64                     //  u ∈ NG
+	ProvidedPreimages []polkavm.ProvidedPreimage //  p ∈ ⟦(N_S, B)⟧
+}
 
 func NewAccumulator(state *state.State, header *block.Header, newTimeslot jamtime.Timeslot) *Accumulator {
 	return &Accumulator{
@@ -34,22 +44,29 @@ type Accumulator struct {
 	newTimeslot jamtime.Timeslot
 }
 
-// InvokePVM ΨA(U, N_S , N_G, ⟦O⟧) → (U, ⟦T⟧, H?, N_G, ⟦(N_S, Y)⟧) Equation (B.9)
-func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) (state.AccumulationState, []service.DeferredTransfer, *crypto.Hash, uint64, []polkavm.ProvidedPreimage) {
+// InvokePVM ΨA(U, N_T, N_S, N_G, ⟦I⟧) → O Equation (B.9)
+func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) AccumulationOutput {
+	output := AccumulationOutput{
+		AccumulationState: accState,
+	}
+
 	account := accState.ServiceState[serviceIndex]
-	// if ud[s]c = ∅
-	if account.EncodedCodeAndMetadata() == nil {
+	c := account.EncodedCodeAndMetadata()
+	// if c = ∅ ∨ ∣c∣ > WC
+	if c == nil || len(c) == work.MaxSizeServiceCode {
 		ctx, err := a.newCtx(accState, serviceIndex)
 		if err != nil {
 			log.Println("error creating context", "err", err)
 		}
-		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0, []polkavm.ProvidedPreimage{}
+		output.AccumulationState = ctx.AccumulationState
+		return output
 	}
 
 	ctx, err := a.newCtx(accState, serviceIndex)
 	if err != nil {
 		log.Println("error creating context", "err", err)
-		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0, []polkavm.ProvidedPreimage{}
+		output.AccumulationState = ctx.AccumulationState
+		return output
 	}
 
 	// I(u, s), I(u, s)
@@ -70,7 +87,8 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	})
 	if err != nil {
 		log.Println("error encoding arguments", "err", err)
-		return ctx.AccumulationState, []service.DeferredTransfer{}, nil, 0, []polkavm.ProvidedPreimage{}
+		output.AccumulationState = ctx.AccumulationState
+		return output
 	}
 
 	// F (equation B.10)
@@ -138,22 +156,38 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 
 	gasUsed, ret, newCtxPair, err := interpreter.InvokeWholeProgram(account.EncodedCodeAndMetadata(), 5, polkavm.Gas(gas), args, hostCallFunc, newCtxPair)
 	if err != nil {
+		output.GasUsed = uint64(gasUsed)
+
 		errPanic := &polkavm.ErrPanic{}
 		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {
 			log.Println("Program invocation failed with error:", err)
-			return newCtxPair.ExceptionalCtx.AccumulationState, newCtxPair.ExceptionalCtx.DeferredTransfers, nil, uint64(gasUsed), newCtxPair.ExceptionalCtx.ProvidedPreimages
+			output.AccumulationState = newCtxPair.ExceptionalCtx.AccumulationState
+			output.DeferredTransfers = newCtxPair.ExceptionalCtx.DeferredTransfers
+			output.ProvidedPreimages = newCtxPair.ExceptionalCtx.ProvidedPreimages
+
+			return output
 		}
+		output.AccumulationState = newCtxPair.RegularCtx.AccumulationState
+		output.DeferredTransfers = newCtxPair.RegularCtx.DeferredTransfers
+		output.ProvidedPreimages = newCtxPair.RegularCtx.ProvidedPreimages
 		// halt
-		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(gasUsed), newCtxPair.RegularCtx.ProvidedPreimages
+		return output
 	}
-	// if o ∈ Y ∖ H. There is no sure way to check that a byte array is a hash
+
+	output.AccumulationState = newCtxPair.RegularCtx.AccumulationState
+	output.DeferredTransfers = newCtxPair.RegularCtx.DeferredTransfers
+	output.ProvidedPreimages = newCtxPair.RegularCtx.ProvidedPreimages
+
+	// if o ∈ B ∖ H. There is no sure way to check that a byte array is a hash
 	// one way would be to check the shannon entropy but this also not a guarantee, so we just limit to checking the size
 	if len(ret) == crypto.HashSize {
 		h := crypto.Hash(ret)
-		return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, &h, uint64(gasUsed), newCtxPair.RegularCtx.ProvidedPreimages
+		output.Result = &h
+
+		return output
 	}
 
-	return newCtxPair.RegularCtx.AccumulationState, newCtxPair.RegularCtx.DeferredTransfers, nil, uint64(gasUsed), newCtxPair.RegularCtx.ProvidedPreimages
+	return output
 }
 
 // newCtx (B.9)

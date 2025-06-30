@@ -87,7 +87,7 @@ func TestFetch(t *testing.T) {
 	itemIndex := uint32(0)
 
 	operand := []state.AccumulationOperand{
-		{Output: testutils.RandomBytes(t, 5), OutputOrError: block.WorkResultOutputOrError{Inner: block.UnexpectedTermination}},
+		{Trace: testutils.RandomBytes(t, 5), OutputOrError: block.WorkResultOutputOrError{Inner: block.UnexpectedTermination}},
 	}
 	transfers := []service.DeferredTransfer{
 		{Balance: 100, Memo: [service.TransferMemoSizeBytes]byte{1, 2, 3}},
