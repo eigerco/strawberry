@@ -21,7 +21,7 @@ const (
 	AccumulateCost = 10
 )
 
-// AccumulationOutput (O) (eq. 12.20)
+// AccumulationOutput (O) (eq. 12.20 v0.7.0)
 type AccumulationOutput struct {
 	AccumulationState state.AccumulationState    // e ∈ S
 	DeferredTransfers []service.DeferredTransfer // t ∈ ⟦X⟧

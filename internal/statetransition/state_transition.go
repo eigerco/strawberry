@@ -142,7 +142,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 // Intermediate State Calculation Functions
 
 // preimageHasBeenSolicited checks if a preimage has been solicited but not yet provided
-// Y(d, s, h, l) ⇔ h ∉ d[s]p ∧ d[s]l[(h, l)] = [] (eq. 12.41)
+// Y(d, s, h, l) ⇔ h ∉ d[s]p ∧ d[s]l[(h, l)] = [] (eq. 12.41 v0.7.0)
 func preimageHasBeenSolicited(serviceState service.ServiceState, serviceIndex block.ServiceId, preimageHash crypto.Hash, preimageLength service.PreimageLength) bool {
 	account, ok := serviceState[serviceIndex]
 	if !ok {
@@ -1211,25 +1211,25 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	accumulationStats AccumulationStats,
 	transfersStats DeferredTransfersStats,
 ) {
-	// R! ≡ [w | w <− R, |(w_c)p| = 0 ∧ wl = {}] (eq. 12.4)
+	// R! ≡ [w | w <− R, |(w_c)p| = 0 ∧ wl = {}] (eq. 12.4 v0.7.0)
 	var immediatelyAccWorkReports []block.WorkReport
 	var workReportWithDeps []state.WorkReportWithUnAccumulatedDependencies
 	for _, workReport := range workReports {
 		if len(workReport.RefinementContext.PrerequisiteWorkPackage) == 0 && len(workReport.SegmentRootLookup) == 0 {
 			immediatelyAccWorkReports = append(immediatelyAccWorkReports, workReport)
 		} else if len(workReport.RefinementContext.PrerequisiteWorkPackage) > 0 || len(workReport.SegmentRootLookup) != 0 {
-			// |(w_x)p| > 0 ∨ wl ≠ {} (part of eq. 12.5)
+			// |(w_x)p| > 0 ∨ wl ≠ {} (part of eq. 12.5 v0.7.0)
 			workReportWithDeps = append(workReportWithDeps, getWorkReportDependencies(workReport))
 		}
 	}
 
-	// RQ ≡ E([D(w) | w <− R, |(w_c)p| > 0 ∨ wl ≠ {}], {ξ) (eq. 12.5)
+	// RQ ≡ E([D(w) | w <− R, |(w_c)p| > 0 ∨ wl ≠ {}], {ξ) (eq. 12.5 v0.7.0)
 	var queuedWorkReports = updateQueue(workReportWithDeps, flattenAccumulationHistory(currentState.AccumulationHistory))
 
-	// let m = Ht mod E (eq. 12.10)
+	// let m = Ht mod E (eq. 12.10 v0.7.0)
 	timeslotPerEpoch := header.TimeSlotIndex % jamtime.TimeslotsPerEpoch
 
-	// q = E(⋃(ωm...) ⌢ ⋃(ω...m) ⌢ RQ, P(R!)) (eq. 12.12)
+	// q = E(⋃(ωm...) ⌢ ⋃(ω...m) ⌢ RQ, P(R!)) (eq. 12.12 v0.7.0)
 	workReportsFromQueueDeps := updateQueue(
 		slices.Concat(
 			slices.Concat(currentState.AccumulationQueue[timeslotPerEpoch:]...), // ⋃(ωm...)
@@ -1238,19 +1238,19 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		),
 		getWorkPackageHashes(immediatelyAccWorkReports), // P(R!)
 	)
-	// R* ≡ R! ⌢ Q(q) (eq. 12.11)
+	// R* ≡ R! ⌢ Q(q) (eq. 12.11 v0.7.0)
 	var accumulatableWorkReports = slices.Concat(immediatelyAccWorkReports, accumulationPriority(workReportsFromQueueDeps))
 
 	privSvcGas := uint64(0)
 	for _, gas := range currentState.PrivilegedServices.AmountOfGasPerServiceId {
 		privSvcGas += gas
 	}
-	// let g = max(GT, GA ⋅ C + [∑x∈V(χ_Z)](x)) (eq. 12.22)
+	// let g = max(GT, GA ⋅ C + [∑x∈V(χ_Z)](x)) (eq. 12.22 v0.7.0)
 	gasLimit := max(service.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
 
 	accumulator := NewAccumulator(currentState, header, newTimeslot)
-	// e = (d: δ, i: ι, q: ϕ, m: χ_M, a: χ_A, v: χ_V, z: χ_Z) (eq. 12.23)
-	// (n, e′, t, θ′, u) ≡ ∆+(g, R*, e, χ_Z) (eq. 12.24)
+	// e = (d: δ, i: ι, q: ϕ, m: χ_M, a: χ_A, v: χ_V, z: χ_Z) (eq. 12.23 v0.7.0)
+	// (n, e′, t, θ′, u) ≡ ∆+(g, R*, e, χ_Z) (eq. 12.24 v0.7.0)
 	accumulatedCount, newAccumulationState, transfers, accumulationOutputLog, gasPairs := accumulator.
 		SequentialDelta(gasLimit, accumulatableWorkReports, state.AccumulationState{
 			ServiceState:             currentState.Services,
@@ -1262,8 +1262,8 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 			AmountOfGasPerServiceId:  currentState.PrivilegedServices.AmountOfGasPerServiceId,
 		}, currentState.PrivilegedServices.AmountOfGasPerServiceId)
 
-	// (χ′, δ†, ι′, φ′) ≡ o (eq. 12.23)
-	// (d: δ†, i: ι′, q: ϕ′, m: χ′_M, a: χ′_A, v: χ′_V , z: χ′_Z ) ≡ e′ (eq. 12.25)
+	// (χ′, δ†, ι′, φ′) ≡ o (eq. 12.23 v0.7.0)
+	// (d: δ†, i: ι′, q: ϕ′, m: χ′_M, a: χ′_A, v: χ′_V , z: χ′_Z ) ≡ e′ (eq. 12.25 v0.7.0)
 	intermediateServiceState := newAccumulationState.ServiceState
 	newPrivilegedServices = service.PrivilegedServices{
 		ManagerServiceId:        newAccumulationState.ManagerServiceId,
@@ -1276,7 +1276,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 
 	// Compute accumulation statistics
 
-	// N(s) ≡ [r | w <− R*...n, r <− w_r, r_s = s] (eq. 12.28)
+	// N(s) ≡ [r | w <− R*...n, r <− w_r, r_s = s] (eq. 12.28 v0.7.0)
 	accumulateCountBySvc := map[block.ServiceId]uint32{}
 	for _, workReport := range accumulatableWorkReports[:accumulatedCount] {
 		for _, result := range workReport.WorkResults {
@@ -1284,7 +1284,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		}
 	}
 
-	// S ≡ {(s ↦ ([∑(s,u)∈u] (u), |N(s)|)) | N(s) ≠ []} (eq. 12.27)
+	// S ≡ {(s ↦ ([∑(s,u)∈u] (u), |N(s)|)) | N(s) ≠ []} (eq. 12.27 v0.7.0)
 	accumulationStats = AccumulationStats{}
 	for _, gp := range gasPairs {
 		totalGas := accumulationStats[gp.ServiceId].AccumulateGasUsed
@@ -1299,11 +1299,11 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		}
 	}
 
-	// x  = {(s ↦ ΨT(δ†, τ′, s, X(s))) | (s ↦ a) ∈ δ†} (eq. 12.30)
-	// δ‡ ≡ {(s ↦ a′) | (s ↦ (a, u)) ∈ x} (12.31)
+	// x  = {(s ↦ ΨT(δ†, τ′, s, X(s))) | (s ↦ a) ∈ δ†} (eq. 12.30 v0.7.0)
+	// δ‡ ≡ {(s ↦ a′) | (s ↦ (a, u)) ∈ x} (12.31 v0.7.0)
 	postAccumulationServiceState = make(service.ServiceState)
 
-	// X ≡ {(d ↦(|X(d)|, u))| X(d) ≠ [], ∃a ∶ x[d] = (a, u)} (eq. 12.34)
+	// X ≡ {(d ↦(|X(d)|, u))| X(d) ≠ [], ∃a ∶ x[d] = (a, u)} (eq. 12.34 v0.7.0)
 	transfersStats = DeferredTransfersStats{}
 
 	for serviceId := range intermediateServiceState {
@@ -1317,7 +1317,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 			receiverTransfers,
 		)
 
-		// Eq. 12.32
+		// Eq. 12.32 v0.7.0
 		//      ⎧ a except a′_a = τ′ if s ∈ K(S)
 		// a′ = ⎨
 		//      ⎩ a otherwise
@@ -1336,8 +1336,8 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		}
 	}
 
-	// ξ′E−1 = P(R*...n) (eq. 12.35)
-	// ∀i ∈ NE−1 ∶ ξ′i ≡ ξi+1 (eq. 12.36)
+	// ξ′E−1 = P(R*...n) (eq. 12.35 v0.7.0)
+	// ∀i ∈ NE−1 ∶ ξ′i ≡ ξi+1 (eq. 12.36 v0.7.0)
 	newAccumulationHistory = state.AccumulationHistory(append(
 		currentState.AccumulationHistory[1:],
 		getWorkPackageHashes(accumulatableWorkReports[:accumulatedCount]),
@@ -1346,7 +1346,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	// ξ′E−1
 	lastAccumulation := newAccumulationHistory[jamtime.TimeslotsPerEpoch-1]
 
-	// (eq. 12.37)
+	// Eq. 12.37 v0.7.0
 	//					  ⎧ E(RQ, ξ′E−1) 		if i = 0
 	// ∀i ∈ NE ∶ ω′↺m−i ≡ ⎨ [] 					if 1 ≤ i < τ′ − τ
 	// 					  ⎩ E(ω↺m−i, ξ′E−1) 	if i ≥ τ′ − τ
@@ -1364,7 +1364,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	return
 }
 
-// accumulationPriority Q(r ⟦(R, {H})⟧) → ⟦R⟧ (eq. 12.8)
+// accumulationPriority Q(r ⟦(R, {H})⟧) → ⟦R⟧ (eq. 12.8 v0.7.0)
 func accumulationPriority(workReportAndDeps []state.WorkReportWithUnAccumulatedDependencies) []block.WorkReport {
 	var workReports []block.WorkReport
 	for _, wd := range workReportAndDeps {
@@ -1380,7 +1380,7 @@ func accumulationPriority(workReportAndDeps []state.WorkReportWithUnAccumulatedD
 	return append(workReports, accumulationPriority(updateQueue(workReportAndDeps, getWorkPackageHashes(workReports)))...)
 }
 
-// getWorkReportDependencies D(w) ≡ (w, {(w_c)p} ∪ K(w_l)) (eq. 12.6)
+// getWorkReportDependencies D(w) ≡ (w, {(w_c)p} ∪ K(w_l)) (eq. 12.6 v0.7.0)
 func getWorkReportDependencies(workReport block.WorkReport) state.WorkReportWithUnAccumulatedDependencies {
 	deps := make(map[crypto.Hash]struct{})
 	for _, prereqHash := range workReport.RefinementContext.PrerequisiteWorkPackage {
@@ -1395,7 +1395,7 @@ func getWorkReportDependencies(workReport block.WorkReport) state.WorkReportWith
 	}
 }
 
-// flattenAccumulationHistory {ξ ≡ x∈ξ ⋃(x) (eq. 12.2)
+// flattenAccumulationHistory {ξ ≡ x∈ξ ⋃(x) (eq. 12.2 v0.7.0)
 func flattenAccumulationHistory(accHistory state.AccumulationHistory) (hashes map[crypto.Hash]struct{}) {
 	hashes = make(map[crypto.Hash]struct{})
 	for _, epochHistory := range accHistory {
@@ -1404,7 +1404,7 @@ func flattenAccumulationHistory(accHistory state.AccumulationHistory) (hashes ma
 	return hashes
 }
 
-// updateQueue E(r ⟦(R, {H})⟧, x {H}) → ⟦(R, {H})⟧ (eq. 12.7)
+// updateQueue E(r ⟦(R, {H})⟧, x {H}) → ⟦(R, {H})⟧ (eq. 12.7 v0.7.0)
 func updateQueue(workRepAndDep []state.WorkReportWithUnAccumulatedDependencies, hashSet map[crypto.Hash]struct{}) []state.WorkReportWithUnAccumulatedDependencies {
 	var newWorkRepsAndDeps []state.WorkReportWithUnAccumulatedDependencies
 	for _, wd := range workRepAndDep {
@@ -1422,7 +1422,7 @@ func updateQueue(workRepAndDep []state.WorkReportWithUnAccumulatedDependencies, 
 	return newWorkRepsAndDeps
 }
 
-// P(w {R}) → {H} (eq. 12.9)
+// P(w {R}) → {H} (eq. 12.9 v0.7.0)
 func getWorkPackageHashes(workReports []block.WorkReport) (hashes map[crypto.Hash]struct{}) {
 	hashes = make(map[crypto.Hash]struct{})
 	// {(ws)h S w ∈ w}
@@ -1432,7 +1432,7 @@ func getWorkPackageHashes(workReports []block.WorkReport) (hashes map[crypto.Has
 	return hashes
 }
 
-// transfersForReceiver X(d NS) → ⟦X⟧ (eq. 12.29)
+// transfersForReceiver X(d NS) → ⟦X⟧ (eq. 12.29 v0.7.0)
 func transfersForReceiver(transfers []service.DeferredTransfer, serviceId block.ServiceId) (transfersForReceiver []service.DeferredTransfer) {
 	// [ t | t <− t, t_d = d ]
 	for _, transfer := range transfers {
@@ -1727,13 +1727,13 @@ func CalculateNewServiceStatistics(
 	return newServiceStats
 }
 
-// ServiceHashPairs B ≡ {(NS , H)} (eq. 12.15)
+// ServiceHashPairs B ≡ {(NS , H)} (eq. 12.15 v0.7.0)
 type ServiceHashPairs []state.ServiceHashPair
 
-// ServiceGasPairs U ≡ ⟦(NS , NG)⟧ (eq. 12.15)
+// ServiceGasPairs U ≡ ⟦(NS , NG)⟧ (eq. 12.15 v0.7.0)
 type ServiceGasPairs []ServiceGasPair
 
-// AccumulationStats S ∈ ⟨NS → (NG, N)⟩ (eq. 12.26)
+// AccumulationStats S ∈ ⟨NS → (NG, N)⟩ (eq. 12.26 v0.7.0)
 type AccumulationStats map[block.ServiceId]AccumulationStatEntry
 
 type AccumulationStatEntry struct {
@@ -1741,7 +1741,7 @@ type AccumulationStatEntry struct {
 	AccumulateCount   uint32
 }
 
-// DeferredTransfersStats X ∈ ⟨NS → (N, NG)⟩ (eq. 12.33)
+// DeferredTransfersStats X ∈ ⟨NS → (N, NG)⟩ (eq. 12.33 v0.7.0)
 type DeferredTransfersStats map[block.ServiceId]DeferredTransfersStatEntry
 
 type DeferredTransfersStatEntry struct {
@@ -1754,7 +1754,7 @@ type ServiceGasPair struct {
 	Gas       uint64
 }
 
-// SequentialDelta implements equation 12.16 (∆+(NG, ⟦R⟧, S, ⟨NS → NG⟩) → (N, S, ⟦X⟧, B, U))
+// SequentialDelta implements equation 12.16 v0.7.0 (∆+(NG, ⟦R⟧, S, ⟨NS → NG⟩) → (N, S, ⟦X⟧, B, U))
 func (a *Accumulator) SequentialDelta(
 	gasLimit uint64,
 	workReports []block.WorkReport,
@@ -1831,7 +1831,7 @@ func (a *Accumulator) SequentialDelta(
 	return uint32(maxReports), newCtx, transfers, hashPairs, gasPairs
 }
 
-// ParallelDelta implements equation 12.17 (∆*(S, ⟦R⟧, ⟨NS → NG⟩) → (S, ⟦X⟧, B, U))
+// ParallelDelta implements equation 12.17 v0.7.0 (∆*(S, ⟦R⟧, ⟨NS → NG⟩) → (S, ⟦X⟧, B, U))
 func (a *Accumulator) ParallelDelta(
 	initialAccState state.AccumulationState,
 	workReports []block.WorkReport,
@@ -2014,7 +2014,7 @@ func (a *Accumulator) ParallelDelta(
 	return newAccState, allTransfers, accumHashPairs, accumGasPairs
 }
 
-// Delta1 implements equation 12.21 ∆1(S, ⟦R⟧, ⟨NS → NG⟩, NS) → O
+// Delta1 implements equation 12.21 v0.7.0 ∆1(S, ⟦R⟧, ⟨NS → NG⟩, NS) → O
 func (a *Accumulator) Delta1(
 	accumulationState state.AccumulationState,
 	workReports []block.WorkReport,
@@ -2059,7 +2059,7 @@ func (a *Accumulator) Delta1(
 	return a.InvokePVM(accumulationState, a.newTimeslot, serviceIndex, gasLimit, operands)
 }
 
-// P(d ⟨NS → A⟩,p {(NS , B)}) → ⟨NS → A⟩ (eq. 12.18)
+// P(d ⟨NS → A⟩,p {(NS , B)}) → ⟨NS → A⟩ (eq. 12.18 v0.7.0)
 func (a *Accumulator) preimageIntegration(services service.ServiceState, preimages []polkavm.ProvidedPreimage) service.ServiceState {
 	servicesWithPreimages := services.Clone()
 
