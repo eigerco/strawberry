@@ -19,7 +19,7 @@ type State struct {
 	TimeslotIndex            jamtime.Timeslot                  // Time-related state (τ): the most recent block’s slot index.
 	PastJudgements           Judgements                        // PastJudgements (ψ) - past judgements on work-reports and validators.
 	ActivityStatistics       validator.ActivityStatisticsState // Validator statistics (π) - The activity statistics for the validators.
-	AccumulationQueue        AccumulationQueue                 // Accumulation Queue (ϑ) - ready (i.e. available and/or audited) but not-yet-accumulated work-reports. Each of these were made available at most one epoch ago but have or had unfulfilled dependencies.
+	AccumulationQueue        AccumulationQueue                 // Accumulation Queue (ω) - ready (i.e. available and/or audited) but not-yet-accumulated work-reports. Each of these were made available at most one epoch ago but have or had unfulfilled dependencies.
 	AccumulationHistory      AccumulationHistory               // Accumulation history (ξ) - history of what has been accumulated for an epoch worth of work-reports. Mapping of work-package hash to segment-root.
 	AccumulationOutputLog    AccumulationOutputLog             // Accumulation Output Log (θ)
 }

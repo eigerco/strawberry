@@ -329,7 +329,7 @@ type PreimageHistoricalTimeslots []jamtime.Timeslot // Metadata for preimages (l
 
 type Memo [TransferMemoSizeBytes]byte
 
-// DeferredTransfer Equation (12.14 v0.7.0): X ≡ (s ∈ Ns, d ∈ Ns, a ∈ Nb, m ∈ B_WT, g ∈ Ng)
+// DeferredTransfer X ≡ (s ∈ Ns, d ∈ Ns, a ∈ Nb, m ∈ B_WT, g ∈ Ng) (eq. 12.14 v0.7.0)
 type DeferredTransfer struct {
 	SenderServiceIndex   block.ServiceId // sender service index (s)
 	ReceiverServiceIndex block.ServiceId // receiver service index (d)

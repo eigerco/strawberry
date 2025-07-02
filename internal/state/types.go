@@ -113,22 +113,24 @@ type WorkReportWithUnAccumulatedDependencies struct {
 	Dependencies map[crypto.Hash]struct{} // Set of Dependencies (Work-Package Hashes related to work report)
 }
 
+// AccumulationQueue ω ∈ ⟦⟦(R, {H})⟧⟧_E (eq. 12.3 v0.7.0)
 type AccumulationQueue [jamtime.TimeslotsPerEpoch][]WorkReportWithUnAccumulatedDependencies
 
-type AccumulationHistory [jamtime.TimeslotsPerEpoch]map[crypto.Hash]struct{} // (equation 162 v0.4.5)
+// AccumulationHistory ξ ∈ ⟦{H}⟧_E (eq. 12.1 v0.7.0)
+type AccumulationHistory [jamtime.TimeslotsPerEpoch]map[crypto.Hash]struct{}
 
-// AccumulationState characterization of state components (equation 174 v0.4.5)
+// AccumulationState characterization of state components (eq. 12.13 v0.7.0)
 type AccumulationState struct {
 	ServiceState             service.ServiceState                               // Service accounts δ (d ∈ D⟨NS → A⟩)
 	ValidatorKeys            safrole.ValidatorsData                             // Validator keys ι (i ∈ ⟦K⟧V)
-	PendingAuthorizersQueues [common.TotalNumberOfCores]PendingAuthorizersQueue // Queue of authorizers (q ∈ C⟦H⟧QHC)
+	PendingAuthorizersQueues [common.TotalNumberOfCores]PendingAuthorizersQueue // Queue of authorizers ϕ (q ∈ C⟦H⟧QHC)
 	ManagerServiceId         block.ServiceId                                    // (m)
 	AssignedServiceIds       [common.TotalNumberOfCores]block.ServiceId         // (a)
 	DesignateServiceId       block.ServiceId                                    // (u)
 	AmountOfGasPerServiceId  map[block.ServiceId]uint64                         // (z)
 }
 
-// AccumulationOperand represents a single operand for accumulation (eq. 12.19)
+// AccumulationOperand represents a single operand for accumulation (I) (eq. 12.19 v0.7.0)
 type AccumulationOperand struct {
 	WorkPackageHash   crypto.Hash                   // Work-package hash (p ∈ H)
 	SegmentRoot       crypto.Hash                   // Segment root (e ∈ H)

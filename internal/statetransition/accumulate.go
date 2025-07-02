@@ -21,13 +21,13 @@ const (
 	AccumulateCost = 10
 )
 
-// AccumulationOutput (O)
+// AccumulationOutput (O) (eq. 12.20 v0.7.0)
 type AccumulationOutput struct {
 	AccumulationState state.AccumulationState    // e ∈ S
 	DeferredTransfers []service.DeferredTransfer // t ∈ ⟦X⟧
 	Result            *crypto.Hash               // y ∈ H?
 	GasUsed           uint64                     //  u ∈ NG
-	ProvidedPreimages []polkavm.ProvidedPreimage //  p ∈ ⟦(N_S, B)⟧
+	ProvidedPreimages []polkavm.ProvidedPreimage //  p ∈ {(N_S, B)}
 }
 
 func NewAccumulator(state *state.State, header *block.Header, newTimeslot jamtime.Timeslot) *Accumulator {
