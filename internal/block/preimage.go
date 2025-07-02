@@ -6,4 +6,5 @@ type Preimage struct {
 	Data         []byte // p
 }
 
+// PreimageExtrinsic EP ∈ ⟦(NS , B)⟧ (eq. 12.38)
 type PreimageExtrinsic []Preimage
