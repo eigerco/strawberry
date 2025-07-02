@@ -145,7 +145,7 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 		}(),
 	}
 
-	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState, err := CalculateNewServiceStateWithPreimages(preimages, serviceState, newTimeslot)
 	require.NoError(t, err)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
@@ -168,7 +168,7 @@ func TestCalculateIntermediateServiceStateEmptyPreimages(t *testing.T) {
 
 	expectedServiceState := serviceState
 
-	newServiceState, err := CalculateIntermediateServiceState(block.PreimageExtrinsic{}, serviceState, jamtime.Timeslot(100))
+	newServiceState, err := CalculateNewServiceStateWithPreimages(block.PreimageExtrinsic{}, serviceState, jamtime.Timeslot(100))
 	require.NoError(t, err)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
@@ -200,7 +200,7 @@ func TestCalculateIntermediateServiceStateNonExistentService(t *testing.T) {
 		block.ServiceId(0): sa,
 	}
 
-	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState, err := CalculateNewServiceStateWithPreimages(preimages, serviceState, newTimeslot)
 	require.Error(t, err)
 	require.Equal(t, "preimage unneeded", err.Error())
 	require.Nil(t, newServiceState)
@@ -263,7 +263,7 @@ func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
 		}(),
 	}
 
-	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState, err := CalculateNewServiceStateWithPreimages(preimages, serviceState, newTimeslot)
 	require.NoError(t, err)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
@@ -310,7 +310,7 @@ func TestCalculateIntermediateServiceStateExistingPreimage(t *testing.T) {
 		block.ServiceId(0): sa,
 	}
 
-	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState, err := CalculateNewServiceStateWithPreimages(preimages, serviceState, newTimeslot)
 	require.Error(t, err)
 	require.Equal(t, "preimage unneeded", err.Error())
 	require.Nil(t, newServiceState)
@@ -342,7 +342,7 @@ func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
 		block.ServiceId(0): sa,
 	}
 
-	newServiceState, err := CalculateIntermediateServiceState(preimages, serviceState, newTimeslot)
+	newServiceState, err := CalculateNewServiceStateWithPreimages(preimages, serviceState, newTimeslot)
 	require.Error(t, err)
 	require.Equal(t, "preimage unneeded", err.Error())
 	require.Nil(t, newServiceState)

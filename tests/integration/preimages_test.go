@@ -131,7 +131,13 @@ func TestPreimage(t *testing.T) {
 			preimages := mapPreimages(t, data.Input.Preimages)
 
 			newTimeSlot := jamtime.Timeslot(data.Input.Slot)
-			newServiceState, err := statetransition.CalculateIntermediateServiceState(preimages, preServiceState, newTimeSlot)
+			err = statetransition.ValidatePreimages(preimages, preServiceState)
+			if data.Output.Err != "" {
+				require.Error(t, err)
+				require.EqualError(t, err, strings.ReplaceAll(data.Output.Err, "_", " "))
+				return
+			}
+			newServiceState, err := statetransition.CalculateNewServiceStateWithPreimages(preimages, preServiceState, newTimeSlot)
 			if data.Output.Err != "" {
 				require.Error(t, err)
 				require.EqualError(t, err, strings.ReplaceAll(data.Output.Err, "_", " "))
