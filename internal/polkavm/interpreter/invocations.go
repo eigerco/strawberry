@@ -6,7 +6,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
-// InvokeWholeProgram the marshalling whole-program pvm machine state-transition function: (ΨM eq. A.44)
+// InvokeWholeProgram the marshalling whole-program pvm machine state-transition function: (ΨM eq. A.44 v0.7.0)
 // returns remaining gas and:
 // if error is nil (meaning halt or ∎) should return a result as bytes otherwise
 // error as one of:
@@ -50,7 +50,7 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.G
 	return 0, nil, x1, err
 }
 
-// InvokeHostCall host call invocation (ΨH eq. A.35)
+// InvokeHostCall host call invocation (ΨH eq. A.35 v0.7.0)
 func InvokeHostCall[X any](
 	i *Instance,
 	hostCall polkavm.HostCall[X], x X,
@@ -78,7 +78,7 @@ func InvokeHostCall[X any](
 	return x, nil
 }
 
-// Invoke basic definition (Ψ eq. A.1)
+// Invoke basic definition (Ψ eq. A.1 v0.7.0)
 func Invoke(i *Instance) (uint64, error) {
 	for {
 		if hostCall, err := i.step(); err != nil {

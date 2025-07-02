@@ -16,7 +16,7 @@ const (
 	ReadWrite                        // W (Read-Write)
 )
 
-// Memory M ≡ (V ∈ B_(2^32), A ∈ ⟦{W, R, ∅}⟧p) (eq. 4.24)
+// Memory M ≡ (v ∈ B_(2^32), a ∈ ⟦{W, R, ∅}⟧p) (eq. 4.24 v0.7.0)
 // for practical reasons we define each memory segment separately
 // so we don't have to allocate [2^32]byte unnecessarily
 type Memory struct {
@@ -33,7 +33,7 @@ type memorySegment struct {
 	access  MemoryAccess
 }
 
-// Read reads from the set of readable indices (Vμ) (implements eq. A.8)
+// Read reads from the set of readable indices (Vμ) (implements eq. A.8 v0.7.0)
 func (m *Memory) Read(address uint64, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
@@ -57,7 +57,7 @@ func (m *Memory) Read(address uint64, data []byte) error {
 		copy(logd, memoryData)
 	}
 
-	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋ (eq. A.9)
+	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋ (eq. A.9 v0.7.0)
 	if access == Inaccessible {
 		// find the minimum page that is not readable
 		for i := address / PageSize; i <= (address+uint64(len(data)))/PageSize; i++ {
@@ -72,7 +72,7 @@ func (m *Memory) Read(address uint64, data []byte) error {
 	return nil
 }
 
-// Write writes to the set of writeable indices (Vμ*) (implements eq. A.8)
+// Write writes to the set of writeable indices (Vμ*) (implements eq. A.8 v0.7.0)
 func (m *Memory) Write(address uint64, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
@@ -183,7 +183,7 @@ type Registers [13]uint64
 
 type Gas uint64
 
-// HostCall the generic Ω function definition Ω⟨X⟩ ≡ (N, NG, ⟦NR⟧13, M, X) → ({▸, ∎, ☇, ∞}, NG, ⟦NR⟧13, M, X) ∪ {F} × NR (eq. A.36)
+// HostCall the generic Ω function definition Ω⟨⟩X ≡ (N, NG, ⟦NR⟧13, M, X) → ({▸, ∎, ☇, ∞}, NG, ⟦NR⟧13, M, X) ∪ {F} × NR (eq. A.36 v0.7.0)
 type HostCall[X any] func(hostCall uint64, gasCounter Gas, regs Registers, mem Memory, x X) (Gas, Registers, Memory, X, error)
 
 type Mutator interface {
