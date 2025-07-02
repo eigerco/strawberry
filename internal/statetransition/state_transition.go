@@ -51,6 +51,10 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		return fmt.Errorf("extrinsic guarantees validation failed, err: %w", err)
 	}
 
+	if err := ValidatePreimages(newBlock.Extrinsic.EP, s.Services); err != nil {
+		return err
+	}
+
 	intermediateCoreAssignments := CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
 
 	newJudgements, err := CalculateNewJudgements(prevTimeSlot, newBlock.Extrinsic.ED, s.PastJudgements, s.ValidatorState)
@@ -104,7 +108,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		newTimeSlot,
 		workReports,
 	)
-	finalServicesState, err := CalculateIntermediateServiceState(newBlock.Extrinsic.EP, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
+	finalServicesState, err := CalculateNewServiceStateWithPreimages(newBlock.Extrinsic.EP, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
 	if err != nil {
 		return err
 	}
@@ -159,6 +163,7 @@ func preimageHasBeenSolicited(serviceState service.ServiceState, serviceIndex bl
 	return !preimageLookupExists && (metaExists && len(meta) == 0)
 }
 
+// EP = [i ∈ EP || i] (eq. 12.39)
 func isPreimagesSortedUnique(preimages block.PreimageExtrinsic) bool {
 	if len(preimages) <= 1 {
 		return true
@@ -180,44 +185,62 @@ func isPreimagesSortedUnique(preimages block.PreimageExtrinsic) bool {
 	return true
 }
 
-// CalculateIntermediateServiceState implements Equations 12.28–12.33
-// This function calculates the intermediate service state δ† based on:
-// - The current service state δ (serviceState)
-// - The preimage extrinsic EP (preimages)
-// - The new timeslot τ′ (newTimeslot)
-//
-// For each preimage in EP:
-//  1. It adds the preimage p to the PreimageLookup of service s, keyed by its hash H(p)
-//  2. It adds a new entry to the PreimageMeta of service s, keyed by the hash H(p) and
-//     length |p|, with the value being the new timeslot τ′
-//
-// The function returns a new ServiceState without modifying the input state.
-func CalculateIntermediateServiceState(
-	preimages block.PreimageExtrinsic,
-	serviceState service.ServiceState,
-	newTimeslot jamtime.Timeslot,
-) (service.ServiceState, error) {
+// ValidatePreimages implements equations 12.39 and 12.40 v0.7.0
+// checks that the preimages are ordered, unique and solicited by a service
+func ValidatePreimages(preimages block.PreimageExtrinsic, serviceState service.ServiceState) error {
 	if !isPreimagesSortedUnique(preimages) {
-		return serviceState, errors.New("preimages not sorted unique")
+		return errors.New("preimages not sorted unique")
 	}
-
-	newServiceState := serviceState.Clone()
 
 	for _, preimage := range preimages {
 		serviceId := block.ServiceId(preimage.ServiceIndex)
 		preimageHash := crypto.HashData(preimage.Data)
 		preimageLength := service.PreimageLength(len(preimage.Data))
 
-		// ∀(s, p) ∈ E_P∶ R(δ, s, H(p), |p|) (12.31 v0.6.3)
+		// ∀(s, p) ∈ E_P∶ R(δ, s, H(p), |p|) (eq. 12.40 v0.7.0)
 		if !preimageHasBeenSolicited(serviceState, serviceId, preimageHash, preimageLength) {
-			return nil, errors.New("preimage unneeded")
+			return errors.New("preimage unneeded")
+		}
+	}
+
+	return nil
+}
+
+// CalculateNewServiceStateWithPreimages implements Equations 12.42 and 12.43 v0.7.0
+// This function calculates the final service state δ′ based on:
+// - The current service state δ (serviceState)
+// - The preimage extrinsic EP (preimages)
+// - The new timeslot τ′ (newTimeslot)
+//
+// For each preimage in EP:
+//  1. It adds the preimage p to the PreimageLookup of service s, keyed by its hash H(d)
+//  2. It adds a new entry to the PreimageMeta of service s, keyed by the hash H(d) and
+//     length |d|, with the value being the new timeslot τ′
+//
+// The function returns a new ServiceState without modifying the input state.
+func CalculateNewServiceStateWithPreimages(
+	preimages block.PreimageExtrinsic,
+	postAccumulationServiceState service.ServiceState,
+	newTimeslot jamtime.Timeslot,
+) (service.ServiceState, error) {
+
+	newServiceState := postAccumulationServiceState.Clone()
+
+	for _, preimage := range preimages {
+		serviceId := block.ServiceId(preimage.ServiceIndex)
+		preimageHash := crypto.HashData(preimage.Data)
+		preimageLength := service.PreimageLength(len(preimage.Data))
+
+		// let p = { (s, d) | (s, d) ∈ EP, Y(δ‡, s, H(d), |d|) } (eq. 12.42 v0.7.0)
+		if !preimageHasBeenSolicited(postAccumulationServiceState, serviceId, preimageHash, preimageLength) {
+			continue
 		}
 
-		// Eq. 12.33 v0.6.3:
-		//							⎧ δ′[s]p[H(p)] = p
-		// δ′ = δ‡ ex. ∀(s, p) ∈ P∶ ⎨
-		//							⎩ δ′[s]l[H(p), |p|] = [τ′]
-		account, ok := serviceState[serviceId]
+		// Eq. 12.43 v0.7.0
+		//							⎧ δ′[s]p[H(d)] = d
+		// δ′ = δ‡ ex. ∀(s, d) ∈ p∶ ⎨
+		// 							⎩ δ′[s]l[H(d), |d|] = [τ′]
+		account, ok := postAccumulationServiceState[serviceId]
 		if !ok {
 			continue
 		}
