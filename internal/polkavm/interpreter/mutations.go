@@ -885,7 +885,7 @@ func bool2uint64(v bool) uint64 {
 	return 0
 }
 
-// smod (a Z, b Z) → Z a if b = 0 otherwise sgn(a)(|a| mod |b|) (eq. A.32)
+// smod (a Z, b Z) → Z a if b = 0 otherwise sgn(a)(|a| mod |b|) (eq. A.33 v0.7.0)
 func smod64(a int64, b int64) int64 {
 	if b == 0 {
 		return a
@@ -901,7 +901,7 @@ func abs64(v int64) int64 {
 	return (v ^ mask) - mask
 }
 
-// smod (a Z, b Z) → Z a if b = 0 otherwise sgn(a)(|a| mod |b|) (eq. A.33)
+// smod (a Z, b Z) → Z a if b = 0 otherwise sgn(a)(|a| mod |b|) (eq. A.33 v0.7.0)
 func smod32(a int32, b int32) int32 {
 	if b == 0 {
 		return a
