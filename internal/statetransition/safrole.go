@@ -22,7 +22,7 @@ type SafroleInput struct {
 	TimeSlot jamtime.Timeslot
 	// Ticket extrinsic (E_T).
 	Tickets []block.TicketProof
-	// Y(Hv)
+	// Y(H_V)
 	Entropy crypto.BandersnatchOutputHash
 }
 
@@ -43,9 +43,9 @@ func NewSafroleInputFromBlock(block block.Block) (SafroleInput, error) {
 
 // Output from UpdateSafroleState.
 type SafroleOutput struct {
-	// H_e
+	// H_E
 	EpochMark *block.EpochMarker
-	// H_w
+	// H_W
 	WinningTicketMark *block.WinningTicketMarker
 
 	// Entropies for use by downstream functions that might also use this output.
@@ -54,15 +54,16 @@ type SafroleOutput struct {
 }
 
 // Validates then produces tickets from submitted ticket proofs.
-// Implements equations 74-80 in the graypaper (v.0.4.5)
-// ET ∈ D{r ∈ NN, p ∈ F̄[]γz⟨XT ⌢ η′2 r⟩}I  (74)
-// |ET| ≤ K if m′ < Y                        (75)
-// n ≡ [{y ▸ Y(ip), r ▸ ir} S i <− ET]      (76)
-// n = [xy __ x ∈ n]                         (77)
-// {xy S x ∈ n} ⫰ {xy S x ∈ γa}             (78)
-// γ′a ≡ [xy^^ x ∈ n ∪ {∅ if e′ > e, γa otherwise}]E  (79)
+// Implements equations 6.29-6.34
+// E_T ∈ D{e ∈ N_N, p ∈ V[]γ'z⟨X_T ⌢ η′2 ++ e⟩}  (6.29)
+// |E_T| ≤ K if m′ < Y                           (6.30)
+// n ≡ [(y: Y(i_p), e: i_e) | i <− E_T]          (6.31)
+// n = [x ∈ n || x_y]                            (6.32)
+// {x_y | x ∈ n} ⫰ {x_y | x ∈ γ_A}               (6.33)
+// γ′A ≡ [x ∈ n ∪ {∅ if e′ > e, γ_A otherwise}]E (6.34)
+// GP v0.7.0
 func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, ticketProofs []block.TicketProof) ([]block.Ticket, error) {
-	// Equation 75: |ET| ≤ K if m′ < Y (v.0.4.5)
+	// Equation 6.30: |E_T| ≤ K if m′ < Y
 	if len(ticketProofs) > common.MaxTicketExtrinsicSize {
 		return []block.Ticket{}, errors.New("too many tickets")
 	}
@@ -73,23 +74,23 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 		return []block.Ticket{}, err
 	}
 
-	// Equation 78: {xy S x ∈ n} ⫰ {xy S x ∈ γa} (v.0.4.5)
+	// Equation 6.33: {x_y | x ∈ n} ⫰ {x_y | x ∈ γ_A}
 	// Check for duplicate tickets in γ_a
 	existingIds := make(map[crypto.BandersnatchOutputHash]struct{}, len(safstate.TicketAccumulator))
 	for _, ticket := range safstate.TicketAccumulator {
 		existingIds[ticket.Identifier] = struct{}{}
 	}
-	// Equations 74 and 76 (v.0.4.5)
-	// ET ∈ D{r ∈ NN, p ∈ F̄[]γz⟨XT ⌢ η′2 r⟩}I
-	// n ≡ [{y ▸ Y(ip), r ▸ ir} S i <− ET]
+	// Equations 6.29 and 6.31
+	// E_T ∈ D{e ∈ N_N, p ∈ V[]γ'z⟨X_T ⌢ η′2 ++ e⟩}
+	// n ≡ [(y: Y(i_p), e: i_e) | i <− E_T]
 	tickets := make([]block.Ticket, len(ticketProofs))
 	for i, tp := range ticketProofs {
-		// Equation 6.29: r ∈ N_N (v.0.5.4)
+		// Equation 6.29: e ∈ N_N
 		if tp.EntryIndex >= common.MaxTicketAttemptsPerValidator {
 			return []block.Ticket{}, errors.New("bad ticket attempt")
 		}
 
-		// Validate the ring signature. VrfInputData is X_t ⌢ η_2′ ++ r. Equation 74. (v.0.4.5)
+		// Validate the ring signature. VrfInputData is X_t ⌢ η_2′ ++ r. Equation 6.29
 		vrfInputData := append([]byte(state.TicketSealContext), entropyPool[2][:]...)
 		vrfInputData = append(vrfInputData, tp.EntryIndex)
 		// This produces the output hash we need to construct the ticket further down.
@@ -98,19 +99,19 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 			return []block.Ticket{}, errors.New("bad ticket proof")
 		}
 
-		// Equation 78: {xy S x ∈ n} ⫰ {xy S x ∈ γa} (v.0.4.5)
+		// Equation 6.33: {x_y | x ∈ n} ⫰ {x_y | x ∈ γ_A}
 		if _, exists := existingIds[outputHash]; exists {
 			return []block.Ticket{}, errors.New("duplicate ticket")
 		}
 
-		// Equation 76: n ≡ [{y ▸ Y(ip), r ▸ ir} S i <− ET] (v.0.4.5)
+		// Equation 6.31: n ≡ [(y: Y(i_p), e: i_e) | i <− E_T]
 		tickets[i] = block.Ticket{
 			Identifier: outputHash,
 			EntryIndex: tp.EntryIndex,
 		}
 	}
 
-	// Equation 77: n = [xy __ x ∈ n] (v.0.4.5)
+	// Equation 6.32: n = [x ∈ n || x_y]
 	// Verify tickets are ordered by identifier
 	for i := 1; i < len(tickets); i++ {
 		prevHash := tickets[i-1].Identifier
@@ -125,20 +126,22 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 
 // Implements section 6 of the graypaper.
 // Updates all state associated with the SAFROLE protocol.
-// Implements key equations (v.0.4.5)
-// γ′k ≡ Φ(ι) if e′ > e                     (58)
-// γ′s ≡ Z(γa) if e′ = e + 1 ∧ m ≥ Y ∧ |γa| = E
+// Implements key equations:
+// γ′_P ≡ Φ(ι) if e′ > e                     (6.13)
+// T ≡ Z(γ_A) if e′ = e + 1 ∧ m ≥ Y ∧ |γ_A| = E
 //
-//	γs if e′ = e
-//	F(η′2, κ′) otherwise                (69)
+//	γ_s if e′ = e
+//	F(η′2, κ′) otherwise                     (6.24)
 //
-// He ≡ (η′1, [kb S k <− γ′k]) if e′ > e
+// H_E ≡ (n0, η1, [(k_b, k_e) | k <− γ′_P]) if e′ > e
 //
-//	∅ otherwise                          (72)
+//	∅ otherwise                              (6.27)
 //
-// Hw ≡ Z(γa) if e′ = e ∧ m < Y ≤ m′ ∧ |γa| = E
+// H_W ≡ Z(γ_A) if e′ = e ∧ m < Y ≤ m′ ∧ |γ_A| = E
 //
-//	∅ otherwise                          (73)
+//	∅ otherwise                              (6.28)
+//
+// GP v0.7.0
 func UpdateSafroleState(
 	input SafroleInput,
 	preTimeSlot jamtime.Timeslot,
@@ -152,7 +155,7 @@ func UpdateSafroleState(
 
 	nextTimeSlot := input.TimeSlot
 
-	// Equations 67, 68 (v.0.4.5)
+	// Equations 6.22, 6.23
 	// η′0 ≡ H(η0 ⌢ Y(Hv))
 	// (η′1, η′2, η′3) ≡ (η0, η1, η2) if e′ > e
 	newEntropyPool, err := calculateNewEntropyPool(preTimeSlot, nextTimeSlot, input.Entropy, entropyPool)
@@ -168,21 +171,21 @@ func UpdateSafroleState(
 
 	epoch := nextTimeSlot.ToEpoch()   // e'
 	preEpoch := preTimeSlot.ToEpoch() // e
-	// |γ_a| = E, a condition of equation 73.
+	// |γ_A| = E, a condition of equation 6.24
 	ticketAccumulatorFull := len(validatorState.SafroleState.TicketAccumulator) == jamtime.TimeslotsPerEpoch
 
-	// Note that this condition allows epochs to be skipped, e' > e, as in equations 58, 68, 72. (v.0.4.5)
+	// Note that this condition allows epochs to be skipped, e' > e, as in equations 6.13, 6.23, 6.27
 	// We don't care about the timeslot, only the epoch.
-	// Equation 58: (γ′k, κ′, λ′, γ′z) ≡ (Φ(ι), γk, κ, z) if e′ > e
+	// Equation 6.13 (γ′P, κ′, λ′, γ′z) ≡ (Φ(ι), γ_P, κ, z) if e′ > e
 	if epoch > preEpoch {
-		// Equation 59: Φ(k) ≡ [0, 0, ...] if ke ∈ ψ′o (v.0.4.5)
+		// Equation 6.14: Φ(k) ≡ [0, 0, ...] if ke ∈ ψ′o
 		//                     k otherwise
 		newValidatorState.SafroleState.NextValidators = validator.NullifyOffenders(validatorState.QueuedValidators, offenders)
 		newValidatorState.CurrentValidators = validatorState.SafroleState.NextValidators
 		newValidatorState.ArchivedValidators = validatorState.CurrentValidators
 
 		// Calculate new ring commitment. (γ_z) . Apply the O function from equation 58.
-		//  Equation 58: z = O([kb S k <− γ′k])
+		//  Equation 6.13: z = O([k_b | k <− γ′P])
 		ringCommitment, err := newValidatorState.SafroleState.NextValidators.RingCommitment()
 		if err != nil {
 			return entropyPool, validatorState, SafroleOutput{}, errors.New("unable to calculate ring commitment")
@@ -192,13 +195,13 @@ func UpdateSafroleState(
 		// Determine the sealing keys.  Standard way is to use
 		// tickets as sealing keys, if we can't then fall back to selecting
 		// bandersnatch validator keys for sealing randomly using past entropy.
-		// Equation 69: γ′s ≡ Z(γa) if e′ = e + 1 ∧ m ≥ Y ∧ |γa| = E (v.0.4.5)
-		//                    γs if e′ = e
+		// Equation 6.24: T ≡ Z(γ_A) if e′ = e + 1 ∧ m ≥ Y ∧ |γ_A| = E
+		//                    γ_s if e′ = e
 		//                    F(η′2, κ′) otherwise
 		if epoch == preEpoch+jamtime.Epoch(1) &&
 			// m >= Y
 			!preTimeSlot.IsTicketSubmissionPeriod() &&
-			// |γ_a| = E
+			// |γ_A| = E
 			ticketAccumulatorFull {
 			// Use tickets for sealing keys. Apply the Z function on the ticket accumulator.
 			sealingTickets := safrole.OutsideInSequence(newValidatorState.SafroleState.TicketAccumulator)
@@ -212,8 +215,8 @@ func UpdateSafroleState(
 			newValidatorState.SafroleState.SealingKeySeries.Set(fallbackKeys)
 		}
 
-		// Compute epoch marker (H_e).
-		// Equation 6.27: He ≡ (η0, n1, [kb S k <− γ′k]) if e′ > e (v.0.5.4)
+		// Compute epoch marker (H_E).
+		// Equation 6.27: He ≡ (η0, n1, [(k_b, k_e) | k <− γ′P]) if e′ > e
 		output.EpochMark = &block.EpochMarker{
 			Entropy:        entropyPool[0],
 			TicketsEntropy: entropyPool[1],
@@ -225,12 +228,13 @@ func UpdateSafroleState(
 			}
 		}
 
-		// Reset ticket accumulator. From equation 79.
+		// Reset ticket accumulator. From equation 6.34
+		// y'_A = ∅ if e′ > e
 		newValidatorState.SafroleState.TicketAccumulator = []block.Ticket{}
 	}
 
 	// Check if we need to generate the winning tickets marker.
-	// // Equation 73: Hw ≡ Z(γa) if e′ = e ∧ m < Y ≤ m′ ∧ |γa| = E (v.0.4.5)
+	// // Equation 6.28: H_W ≡ Z(γ_A) if e′ = e ∧ m < Y ≤ m′ ∧ |γ_A| = E
 	if epoch == preEpoch &&
 		nextTimeSlot.IsWinningTicketMarkerPeriod(preTimeSlot) &&
 		ticketAccumulatorFull {
@@ -239,22 +243,22 @@ func UpdateSafroleState(
 		output.WinningTicketMark = (*block.WinningTicketMarker)(winningTickets)
 	}
 
-	// Process incoming tickets.  Check if we're still allowed to submit
-	// tickets. An implication of equation 75. m' < Y to submit.
+	// Process incoming tickets. Check if we're still allowed to submit
+	// tickets. An implication of equation 6.30: m' < Y to submit.
 	if !nextTimeSlot.IsTicketSubmissionPeriod() && len(input.Tickets) > 0 {
 		return entropyPool, validatorState, SafroleOutput{}, errors.New("unexpected ticket")
 	}
 
 	if len(input.Tickets) > 0 {
 		// Validate ticket proofs and produce tickets. Tickets produced are n.
-		// As in equation 76.
+		// As in equation 6.31-6.33
 		tickets, err := calculateTickets(newValidatorState.SafroleState, newEntropyPool, input.Tickets)
 		if err != nil {
 			return entropyPool, validatorState, SafroleOutput{}, err
 		}
 
-		// Update the accumulator γ_a.
-		// Equation 79: γ′a ≡ [xy^^ x ∈ n ∪ {∅ if e′ > e, γa otherwise}]E (v.0.4.5)
+		// Update the accumulator γ_A.
+		// Equation 6.34: γ′A ≡ [x ∈ n ∪ {∅ if e′ > e, γ_A otherwise}]E
 		// Combine existing and new tickets.
 		accumulator := newValidatorState.SafroleState.TicketAccumulator
 		allTickets := make([]block.Ticket, len(accumulator)+len(tickets))
@@ -272,7 +276,7 @@ func UpdateSafroleState(
 		}
 
 		// Ensure all incoming tickets exist in the accumulator. No useless
-		// tickets are allowed. Equation 6.35: n ⊆ γ′a (v.0.5.4)
+		// tickets are allowed. Equation 6.35: n ⊆ γ′A
 		existingIds := make(map[crypto.BandersnatchOutputHash]struct{}, len(allTickets))
 		for _, ticket := range allTickets {
 			existingIds[ticket.Identifier] = struct{}{}
@@ -288,10 +292,12 @@ func UpdateSafroleState(
 	return newEntropyPool, newValidatorState, output, nil
 }
 
-// Implements equations 67 and 68 from the graypaper. (v.0.4.5)
+// Calculates η′0 ≡ H(η0 ⌢ Y(Hv)) every slot (6.22)
+// and rotates the entropies on epoch change:
+// (η1′​,η2′​,η3′​) = {(η0​,η1​,η2​) ​if e′>e (η1​,η2​,η3​) otherwise​ (6.23)
 // The entropyInput is assumed to be bandersnatch output hash from the block vrf siganture, Y(Hv).
-// The entryPool is defined as equation 66.
-// Calculates η′0 ≡ H(η0 ⌢ Y(Hv)) every slot, and rotates the entropies on epoch change.
+// The entryPool is defined as equation 6.21: η ∈ ⟦H⟧_4
+// GP v0.7.0
 func calculateNewEntropyPool(currentTimeslot jamtime.Timeslot, newTimeslot jamtime.Timeslot, entropyInput crypto.BandersnatchOutputHash, entropyPool state.EntropyPool) (state.EntropyPool, error) {
 	newEntropyPool := entropyPool
 
@@ -316,7 +322,7 @@ func rotateEntropyPool(pool state.EntropyPool) state.EntropyPool {
 // the next ValidatorState together with the SAFROLE output which includes the
 // entropy entries to use for ticket submission and block sealing. Disputes only
 // need to be included in specific cases where an updated pending validator set
-// (γ_k) is required for some calculation.
+// (γ_P) is required for some calculation.
 func NextSafroleState(priorState *state.State, nextTimeslot jamtime.Timeslot, disputes block.DisputeExtrinsic) (
 	validator.ValidatorState,
 	SafroleOutput,

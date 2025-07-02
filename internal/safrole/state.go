@@ -12,11 +12,12 @@ import (
 )
 
 // State relevant to Safrole protocol
+// GP v0.7.0
 type State struct {
-	NextValidators    ValidatorsData        // (γk) Validator keys for the following epoch.
-	RingCommitment    crypto.RingCommitment // (γz) Bandersnatch ring commitment.
-	SealingKeySeries  SealingKeys           // (γs) Sealing-key series of the current epoch.
-	TicketAccumulator []block.Ticket        // (γa) Sealing-key contest ticket accumulator.
+	NextValidators    ValidatorsData        // (γP) Validator keys for the following epoch.
+	RingCommitment    crypto.RingCommitment // (γZ) Bandersnatch ring commitment.
+	SealingKeySeries  SealingKeys           // (γS) Sealing-key series of the current epoch.
+	TicketAccumulator []block.Ticket        // (γA) Sealing-key contest ticket accumulator.
 }
 
 type ValidatorsData [common.NumberOfValidators]crypto.ValidatorKey
@@ -70,7 +71,10 @@ func (vsd ValidatorsData) RingProver(privateKey crypto.BandersnatchPrivateKey) (
 }
 
 // SelectFallbackKeys selects the fallback keys for the sealing key series.
-// Implements the F function from the graypaper. Equation 71.
+// Implements the F function from the graypaper.
+// Equation 6.26:
+// (r, k) -> [k_E4^-1 (H(r~E4(i))...4)_b^↺ | ∈ N_E]
+// GP v0.7.0
 func SelectFallbackKeys(entropy crypto.Hash, currentValidators ValidatorsData) (crypto.EpochKeys, error) {
 	var fallbackKeys crypto.EpochKeys
 	for i := uint32(0); i < jamtime.TimeslotsPerEpoch; i++ {
@@ -95,7 +99,10 @@ func SelectFallbackKeys(entropy crypto.Hash, currentValidators ValidatorsData) (
 	return fallbackKeys, nil
 }
 
-// OutsideInSequence implements the Z function from the graypaper. Equation 70.
+// OutsideInSequence implements the Z function from the graypaper.
+// Equation 6.25
+// s ↦ [s0, s_|s|-1, s1, s_|s|-2, ...]
+// GP v0.7.0
 func OutsideInSequence(tickets []block.Ticket) []block.Ticket {
 	n := len(tickets)
 	result := make([]block.Ticket, n)

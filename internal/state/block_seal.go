@@ -30,7 +30,9 @@ type TicketOrKey interface {
 }
 
 // Gets the winning ticket or key for the current timeslot.
-// Implements part of equation 6.15 in the graypaper: γ′s[Ht]^↺ (v0.5.4)
+// Implements part of equation 6.15:
+// let i = T[H_T]°
+// GP v0.7.0
 func getWinningTicketOrKey(timeslot jamtime.Timeslot, sealingKeys safrole.TicketsOrKeys) (TicketOrKey, error) {
 	index := timeslot.TimeslotInEpoch()
 	switch value := sealingKeys.(type) {
@@ -48,7 +50,33 @@ func getWinningTicketOrKey(timeslot jamtime.Timeslot, sealingKeys safrole.Ticket
 // bandersnatch public key as a fallback. Checks that the private key given was
 // either used to generate the winning ticket or otherwise if it's public key
 // matches the winning public key in the case of fallback.
-// Implements equations 6.15-6.20 in the graypaper. (v0.5.4)
+// Implements equations:
+// let i = T[H_T]°:
+//
+// (6.15) T ∈ [[T]] =>
+//
+//	{
+//	  i_y = Y(H_S),
+//	  H_S ∈ V^~_H_A(H) <X_T ~ η'_3 + i_e>,
+//	  T = 1
+//	}
+//
+// (6.16) T ∈ [[H]] =>
+//
+//	{
+//	  i = H_A,
+//	  H_S ∈ V^~_H_A(H) <X_F ~ η'_3>,
+//	  T = 0
+//	}
+//
+// (6.17) H_V ∈ V^~_H_A([]) <X_E ~ Y(H_S)>
+//
+// (6.18) X_E = $jam_entropy
+//
+// (6.19) X_F = $jam_fallback_seal
+//
+// (6.20) X_T = $jam_ticket_seal
+// GP v0.7.0
 func SealBlock(
 	header *block.Header,
 	sealKeys safrole.SealingKeys,
@@ -83,11 +111,37 @@ func SealBlock(
 // the given header using either a winning ticket or a public key in the case of
 // fallback. This will error if the private key can't be associated with the
 // given ticket or public key in the case of fallback.
-// Implements equations 6.15-6.20 in the graypaper. (v0.5.4)
+// Implements equations:
+// let i = T[H_T]°:
+//
+// (6.15) T ∈ [[T]] =>
+//
+//	{
+//	  i_y = Y(H_S),
+//	  H_S ∈ V^~_H_A(H) <X_T ~ η'_3 + i_e>,
+//	  T = 1
+//	}
+//
+// (6.16) T ∈ [[H]] =>
+//
+//	{
+//	  i = H_A,
+//	  H_S ∈ V^~_H_A(H) <X_F ~ η'_3>,
+//	  T = 0
+//	}
+//
+// (6.17) H_V ∈ V^~_H_A([]) <X_E ~ Y(H_S)>
+//
+// (6.18) X_E = $jam_entropy
+//
+// (6.19) X_F = $jam_fallback_seal
+//
+// (6.20) X_T = $jam_ticket_seal
+// GP v0.7.0
 func SignBlock(
 	header block.Header,
 	ticketOrKey TicketOrKey,
-	privateKey crypto.BandersnatchPrivateKey, // Ha
+	privateKey crypto.BandersnatchPrivateKey, // H_A
 	entropy crypto.Hash, // η′3
 ) (
 	sealSignature crypto.BandersnatchSignature,
@@ -107,18 +161,32 @@ func SignBlock(
 // Produces a seal signature and VRFS signature for the unsealed header bytes of
 // the given header using a winning ticket. This will error if the private key
 // can't be associated with the given ticket.
-// Implements equations 6.15 and 6.17-6.20 in the graypaper. (v0.5.4)
+// Implements equations:
+// (6.15) T ∈ [[T]] =>
+//
+//	{
+//	  i_y = Y(H_S),
+//	  H_S ∈ V^~_H_A(H) <X_T ~ η'_3 + i_e>,
+//	  T = 1
+//	}
+//
+// (6.17) H_V ∈ V^~_H_A([]) <X_E ~ Y(H_S)>
+//
+// (6.18) X_E = $jam_entropy
+//
+// (6.20) X_T = $jam_ticket_seal
+// GP v0.7.0
 func SignBlockWithTicket(
 	header block.Header,
 	ticket block.Ticket,
-	privateKey crypto.BandersnatchPrivateKey, // Ha
+	privateKey crypto.BandersnatchPrivateKey, // H_A
 	entropy crypto.Hash, // η′3
 ) (
 	sealSignature crypto.BandersnatchSignature,
 	vrfSignature crypto.BandersnatchSignature,
 	err error,
 ) {
-	// Build the context: XT ⌢ η′3 ++ ir
+	// Build the context: XT ⌢ η′3 ++ i_e
 	sealContext := buildTicketSealContext(entropy, ticket.EntryIndex)
 
 	// We need to add the VRF signature to the header before we seal. This seems
@@ -137,7 +205,7 @@ func SignBlockWithTicket(
 		return crypto.BandersnatchSignature{}, crypto.BandersnatchSignature{}, err
 	}
 
-	// Extra safety check. See equation 6.29 in the graypaper. (v0.5.4)
+	// Extra safety check. See equation 6.29
 	// The VRF output hash of the seal signature should be the same as the VRF
 	// output hash of the ticket if the same private key was used to produce
 	// both.
@@ -167,7 +235,7 @@ func SignBlockWithTicket(
 
 // Helper to build the ticket sealing context.
 func buildTicketSealContext(entropy crypto.Hash, ticketAttempt uint8) []byte {
-	// Build the context: XT ⌢ η′3 ++ ir
+	// Build the context: XT ⌢ η′3 ++ i_e
 	sealContext := append([]byte(TicketSealContext), entropy[:]...)
 	sealContext = append(sealContext, byte(ticketAttempt))
 	return sealContext
@@ -176,11 +244,27 @@ func buildTicketSealContext(entropy crypto.Hash, ticketAttempt uint8) []byte {
 // Produces a seal signature and VRFS signature for the unsealed header bytes of
 // the given header using a winning public key. This is the fallback case. This
 // will error if the private key can't be associated with the given public key.
-// Implements equations 6.16 and 6.17-6.20 in the graypaper. (v0.5.4)
+// Implements equations:
+// let i = T[H_T]°:
+//
+// (6.16) T ∈ [[H]] =>
+//
+//	{
+//	  i = H_A,
+//	  H_S ∈ V^~_H_A(H) <X_F ~ η'_3>,
+//	  T = 0
+//	}
+//
+// (6.17) H_V ∈ V^~_H_A([]) <X_E ~ Y(H_S)>
+//
+// (6.18) X_E = $jam_entropy
+//
+// (6.19) X_F = $jam_fallback_seal
+// GP v0.7.0
 func SignBlockWithFallback(
 	header block.Header,
 	winningKey crypto.BandersnatchPublicKey,
-	privateKey crypto.BandersnatchPrivateKey, // Ha
+	privateKey crypto.BandersnatchPrivateKey, // H_A
 	entropy crypto.Hash, // // η′3
 ) (
 	sealSignature crypto.BandersnatchSignature,
@@ -238,7 +322,9 @@ func buildTicketFallbackContext(entropy crypto.Hash) []byte {
 }
 
 // Helper to produce the VRFS signature.
-// Implements equation 6.17 in the graypaper. (v0.5.4)
+// Implements equation 6.17:
+// H_V ∈ V^~_H_A([]) <X_E ~ Y(H_S)>
+// GP v0.7.0
 func signBlockVRFS(
 	sealOutputHash crypto.BandersnatchOutputHash,
 	privateKey crypto.BandersnatchPrivateKey,
@@ -271,10 +357,40 @@ func encodeUnsealedHeader(header block.Header) ([]byte, error) {
 	}
 	// Hs will be the last 96 zeros, so strip those off to get the unsealed
 	// header bytes.
-	// See equation C.19 in the graypaper. (v0.5.4)
+	// See equation C.22: E(H) = E(EU (H), HS)
+	// GP v0.7.0
 	return bytes[:len(bytes)-96], nil
 }
 
+// Finds the winning ticket or key and then verifies block seal and VRF
+// signatures.
+// Uses equations:
+// let i = T[H_T]°:
+//
+// (6.15) T ∈ [[T]] =>
+//
+//	{
+//	  i_y = Y(H_S),
+//	  H_S ∈ V^~_H_A(H) <X_T ~ η'_3 + i_e>,
+//	  T = 1
+//	}
+//
+// (6.16) T ∈ [[H]] =>
+//
+//	{
+//	  i = H_A,
+//	  H_S ∈ V^~_H_A(H) <X_F ~ η'_3>,
+//	  T = 0
+//	}
+//
+// (6.17) H_V ∈ V^~_H_A([]) <X_E ~ Y(H_S)>
+//
+// (6.18) X_E = $jam_entropy
+//
+// (6.19) X_F = $jam_fallback_seal
+//
+// (6.20) X_T = $jam_ticket_seal
+// GP v0.7.0
 func VerifyBlockSeal(
 	header *block.Header,
 	sealKeys safrole.SealingKeys,
@@ -292,6 +408,36 @@ func VerifyBlockSeal(
 	return VerifyBlockSignatures(*header, winningTicketOrKey, validators, entropy)
 }
 
+// Verifies the block seal and VRF signatures.
+// Uses equations:
+// (5.9) H_I ∈ N_V , H_A ≡ κ′[H_I]
+//
+// let i = T[H_T]°:
+//
+// (6.15) T ∈ [[T]] =>
+//
+//	{
+//	  i_y = Y(H_S),
+//	  H_S ∈ V^~_H_A(H) <X_T ~ η'_3 + i_e>,
+//	  T = 1
+//	}
+//
+// (6.16) T ∈ [[H]] =>
+//
+//	{
+//	  i = H_A,
+//	  H_S ∈ V^~_H_A(H) <X_F ~ η'_3>,
+//	  T = 0
+//	}
+//
+// (6.17) H_V ∈ V^~_H_A([]) <X_E ~ Y(H_S)>
+//
+// (6.18) X_E = $jam_entropy
+//
+// (6.19) X_F = $jam_fallback_seal
+//
+// (6.20) X_T = $jam_ticket_seal
+// GP v0.7.0
 func VerifyBlockSignatures(
 	header block.Header,
 	ticketOrKey TicketOrKey,
@@ -301,6 +447,9 @@ func VerifyBlockSignatures(
 	if int(header.BlockAuthorIndex) > len(currentValidators)-1 {
 		return false, errors.New("invalid block author index")
 	}
+	// Use the block header author index to get the public key of the validator
+	// who authored the block. (H_I)
+	// H_A ≡ κ′[H_I] (5.9)
 	publicKey := currentValidators[header.BlockAuthorIndex].Bandersnatch
 
 	unsealedHeader, err := encodeUnsealedHeader(header)
@@ -381,6 +530,31 @@ func VerifyBlockSignatures(
 
 // Determines if the holder of the given privateKey is the timeslot's block
 // producer.
+// Uses equations:
+// (6.15) T ∈ [[T]] =>
+//
+//	{
+//	  i_y = Y(H_S),
+//	  H_S ∈ V^~_H_A(H) <X_T ~ η'_3 + i_e>,
+//	  T = 1
+//	}
+//
+// (6.16) T ∈ [[H]] =>
+//
+//	{
+//	  i = H_A,
+//	  H_S ∈ V^~_H_A(H) <X_F ~ η'_3>,
+//	  T = 0
+//	}
+//
+// (6.17) H_V ∈ V^~_H_A([]) <X_E ~ Y(H_S)>
+//
+// (6.18) X_E = $jam_entropy
+//
+// (6.19) X_F = $jam_fallback_seal
+//
+// (6.20) X_T = $jam_ticket_seal
+// GP v0.7.0
 func IsSlotLeader(
 	timeslot jamtime.Timeslot,
 	sealingKeys safrole.SealingKeys,
@@ -397,7 +571,7 @@ func IsSlotLeader(
 
 	switch tok := winningTicketOrKey.(type) {
 	case block.Ticket:
-		// Build the context: XT ⌢ η′3 ++ ir
+		// Build the context: XT ⌢ η′3 ++ i_e
 		sealContext := buildTicketSealContext(entropy, tok.EntryIndex)
 
 		signature, err := bandersnatch.Sign(privateKey, sealContext, []byte{})

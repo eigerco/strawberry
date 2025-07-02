@@ -65,9 +65,9 @@ type ServiceActivityRecord struct {
 
 type ServiceStatistics map[block.ServiceId]ServiceActivityRecord
 
-// Implements equation 59 from the graypaper, i.e Φ(k). If any of the queued
-// validator data matches the offenders list (ψ′), all the keys for that
-// validator are zero'd out.
+// Implements equation 6.14 from the graypaper, i.e Φ(k). If any of the queued
+// validator data matches the offenders list (ψ′_o), all the keys for that
+// validator are zero'd out. v0.7.0
 func NullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed25519.PublicKey) safrole.ValidatorsData {
 	offenderMap := make(crypto.ED25519PublicKeySet)
 	for _, key := range offenders {
