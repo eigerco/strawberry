@@ -77,7 +77,7 @@ func TestSimulateGuarantee(t *testing.T) {
 
 	// And the assigned report should match the one in the guarantee.
 	assignment := currentState.CoreAssignments[coreIndex]
-	require.Equal(t, &report, assignment.WorkReport)
+	require.Equal(t, report, assignment.WorkReport)
 
 	// Ensure the used authorizer has been removed from the pool.
 	require.Equal(t, crypto.Hash{}, currentState.CoreAuthorizersPool[coreIndex][0])

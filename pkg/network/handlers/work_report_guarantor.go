@@ -5,11 +5,12 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/validator"
 	"log"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/eigerco/strawberry/internal/validator"
 
 	"github.com/eigerco/strawberry/internal/authorization"
 	"github.com/eigerco/strawberry/internal/block"
@@ -255,7 +256,7 @@ func (h *WorkReportGuarantor) startLocalRefinement(
 		log.Printf("local refinement failed: %v", err)
 		return
 	}
-	if err := h.validatorService.StoreAllShards(context.Background(), workReport.WorkPackageSpecification.ErasureRoot, shards.Bundle, shards.Segments, shards.BundleHashAndSegmentsRoot); err != nil {
+	if err := h.validatorService.StoreAllShards(context.Background(), workReport.AvailabilitySpecification.ErasureRoot, shards.Bundle, shards.Segments, shards.BundleHashAndSegmentsRoot); err != nil {
 		localResultCh <- localReportResult{err: err}
 		log.Printf("failed to store shards: %v", err)
 		return

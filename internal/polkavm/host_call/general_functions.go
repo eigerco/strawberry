@@ -594,7 +594,7 @@ func GetChainConstants() ([]byte, error) {
 		work.MaxNumberOfItems,
 		work.MaxNumberOfDependencyItems,
 		block.MaxTicketsPerBlock,
-		state.MaxTimeslotsForPreimage,
+		state.MaxTimeslotsForLookupAnchor,
 		common.MaxTicketAttemptsPerValidator,
 		state.MaxAuthorizersPerCore,
 		jamtime.SlotPeriodInSeconds,

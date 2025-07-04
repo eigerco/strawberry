@@ -763,7 +763,7 @@ func (aa AvailabilityAssigments) To() state.CoreAssignments {
 		report := a.Report.To()
 
 		assignments[i] = &state.Assignment{
-			WorkReport: &report,
+			WorkReport: report,
 			Time:       jamtime.Timeslot(a.Timeout),
 		}
 	}
@@ -777,7 +777,7 @@ func NewAvailabilityAssigments(assignments state.CoreAssignments) AvailabilityAs
 		if a == nil {
 			continue
 		}
-		report := NewWorkReport(*a.WorkReport)
+		report := NewWorkReport(a.WorkReport)
 		aa[i] = &AvailabilityAssigment{
 			Report:  &report,
 			Timeout: uint32(a.Time),
@@ -804,7 +804,7 @@ type WorkReport struct {
 }
 
 func (w WorkReport) To() block.WorkReport {
-	results := make([]block.WorkResult, len(w.Results))
+	results := make([]block.WorkDigest, len(w.Results))
 	for i, r := range w.Results {
 		results[i] = r.To()
 	}
@@ -815,20 +815,20 @@ func (w WorkReport) To() block.WorkReport {
 	}
 
 	return block.WorkReport{
-		WorkPackageSpecification: w.PackageSpec.To(),
-		RefinementContext:        w.Context.To(),
-		CoreIndex:                w.CoreIndex,
-		AuthorizerHash:           hexToHash(w.AuthorizerHash),
-		Trace:                    hexToBytes(w.AuthOutput),
-		SegmentRootLookup:        segmentRootLookup,
-		WorkResults:              results,
-		AuthGasUsed:              w.AuthGasUsed,
+		AvailabilitySpecification: w.PackageSpec.To(),
+		RefinementContext:         w.Context.To(),
+		CoreIndex:                 w.CoreIndex,
+		AuthorizerHash:            hexToHash(w.AuthorizerHash),
+		AuthorizerTrace:           hexToBytes(w.AuthOutput),
+		SegmentRootLookup:         segmentRootLookup,
+		WorkDigests:               results,
+		AuthGasUsed:               w.AuthGasUsed,
 	}
 }
 
 func NewWorkReport(report block.WorkReport) WorkReport {
-	results := make([]WorkResult, len(report.WorkResults))
-	for i, r := range report.WorkResults {
+	results := make([]WorkResult, len(report.WorkDigests))
+	for i, r := range report.WorkDigests {
 		results[i] = NewWorkResult(r)
 	}
 
@@ -844,11 +844,11 @@ func NewWorkReport(report block.WorkReport) WorkReport {
 	})
 
 	return WorkReport{
-		PackageSpec:       NewWorkPackageSpec(report.WorkPackageSpecification),
+		PackageSpec:       NewWorkPackageSpec(report.AvailabilitySpecification),
 		Context:           NewRefineContext(report.RefinementContext),
 		CoreIndex:         report.CoreIndex,
 		AuthorizerHash:    hashToHex(report.AuthorizerHash),
-		AuthOutput:        bytesToHex(report.Trace),
+		AuthOutput:        bytesToHex(report.AuthorizerTrace),
 		Results:           results,
 		SegmentRootLookup: segmentRootLookup,
 		AuthGasUsed:       uint64(report.AuthGasUsed),
@@ -868,8 +868,8 @@ type WorkPackageSpec struct {
 	ExportsCount uint16 `json:"exports_count"`
 }
 
-func (w WorkPackageSpec) To() block.WorkPackageSpecification {
-	return block.WorkPackageSpecification{
+func (w WorkPackageSpec) To() block.AvailabilitySpecification {
+	return block.AvailabilitySpecification{
 		WorkPackageHash:           hexToHash(w.Hash),
 		AuditableWorkBundleLength: w.Length,
 		ErasureRoot:               hexToHash(w.ErasureRoot),
@@ -878,7 +878,7 @@ func (w WorkPackageSpec) To() block.WorkPackageSpecification {
 	}
 }
 
-func NewWorkPackageSpec(spec block.WorkPackageSpecification) WorkPackageSpec {
+func NewWorkPackageSpec(spec block.AvailabilitySpecification) WorkPackageSpec {
 	return WorkPackageSpec{
 		Hash:         hashToHex(spec.WorkPackageHash),
 		Length:       spec.AuditableWorkBundleLength,
@@ -963,7 +963,7 @@ var fromWorkResultErrorMap = map[block.WorkResultError]string{
 	block.CodeTooLarge:           "code-oversize",
 }
 
-func (w WorkResult) To() block.WorkResult {
+func (w WorkResult) To() block.WorkDigest {
 	serviceID := block.ServiceId(w.ServiceID)
 
 	resultOutput := block.WorkResultOutputOrError{}
@@ -991,21 +991,21 @@ func (w WorkResult) To() block.WorkResult {
 		}
 	}
 
-	return block.WorkResult{
-		ServiceId:              serviceID,
-		ServiceHashCode:        hexToHash(w.CodeHash),
-		PayloadHash:            hexToHash(w.PayloadHash),
-		GasPrioritizationRatio: w.AccumulateGas,
-		Output:                 resultOutput,
-		GasUsed:                w.RefineLoad.GasUsed,
-		ImportsCount:           w.RefineLoad.Imports,
-		ExtrinsicCount:         w.RefineLoad.ExtrinsicCount,
-		ExtrinsicSize:          w.RefineLoad.ExtrinsicSize,
-		ExportsCount:           w.RefineLoad.Exports,
+	return block.WorkDigest{
+		ServiceId:             serviceID,
+		ServiceHashCode:       hexToHash(w.CodeHash),
+		PayloadHash:           hexToHash(w.PayloadHash),
+		GasLimit:              w.AccumulateGas,
+		Output:                resultOutput,
+		GasUsed:               w.RefineLoad.GasUsed,
+		SegmentsImportedCount: w.RefineLoad.Imports,
+		ExtrinsicCount:        w.RefineLoad.ExtrinsicCount,
+		ExtrinsicSize:         w.RefineLoad.ExtrinsicSize,
+		SegmentsExportedCount: w.RefineLoad.Exports,
 	}
 }
 
-func NewWorkResult(result block.WorkResult) WorkResult {
+func NewWorkResult(result block.WorkDigest) WorkResult {
 	resultMap := make(map[string]*string)
 	switch v := result.Output.Inner.(type) {
 	case []byte:
@@ -1020,14 +1020,14 @@ func NewWorkResult(result block.WorkResult) WorkResult {
 		ServiceID:     uint32(result.ServiceId),
 		CodeHash:      hashToHex(result.ServiceHashCode),
 		PayloadHash:   hashToHex(result.PayloadHash),
-		AccumulateGas: result.GasPrioritizationRatio,
+		AccumulateGas: result.GasLimit,
 		Result:        resultMap,
 		RefineLoad: RefineLoad{
 			GasUsed:        result.GasUsed,
-			Imports:        result.ImportsCount,
+			Imports:        result.SegmentsImportedCount,
 			ExtrinsicCount: result.ExtrinsicCount,
 			ExtrinsicSize:  result.ExtrinsicSize,
-			Exports:        result.ExportsCount,
+			Exports:        result.SegmentsExportedCount,
 		},
 	}
 }

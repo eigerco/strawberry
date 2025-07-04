@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/assuring"
+	"github.com/eigerco/strawberry/internal/disputing"
+	"github.com/eigerco/strawberry/internal/guaranteeing"
 	"github.com/eigerco/strawberry/internal/merkle/mountain_ranges"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
@@ -223,7 +226,7 @@ func mapWorkReport(r Report) block.WorkReport {
 	}
 
 	return block.WorkReport{
-		WorkPackageSpecification: block.WorkPackageSpecification{
+		AvailabilitySpecification: block.AvailabilitySpecification{
 			WorkPackageHash:           crypto.Hash(mustStringToHex(r.PackageSpec.Hash)),
 			AuditableWorkBundleLength: uint32(r.PackageSpec.Length),
 			ErasureRoot:               crypto.Hash(mustStringToHex(r.PackageSpec.ErasureRoot)),
@@ -244,14 +247,14 @@ func mapWorkReport(r Report) block.WorkReport {
 		},
 		CoreIndex:         uint16(r.CoreIndex),
 		AuthorizerHash:    crypto.Hash(mustStringToHex(r.AuthorizerHash)),
-		Trace:             mustStringToHex(r.AuthOutput),
+		AuthorizerTrace:   mustStringToHex(r.AuthOutput),
 		SegmentRootLookup: segmentRootLookup,
-		WorkResults:       mapWorkResults(r.Results),
+		WorkDigests:       mapWorkResults(r.Results),
 	}
 }
 
-func mapWorkResults(results []WorkResult) []block.WorkResult {
-	workResults := make([]block.WorkResult, len(results))
+func mapWorkResults(results []WorkResult) []block.WorkDigest {
+	workResults := make([]block.WorkDigest, len(results))
 	for i, r := range results {
 		var output block.WorkResultOutputOrError
 		if val, ok := r.Result["ok"]; ok {
@@ -260,17 +263,17 @@ func mapWorkResults(results []WorkResult) []block.WorkResult {
 			output.Inner = block.NoError // Or appropriate error mapping
 		}
 
-		workResults[i] = block.WorkResult{
-			ServiceId:              block.ServiceId(r.ServiceID),
-			ServiceHashCode:        crypto.Hash(mustStringToHex(r.CodeHash)),
-			PayloadHash:            crypto.Hash(mustStringToHex(r.PayloadHash)),
-			GasPrioritizationRatio: r.Gas,
-			Output:                 output,
-			GasUsed:                r.RefineLoad.GasUsed,
-			ImportsCount:           r.RefineLoad.Imports,
-			ExtrinsicCount:         r.RefineLoad.ExtrinsicCount,
-			ExtrinsicSize:          r.RefineLoad.ExtrinsicSize,
-			ExportsCount:           r.RefineLoad.Exports,
+		workResults[i] = block.WorkDigest{
+			ServiceId:             block.ServiceId(r.ServiceID),
+			ServiceHashCode:       crypto.Hash(mustStringToHex(r.CodeHash)),
+			PayloadHash:           crypto.Hash(mustStringToHex(r.PayloadHash)),
+			GasLimit:              r.Gas,
+			Output:                output,
+			GasUsed:               r.RefineLoad.GasUsed,
+			SegmentsImportedCount: r.RefineLoad.Imports,
+			ExtrinsicCount:        r.RefineLoad.ExtrinsicCount,
+			ExtrinsicSize:         r.RefineLoad.ExtrinsicSize,
+			SegmentsExportedCount: r.RefineLoad.Exports,
 		}
 	}
 	return workResults
@@ -308,13 +311,8 @@ func TestReports(t *testing.T) {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
-		failsOnValidateExtrinsicsGuarantees := true
 
 		t.Run(file.Name(), func(t *testing.T) {
-			switch file.Name() {
-			case "bad_signature-1.json", "wrong_assignment-1.json":
-				failsOnValidateExtrinsicsGuarantees = false // These tests are NOT expected to fail on ValidateExtrinsicGuarantees, but later
-			}
 			filePath := fmt.Sprintf("vectors/reports/tiny/%s", file.Name())
 			data, err := ReadJSONFile(filePath)
 			require.NoError(t, err, "failed to read JSON file: %s", filePath)
@@ -341,26 +339,23 @@ func TestReports(t *testing.T) {
 			}
 
 			newTimeState := statetransition.CalculateNewTimeState(newBlock.Header)
-			err = statetransition.ValidateExtrinsicGuarantees(newBlock.Header, &preState, newBlock.Extrinsic.EG, preState.CoreAssignments, newTimeState, chain)
+			// ρ†
+			intermediateCoreAssignments := disputing.CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, preState.CoreAssignments)
+			// ρ‡
+			intermediateCoreAssignments, _, err = assuring.CalculateIntermediateCoreAssignmentsAndAvailableWorkReports(newBlock.Extrinsic.EA, preState.ValidatorState.CurrentValidators, intermediateCoreAssignments,
+				newBlock.Header)
+			require.NoError(t, err)
+
+			reporters, err := guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(newBlock.Extrinsic.EG, &preState, chain, newTimeState, preState.RecentHistory,
+				newBlock.Header, intermediateCoreAssignments)
 			//Verify results
-			if data.Output.Err != "" && failsOnValidateExtrinsicsGuarantees {
-				require.Error(t, err)
-				require.EqualError(t, err, strings.ReplaceAll(data.Output.Err, "_", " "))
-				return
-			}
-			require.NoError(t, err)
-
-			intermediateCoreAssignments := statetransition.CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, preState.CoreAssignments)
-			intermediateCoreAssignments, _, err = statetransition.CalculateIntermediateCoreAssignments(newBlock.Extrinsic.EA, intermediateCoreAssignments, newBlock.Header)
-			require.NoError(t, err)
-
-			newCoreAssignments, reporters, err := statetransition.CalculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, preState.ValidatorState, newTimeState, preState.EntropyPool)
 			if data.Output.Err != "" {
 				require.Error(t, err)
 				require.EqualError(t, err, strings.ReplaceAll(data.Output.Err, "_", " "))
 				return
 			}
 			require.NoError(t, err)
+			newCoreAssignments := guaranteeing.CalculatePosteriorCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, newTimeState)
 
 			expectedPostState := mapState(data.PostState)
 
@@ -382,8 +377,8 @@ func TestReports(t *testing.T) {
 					segRoot := crypto.Hash(mustStringToHex(r.SegmentTreeRoot))
 					found := false
 					for _, newCoreAssignment := range newCoreAssignments {
-						if newCoreAssignment.WorkReport.WorkPackageSpecification.WorkPackageHash == wpHash &&
-							newCoreAssignment.WorkReport.WorkPackageSpecification.SegmentRoot == segRoot {
+						if newCoreAssignment.WorkReport.AvailabilitySpecification.WorkPackageHash == wpHash &&
+							newCoreAssignment.WorkReport.AvailabilitySpecification.SegmentRoot == segRoot {
 							found = true
 							break
 						}
@@ -546,7 +541,7 @@ func mapAvailAssignments(assignments []*AvailAssignments) state.CoreAssignments 
 		// Map the assignment for this core
 		workReport := mapWorkReport(assignment.Report)
 		coreAssignments[i] = &state.Assignment{
-			WorkReport: &workReport,
+			WorkReport: workReport,
 			Time:       jamtime.Timeslot(assignment.Timeout),
 		}
 	}

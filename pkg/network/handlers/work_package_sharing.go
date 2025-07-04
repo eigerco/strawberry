@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/validator"
 	"log"
 	"sync"
+
+	"github.com/eigerco/strawberry/internal/validator"
 
 	"github.com/quic-go/quic-go"
 
@@ -124,7 +125,7 @@ func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream qui
 		return fmt.Errorf("failed to produce work report: %w", err)
 	}
 
-	if err := h.validatorService.StoreAllShards(ctx, workReport.WorkPackageSpecification.ErasureRoot, shards.Bundle, shards.Segments, shards.BundleHashAndSegmentsRoot); err != nil {
+	if err := h.validatorService.StoreAllShards(ctx, workReport.AvailabilitySpecification.ErasureRoot, shards.Bundle, shards.Segments, shards.BundleHashAndSegmentsRoot); err != nil {
 		return fmt.Errorf("failed to store shards: %w", err)
 	}
 
