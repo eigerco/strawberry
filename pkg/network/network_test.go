@@ -1241,7 +1241,7 @@ func TestAnnounceBlocksAndDistributeShards(t *testing.T) {
 				Guarantees: []block.Guarantee{
 					{
 						WorkReport: block.WorkReport{
-							WorkPackageSpecification: block.WorkPackageSpecification{
+							AvailabilitySpecification: block.AvailabilitySpecification{
 								ErasureRoot: erasureRoot,
 							},
 						},

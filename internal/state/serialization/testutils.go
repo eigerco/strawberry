@@ -126,8 +126,8 @@ func RandomCoreAssignments(t *testing.T) state.CoreAssignments {
 	var assignments state.CoreAssignments
 	for i := range assignments {
 		assignments[i] = &state.Assignment{
-			WorkReport: &block.WorkReport{
-				WorkPackageSpecification: block.WorkPackageSpecification{WorkPackageHash: testutils.RandomHash(t)},
+			WorkReport: block.WorkReport{
+				AvailabilitySpecification: block.AvailabilitySpecification{WorkPackageHash: testutils.RandomHash(t)},
 				RefinementContext: block.RefinementContext{
 					Anchor:                  block.RefinementContextAnchor{HeaderHash: testutils.RandomHash(t)},
 					LookupAnchor:            block.RefinementContextLookupAnchor{HeaderHash: testutils.RandomHash(t), Timeslot: testutils.RandomTimeslot()},
@@ -135,9 +135,9 @@ func RandomCoreAssignments(t *testing.T) state.CoreAssignments {
 				},
 				CoreIndex:         uint16(i),
 				AuthorizerHash:    testutils.RandomHash(t),
-				Trace:             []byte("output"),
+				AuthorizerTrace:   []byte("output"),
 				SegmentRootLookup: make(map[crypto.Hash]crypto.Hash),
-				WorkResults:       []block.WorkResult{RandomWorkResult(t)},
+				WorkDigests:       []block.WorkDigest{RandomWorkResult(t)},
 			},
 			Time: testutils.RandomTimeslot(),
 		}
@@ -145,17 +145,17 @@ func RandomCoreAssignments(t *testing.T) state.CoreAssignments {
 	return assignments
 }
 
-func RandomWorkResult(t *testing.T) block.WorkResult {
+func RandomWorkResult(t *testing.T) block.WorkDigest {
 	output := block.WorkResultOutputOrError{}
 	err := output.SetValue([]byte("output"))
 	require.NoError(t, err)
 
-	return block.WorkResult{
-		ServiceId:              block.ServiceId(567),
-		ServiceHashCode:        testutils.RandomHash(t),
-		PayloadHash:            testutils.RandomHash(t),
-		GasPrioritizationRatio: testutils.RandomUint64(),
-		Output:                 output,
+	return block.WorkDigest{
+		ServiceId:       block.ServiceId(567),
+		ServiceHashCode: testutils.RandomHash(t),
+		PayloadHash:     testutils.RandomHash(t),
+		GasLimit:        testutils.RandomUint64(),
+		Output:          output,
 	}
 }
 
@@ -188,7 +188,7 @@ func RandomAccumulationHistory(t *testing.T) state.AccumulationHistory {
 
 func RandomWorkReport(t *testing.T) block.WorkReport {
 	return block.WorkReport{
-		WorkPackageSpecification: block.WorkPackageSpecification{
+		AvailabilitySpecification: block.AvailabilitySpecification{
 			WorkPackageHash: testutils.RandomHash(t),
 		},
 		RefinementContext: block.RefinementContext{
@@ -202,9 +202,9 @@ func RandomWorkReport(t *testing.T) block.WorkReport {
 		},
 		CoreIndex:         testutils.RandomUint16(),
 		AuthorizerHash:    testutils.RandomHash(t),
-		Trace:             []byte("random output"),
+		AuthorizerTrace:   []byte("random output"),
 		SegmentRootLookup: make(map[crypto.Hash]crypto.Hash),
-		WorkResults:       []block.WorkResult{RandomWorkResult(t)},
+		WorkDigests:       []block.WorkDigest{RandomWorkResult(t)},
 	}
 }
 

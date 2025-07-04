@@ -14,10 +14,10 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/disputing"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
-	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/stretchr/testify/require"
 )
 
@@ -124,8 +124,8 @@ type SegmentRootPair struct {
 }
 
 type Rho struct {
-	Report  *Report `json:"Report"`
-	Timeout int     `json:"Timeout"`
+	Report  Report `json:"Report"`
+	Timeout int    `json:"Timeout"`
 }
 
 type ValidatorKey struct {
@@ -174,7 +174,10 @@ type JSONData struct {
 func mapRho(rhos []Rho) state.CoreAssignments {
 	assignments := state.CoreAssignments{}
 	for i, rho := range rhos {
-		if rho.Report != nil {
+		// Check if this is a null/empty rho (all fields are zero values)
+		if rho.Timeout == 0 && len(rho.Report.PackageSpec.Hash) == 0 {
+			assignments[i] = nil
+		} else {
 			r := &state.Assignment{
 				WorkReport: mapReport(rho.Report),
 				Time:       jamtime.Timeslot(rho.Timeout),
@@ -276,7 +279,7 @@ func TestDisputes(t *testing.T) {
 	require.NoError(t, err, "failed to read tiny directory")
 
 	for _, file := range files {
-		if !strings.HasSuffix(file.Name(), ".json") {
+		if !strings.HasSuffix(file.Name(), "il_assignments-1.json") {
 			continue
 		}
 
@@ -318,15 +321,15 @@ func TestDisputes(t *testing.T) {
 			expectedState.ValidatorState.ArchivedValidators = lambda
 			expectedState.TimeslotIndex = jamtime.Timeslot(data.PostState.Tau)
 
-			newJudgements, err := statetransition.CalculateNewJudgements(preState.TimeslotIndex, disputes, preState.PastJudgements, preState.ValidatorState)
+			newJudgements, err := disputing.ValidateDisputesExtrinsicAndProduceJudgements(preState.TimeslotIndex, disputes, preState.ValidatorState, preState.PastJudgements)
 			if data.Output.Err != "" {
 				require.Error(t, err)
 				require.EqualError(t, err, strings.ReplaceAll(data.Output.Err, "_", " "))
 			} else {
 				require.NoError(t, err)
+				// Manually assign to produce a "new state" since we are not using the full UpdateState func
+				preState.PastJudgements = newJudgements
 			}
-			// Manually assign to produce a "new state" since we are not using the full UpdateState func
-			preState.PastJudgements = newJudgements
 
 			// If we are supposed to have offenders according to the test vector
 			if len(data.Output.Ok.OffendersMark) > 0 {
@@ -337,7 +340,7 @@ func TestDisputes(t *testing.T) {
 				require.ElementsMatch(t, offendersMark, newJudgements.OffendingValidators)
 			}
 
-			newCoreAssignments := statetransition.CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes, preStateCoreAssignmetns)
+			newCoreAssignments := disputing.CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes, preStateCoreAssignmetns)
 			// Manually assign to produce a "new state" since we are not using the full UpdateState func
 			preState.CoreAssignments = newCoreAssignments
 

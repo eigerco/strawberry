@@ -272,7 +272,7 @@ func mapAccumulateWorkReport(r AccumulateReport) block.WorkReport {
 		segmentRootLookup[mapHash(sr.WorkPackageHash)] = mapHash(sr.SegmentTreeRoot)
 	}
 	return block.WorkReport{
-		WorkPackageSpecification: block.WorkPackageSpecification{
+		AvailabilitySpecification: block.AvailabilitySpecification{
 			WorkPackageHash:           mapHash(r.PackageSpec.Hash),
 			AuditableWorkBundleLength: r.PackageSpec.Length,
 			ErasureRoot:               mapHash(r.PackageSpec.ErasureRoot),
@@ -293,22 +293,22 @@ func mapAccumulateWorkReport(r AccumulateReport) block.WorkReport {
 		},
 		CoreIndex:         r.CoreIndex,
 		AuthorizerHash:    mapHash(r.AuthorizerHash),
-		Trace:             mustStringToHex(r.AuthOutput),
+		AuthorizerTrace:   mustStringToHex(r.AuthOutput),
 		SegmentRootLookup: segmentRootLookup,
-		WorkResults: mapSlice(r.Results, func(rr AccumulateReportResult) block.WorkResult {
-			return block.WorkResult{
-				ServiceId:              block.ServiceId(rr.ServiceId),
-				ServiceHashCode:        mapHash(rr.CodeHash),
-				PayloadHash:            mapHash(rr.PayloadHash),
-				GasPrioritizationRatio: rr.AccumulateGas,
+		WorkDigests: mapSlice(r.Results, func(rr AccumulateReportResult) block.WorkDigest {
+			return block.WorkDigest{
+				ServiceId:       block.ServiceId(rr.ServiceId),
+				ServiceHashCode: mapHash(rr.CodeHash),
+				PayloadHash:     mapHash(rr.PayloadHash),
+				GasLimit:        rr.AccumulateGas,
 				Output: block.WorkResultOutputOrError{
 					Inner: mustStringToHex(rr.Result.Ok),
 				},
-				GasUsed:        rr.RefineLoad.GasUsed,
-				ImportsCount:   rr.RefineLoad.Imports,
-				ExtrinsicCount: rr.RefineLoad.ExtrinsicCount,
-				ExtrinsicSize:  rr.RefineLoad.ExtrinsicSize,
-				ExportsCount:   rr.RefineLoad.Exports,
+				GasUsed:               rr.RefineLoad.GasUsed,
+				SegmentsImportedCount: rr.RefineLoad.Imports,
+				ExtrinsicCount:        rr.RefineLoad.ExtrinsicCount,
+				ExtrinsicSize:         rr.RefineLoad.ExtrinsicSize,
+				SegmentsExportedCount: rr.RefineLoad.Exports,
 			}
 		}),
 		AuthGasUsed: r.AuthGasUsed,

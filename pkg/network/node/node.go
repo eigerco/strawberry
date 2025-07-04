@@ -16,9 +16,9 @@ import (
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/d3l"
+	"github.com/eigerco/strawberry/internal/guaranteeing"
 	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/state"
-	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/internal/work"
@@ -467,7 +467,7 @@ func (n *Node) SegmentShardRequestJustificationSend(ctx context.Context, peerKey
 // 5. Identify and register other validators who share that same core and update WorkReportGuarantor handler for CE-134
 // TODO: Call this during node initialization and periodically to keep core and co-guarantors up to date.
 func (n *Node) UpdateCoreAssignments() error {
-	assignments, err := statetransition.PermuteAssignments(n.State.EntropyPool[2], n.State.TimeslotIndex)
+	assignments, err := guaranteeing.PermuteAssignments(n.State.EntropyPool[2], n.State.TimeslotIndex)
 	if err != nil {
 		return fmt.Errorf("failed to permute validator assignments: %w", err)
 	}
@@ -756,7 +756,7 @@ func (n *Node) GetGuaranteedShardsAndStore(ctx context.Context, guarantee block.
 			return fmt.Errorf("peer with validator index %d not found", credential.ValidatorIndex)
 		}
 
-		erasureRoot := guarantee.WorkReport.WorkPackageSpecification.ErasureRoot
+		erasureRoot := guarantee.WorkReport.AvailabilitySpecification.ErasureRoot
 		validatorIndex := n.ValidatorManager.Index
 
 		bundleShard, segmentsShard, justification, err := n.ShardDistributionSend(ctx, peer.Ed25519Key, guarantee.WorkReport.CoreIndex, erasureRoot)

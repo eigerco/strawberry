@@ -22,7 +22,7 @@ func TestWorkReportStore(t *testing.T) {
 	}()
 
 	workReport := block.WorkReport{
-		WorkPackageSpecification: block.WorkPackageSpecification{WorkPackageHash: testutils.RandomHash(t)},
+		AvailabilitySpecification: block.AvailabilitySpecification{WorkPackageHash: testutils.RandomHash(t)},
 		RefinementContext: block.RefinementContext{
 			Anchor:                  block.RefinementContextAnchor{HeaderHash: testutils.RandomHash(t)},
 			LookupAnchor:            block.RefinementContextLookupAnchor{HeaderHash: testutils.RandomHash(t), Timeslot: testutils.RandomTimeslot()},
@@ -30,15 +30,15 @@ func TestWorkReportStore(t *testing.T) {
 		},
 		CoreIndex:         1,
 		AuthorizerHash:    testutils.RandomHash(t),
-		Trace:             []byte("output"),
+		AuthorizerTrace:   []byte("output"),
 		SegmentRootLookup: make(map[crypto.Hash]crypto.Hash),
-		WorkResults: []block.WorkResult{
+		WorkDigests: []block.WorkDigest{
 			{
-				ServiceId:              1,
-				ServiceHashCode:        testutils.RandomHash(t),
-				PayloadHash:            testutils.RandomHash(t),
-				GasPrioritizationRatio: uint64(20),
-				Output:                 block.WorkResultOutputOrError{Inner: []byte("output")},
+				ServiceId:       1,
+				ServiceHashCode: testutils.RandomHash(t),
+				PayloadHash:     testutils.RandomHash(t),
+				GasLimit:        uint64(20),
+				Output:          block.WorkResultOutputOrError{Inner: []byte("output")},
 			},
 		},
 	}

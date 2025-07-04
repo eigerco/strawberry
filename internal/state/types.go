@@ -3,7 +3,6 @@ package state
 import (
 	"bytes"
 	"crypto/ed25519"
-	"io"
 	"sort"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -16,50 +15,15 @@ import (
 )
 
 type Assignment struct {
-	WorkReport *block.WorkReport // Work-Report (w)
-	Time       jamtime.Timeslot  // time at which work-report was reported but not yet accumulated (t)
-}
-
-// TODO remove this when we refactor Assigment's WorkReport to not be a pointer.
-func (a *Assignment) MarshalJAM() ([]byte, error) {
-	if a == nil {
-		// Return the nil pointer marker.
-		return []byte{0x00}, nil
-	}
-
-	assignment := struct {
-		WorkReport block.WorkReport
-		Time       jamtime.Timeslot
-	}{
-		WorkReport: *a.WorkReport,
-		Time:       a.Time,
-	}
-
-	// Make sure to write a pointer back.
-	return jam.Marshal(&assignment)
-}
-
-// TODO remove this when we refactor Assigment's WorkReport to not be a pointer.
-func (a *Assignment) UnmarshalJAM(reader io.Reader) error {
-	var assignment struct {
-		WorkReport block.WorkReport
-		Time       jamtime.Timeslot
-	}
-	decoder := jam.NewDecoder(reader)
-	if err := decoder.Decode(&assignment); err != nil {
-		return err
-	}
-	a.WorkReport = &assignment.WorkReport
-	a.Time = assignment.Time
-
-	return nil
+	WorkReport block.WorkReport // Work-Report (r)
+	Time       jamtime.Timeslot // time at which work-report was reported but not yet accumulated (t)
 }
 
 type Judgements struct {
-	GoodWorkReports     []crypto.Hash       //  Good work-reports (ψg) - Work-reports judged to be correct.
-	BadWorkReports      []crypto.Hash       //  Bad work-reports (ψb) - Work-reports judged to be incorrect.
-	WonkyWorkReports    []crypto.Hash       //  Wonky work-reports (ψw) - Work-reports whose validity is judged to be unknowable.
-	OffendingValidators []ed25519.PublicKey //  Offending validators (ψp) - CurrentValidators who made a judgement found to be incorrect.
+	GoodWorkReports     []crypto.Hash       // Good work-reports (ψG) - Work-reports judged to be correct.
+	BadWorkReports      []crypto.Hash       // Bad work-reports (ψB) - Work-reports judged to be incorrect.
+	WonkyWorkReports    []crypto.Hash       // Wonky work-reports (ψW) - Work-reports whose validity is judged to be unknowable.
+	OffendingValidators []ed25519.PublicKey // Offending validators (ψO) - Validators who made a judgement found to be incorrect.
 }
 
 // Note that unmarshaling is not implemented given that we sort when serializing.
@@ -139,23 +103,6 @@ type AccumulationOperand struct {
 	GasLimit          uint64                        `jam:"encoding=compact"` // Gas limit (g ∈ NG)
 	Trace             []byte                        // Trace of the work report (t ∈ B)
 	OutputOrError     block.WorkResultOutputOrError // Output or error (l ∈ B ∪ E)
-}
-
-// AccumulationResult represents the result type from equation 162:
-// A: NS → {s ∈ A?, v ∈ ⟦K⟧V, t ∈ ⟦T⟧, r ∈ H?, c ∈ C⟦H⟧QHC, n ∈ D⟨NS → A⟩, p ∈ {m,a,v ∈ NS, g ∈ D⟨NS → NG⟩}}
-type AccumulationResult struct {
-	ServiceState      *service.ServiceAccount    // s - Optional updated service account state
-	ValidatorUpdates  safrole.ValidatorsData     // v - Single validator data set, not a slice
-	DeferredTransfers []service.DeferredTransfer // t - Deferred transfers sequence
-	AccumulationRoot  *crypto.Hash               // r - Optional accumulation result hash
-	CoreAssignments   PendingAuthorizersQueues   // c - Core authorizations queue
-	NewServices       service.ServiceState       // n - Newly created services mapping
-	PrivilegedUpdates struct {                   // p - Privileged service updates
-		ManagerServiceId   block.ServiceId            // m - Manager service
-		AssignServiceId    block.ServiceId            // a - Assign service
-		DesignateServiceId block.ServiceId            // v - Designate service
-		GasAssignments     map[block.ServiceId]uint64 // g - Gas assignments
-	}
 }
 
 // AccumulationOutputLog θ ∈ ⟦(NS, H)⟧ (eq. 7.4)

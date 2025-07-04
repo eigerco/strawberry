@@ -10,6 +10,7 @@ import (
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
+	"github.com/eigerco/strawberry/internal/disputing"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
@@ -323,11 +324,11 @@ func rotateEntropyPool(pool state.EntropyPool) state.EntropyPool {
 // entropy entries to use for ticket submission and block sealing. Disputes only
 // need to be included in specific cases where an updated pending validator set
 // (γ_P) is required for some calculation.
-func NextSafroleState(priorState *state.State, nextTimeslot jamtime.Timeslot, disputes block.DisputeExtrinsic) (
+func NextSafroleState(priorState *state.State, nextTimeslot jamtime.Timeslot, de block.DisputeExtrinsic) (
 	validator.ValidatorState,
 	SafroleOutput,
 	error) {
-	newJudgements, err := CalculateNewJudgements(priorState.TimeslotIndex, disputes, priorState.PastJudgements, priorState.ValidatorState)
+	newJudgements, err := disputing.ValidateDisputesExtrinsicAndProduceJudgements(priorState.TimeslotIndex, de, priorState.ValidatorState, priorState.PastJudgements)
 	if err != nil {
 		return validator.ValidatorState{}, SafroleOutput{}, err
 	}

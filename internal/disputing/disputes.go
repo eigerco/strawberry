@@ -1,9 +1,12 @@
-package disputes
+package disputing
 
 import (
 	"bytes"
 	"crypto/ed25519"
 	"errors"
+	"log"
+
+	"slices"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -12,7 +15,6 @@ import (
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/validator"
-	"slices"
 )
 
 const (
@@ -21,9 +23,54 @@ const (
 	DisputeVoteGood  uint16 = (2 * common.NumberOfValidators / 3) + 1 // 2/3+1 positive votes - report is good
 )
 
+// CalculateIntermediateCoreAssignmentsFromExtrinsics processes dispute verdicts to clear
+// work-reports from cores that have been judged as bad or wonky
+// ∀c ∈ NC : ρ†[c] = {∅ if (H(ρ[c]r), t) ∈ v, t < ⌊2/3V⌋; ρ[c] otherwise} (eq. 10.15 v 0.7.0)
+// This ensures that work-reports without a 2/3+1 supermajority of positive judgments
+// are removed from their assigned cores before accumulation can occur. This is a critical
+// security mechanism that prevents invalid or disputed work from being accumulated into
+// the chain state.
+func CalculateIntermediateCoreAssignmentsFromExtrinsics(de block.DisputeExtrinsic, coreAssignments state.CoreAssignments) state.CoreAssignments {
+	newAssignments := coreAssignments // Create a copy of the current assignments
+
+	// Process each verdict in the disputes
+	for _, v := range de.Verdicts {
+		verdictReportHash := v.ReportHash
+		positiveJudgments := CountPositiveJudgements(v)
+
+		// If less than 2/3+1 supermajority of positive judgments, the work-report is
+		// considered either bad (0 positive) or wonky (1/3 positive), and must be
+		// cleared from its core to prevent accumulation
+		if positiveJudgments < DisputeVoteGood {
+			// Search all cores to find where this work-report is assigned
+			for c := uint16(0); c < common.TotalNumberOfCores; c++ {
+				if newAssignments[c] == nil {
+					continue
+				}
+
+				// Hash the work-report currently on this core to check if it matches
+				coreReportHash, err := newAssignments[c].WorkReport.Hash()
+				if err != nil {
+					log.Printf("Failed to hash work report on core %d while clearing assignments for verdict with %d/%d positive votes: %v",
+						c, positiveJudgments, DisputeVoteGood, err)
+					continue
+				}
+
+				// If this core has the disputed work-report, clear it
+				if coreReportHash == verdictReportHash {
+					newAssignments[c] = nil // Clear the assignment
+				}
+			}
+		}
+		// Note: Work-reports with 2/3+1 positive judgments (good) remain on their cores
+		// and can proceed to accumulation
+	}
+
+	return newAssignments
+}
+
 // verifyVerdictSignatures verifies the signatures of all judgments in a verdict
-// Equation 10.3(v0.6.7):
-// ∀(r, a,j) ∈ v,∀(v, i, s) ∈ j : s ∈ Ek[i]e⟨Xv ⌢ r⟩
+// ∀(r,a,j) ∈ EV, ∀(v,i,s) ∈ j : s ∈ V̄k[i]e⟨Xv ⌢ r⟩(eq. 10.3 v 0.7.0)
 func verifyVerdictSignatures(currentTimeslot jamtime.Timeslot, verdict block.Verdict, currentValidators, archivedValidators safrole.ValidatorsData) error {
 	currentEpoch := currentTimeslot.ToEpoch()
 	validatorSet := currentValidators
@@ -49,7 +96,7 @@ func verifyVerdictSignatures(currentTimeslot jamtime.Timeslot, verdict block.Ver
 
 // isValidatorKeyInCurrentOrPrevEpoch checks if a validator's Ed25519 key exists in either
 // the current or previous epoch's validator set.
-// Equations 10.3, 10.5, 10.6(v0.6.7):
+// Equations 10.3, 10.5, 10.6(v0.7.0):
 // - κ represents the current epoch's validator keys (active validator set)
 // - λ represents the previous epoch's validator keys (archived validator set)
 // - Valid signatures must come from validators in κ = {ke | k ∈ λ ∪ κ} ∖ ψo
@@ -92,13 +139,7 @@ func CountPositiveJudgements(v block.Verdict) uint16 {
 }
 
 // validateFault validates a fault proof
-// Equation 10.6(v0.6.7):
-//
-//	∀(r, v, k, s) ∈ f : ⋀ {
-//	  r ∈ ψ'b ⇔ r ∉ ψ'g ⇔ v⊥,
-//	  k ∈ κ,
-//	  s ∈ Ek⟨Xv ⌢ r⟩
-//	}
+// ∀(r,v,f,s) ∈ EF : ⋀{r ∈ ψ'B ⇔ r ∉ ψ'G ⇔ v, k ∈ k, s ∈ V̄f⟨Xv ⌢ r⟩} (eq. 10.6 v 0.7.0)
 func validateFault(fault block.Fault, verdictSummaries []block.VerdictSummary, offendingValidators []ed25519.PublicKey) error {
 	var summary block.VerdictSummary
 	for _, v := range verdictSummaries {
@@ -141,13 +182,7 @@ func validateFault(fault block.Fault, verdictSummaries []block.VerdictSummary, o
 }
 
 // validateCulprit validates a culprit
-// Equation 10.5(v0.6.7):
-//
-//	∀(r, k, s) ∈ c : ⋀ {
-//	  r ∈ ψ'b,
-//	  k ∈ κ,
-//	  s ∈ Ek⟨XG ⌢ r⟩
-//	}
+// ∀(r,f,s) ∈ EC : ⋀{r ∈ ψ'B, f ∈ k, s ∈ V̄f⟨XG ⌢ r⟩} (eq. 10.5 v 0.7.0)
 func validateCulprit(culprit block.Culprit, badReports []crypto.Hash, offendingValidators []ed25519.PublicKey) error {
 	// Must be in bad reports
 	if !slices.Contains(badReports, culprit.ReportHash) {
@@ -168,10 +203,10 @@ func validateCulprit(culprit block.Culprit, badReports []crypto.Hash, offendingV
 }
 
 // verifySortedUnique verifies the ordering and uniqueness constraints for disputes extrinsic
-// Equations 10.7, 10.8, 10.10(v0.6.7):
-// - Equation 10.7: v = [r⌣_(r,a,j)∈v] (verdicts ordered by report hash)
-// - Equation 10.8: c = [k⌣_(r,k,s)∈c], f = [k⌣_(r,v,k,s)∈f] (culprits and faults ordered by Ed25519 key)
-// - Equation 10.10: ∀(r,a,j) ∈ v : j = [i⌣_(v,i,s)∈j] (judgments ordered by validator index)
+// Equations 10.7, 10.8, 10.10(v0.7.0):
+// - Equation 10.7: EV = [(r,a,j) ∈ EV_r] (verdicts ordered by report hash)
+// - Equation 10.8: EC = [(r,f,s) ∈ EC_f], EF = [(r,v,f,s) ∈ EF_f] (culprits and faults ordered by Ed25519 key)
+// - Equation 10.10: ∀(r,a,j) ∈ EV : j = [(v,i,s) ∈ j_i] (judgments ordered by validator index)
 // All sequences must be strictly ordered with no duplicates to ensure deterministic processing
 func verifySortedUnique(disputes block.DisputeExtrinsic) error {
 	// Check faults are sorted unique
@@ -207,8 +242,7 @@ func verifySortedUnique(disputes block.DisputeExtrinsic) error {
 }
 
 // verifyNotAlreadyJudged ensures a verdict's report hasn't already been judged
-// Equation 10.9(v0.6.7):
-// {r | (r,a,j) ∈ v} ⊈ ψg ∪ ψb ∪ ψw
+// {r | (r,a,j) ∈ EV} ⫰ ψG ∪ ψB ∪ ψW (eq. 10.9 v 0.7.0)
 func verifyNotAlreadyJudged(verdict block.Verdict, stateJudgements state.Judgements) error {
 	reportHash := verdict.ReportHash
 	if slices.Contains(stateJudgements.GoodWorkReports, reportHash) ||
@@ -219,12 +253,11 @@ func verifyNotAlreadyJudged(verdict block.Verdict, stateJudgements state.Judgeme
 	return nil
 }
 
-// validateVerdictAndComputeVerdictSummary implements the verdict validation and produces "V" verdict summary:
-// - Equation 10.11: V ∈ ⟦{H, {0, ⌊V/3⌋, ⌊2V/3⌋ + 1}}⟧ (valid vote counts)
-// - Equation 10.12: V = [(r, Σv) | (r,a,j) ∈ v] (sum positive judgments)
-// - Equation 10.13: ∀(r, ⌊2V/3⌋ + 1) ∈ V : ∃(r, ...) ∈ f (good verdicts need faults)
-// - Equation 10.14: ∀(r, 0) ∈ V : |{(r, ...) ∈ c}| ≥ 2 (bad verdicts need 2+ culprits)
-//
+// validateVerdictAndComputeVerdictSummary implements the verdict validation and produces "v" verdict summary:
+// - Equation 10.11: v ∈ ⟦(H, {0, ⌊1/3V⌋, ⌊2/3V⌋ + 1})⟧ (valid vote counts)
+// - Equation 10.12: v = [(r, Σ(v,i,s)∈j v) | (r,a,j) <- EV] (sum positive judgments)
+// - Equation 10.13: ∀(r, ⌊2/3V⌋ + 1) ∈ v : ∃(r, ...) ∈ EF (good verdicts need faults)
+// - Equation 10.14: ∀(r, 0) ∈ v : |{(r, ...) ∈ EC}| ≥ 2 (bad verdicts need 2+ culprits)
 // The function validates that:
 // 1. All validator indices are valid
 // 2. The vote count matches one of three valid thresholds (good/bad/wonky)

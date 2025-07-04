@@ -3,20 +3,20 @@ package statetransition
 import (
 	"bytes"
 	"crypto/ed25519"
-	"crypto/sha256"
 	"errors"
 	"fmt"
-	"log"
 	"maps"
 	"math"
 	"slices"
 	"sort"
 	"sync"
 
+	"github.com/eigerco/strawberry/internal/assuring"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/disputes"
+	"github.com/eigerco/strawberry/internal/disputing"
+	"github.com/eigerco/strawberry/internal/guaranteeing"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
 	"github.com/eigerco/strawberry/internal/merkle/mountain_ranges"
@@ -44,21 +44,17 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 	newTimeSlot := CalculateNewTimeState(newBlock.Header)
 
 	intermediateRecentHistory := CalculateIntermediateRecentHistory(newBlock.Header, s.RecentHistory)
-	// TODO: this should probably be passed it explicitly to functions below that need it.
-	s.RecentHistory = intermediateRecentHistory
 
-	if err := ValidateExtrinsicGuarantees(newBlock.Header, s, newBlock.Extrinsic.EG, s.CoreAssignments, newTimeSlot, chain); err != nil {
-		return fmt.Errorf("extrinsic guarantees validation failed, err: %w", err)
-	}
+	// ρ† ≺ (ED , ρ)
+	intermediateCoreAssignments := disputing.CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
 
-	if err := ValidatePreimages(newBlock.Extrinsic.EP, s.Services); err != nil {
+	// ψ′ ≺ (ED, ψ)
+	newJudgements, err := disputing.ValidateDisputesExtrinsicAndProduceJudgements(prevTimeSlot, newBlock.Extrinsic.ED, s.ValidatorState, s.PastJudgements)
+	if err != nil {
 		return err
 	}
 
-	intermediateCoreAssignments := CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
-
-	newJudgements, err := CalculateNewJudgements(prevTimeSlot, newBlock.Extrinsic.ED, s.PastJudgements, s.ValidatorState)
-	if err != nil {
+	if err := ValidatePreimages(newBlock.Extrinsic.EP, s.Services); err != nil {
 		return err
 	}
 
@@ -84,17 +80,18 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		return fmt.Errorf("failed to verify block header: %w", err)
 	}
 
-	intermediateCoreAssignments, _, err = CalculateIntermediateCoreFromAssurances(s.ValidatorState.CurrentValidators, intermediateCoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
+	// ρ‡ ≺ (EA, ρ†) (eq. 4.13 v0.7.0) and R* ≺ (EA, ρ†) (eq 4.15 v0.7.0)
+	intermediateCoreAssignments, availableWorkReports, err := assuring.CalculateIntermediateCoreAssignmentsAndAvailableWorkReports(newBlock.Extrinsic.EA, s.ValidatorState.CurrentValidators, intermediateCoreAssignments, newBlock.Header)
 	if err != nil {
 		return err
 	}
 
-	newCoreAssignments, reporters, err := CalculateNewCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, s.ValidatorState, newTimeSlot, newEntropyPool)
+	reporters, err := guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(newBlock.Extrinsic.EG, s, chain, newTimeSlot, intermediateRecentHistory, newBlock.Header, intermediateCoreAssignments)
 	if err != nil {
 		return err
 	}
-
-	workReports := GetAvailableWorkReports(newCoreAssignments)
+	// ρ′ ≺ (EG, ρ‡, κ, τ ′)
+	newCoreAssignments := guaranteeing.CalculatePosteriorCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, newTimeSlot)
 
 	newAccumulationQueue,
 		newAccumulationHistory,
@@ -106,7 +103,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		&newBlock.Header,
 		s,
 		newTimeSlot,
-		workReports,
+		availableWorkReports,
 	)
 	finalServicesState, err := CalculateNewServiceStateWithPreimages(newBlock.Extrinsic.EP, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
 	if err != nil {
@@ -266,116 +263,6 @@ func CalculateNewServiceStateWithPreimages(
 	return newServiceState, nil
 }
 
-// CalculateIntermediateCoreAssignmentsFromExtrinsics processes dispute verdicts to clear
-// work-reports from cores that have been judged as bad or wonky Equation 10.15(v0.6.7):
-// Equation 4.12(v0.6.7): ρ† ≺ (ED , ρ)
-//
-//	∀c ∈ NC : ρ†[c] = {
-//	  ∅ if {(H(ρ[c]w), t) ∈ V, t < ⌊2V/3⌋}
-//	  ρ[c] otherwise
-//	}
-//
-// This ensures that work-reports without a 2/3+1 supermajority of positive judgments
-// are removed from their assigned cores before accumulation can occur. This is a critical
-// security mechanism that prevents invalid or disputed work from being accumulated into
-// the chain state.
-func CalculateIntermediateCoreAssignmentsFromExtrinsics(de block.DisputeExtrinsic, coreAssignments state.CoreAssignments) state.CoreAssignments {
-	newAssignments := coreAssignments // Create a copy of the current assignments
-
-	// Process each verdict in the disputes
-	for _, v := range de.Verdicts {
-		verdictReportHash := v.ReportHash
-		positiveJudgments := disputes.CountPositiveJudgements(v)
-
-		// If less than 2/3+1 supermajority of positive judgments, the work-report is
-		// considered either bad (0 positive) or wonky (1/3 positive), and must be
-		// cleared from its core to prevent accumulation
-		if positiveJudgments < disputes.DisputeVoteGood {
-			// Search all cores to find where this work-report is assigned
-			for c := uint16(0); c < common.TotalNumberOfCores; c++ {
-				if newAssignments[c] == nil {
-					continue
-				}
-
-				// Hash the work-report currently on this core to check if it matches
-				coreReportHash, err := newAssignments[c].WorkReport.Hash()
-				if err != nil {
-					log.Printf("Failed to hash work report on core %d while clearing assignments for verdict with %d/%d positive votes: %v",
-						c, positiveJudgments, disputes.DisputeVoteGood, err)
-					continue
-				}
-
-				// If this core has the disputed work-report, clear it
-				if coreReportHash == verdictReportHash {
-					newAssignments[c] = nil // Clear the assignment
-				}
-			}
-		}
-		// Note: Work-reports with 2/3+1 positive judgments (good) remain on their cores
-		// and can proceed to accumulation
-	}
-
-	return newAssignments
-}
-
-// CalculateIntermediateCoreAssignments implements equations
-//
-//	4.13: ρ‡ ≺ (EA, ρ†)
-//	4.15: W* ≺ (EA, ρ†). Note there's a typo in the paper, which states ρ' but that isn't correct.
-//
-// It calculates the intermediate core assignments based on availability
-// assurances, and also returns the set of now avaiable work reports.
-// (GP v0.6.5)
-func CalculateIntermediateCoreAssignments(assurances block.AssurancesExtrinsic, coreAssignments state.CoreAssignments, header block.Header) (state.CoreAssignments, []*block.WorkReport, error) {
-	// Initialize availability count for each core
-	availabilityCounts := make(map[uint16]int)
-
-	// Process each assurance in the AssurancesExtrinsic (EA)
-	// Check the availability status for each core in this assurance
-	for coreIndex := range common.TotalNumberOfCores {
-		for _, assurance := range assurances {
-			// Check if the bit corresponding to this core is set (1) in the Bitfield
-			// See equation 11.15: af[c] ⇒ ρ†[c] ≠ ∅
-			if assurance.IsForCore(coreIndex) {
-				if coreAssignments[coreIndex] == nil {
-					return coreAssignments, nil, ErrCoreNotEngaged
-				}
-				// If set, increment the availability count for this core
-				availabilityCounts[coreIndex]++
-			}
-		}
-	}
-
-	// W, the set of work reports that have become available. (see equation 11.16)
-	var availableReports []*block.WorkReport
-	// Update assignments based on availability
-	// This implements equation 11.17:
-	// ∀c ∈ NC : ρ‡[c] ≡ { ∅ if ρ[c]w ∈ W ∨ Ht ≥ ρ†[c]t + U
-	//                    ρ†[c] otherwise }
-	// It also implements 11.16 by adding any reports that are now available to W.
-	for coreIndex := range common.TotalNumberOfCores {
-		availCountForCore, ok := availabilityCounts[coreIndex]
-		// Remove core if:
-		// 1. There are availability assurances for this core, and they exceed the threshold, i.e > 2/3 of validators are assuring
-		// 2. Assignment report is stale, the report is older than U timeslots ago and should timeout.
-		if ok && availCountForCore > common.AvailabilityThreshold {
-			// Add any report that is made available to the W set. Note this
-			// includes reports that could already be timed out. We are lenient
-			// here, as long as they are made available they get added to the
-			// set.
-			availableReports = append(availableReports, coreAssignments[coreIndex].WorkReport)
-			coreAssignments[coreIndex] = nil
-		}
-		// Any report that isn't lucky enough to be made available is timed out and removed.
-		if isAssignmentStale(coreAssignments[coreIndex], header.TimeSlotIndex) {
-			coreAssignments[coreIndex] = nil
-		}
-	}
-
-	// Return the new intermediate CoreAssignments (ρ‡), along with the newly available reports. (W)
-	return coreAssignments, availableReports, nil
-}
-
 // Final State Calculation Functions
 
 // CalculateNewTimeState Equation 16: τ′ ≺ H
@@ -518,8 +405,8 @@ func computeAccumulationRoot(pairs ServiceHashPairs) (crypto.Hash, error) {
 func buildWorkPackageMapping(guarantees []block.Guarantee) map[crypto.Hash]crypto.Hash {
 	workPackages := make(map[crypto.Hash]crypto.Hash)
 	for _, g := range guarantees {
-		workPackages[g.WorkReport.WorkPackageSpecification.WorkPackageHash] =
-			g.WorkReport.WorkPackageSpecification.SegmentRoot
+		workPackages[g.WorkReport.AvailabilitySpecification.WorkPackageHash] =
+			g.WorkReport.AvailabilitySpecification.SegmentRoot
 	}
 	return workPackages
 }
@@ -616,610 +503,6 @@ func addUniqueEdPubKey(slice []ed25519.PublicKey, key ed25519.PublicKey) []ed255
 	return append(slice, key)
 }
 
-// CalculateNewJudgements Equation 4.11(v0.6.7): ψ′ ≺ (ED, ψ)
-// Equations 10.16-10.19(v0.6.7):
-// ψ'g ≡ ψg ∪ {r | {r, ⌊2/3V⌋ + 1} ∈ V}
-// ψ'b ≡ ψb ∪ {r | {r, 0} ∈ V}
-// ψ'w ≡ ψw ∪ {r | {r, ⌊1/3V⌋} ∈ V}
-// ψ'o ≡ ψo ∪ {k | (r, k, s) ∈ c} ∪ {k | (r, v, k, s) ∈ f}
-func CalculateNewJudgements(prevTimeSlot jamtime.Timeslot, de block.DisputeExtrinsic, stateJudgements state.Judgements, validators validator.ValidatorState) (state.Judgements, error) {
-	newJudgements, err := disputes.ValidateDisputesExtrinsicAndProduceJudgements(prevTimeSlot, de, validators, stateJudgements)
-	if err != nil {
-		return stateJudgements, err
-	}
-
-	return newJudgements, nil
-}
-
-// CalculateNewCoreAssignments updates the core assignments based on new guarantees.
-// This implements equation 27: ρ′ ≺ (EG, ρ‡, κ, τ′)
-//
-// It also implements part of equation 11.26 v0.6.2 regarding timeslot validation:
-// R(⌊τ′/R⌋ - 1) ≤ t ≤ τ′
-func CalculateNewCoreAssignments(
-	guarantees block.GuaranteesExtrinsic,
-	intermediateAssignments state.CoreAssignments,
-	validatorState validator.ValidatorState,
-	newTimeslot jamtime.Timeslot,
-	entropyPool state.EntropyPool,
-) (newAssignments state.CoreAssignments, reporters crypto.ED25519PublicKeySet, err error) {
-	newAssignments = intermediateAssignments
-	reporters = make(crypto.ED25519PublicKeySet)
-
-	for _, guarantee := range guarantees.Guarantees {
-		coreIndex := guarantee.WorkReport.CoreIndex
-		log.Printf("Processing guarantee for core %d", coreIndex)
-
-		// Check timeslot range: R(⌊τ′/R⌋ - 1) ≤ t ≤ τ′
-		rotationIndex := uint32(newTimeslot / jamtime.ValidatorRotationPeriod)
-		var previousRotationStart uint32
-		if rotationIndex == 0 {
-			previousRotationStart = 0
-		} else {
-			previousRotationStart = (rotationIndex - 1) * uint32(jamtime.ValidatorRotationPeriod)
-		}
-
-		if uint32(guarantee.Timeslot) < previousRotationStart ||
-			guarantee.Timeslot > newTimeslot {
-			return state.CoreAssignments{}, nil, ErrTimeslotOutOfRange
-		}
-
-		if isAssignmentValid(intermediateAssignments[coreIndex], newTimeslot) {
-			var guaranteeReporters crypto.ED25519PublicKeySet
-			guaranteeReporters, err := verifyGuaranteeCredentials(guarantee, validatorState, entropyPool, newTimeslot)
-			if err != nil {
-				log.Printf("Signature verification failed for core %d", guarantee.WorkReport.CoreIndex)
-				return state.CoreAssignments{}, nil, err
-			}
-			for reporter := range guaranteeReporters {
-				reporters[reporter] = struct{}{}
-			}
-
-			newAssignments[coreIndex] = &state.Assignment{
-				WorkReport: &guarantee.WorkReport,
-				Time:       newTimeslot,
-			}
-		}
-	}
-
-	return newAssignments, reporters, nil
-}
-
-// generateRefinementContextID serializes the RefinementContext and returns its SHA-256 hash as a hex string.
-func generateRefinementContextID(context block.RefinementContext) (string, error) {
-	serialized, err := jam.Marshal(context)
-	if err != nil {
-		return "", fmt.Errorf("failed to serialize RefinementContext: %w", err)
-	}
-
-	hash := sha256.Sum256(serialized)
-
-	// Convert hash to a hex
-	return fmt.Sprintf("%x", hash), nil
-}
-
-// computeWorkReportHash computes a SHA-256 hash of the WorkReport
-func computeWorkReportHash(workReport block.WorkReport) (crypto.Hash, error) {
-	serialized, err := jam.Marshal(workReport)
-	if err != nil {
-		return crypto.Hash{}, fmt.Errorf("failed to serialize WorkReport: %w", err)
-	}
-	hash := sha256.Sum256(serialized)
-
-	return hash, nil
-}
-
-func ValidateExtrinsicGuarantees(
-	header block.Header,
-	currentState *state.State,
-	guarantees block.GuaranteesExtrinsic,
-	currentAssignment state.CoreAssignments,
-	newTimeslot jamtime.Timeslot,
-	chain *store.Chain,
-) error {
-	// [⋃ x∈β] K(x_p) ∪ [⋃ x∈ξ] x ∪ q ∪ a
-	pastWorkPackages := make(map[crypto.Hash]struct{})
-
-	// [⋃ x∈β] K(xp)
-	recentBlockPrerequisites := make(map[crypto.Hash]crypto.Hash)
-
-	for _, recentBlock := range currentState.RecentHistory.BlockHistory {
-		for key, val := range recentBlock.Reported {
-			recentBlockPrerequisites[key] = val
-			pastWorkPackages[key] = struct{}{}
-		}
-	}
-
-	seenPackages := make(map[crypto.Hash]struct{})
-	for _, guarantee := range guarantees.Guarantees {
-		hash := guarantee.WorkReport.WorkPackageSpecification.WorkPackageHash
-		if _, exists := seenPackages[hash]; exists {
-			return fmt.Errorf("duplicate package")
-		}
-		if _, exists := pastWorkPackages[hash]; exists {
-			return fmt.Errorf("duplicate package")
-		}
-		seenPackages[hash] = struct{}{}
-	}
-
-	for _, guarantee := range guarantees.Guarantees {
-		if guarantee.Timeslot > header.TimeSlotIndex {
-			return errors.New("future report slot")
-		}
-
-		for _, credential := range guarantee.Credentials {
-			if int(credential.ValidatorIndex) >= len(currentState.ValidatorState.CurrentValidators) {
-				return fmt.Errorf("bad validator index")
-			}
-		}
-
-		for _, workResult := range guarantee.WorkReport.WorkResults {
-			// validate service ID exist
-			if _, exists := currentState.Services[workResult.ServiceId]; !exists {
-				return errors.New("bad service id")
-			}
-			// ∀w ∈ w, ∀r ∈ wr ∶ rc = δ[rs]c (eq. 11.41 0.5.0)
-			if workResult.ServiceHashCode != currentState.Services[workResult.ServiceId].CodeHash {
-				return errors.New("bad code hash")
-			}
-		}
-
-		// Validate core index is within bounds based on auth pools length
-		if int(guarantee.WorkReport.CoreIndex) >= len(currentState.CoreAuthorizersPool) {
-			return errors.New("bad core index")
-		}
-
-		// Size check for Work Report output
-		if !guarantee.WorkReport.OutputSizeIsValid() {
-			return errors.New("work report too big")
-		}
-
-		// Verify authorizer exists in the core's authorization pool
-		authFound := false
-		for _, auth := range currentState.CoreAuthorizersPool[guarantee.WorkReport.CoreIndex] {
-			if auth == guarantee.WorkReport.AuthorizerHash {
-				authFound = true
-				break
-			}
-		}
-		if !authFound {
-			return errors.New("core unauthorized")
-		}
-
-		// check if cores are already engaged
-		coreIndex := guarantee.WorkReport.CoreIndex
-		if !isAssignmentValid(currentAssignment[coreIndex], newTimeslot) {
-			return errors.New("core engaged")
-		}
-
-	}
-
-	contexts := make(map[string]struct{})
-	extrinsicWorkPackages := make(map[crypto.Hash]crypto.Hash)
-
-	prerequisitePackageHashes := make(map[crypto.Hash]struct{})
-
-	for _, guarantee := range guarantees.Guarantees {
-		context := guarantee.WorkReport.RefinementContext
-
-		// Generate a unique ID for the context
-		contextID, err := generateRefinementContextID(context)
-		if err != nil {
-			return fmt.Errorf("failed to generate RefinementContextID: %w", err)
-		}
-
-		contexts[contextID] = struct{}{}
-		extrinsicWorkPackages[guarantee.WorkReport.WorkPackageSpecification.WorkPackageHash] = guarantee.WorkReport.WorkPackageSpecification.SegmentRoot
-		// ∀w ∈ w ∶ [∑ r∈wr] (rg) ≤ GA ∧ ∀r ∈ wr ∶ rg ≥ δ[rs]g (eq. 11.29 0.5.0)
-		totalGas := uint64(0)
-		for _, r := range guarantee.WorkReport.WorkResults {
-			if r.GasPrioritizationRatio < currentState.Services[r.ServiceId].GasLimitForAccumulator {
-				return fmt.Errorf("service item gas too low")
-			}
-			totalGas += r.GasPrioritizationRatio
-		}
-		if totalGas > common.MaxAllocatedGasAccumulation {
-			return fmt.Errorf("work report gas too high")
-		}
-
-		for key := range guarantee.WorkReport.SegmentRootLookup {
-			prerequisitePackageHashes[key] = struct{}{}
-		}
-
-		// Check total dependencies. 11.3 GP 0.5.4
-		totalDeps := len(guarantee.WorkReport.RefinementContext.PrerequisiteWorkPackage) +
-			len(guarantee.WorkReport.SegmentRootLookup)
-		if totalDeps > common.WorkReportMaxSumOfDependencies {
-			return errors.New("too many dependencies")
-		}
-
-		for _, prereqHash := range context.PrerequisiteWorkPackage {
-			prerequisitePackageHashes[prereqHash] = struct{}{}
-
-			// let q = {(wx)p S q ∈ ϑ, w ∈ K(q)} (eq. 11.35 0.5.0)
-			for _, workReportsAndDeps := range currentState.AccumulationQueue {
-				for _, wd := range workReportsAndDeps {
-					// Compare the hashes
-					wdHash, err := computeWorkReportHash(wd.WorkReport)
-					if err != nil {
-						return fmt.Errorf("failed to compute WorkReport hash: %w", err)
-					}
-					currentGuaranteeHash, err := computeWorkReportHash(guarantee.WorkReport)
-					if err != nil {
-						return fmt.Errorf("failed to compute current WorkReport hash: %w", err)
-					}
-					if wdHash == currentGuaranteeHash {
-						pastWorkPackages[prereqHash] = struct{}{}
-					}
-				}
-			}
-		}
-
-		// let a = {((iw )x)p S i ∈ ρ, i ≠ ∅} (eq. 11.36 0.5.0)
-		for _, ca := range currentState.CoreAssignments {
-			if ca != nil && ca.WorkReport != nil {
-				for _, prereqHash := range ca.WorkReport.RefinementContext.PrerequisiteWorkPackage {
-					pastWorkPackages[prereqHash] = struct{}{}
-				}
-			}
-		}
-	}
-
-	// |p| = |w| (eq. 11.31 0.5.0)
-	if len(extrinsicWorkPackages) != len(guarantees.Guarantees) {
-		return fmt.Errorf("cardinality of work-package hashes is not equal to the length of work-reports")
-	}
-
-	for _, guarantee := range guarantees.Guarantees {
-		context := guarantee.WorkReport.RefinementContext
-		contextID, err := generateRefinementContextID(context)
-		if err != nil {
-			return fmt.Errorf("failed to generate RefinementContextID: %w", err)
-		}
-
-		if _, exists := contexts[contextID]; !exists {
-			return fmt.Errorf("context ID not found in contexts map")
-		}
-
-		// ∀x ∈ x ∶ ∃y ∈ β ∶ x_a = y_h ∧ x_s = y_s ∧ x_b = HK (EM (y_b)) (eq. 11.32 0.5.0)
-		found, err := anchorBlockInRecentBlocks(context, currentState)
-		if !found {
-			return err
-		}
-
-		// ∀x ∈ x ∶ xt ≥ Ht − L (eq. 11.33 0.5.0)
-		if context.LookupAnchor.Timeslot >= header.TimeSlotIndex-state.MaxTimeslotsForPreimage {
-			return fmt.Errorf("lookup anchor block (timeslot %d) not within the last %d timeslots (current timeslot: %d)", context.LookupAnchor.Timeslot, state.MaxTimeslotsForPreimage, header.TimeSlotIndex)
-		}
-
-		// ∀x ∈ x ∶ ∃h ∈ A ∶ ht = xt ∧ H(h) = xl (eq. 11.34 0.5.0)
-		_, err = chain.FindHeader(func(ancestor block.Header) bool {
-			ancestorHash, err := ancestor.Hash()
-			if err != nil {
-				return false
-			}
-			return ancestor.TimeSlotIndex == context.LookupAnchor.Timeslot && ancestorHash == context.LookupAnchor.HeaderHash
-		})
-		if err != nil {
-			return fmt.Errorf("no record of header found: %w", err)
-		}
-	}
-
-	accHistoryPrerequisites := make(map[crypto.Hash]struct{})
-	for _, hashSet := range currentState.AccumulationHistory {
-		maps.Copy(accHistoryPrerequisites, hashSet)
-	}
-
-	// ∀p ∈ p, p ∉ [⋃ x∈β] K(x_p) ∪ [⋃ x∈ξ] x ∪ q ∪ a (eq. 11.37 0.5.0)
-	for p := range extrinsicWorkPackages {
-		if _, ok := pastWorkPackages[p]; ok {
-			return fmt.Errorf("report work-package is the work-package of some other report made in the past")
-		}
-	}
-
-	// p ∪ {x | x ∈ b_p, b ∈ β} (eq. 11.33, 11.39 0.5.0)
-	extrinsicAndRecentWorkPackages := make(map[crypto.Hash]crypto.Hash)
-	for k, v := range extrinsicWorkPackages {
-		extrinsicAndRecentWorkPackages[k] = v
-	}
-	for k, v := range recentBlockPrerequisites {
-		extrinsicAndRecentWorkPackages[k] = v
-	}
-
-	for _, guarantee := range guarantees.Guarantees {
-		// ∀w ∈ w ∶ wl ⊆ p ∪ [⋃ b∈β] b_p (eq. 11.40 0.5.0)
-		for lookupKey, lookupValue := range guarantee.WorkReport.SegmentRootLookup {
-			if extrinsicAndRecentWorkPackages[lookupKey] != lookupValue {
-				return fmt.Errorf("segment root lookup invalid")
-			}
-		}
-	}
-
-	// Add recent block work packages to the allowed set
-	for _, block := range currentState.RecentHistory.BlockHistory {
-		for hash := range block.Reported {
-			extrinsicWorkPackages[hash] = block.Reported[hash]
-		}
-	}
-
-	// ∀w ∈ w, ∀p ∈ (wx)p ∪ K(wl) ∶ p ∈ p ∪ {x S x ∈ K(bp), b ∈ β} (eq. 11.38 0.5.0)
-	for p := range prerequisitePackageHashes {
-		if _, ok := extrinsicWorkPackages[p]; !ok {
-			return fmt.Errorf("dependency missing")
-		}
-	}
-
-	if !isGuaranteesSortedByCoreIndex(guarantees.Guarantees) {
-		return errors.New("out of order guarantee")
-	}
-	for _, guarantee := range guarantees.Guarantees {
-		// ∀w ∈ w ∶ wl ⊆ p ∪ [⋃ b∈β] b_p (eq. 11.40 0.5.0)
-		for lookupKey, lookupValue := range guarantee.WorkReport.SegmentRootLookup {
-			if extrinsicAndRecentWorkPackages[lookupKey] != lookupValue {
-				return fmt.Errorf("segment root lookup invalid")
-			}
-		}
-		// Verify that credentials are ordered by validator index (equation 11.24 0.5.0)
-		for i := 1; i < len(guarantee.Credentials); i++ {
-			if guarantee.Credentials[i-1].ValidatorIndex >= guarantee.Credentials[i].ValidatorIndex {
-				return errors.New("not sorted or unique guarantors")
-			}
-		}
-
-		// Check each individual guarantee has at least 2 signatures:
-		// From Graypaper 0.5.0: "With two guarantor signatures, the work-report may be distributed"
-		if len(guarantee.Credentials) < 2 {
-			return fmt.Errorf("insufficient guarantees")
-		}
-
-		err := verifyGuaranteeAge(guarantee, newTimeslot)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// anchorBlockInRecentBlocks ∀x ∈ x ∶ ∃y ∈ β ∶ x_a = y_h ∧ x_s = ys ∧ xb = M_R (yb)) (11.34 v0.5.2)
-func anchorBlockInRecentBlocks(context block.RefinementContext, currentState *state.State) (bool, error) {
-	for _, y := range currentState.RecentHistory.BlockHistory {
-		if context.Anchor.HeaderHash != y.HeaderHash {
-			continue
-		}
-
-		// Found block but state root doesn't match
-		if context.Anchor.PosteriorStateRoot != y.StateRoot {
-			return false, fmt.Errorf("bad state root")
-		}
-
-		// Block found, check beefy root
-		beefyRoot := y.BeefyRoot
-		if context.Anchor.PosteriorBeefyRoot == beefyRoot {
-			return true, nil
-		}
-
-		// Found block but beefy root doesn't match
-		return false, fmt.Errorf("bad beefy mmr root")
-	}
-	// No matching block found
-	return false, fmt.Errorf("anchor not recent")
-}
-
-// determineValidatorsAndDataForPermutation implements relevant data selection from equation 11.20 and 11.21 in GP 0.5.0:
-// Equation 11.20:
-//
-//	G ≡ (P(η₂', τ'), Φ(κ'))
-//
-// Equation 11.21:
-//
-//	G* ≡ (P(e, τ' - R), Φ(k))
-//	where (e,k) = {
-//	  (η₂', κ') if ⌊(τ'-R)/E⌋ = ⌊τ'/E⌋
-//	  (η₃', λ') otherwise
-//	}
-func determineValidatorsAndDataForPermutation(
-	guaranteeTimeslot jamtime.Timeslot,
-	currentTimeslot jamtime.Timeslot,
-	entropyPool state.EntropyPool,
-	currentValidators safrole.ValidatorsData,
-	archivedValidators safrole.ValidatorsData,
-) (safrole.ValidatorsData, crypto.Hash, jamtime.Timeslot) {
-	currentRotation := currentTimeslot / jamtime.ValidatorRotationPeriod
-	guaranteeRotation := guaranteeTimeslot / jamtime.ValidatorRotationPeriod
-
-	var entropy crypto.Hash
-	var timeslotForPermutation jamtime.Timeslot
-	var validators safrole.ValidatorsData
-
-	// G ≡ (P(η₂', τ'), Φ(κ')) for current rotation
-	if guaranteeRotation == currentRotation {
-		entropy = entropyPool[2]
-		timeslotForPermutation = currentTimeslot
-		validators = currentValidators
-	} else {
-		timeslotForPermutation = currentTimeslot - jamtime.ValidatorRotationPeriod
-		currentEpochIndex := currentTimeslot / jamtime.TimeslotsPerEpoch
-		prevEpochIndex := timeslotForPermutation / jamtime.TimeslotsPerEpoch
-
-		// G* ≡ (P(e, τ' - R), Φ(k)) for previous rotation
-		if currentEpochIndex == prevEpochIndex {
-			entropy = entropyPool[2]
-			validators = currentValidators
-		} else {
-			entropy = entropyPool[3]
-			validators = archivedValidators
-		}
-	}
-
-	return validators, entropy, timeslotForPermutation
-}
-
-// isGuaranteesSortedByCoreIndex checks if the guarantees are sorted by their core index
-// in ascending order, implementing the ordering requirement from equation 137
-// in the graypaper: EG = [(gw)c ^ g ∈ EG]
-func isGuaranteesSortedByCoreIndex(guarantees []block.Guarantee) bool {
-	if len(guarantees) <= 1 {
-		return true
-	}
-
-	for i := 0; i < len(guarantees)-1; i++ {
-		currentIndex := guarantees[i].WorkReport.CoreIndex
-		nextIndex := guarantees[i+1].WorkReport.CoreIndex
-
-		if currentIndex >= nextIndex {
-			return false
-		}
-	}
-
-	return true
-}
-
-// isAssignmentValid checks if a new assignment can be made for a core.
-// This implements the condition from equation 142:
-// ρ‡[wc] = ∅ ∨ Ht ≥ ρ‡[wc]t + U
-func isAssignmentValid(currentAssignment *state.Assignment, newTimeslot jamtime.Timeslot) bool {
-	return currentAssignment == nil || (currentAssignment.WorkReport == nil || isAssignmentStale(currentAssignment, newTimeslot))
-}
-
-func isAssignmentStale(currentAssignment *state.Assignment, newTimeslot jamtime.Timeslot) bool {
-	return currentAssignment != nil && newTimeslot >= currentAssignment.Time+common.WorkReportTimeoutPeriod
-}
-
-func verifyGuaranteeAge(guarantee block.Guarantee, currentTimeslot jamtime.Timeslot) error {
-	guaranteeRotation := guarantee.Timeslot / jamtime.ValidatorRotationPeriod
-	currentRotation := currentTimeslot / jamtime.ValidatorRotationPeriod
-
-	// Guarantee must not be from future timeslot
-	if guarantee.Timeslot > currentTimeslot {
-		return errors.New("guarantee from future")
-	}
-
-	// If in same rotation or previous, valid
-	if currentRotation-guaranteeRotation <= 1 {
-		return nil
-	}
-
-	// Otherwise invalid (too old)
-	return errors.New("report epoch before last")
-}
-
-// verifyGuaranteeCredentials verifies the credentials of a guarantee.
-//
-//	Equation 11.24 0.5.0
-func verifyGuaranteeCredentials(
-	guarantee block.Guarantee,
-	validatorState validator.ValidatorState,
-	entropyPool state.EntropyPool,
-	currentTimeslot jamtime.Timeslot,
-) (crypto.ED25519PublicKeySet, error) {
-	reporters := make(crypto.ED25519PublicKeySet)
-
-	validators, entropy, timeslotForPermutation := determineValidatorsAndDataForPermutation(
-		guarantee.Timeslot,
-		currentTimeslot,
-		entropyPool,
-		validatorState.CurrentValidators,
-		validatorState.ArchivedValidators,
-	)
-
-	coreAssignments, err := PermuteAssignments(entropy, timeslotForPermutation)
-	if err != nil {
-		return reporters, fmt.Errorf("failed to compute core assignments: %w", err)
-	}
-
-	log.Printf("Core assignments for timeslot %d: %v", timeslotForPermutation, coreAssignments)
-
-	// Generate work report hash
-	reportBytes, err := jam.Marshal(guarantee.WorkReport)
-	if err != nil {
-		return reporters, fmt.Errorf("failed to marshal work report: %w", err)
-	}
-	hashed := crypto.HashData(reportBytes)
-	message := append([]byte(state.SignatureContextGuarantee), hashed[:]...)
-
-	for _, credential := range guarantee.Credentials {
-
-		if !isValidatorAssignedToCore(credential.ValidatorIndex,
-			guarantee.WorkReport.CoreIndex, coreAssignments) {
-			log.Printf("Validator %d not assigned to core %d",
-				credential.ValidatorIndex, guarantee.WorkReport.CoreIndex)
-			return reporters, ErrWrongAssignment
-		}
-
-		if credential.ValidatorIndex >= uint16(len(validators)) {
-			return reporters, fmt.Errorf("invalid validator index %d", credential.ValidatorIndex)
-		}
-
-		validatorKey := validators[credential.ValidatorIndex].Ed25519
-		if len(validatorKey) != ed25519.PublicKeySize {
-			return reporters, fmt.Errorf("invalid validator key size for validator %d", credential.ValidatorIndex)
-		}
-
-		// Verify signature
-		sigValid := ed25519.Verify(validatorKey, message, credential.Signature[:])
-		if !sigValid {
-			log.Printf("Invalid signature from validator %d", credential.ValidatorIndex)
-			log.Printf("  Key: %x", validatorKey)
-			log.Printf("  Signature: %x", credential.Signature[:])
-			return reporters, ErrBadSignature
-		}
-
-		reporters.Add(validatorKey)
-	}
-
-	return reporters, nil
-}
-
-// isValidatorAssignedToCore checks if a validator is assigned to a specific core.
-func isValidatorAssignedToCore(validatorIndex uint16, coreIndex uint16, coreAssignments []uint32) bool {
-	if int(validatorIndex) >= len(coreAssignments) {
-		return false
-	}
-
-	assigned := coreAssignments[validatorIndex] == uint32(coreIndex)
-	if !assigned {
-		log.Printf("Validator %d assigned to core %d but tried to sign for core %d",
-			validatorIndex, coreAssignments[validatorIndex], coreIndex)
-		return false
-	}
-	return assigned
-}
-
-// RotateSequence rotates the sequence by n positions modulo C.
-// Implements Equation (11.18 v.0.5.0): R(c, n) ≡ [(x + n) mod C ∣ x ∈ shuffledSequence]
-func RotateSequence(sequence []uint32, n uint32) []uint32 {
-	rotated := make([]uint32, len(sequence))
-	for i, x := range sequence {
-		rotated[i] = (x + n) % uint32(common.TotalNumberOfCores)
-	}
-	return rotated
-}
-
-// PermuteAssignments generates the core assignments for validators.
-// Implements Equation (11.20 v0.6.2): P(e, t) ≡ R(F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e), ⌊t mod E/R⌋)
-func PermuteAssignments(entropy crypto.Hash, timeslot jamtime.Timeslot) ([]uint32, error) {
-	// [⌊C ⋅ i/V⌋ ∣i ∈ NV]
-	coreIndices := make([]uint32, common.NumberOfValidators)
-	for i := uint32(0); i < common.NumberOfValidators; i++ {
-		coreIndices[i] = (uint32(common.TotalNumberOfCores) * i) / common.NumberOfValidators
-	}
-
-	// F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e)
-	shuffledSequence, err := common.DeterministicShuffle(coreIndices, entropy)
-	if err != nil {
-		return nil, err
-	}
-
-	// ⌊(t mod E) / R⌋
-	rotationAmount := uint32(timeslot % jamtime.TimeslotsPerEpoch / jamtime.ValidatorRotationPeriod)
-
-	// R(F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e), ⌊(t mod E)/R⌋)
-	rotatedSequence := RotateSequence(shuffledSequence, rotationAmount)
-
-	return rotatedSequence, nil
-}
-
 // CalculateWorkReportsAndAccumulate implements equations. We pass W instead of W* because we also need WQ for
 // updating the state queue.
 // (ω′, ξ′, δ‡, χ′, ι′, ϕ′, θ′, S, X) ≺ (R, ω, ξ, δ, χ, ι, ϕ, τ, τ′) (eq. 4.16)
@@ -1302,7 +585,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	// N(s) ≡ [r | w <− R*...n, r <− w_r, r_s = s] (eq. 12.28 v0.7.0)
 	accumulateCountBySvc := map[block.ServiceId]uint32{}
 	for _, workReport := range accumulatableWorkReports[:accumulatedCount] {
-		for _, result := range workReport.WorkResults {
+		for _, result := range workReport.WorkDigests {
 			accumulateCountBySvc[result.ServiceId]++
 		}
 	}
@@ -1431,7 +714,7 @@ func flattenAccumulationHistory(accHistory state.AccumulationHistory) (hashes ma
 func updateQueue(workRepAndDep []state.WorkReportWithUnAccumulatedDependencies, hashSet map[crypto.Hash]struct{}) []state.WorkReportWithUnAccumulatedDependencies {
 	var newWorkRepsAndDeps []state.WorkReportWithUnAccumulatedDependencies
 	for _, wd := range workRepAndDep {
-		if _, ok := hashSet[wd.WorkReport.WorkPackageSpecification.WorkPackageHash]; !ok {
+		if _, ok := hashSet[wd.WorkReport.AvailabilitySpecification.WorkPackageHash]; !ok {
 			dependencies := maps.Clone(wd.Dependencies)
 			for hash := range hashSet {
 				delete(dependencies, hash)
@@ -1450,7 +733,7 @@ func getWorkPackageHashes(workReports []block.WorkReport) (hashes map[crypto.Has
 	hashes = make(map[crypto.Hash]struct{})
 	// {(ws)h S w ∈ w}
 	for _, workReport := range workReports {
-		hashes[workReport.WorkPackageSpecification.WorkPackageHash] = struct{}{}
+		hashes[workReport.AvailabilitySpecification.WorkPackageHash] = struct{}{}
 	}
 	return hashes
 }
@@ -1474,77 +757,6 @@ func transfersForReceiver(transfers []service.DeferredTransfer, serviceId block.
 		return 0
 	})
 	return transfersForReceiver
-}
-
-// assuranceIsOrderedByValidatorIndex (126) ∀i ∈ {1 ... |E_A|} ∶ EA[i − 1]v < EA[i]v
-func assuranceIsOrderedByValidatorIndex(assurances block.AssurancesExtrinsic) bool {
-	return slices.IsSortedFunc(assurances, func(a, b block.Assurance) int {
-		if a.ValidatorIndex > b.ValidatorIndex {
-			return 1
-		}
-		return -1
-	})
-}
-
-// CalculateIntermediateCoreFromAssurances implements equations
-//
-//	4.13: ρ‡ ≺ (EA, ρ†)
-//	4.15: W* ≺ (EA, ρ†). Note there's a typo in the paper, which states ρ' but that isn't correct.
-//
-// It calculates the intermediate core assignments based on availability
-// assurances, and also returns the set of now avaiable work reports. It also
-// validates that the assurance extrinsic, checking signatures and that ordering
-// is correct with no duplicates. Signatures should be checked using the prior
-// state active validators, ie κ. (GP v0.6.5)
-func CalculateIntermediateCoreFromAssurances(validators safrole.ValidatorsData, assignments state.CoreAssignments, header block.Header, assurances block.AssurancesExtrinsic) (state.CoreAssignments, []*block.WorkReport, error) {
-	if err := validateAssurancesSignature(validators, header, assurances); err != nil {
-		return assignments, nil, err
-	}
-
-	if !assuranceIsOrderedByValidatorIndex(assurances) {
-		return assignments, nil, fmt.Errorf("not sorted or unique assurers")
-	}
-
-	return CalculateIntermediateCoreAssignments(assurances, assignments, header)
-}
-
-// validateAssurancesSignature (127) ∀a ∈ EA ∶ as ∈ Eκ′[av ]e ⟨XA ⌢ H(E(Hp, af ))⟩
-func validateAssurancesSignature(validators safrole.ValidatorsData, header block.Header, assurances block.AssurancesExtrinsic) error {
-	for _, assurance := range assurances {
-		if int(assurance.ValidatorIndex) >= common.NumberOfValidators || validators[assurance.ValidatorIndex].IsEmpty() {
-			return ErrBadValidatorIndex
-		}
-		// ∀a ∈ EA ∶ a_a = Hp (eq. 11.11)
-		if assurance.Anchor != header.ParentHash {
-			return ErrBadAttestationParent
-		}
-		var message []byte
-		b, err := jam.Marshal(header.ParentHash)
-		if err != nil {
-			return fmt.Errorf("error encoding header parent hash %w", err)
-		}
-		message = append(message, b...)
-		b, err = jam.Marshal(assurance.Bitfield)
-		if err != nil {
-			return fmt.Errorf("error encoding assurance bitfield %w", err)
-		}
-		message = append(message, b...)
-		messageHash := crypto.HashData(message)
-		if !ed25519.Verify(validators[assurance.ValidatorIndex].Ed25519, append([]byte(state.SignatureContextAvailable), messageHash[:]...), assurance.Signature[:]) {
-			return ErrBadSignature
-		}
-	}
-	return nil
-}
-
-// W ≡ [ ρ†[c]w | c <− N_C, ∑ [a∈E_A] a_f [c] > 2/3 V ]
-func GetAvailableWorkReports(coreAssignments state.CoreAssignments) (workReports []block.WorkReport) {
-	for _, c := range coreAssignments {
-		if c != nil {
-			workReports = append(workReports, *c.WorkReport)
-		}
-	}
-	return workReports
 }
 
 // CalculateNewActivityStatistics updates activity statistics.
@@ -1646,15 +858,15 @@ func CalculateNewCoreStatistics(
 	for _, guarantee := range blk.Extrinsic.EG.Guarantees {
 		workReport := guarantee.WorkReport
 		coreIndex := workReport.CoreIndex
-		for _, workResult := range workReport.WorkResults {
+		for _, workResult := range workReport.WorkDigests {
 
-			newCoreStats[coreIndex].Imports += workResult.ImportsCount
-			newCoreStats[coreIndex].Exports += workResult.ExportsCount
+			newCoreStats[coreIndex].Imports += workResult.SegmentsImportedCount
+			newCoreStats[coreIndex].Exports += workResult.SegmentsExportedCount
 			newCoreStats[coreIndex].ExtrinsicCount += workResult.ExtrinsicCount
 			newCoreStats[coreIndex].ExtrinsicSize += workResult.ExtrinsicSize
 			newCoreStats[coreIndex].GasUsed += workResult.GasUsed
 			// TODO this might be out of the loop, but the equation looks like it's done for each result.
-			newCoreStats[coreIndex].BundleSize += workReport.WorkPackageSpecification.AuditableWorkBundleLength
+			newCoreStats[coreIndex].BundleSize += workReport.AvailabilitySpecification.AuditableWorkBundleLength
 
 		}
 
@@ -1666,8 +878,8 @@ func CalculateNewCoreStatistics(
 	for _, workReport := range availableReports {
 		coreIndex := workReport.CoreIndex
 
-		l := workReport.WorkPackageSpecification.AuditableWorkBundleLength
-		n := workReport.WorkPackageSpecification.SegmentCount
+		l := workReport.AvailabilitySpecification.AuditableWorkBundleLength
+		n := workReport.AvailabilitySpecification.SegmentCount
 		var daLoad uint32 = l + (common.SizeOfSegment * uint32(math.Ceil(float64(n)*65/64)))
 
 		newCoreStats[coreIndex].DALoad += daLoad
@@ -1710,12 +922,12 @@ func CalculateNewServiceStatistics(
 	// ∑ r ∈wr,w ∈w, wc=c (ri, rx, rz , re, ru, b: (ws)l)
 	for _, guarantee := range blk.Extrinsic.EG.Guarantees {
 		workReport := guarantee.WorkReport
-		for _, workResult := range workReport.WorkResults {
+		for _, workResult := range workReport.WorkDigests {
 			serviceID := block.ServiceId(workResult.ServiceId)
 			record := newServiceStats[serviceID]
 
-			record.Imports += uint32(workResult.ImportsCount)
-			record.Exports += uint32(workResult.ExportsCount)
+			record.Imports += uint32(workResult.SegmentsImportedCount)
+			record.Exports += uint32(workResult.SegmentsExportedCount)
 			record.ExtrinsicCount += uint32(workResult.ExtrinsicCount)
 			record.ExtrinsicSize += uint32(workResult.ExtrinsicSize)
 			record.RefinementCount += 1
@@ -1802,8 +1014,8 @@ func (a *Accumulator) SequentialDelta(
 	// Sum up gas requirements until we exceed limit
 	for i, report := range workReports {
 		reportGas := uint64(0)
-		for _, result := range report.WorkResults {
-			reportGas += result.GasPrioritizationRatio
+		for _, result := range report.WorkDigests {
+			reportGas += result.GasLimit
 		}
 
 		if totalGas+reportGas > gasLimit {
@@ -1871,7 +1083,7 @@ func (a *Accumulator) ParallelDelta(
 
 	// From work reports
 	for _, report := range workReports {
-		for _, result := range report.WorkResults {
+		for _, result := range report.WorkDigests {
 			serviceIndices[result.ServiceId] = struct{}{}
 		}
 	}
@@ -2052,9 +1264,9 @@ func (a *Accumulator) Delta1(
 
 	// Add gas from all relevant work items for this service
 	for _, report := range workReports {
-		for _, result := range report.WorkResults {
+		for _, result := range report.WorkDigests {
 			if result.ServiceId == serviceIndex {
-				gasLimit += result.GasPrioritizationRatio
+				gasLimit += result.GasLimit
 			}
 		}
 	}
@@ -2062,15 +1274,15 @@ func (a *Accumulator) Delta1(
 	// Collect work item operands (p)
 	var operands []state.AccumulationOperand
 	for _, report := range workReports {
-		for _, result := range report.WorkResults {
+		for _, result := range report.WorkDigests {
 			if result.ServiceId == serviceIndex {
 				operand := state.AccumulationOperand{
-					WorkPackageHash:   report.WorkPackageSpecification.WorkPackageHash,
-					SegmentRoot:       report.WorkPackageSpecification.SegmentRoot,
+					WorkPackageHash:   report.AvailabilitySpecification.WorkPackageHash,
+					SegmentRoot:       report.AvailabilitySpecification.SegmentRoot,
 					AuthorizationHash: report.AuthorizerHash,
-					Trace:             report.Trace,
+					Trace:             report.AuthorizerTrace,
 					PayloadHash:       result.PayloadHash,
-					GasLimit:          result.GasPrioritizationRatio,
+					GasLimit:          result.GasLimit,
 					OutputOrError:     result.Output,
 				}
 				operands = append(operands, operand)

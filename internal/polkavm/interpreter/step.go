@@ -617,7 +617,7 @@ func sext(value uint64, length uint64) uint64 {
 		return 0
 	}
 	if length > 8 {
-		panic("length too large for uint64")
+		panic("unsupported bit length")
 	}
 
 	numBits := length * 8
