@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/disputing"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 
@@ -18,7 +19,6 @@ import (
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 func TestCalculateNewTimeStateTransition(t *testing.T) {
@@ -344,8 +344,8 @@ func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
 
 func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 	// Create WorkReports with known hashes
-	workReport1 := &block.WorkReport{CoreIndex: 0}
-	workReport2 := &block.WorkReport{CoreIndex: 1}
+	workReport1 := block.WorkReport{CoreIndex: 0}
+	workReport2 := block.WorkReport{CoreIndex: 1}
 
 	hash1, _ := workReport1.Hash()
 	hash2, _ := workReport2.Hash()
@@ -367,331 +367,8 @@ func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 		{WorkReport: workReport2},
 	}
 
-	newAssignments := CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes, coreAssignments)
+	newAssignments := disputing.CalculateIntermediateCoreAssignmentsFromExtrinsics(disputes, coreAssignments)
 	require.Equal(t, expectedAssignments, newAssignments)
-}
-
-func TestCalculateIntermediateCoreAssignments(t *testing.T) {
-	testCases := []struct {
-		name            string
-		availableCores  uint16
-		validators      uint16
-		expectedRemoved uint16
-	}{
-		{"No Cores Available, All Validators", 0, common.NumberOfValidators, 0},
-		{"No Cores Available, No Validators", 0, 0, 0},
-		{"Half Cores Available, No Validators", common.TotalNumberOfCores / 2, 0, 0},
-		{"Half Cores Available, 2/3 Validators", common.TotalNumberOfCores / 2, (2 * common.NumberOfValidators / 3), 0},
-		{"Half Cores Available, 2/3+1 Validators", common.TotalNumberOfCores / 2, (2 * common.NumberOfValidators / 3) + 1, common.TotalNumberOfCores / 2},
-		{"Half Cores Available, All Validators", common.TotalNumberOfCores / 2, common.NumberOfValidators, common.TotalNumberOfCores / 2},
-		{"All Cores Available, All Validators", common.TotalNumberOfCores, common.NumberOfValidators, common.TotalNumberOfCores},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			assurances := createAssuranceExtrinsic(tc.availableCores, tc.validators)
-			initialAssignments := createInitialAssignments()
-			newAssignments, _, err := CalculateIntermediateCoreAssignments(assurances, initialAssignments, block.Header{TimeSlotIndex: jamtime.Timeslot(12)})
-			require.NoError(t, err)
-
-			removedCount := uint16(0)
-			for _, assignment := range newAssignments {
-				if assignment == nil {
-					removedCount++
-				}
-			}
-			require.Equal(t, tc.expectedRemoved, removedCount, "Number of kept assignments should match expected")
-		})
-	}
-}
-
-func TestCalculateNewCoreAssignments(t *testing.T) {
-	t.Run("valid guarantees within rotation period", func(t *testing.T) {
-		// Generate random ED25519 keys for two validators
-		pubKey1, prvKey1, err := testutils.RandomED25519Keys(t)
-		require.NoError(t, err)
-		pubKey2, prvKey2, err := testutils.RandomED25519Keys(t)
-		require.NoError(t, err)
-		validatorKeys := make([]crypto.ValidatorKey, 2)
-		validatorKeys[0].Ed25519 = pubKey1
-		validatorKeys[1].Ed25519 = pubKey2
-		validatorsData := safrole.ValidatorsData{
-			{Ed25519: validatorKeys[0].Ed25519},
-			{Ed25519: validatorKeys[1].Ed25519},
-		}
-
-		validatorState := validator.ValidatorState{
-			CurrentValidators:  validatorsData,
-			ArchivedValidators: validatorsData,
-		}
-		currentTimeslot := jamtime.Timeslot(100)
-
-		entropyPool := state.EntropyPool{}
-		// Hardcoded entropy that assigns first 2 validators to the same core
-		entropyPool[2] = crypto.Hash{
-			205, 167, 205, 130, 4, 58, 89, 170,
-			187, 59, 155, 75, 28, 244, 251, 244,
-			38, 86, 243, 94, 236, 132, 54, 199,
-			105, 143, 117, 14, 216, 45, 68, 156,
-		}
-
-		// Compute core assignments based on the suitable entropy and timeslot
-		coreAssignments, err := PermuteAssignments(entropyPool[2], currentTimeslot)
-		require.NoError(t, err)
-
-		// Ensure both validators are assigned to the same core
-		require.Equal(t, coreAssignments[0], coreAssignments[1])
-		selectedCoreIndex := uint16(coreAssignments[0])
-
-		// Create WorkReport assigned to selectedCoreIndex
-		workReport := block.WorkReport{
-			CoreIndex: selectedCoreIndex,
-		}
-
-		// Marshal and hash the work report for signing
-		reportBytes, err := jam.Marshal(workReport)
-		require.NoError(t, err)
-		reportHash := crypto.HashData(reportBytes)
-		message := append([]byte(state.SignatureContextGuarantee), reportHash[:]...)
-
-		// Sign the message with both validators
-		signature1 := ed25519.Sign(prvKey1, message)
-		signature2 := ed25519.Sign(prvKey2, message)
-
-		credentials := []block.CredentialSignature{
-			{
-				ValidatorIndex: 0,
-				Signature:      [64]byte(signature1),
-			},
-			{
-				ValidatorIndex: 1,
-				Signature:      [64]byte(signature2),
-			},
-		}
-
-		guarantees := block.GuaranteesExtrinsic{
-			Guarantees: []block.Guarantee{
-				{
-					WorkReport:  workReport,
-					Timeslot:    currentTimeslot,
-					Credentials: credentials,
-				},
-			},
-		}
-
-		intermediateAssignments := state.CoreAssignments{}
-
-		newAssignments, _, err := CalculateNewCoreAssignments(
-			guarantees,
-			intermediateAssignments,
-			validatorState,
-			currentTimeslot,
-			entropyPool,
-		)
-
-		require.NoError(t, err)
-		require.Equal(t, workReport, *newAssignments[selectedCoreIndex].WorkReport)
-		require.Equal(t, currentTimeslot, newAssignments[selectedCoreIndex].Time)
-
-	})
-
-	t.Run("invalid guarantee due to timeslot too old", func(t *testing.T) {
-		pubKey1, prvKey1, err := testutils.RandomED25519Keys(t)
-		require.NoError(t, err)
-		pubKey2, prvKey2, err := testutils.RandomED25519Keys(t)
-		require.NoError(t, err)
-		validatorKeys := make([]crypto.ValidatorKey, 2)
-		validatorKeys[0].Ed25519 = pubKey1
-		validatorKeys[1].Ed25519 = pubKey2
-		validatorsData := safrole.ValidatorsData{
-			{Ed25519: validatorKeys[0].Ed25519},
-			{Ed25519: validatorKeys[1].Ed25519},
-		}
-
-		validatorState := validator.ValidatorState{
-			CurrentValidators:  validatorsData,
-			ArchivedValidators: validatorsData,
-		}
-		currentTimeslot := jamtime.Timeslot(100)
-
-		workReport := block.WorkReport{
-			CoreIndex: 0,
-		}
-
-		reportBytes, err := jam.Marshal(workReport)
-		require.NoError(t, err)
-		reportHash := crypto.HashData(reportBytes)
-		message := append([]byte(state.SignatureContextGuarantee), reportHash[:]...)
-		signature1 := ed25519.Sign(prvKey1, message)
-		signature2 := ed25519.Sign(prvKey2, message)
-
-		credentials := []block.CredentialSignature{
-			{
-				ValidatorIndex: 0,
-				Signature:      [64]byte(signature1),
-			},
-			{
-				ValidatorIndex: 1,
-				Signature:      [64]byte(signature2),
-			},
-		}
-
-		// Create guarantee with timeslot outside valid range
-		oldTimeslot := currentTimeslot - jamtime.ValidatorRotationPeriod*2
-		guarantees := block.GuaranteesExtrinsic{
-			Guarantees: []block.Guarantee{
-				{
-					WorkReport:  workReport,
-					Timeslot:    oldTimeslot,
-					Credentials: credentials,
-				},
-			},
-		}
-
-		intermediateAssignments := state.CoreAssignments{}
-
-		newAssignments, _, err := CalculateNewCoreAssignments(
-			guarantees,
-			intermediateAssignments,
-			validatorState,
-			currentTimeslot,
-			state.EntropyPool{},
-		)
-		require.ErrorIs(t, err, ErrTimeslotOutOfRange)
-		require.Nil(t, newAssignments[0])
-	})
-
-	t.Run("invalid guarantee due to unordered credentials", func(t *testing.T) {
-		pubKey1, prvKey1, err := testutils.RandomED25519Keys(t)
-		require.NoError(t, err)
-		pubKey2, prvKey2, err := testutils.RandomED25519Keys(t)
-		require.NoError(t, err)
-		validatorKeys := make([]crypto.ValidatorKey, 2)
-		validatorKeys[0].Ed25519 = pubKey1
-		validatorKeys[1].Ed25519 = pubKey2
-		validatorsData := safrole.ValidatorsData{
-			{Ed25519: validatorKeys[0].Ed25519},
-			{Ed25519: validatorKeys[1].Ed25519},
-		}
-
-		validatorState := validator.ValidatorState{
-			CurrentValidators:  validatorsData,
-			ArchivedValidators: validatorsData,
-		}
-		currentTimeslot := jamtime.Timeslot(100)
-
-		workReport := block.WorkReport{
-			CoreIndex: 0,
-		}
-
-		reportBytes, err := jam.Marshal(workReport)
-		require.NoError(t, err)
-		reportHash := crypto.HashData(reportBytes)
-		message := append([]byte(state.SignatureContextGuarantee), reportHash[:]...)
-		signature1 := ed25519.Sign(prvKey1, message)
-		signature2 := ed25519.Sign(prvKey2, message)
-
-		// Create credentials with unordered validator indices
-		credentials := []block.CredentialSignature{
-			{
-				ValidatorIndex: 1,
-				Signature:      [64]byte(signature2),
-			},
-			{
-				ValidatorIndex: 0,
-				Signature:      [64]byte(signature1),
-			},
-		}
-
-		guarantees := block.GuaranteesExtrinsic{
-			Guarantees: []block.Guarantee{
-				{
-					WorkReport:  workReport,
-					Timeslot:    currentTimeslot - 1,
-					Credentials: credentials,
-				},
-			},
-		}
-
-		intermediateAssignments := state.CoreAssignments{}
-
-		newAssignments, _, err := CalculateNewCoreAssignments(
-			guarantees,
-			intermediateAssignments,
-			validatorState,
-			currentTimeslot,
-			state.EntropyPool{},
-		)
-		require.ErrorIs(t, err, ErrWrongAssignment)
-		require.Nil(t, newAssignments[0])
-	})
-
-	t.Run("invalid guarantee due to wrong signature", func(t *testing.T) {
-		pubKey1, _, err := testutils.RandomED25519Keys(t)
-		require.NoError(t, err)
-		pubKey2, prvKey2, err := testutils.RandomED25519Keys(t)
-		require.NoError(t, err)
-		_, wrongPrvKey, err := testutils.RandomED25519Keys(t)
-		require.NoError(t, err)
-
-		validatorKeys := make([]crypto.ValidatorKey, 2)
-		validatorKeys[0].Ed25519 = pubKey1
-		validatorKeys[1].Ed25519 = pubKey2
-		validatorsData := safrole.ValidatorsData{
-			{Ed25519: validatorKeys[0].Ed25519},
-			{Ed25519: validatorKeys[1].Ed25519},
-		}
-
-		validatorState := validator.ValidatorState{
-			CurrentValidators:  validatorsData,
-			ArchivedValidators: validatorsData,
-		}
-		currentTimeslot := jamtime.Timeslot(100)
-
-		workReport := block.WorkReport{
-			CoreIndex: 0,
-		}
-
-		reportBytes, err := jam.Marshal(workReport)
-		require.NoError(t, err)
-		reportHash := crypto.HashData(reportBytes)
-		message := append([]byte(state.SignatureContextGuarantee), reportHash[:]...)
-		wrongSignature := ed25519.Sign(wrongPrvKey, message)
-		signature2 := ed25519.Sign(prvKey2, message)
-
-		credentials := []block.CredentialSignature{
-			{
-				ValidatorIndex: 0,
-				Signature:      [64]byte(wrongSignature), // Wrong signature for validator 0
-			},
-			{
-				ValidatorIndex: 1,
-				Signature:      [64]byte(signature2),
-			},
-		}
-
-		guarantees := block.GuaranteesExtrinsic{
-			Guarantees: []block.Guarantee{
-				{
-					WorkReport:  workReport,
-					Timeslot:    currentTimeslot - 1,
-					Credentials: credentials,
-				},
-			},
-		}
-
-		intermediateAssignments := state.CoreAssignments{}
-
-		newAssignments, _, err := CalculateNewCoreAssignments(
-			guarantees,
-			intermediateAssignments,
-			validatorState,
-			currentTimeslot,
-			state.EntropyPool{},
-		)
-		require.ErrorIs(t, err, ErrWrongAssignment)
-		require.Nil(t, newAssignments[0])
-	})
 }
 
 func TestCalculateNewCoreAuthorizations(t *testing.T) {
@@ -1106,14 +783,14 @@ func TestCalculateNewCoreStatistics(t *testing.T) {
 			availableReports: []block.WorkReport{
 				{
 					CoreIndex: 0,
-					WorkPackageSpecification: block.WorkPackageSpecification{
+					AvailabilitySpecification: block.AvailabilitySpecification{
 						AuditableWorkBundleLength: 8649,
 						SegmentCount:              2,
 					},
 				},
 				{
 					CoreIndex: 1,
-					WorkPackageSpecification: block.WorkPackageSpecification{
+					AvailabilitySpecification: block.AvailabilitySpecification{
 						AuditableWorkBundleLength: 335,
 						SegmentCount:              0,
 					},
@@ -1139,18 +816,18 @@ func TestCalculateNewCoreStatistics(t *testing.T) {
 							{
 								WorkReport: block.WorkReport{
 									CoreIndex: 0,
-									WorkPackageSpecification: block.WorkPackageSpecification{
+									AvailabilitySpecification: block.AvailabilitySpecification{
 										AuditableWorkBundleLength: 17180,
 										SegmentCount:              3,
 									},
 
-									WorkResults: []block.WorkResult{
+									WorkDigests: []block.WorkDigest{
 										{
-											GasUsed:        821,
-											ImportsCount:   8,
-											ExportsCount:   17,
-											ExtrinsicCount: 8,
-											ExtrinsicSize:  1526,
+											GasUsed:               821,
+											SegmentsImportedCount: 8,
+											SegmentsExportedCount: 17,
+											ExtrinsicCount:        8,
+											ExtrinsicSize:         1526,
 										},
 									},
 								},
@@ -1158,18 +835,18 @@ func TestCalculateNewCoreStatistics(t *testing.T) {
 							{
 								WorkReport: block.WorkReport{
 									CoreIndex: 1,
-									WorkPackageSpecification: block.WorkPackageSpecification{
+									AvailabilitySpecification: block.AvailabilitySpecification{
 										AuditableWorkBundleLength: 12487,
 										SegmentCount:              3,
 									},
 
-									WorkResults: []block.WorkResult{
+									WorkDigests: []block.WorkDigest{
 										{
-											GasUsed:        697,
-											ImportsCount:   1,
-											ExportsCount:   18,
-											ExtrinsicCount: 3,
-											ExtrinsicSize:  1926,
+											GasUsed:               697,
+											SegmentsImportedCount: 1,
+											SegmentsExportedCount: 18,
+											ExtrinsicCount:        3,
+											ExtrinsicSize:         1926,
 										},
 									},
 								},
@@ -1256,28 +933,28 @@ func TestCalculateNewServiceStatistics(t *testing.T) {
 						Guarantees: []block.Guarantee{
 							{
 								WorkReport: block.WorkReport{
-									WorkResults: []block.WorkResult{
+									WorkDigests: []block.WorkDigest{
 										{
-											ServiceId:      1,
-											GasUsed:        821,
-											ImportsCount:   8,
-											ExportsCount:   17,
-											ExtrinsicCount: 8,
-											ExtrinsicSize:  1526,
+											ServiceId:             1,
+											GasUsed:               821,
+											SegmentsImportedCount: 8,
+											SegmentsExportedCount: 17,
+											ExtrinsicCount:        8,
+											ExtrinsicSize:         1526,
 										},
 									},
 								},
 							},
 							{
 								WorkReport: block.WorkReport{
-									WorkResults: []block.WorkResult{
+									WorkDigests: []block.WorkDigest{
 										{
-											ServiceId:      1,
-											GasUsed:        697,
-											ImportsCount:   1,
-											ExportsCount:   18,
-											ExtrinsicCount: 3,
-											ExtrinsicSize:  1926,
+											ServiceId:             1,
+											GasUsed:               697,
+											SegmentsImportedCount: 1,
+											SegmentsExportedCount: 18,
+											ExtrinsicCount:        3,
+											ExtrinsicSize:         1926,
 										},
 									},
 								},
@@ -1353,33 +1030,4 @@ func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16
 		ReportHash: reportHash,
 		Judgements: judgments,
 	}
-}
-
-func createInitialAssignments() state.CoreAssignments {
-	var initialAssignments state.CoreAssignments
-	for i := range initialAssignments {
-		initialAssignments[i] = &state.Assignment{
-			WorkReport: &block.WorkReport{CoreIndex: uint16(i)},
-			Time:       jamtime.Timeslot(100),
-		}
-	}
-	return initialAssignments
-}
-
-func createAssuranceExtrinsic(availableCores uint16, validators uint16) block.AssurancesExtrinsic {
-	assurances := make(block.AssurancesExtrinsic, validators)
-	for i := uint16(0); i < validators; i++ {
-		assurance := block.Assurance{
-			ValidatorIndex: uint16(i),
-		}
-
-		for j := uint16(0); j < availableCores && j < common.TotalNumberOfCores; j++ {
-			byteIndex := j / 8
-			bitIndex := j % 8
-			assurance.Bitfield[byteIndex] |= 1 << bitIndex
-		}
-
-		assurances[i] = assurance
-	}
-	return assurances
 }

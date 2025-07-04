@@ -26,7 +26,7 @@ func TestWorkReportRequester_RequestWorkReport_Success(t *testing.T) {
 	workReport := block.WorkReport{
 		CoreIndex:         2,
 		AuthGasUsed:       10,
-		Trace:             []byte("output"),
+		AuthorizerTrace:   []byte("output"),
 		SegmentRootLookup: make(map[crypto.Hash]crypto.Hash),
 	}
 
@@ -69,9 +69,9 @@ func TestWorkReportRequestHandler_HandleStream_Success(t *testing.T) {
 	stream := mocks.NewMockQuicStream()
 
 	workReport := block.WorkReport{
-		CoreIndex:   2,
-		AuthGasUsed: 10,
-		Trace:       []byte("output"),
+		CoreIndex:       2,
+		AuthGasUsed:     10,
+		AuthorizerTrace: []byte("output"),
 	}
 
 	kvStore, err := pebble.NewKVStore()

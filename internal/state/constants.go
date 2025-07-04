@@ -1,7 +1,7 @@
 package state
 
 const (
-	MaxTimeslotsForPreimage                 = 14400 // (L) Maximum number of timeslots for preimage metadata
+	MaxTimeslotsForLookupAnchor             = 14400 // (L) Maximum age for lookup-anchor blocks in work reports
 	MaxRecentBlocks                         = 8     // (H) Maximum number of recent blocks to store
 	MaxAuthorizersPerCore                   = 8     // (O) The maximum number of items in the authorizers pool.
 	EntropyPoolSize                         = 4     // () Size of the entropy pool

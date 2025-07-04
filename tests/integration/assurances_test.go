@@ -13,13 +13,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/eigerco/strawberry/internal/assuring"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
-	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/validator"
 )
 
@@ -79,14 +79,14 @@ type AssurancesState struct {
 }
 
 type Assignment struct {
-	Report  *Report          `json:"report"`
+	Report  Report           `json:"report"`
 	Timeout jamtime.Timeslot `json:"timeout"`
 }
 
 type AssurancesOutput struct {
 	Err string `json:"err"`
 	Ok  struct {
-		Reported []*Report `json:"reported"` // ??
+		Reported []Report `json:"reported"` // ??
 	} `json:"ok"`
 }
 
@@ -128,16 +128,13 @@ func mapSlice[T1, T2 any](s1 []T1, fn func(T1) T2) (s2 []T2) {
 	return
 }
 
-func mapReport(r *Report) *block.WorkReport {
-	if r == nil {
-		return nil
-	}
+func mapReport(r Report) block.WorkReport {
 	segmentRootLookup := make(map[crypto.Hash]crypto.Hash)
 	for _, pair := range r.SegmentRootLookup {
 		segmentRootLookup[mapHash(pair.Key)] = mapHash(pair.Val)
 	}
-	return &block.WorkReport{
-		WorkPackageSpecification: block.WorkPackageSpecification{
+	return block.WorkReport{
+		AvailabilitySpecification: block.AvailabilitySpecification{
 			WorkPackageHash:           mapHash(r.PackageSpec.Hash),
 			AuditableWorkBundleLength: r.PackageSpec.Length,
 			ErasureRoot:               mapHash(r.PackageSpec.ErasureRoot),
@@ -151,14 +148,14 @@ func mapReport(r *Report) *block.WorkReport {
 		},
 		CoreIndex:         r.CoreIndex,
 		AuthorizerHash:    mapHash(r.AuthorizerHash),
-		Trace:             mustStringToHex(r.AuthOutput),
+		AuthorizerTrace:   mustStringToHex(r.AuthOutput),
 		SegmentRootLookup: segmentRootLookup,
-		WorkResults: mapSlice(r.Results, func(rr ReportResult) block.WorkResult {
-			return block.WorkResult{
-				ServiceId:              block.ServiceId(rr.ServiceID),
-				ServiceHashCode:        mapHash(rr.CodeHash),
-				PayloadHash:            mapHash(rr.PayloadHash),
-				GasPrioritizationRatio: rr.Gas,
+		WorkDigests: mapSlice(r.Results, func(rr ReportResult) block.WorkDigest {
+			return block.WorkDigest{
+				ServiceId:       block.ServiceId(rr.ServiceID),
+				ServiceHashCode: mapHash(rr.CodeHash),
+				PayloadHash:     mapHash(rr.PayloadHash),
+				GasLimit:        rr.Gas,
 				Output: block.WorkResultOutputOrError{
 					Inner: mustStringToHex(rr.Result.Ok),
 				},
@@ -168,6 +165,9 @@ func mapReport(r *Report) *block.WorkReport {
 }
 
 func mapHash(s string) crypto.Hash {
+	if s == "" {
+		return crypto.Hash{} // returns zero-value Hash (32 zero bytes)
+	}
 	return crypto.Hash(mustStringToHex(s))
 }
 
@@ -200,14 +200,16 @@ func TestAssurancesTiny(t *testing.T) {
 
 			newBlock := mapBlock(tc.Input)
 			theState := mapAssurancesState(tc.PreState)
-			var removedReports []*block.WorkReport
-			theState.CoreAssignments, removedReports, err = statetransition.CalculateIntermediateCoreFromAssurances(theState.ValidatorState.CurrentValidators, theState.CoreAssignments, newBlock.Header, newBlock.Extrinsic.EA)
+			var removedReports []block.WorkReport
+			theState.CoreAssignments, removedReports, err = assuring.CalculateIntermediateCoreAssignmentsAndAvailableWorkReports(
+				newBlock.Extrinsic.EA, theState.ValidatorState.CurrentValidators, theState.CoreAssignments, newBlock.Header)
 			if tc.Output.Err != "" {
 				require.EqualError(t, err, strings.ReplaceAll(tc.Output.Err, "_", " "))
 			} else {
 				require.NoError(t, err)
 			}
-			assert.Equal(t, mapAssurancesState(tc.PostState), theState)
+			pstState := mapAssurancesState(tc.PostState)
+			assert.Equal(t, pstState, theState)
 			assert.Equal(t, mapSlice(tc.Output.Ok.Reported, mapReport), removedReports)
 		})
 	}

@@ -215,12 +215,12 @@ func TestCodec(t *testing.T) {
 			name:  "DecodeWorkResult",
 			files: []string{"work_result_0", "work_result_1"},
 			unmarshal: func(b []byte) (any, error) {
-				var v block.WorkResult
+				var v block.WorkDigest
 				err := jam.Unmarshal(b, &v)
 				return v, err
 			},
 			comparator: func(t *testing.T, expected any, unmarshaled any) {
-				compareWorkResultFields(t, expected.(ExpectedWorkResult), unmarshaled.(block.WorkResult))
+				compareWorkResultFields(t, expected.(ExpectedWorkResult), unmarshaled.(block.WorkDigest))
 			},
 			expected: func(t *testing.T, file string) any {
 				return unmarshalExpected[ExpectedWorkResult](t, file)
@@ -315,11 +315,11 @@ func compareRefinementContextFields(t *testing.T, expected ExpectedRefinementCon
 	assertHashSlicesEqual(t, expected.Prerequisites, actual.PrerequisiteWorkPackage)
 }
 
-func compareWorkResultFields(t *testing.T, expected ExpectedWorkResult, actual block.WorkResult) {
+func compareWorkResultFields(t *testing.T, expected ExpectedWorkResult, actual block.WorkDigest) {
 	require.Equal(t, expected.ServiceId, actual.ServiceId)
 	require.Equal(t, expected.CodeHash, toHex(actual.ServiceHashCode))
 	require.Equal(t, expected.PayloadHash, toHex(actual.PayloadHash))
-	require.Equal(t, expected.AccumulateGas, actual.GasPrioritizationRatio)
+	require.Equal(t, expected.AccumulateGas, actual.GasLimit)
 	if expected.Result.Ok != nil {
 		require.Equal(t, *expected.Result.Ok, toHex(actual.Output.Inner))
 	}
@@ -330,27 +330,27 @@ func compareWorkResultFields(t *testing.T, expected ExpectedWorkResult, actual b
 	}
 
 	require.Equal(t, expected.RefineLoad.GasUsed, actual.GasUsed)
-	require.Equal(t, expected.RefineLoad.Imports, actual.ImportsCount)
+	require.Equal(t, expected.RefineLoad.Imports, actual.SegmentsImportedCount)
 	require.Equal(t, expected.RefineLoad.ExtrinsicCount, actual.ExtrinsicCount)
 	require.Equal(t, expected.RefineLoad.ExtrinsicSize, actual.ExtrinsicSize)
-	require.Equal(t, expected.RefineLoad.Exports, actual.ExportsCount)
+	require.Equal(t, expected.RefineLoad.Exports, actual.SegmentsExportedCount)
 }
 
 func compareWorkReportFields(t *testing.T, expected ExpectedWorkReport, actual block.WorkReport) {
-	require.Equal(t, expected.PackageSpec.Hash, toHex(actual.WorkPackageSpecification.WorkPackageHash))
-	require.Equal(t, expected.PackageSpec.Length, actual.WorkPackageSpecification.AuditableWorkBundleLength)
-	require.Equal(t, expected.PackageSpec.ErasureRoot, toHex(actual.WorkPackageSpecification.ErasureRoot))
-	require.Equal(t, expected.PackageSpec.ExportsRoot, toHex(actual.WorkPackageSpecification.SegmentRoot))
-	require.Equal(t, expected.PackageSpec.ExportsCount, actual.WorkPackageSpecification.SegmentCount)
+	require.Equal(t, expected.PackageSpec.Hash, toHex(actual.AvailabilitySpecification.WorkPackageHash))
+	require.Equal(t, expected.PackageSpec.Length, actual.AvailabilitySpecification.AuditableWorkBundleLength)
+	require.Equal(t, expected.PackageSpec.ErasureRoot, toHex(actual.AvailabilitySpecification.ErasureRoot))
+	require.Equal(t, expected.PackageSpec.ExportsRoot, toHex(actual.AvailabilitySpecification.SegmentRoot))
+	require.Equal(t, expected.PackageSpec.ExportsCount, actual.AvailabilitySpecification.SegmentCount)
 
 	compareRefinementContextFields(t, expected.Context, actual.RefinementContext)
 
 	require.Equal(t, expected.CoreIndex, actual.CoreIndex)
 	require.Equal(t, expected.AuthorizerHash, toHex(actual.AuthorizerHash))
-	require.Equal(t, expected.AuthOutput, toHex(actual.Trace))
+	require.Equal(t, expected.AuthOutput, toHex(actual.AuthorizerTrace))
 
 	for j := range expected.Results {
-		compareWorkResultFields(t, expected.Results[j], actual.WorkResults[j])
+		compareWorkResultFields(t, expected.Results[j], actual.WorkDigests[j])
 	}
 
 	require.Equal(t, expected.AuthGasUsed, actual.AuthGasUsed)

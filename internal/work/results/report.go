@@ -21,7 +21,7 @@ func ProduceWorkReport(
 	bundle *work.PackageBundle,
 	segmentRootLookup work.SegmentRootLookup,
 ) (*Shards, block.WorkReport, error) {
-	var allWorkResults []block.WorkResult
+	var allWorkResults []block.WorkDigest
 	var allExportedSegments []work.Segment
 	var reportSegmentRootLookup = make(map[crypto.Hash]crypto.Hash)
 	exportOffset := uint64(0)
@@ -104,7 +104,7 @@ func ProduceWorkReport(
 
 	// (s, x : px, c, a : pa, o, l, r)
 	return shardData, block.WorkReport{
-		WorkPackageSpecification: block.WorkPackageSpecification{ // eq. 14.16
+		AvailabilitySpecification: block.AvailabilitySpecification{ // eq. 14.16
 			WorkPackageHash:           crypto.HashData(pkgBytes),
 			AuditableWorkBundleLength: uint32(len(auditableBlob)),
 			ErasureRoot:               binary_tree.ComputeWellBalancedRoot(shardData.BundleHashAndSegmentsRoot, crypto.HashData),
@@ -113,9 +113,9 @@ func ProduceWorkReport(
 		},
 		RefinementContext: bundle.Package().Context,
 		CoreIndex:         coreIndex,
-		Trace:             authOutput,
+		AuthorizerTrace:   authOutput,
 		AuthorizerHash:    authHash,
 		SegmentRootLookup: reportSegmentRootLookup,
-		WorkResults:       allWorkResults,
+		WorkDigests:       allWorkResults,
 	}, nil
 }

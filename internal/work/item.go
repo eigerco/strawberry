@@ -42,7 +42,7 @@ func (w *Item) Size() uint64 {
 }
 
 // ToWorkResult item-to-result function C (14.8 v0.5.4)
-func (w *Item) ToWorkResult(output block.WorkResultOutputOrError, gasUsed uint64) block.WorkResult {
+func (w *Item) ToWorkResult(output block.WorkResultOutputOrError, gasUsed uint64) block.WorkDigest {
 	payloadHash := crypto.HashData(w.Payload)
 
 	gasPrioritizationRatio := uint64(0)
@@ -54,16 +54,16 @@ func (w *Item) ToWorkResult(output block.WorkResultOutputOrError, gasUsed uint64
 	for _, e := range w.Extrinsics {
 		extrinsicSize += e.Length
 	}
-	return block.WorkResult{
-		ServiceId:              w.ServiceId,
-		ServiceHashCode:        w.CodeHash,
-		PayloadHash:            payloadHash,
-		GasPrioritizationRatio: gasPrioritizationRatio,
-		Output:                 output,
-		GasUsed:                gasUsed,
-		ImportsCount:           uint16(len(w.ImportedSegments)),
-		ExtrinsicCount:         uint16(len(w.Extrinsics)),
-		ExtrinsicSize:          extrinsicSize,
-		ExportsCount:           w.ExportedSegments,
+	return block.WorkDigest{
+		ServiceId:             w.ServiceId,
+		ServiceHashCode:       w.CodeHash,
+		PayloadHash:           payloadHash,
+		GasLimit:              gasPrioritizationRatio,
+		Output:                output,
+		GasUsed:               gasUsed,
+		SegmentsImportedCount: uint16(len(w.ImportedSegments)),
+		ExtrinsicCount:        uint16(len(w.Extrinsics)),
+		ExtrinsicSize:         extrinsicSize,
+		SegmentsExportedCount: w.ExportedSegments,
 	}
 }
