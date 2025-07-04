@@ -613,20 +613,27 @@ func signed(value uint64, length uint64) int64 {
 
 // Xn∈{0,1,2,3,4,8}∶ N^28n → N_R (eq. A.16 v0.7.0)
 func sext(value uint64, length uint64) uint64 {
-	switch length {
-	case 0:
+	if length == 0 {
 		return 0
-	case 1:
-		return uint64(int64(int8(uint8(value))))
-	case 2:
-		return uint64(int64(int16(uint16(value))))
-	case 3:
-		return uint64(int64(int32(value<<8)) >> 8)
-	case 4:
-		return uint64(int64(int32(value)))
-	case 8:
+	}
+	if length > 8 {
+		panic("unsupported bit length")
+	}
+
+	numBits := length * 8
+
+	if numBits == 64 {
 		return uint64(int64(value))
-	default:
-		panic("unreachable")
+	}
+
+	mask := uint64((1 << numBits) - 1)
+
+	relevantValue := value & mask
+	signBit := uint64(1) << (numBits - 1)
+
+	if (relevantValue & signBit) != 0 {
+		return relevantValue | (^mask)
+	} else {
+		return relevantValue
 	}
 }
