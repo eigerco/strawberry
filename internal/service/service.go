@@ -103,7 +103,7 @@ func (sa *ServiceAccount) SetTotalNumberOfOctets(n uint64) {
 	sa.totalNumberOfOctets = n
 }
 
-// InsertStorage adds a new storage entry and updates item and octet counters accordingly (9.8 v0.6.7)
+// InsertStorage adds a new storage entry and updates item and octet counters accordingly (9.8 v0.7.0)
 func (sa *ServiceAccount) InsertStorage(key statekey.StateKey, originalKeySize uint64, value []byte) {
 	if sa.globalKV == nil {
 		sa.globalKV = make(map[statekey.StateKey][]byte)
@@ -117,7 +117,7 @@ func (sa *ServiceAccount) InsertStorage(key statekey.StateKey, originalKeySize u
 	sa.globalKV[key] = value
 }
 
-// DeleteStorage removes a storage entry and updates both the item and octet counters accordingly (9.8 v0.6.7)
+// DeleteStorage removes a storage entry and updates both the item and octet counters accordingly (9.8 v0.7.0)
 func (sa *ServiceAccount) DeleteStorage(key statekey.StateKey, keyLen uint64, valueLen uint64) {
 	if _, ok := sa.GetStorage(key); ok {
 		delete(sa.globalKV, key)
@@ -146,7 +146,7 @@ func (sa *ServiceAccount) GetPreimageMeta(key statekey.StateKey) (PreimageHistor
 	return timeslots, true
 }
 
-// InsertPreimageMeta adds a new preimage entry and updates the item and octet counters accordingly (9.8 v0.6.7)
+// InsertPreimageMeta adds a new preimage entry and updates the item and octet counters accordingly (9.8 v0.7.0)
 func (sa *ServiceAccount) InsertPreimageMeta(key statekey.StateKey, length uint64, timeslots PreimageHistoricalTimeslots) error {
 	data, err := jam.Marshal(timeslots)
 	if err != nil {
@@ -167,7 +167,7 @@ func (sa *ServiceAccount) InsertPreimageMeta(key statekey.StateKey, length uint6
 	return nil
 }
 
-// UpdatePreimageMeta updates the value for an existing key without altering accounting fields (9.8 v0.6.7)
+// UpdatePreimageMeta updates the value for an existing key without altering accounting fields (9.8 v0.7.0)
 func (sa *ServiceAccount) UpdatePreimageMeta(key statekey.StateKey, newValue PreimageHistoricalTimeslots) error {
 	if sa.globalKV == nil {
 		return fmt.Errorf("cannot update preimage meta: globalKV map is nil")
@@ -186,7 +186,7 @@ func (sa *ServiceAccount) UpdatePreimageMeta(key statekey.StateKey, newValue Pre
 	return nil
 }
 
-// DeletePreimageMeta removes a preimage entry and updates both the item and octet counters accordingly (9.8 v0.6.7)
+// DeletePreimageMeta removes a preimage entry and updates both the item and octet counters accordingly (9.8 v0.7.0)
 func (sa *ServiceAccount) DeletePreimageMeta(key statekey.StateKey, length uint64) {
 	if _, ok := sa.GetPreimageMeta(key); ok {
 		delete(sa.globalKV, key)
@@ -213,17 +213,26 @@ func (sa *ServiceAccount) EncodedCodeAndMetadata() []byte {
 	return nil
 }
 
-// ThresholdBalance (9.8 v0.6.7) ∀a ∈ V(δ): at
+// ThresholdBalance (9.8 v0.7.0) ∀a ∈ V(δ): at
 func (sa *ServiceAccount) ThresholdBalance() uint64 {
 	ai := uint64(sa.totalNumberOfItems)
 	ao := sa.totalNumberOfOctets
 
 	// at ∈ NB ≡ max(0,BS + BI ⋅ ai + BL ⋅ ao − af )
-	return max(0, BasicMinimumBalance+AdditionalMinimumBalancePerItem*ai+AdditionalMinimumBalancePerOctet*ao-sa.GratisStorageOffset)
+	sum := BasicMinimumBalance +
+		AdditionalMinimumBalancePerItem*ai +
+		AdditionalMinimumBalancePerOctet*ao
+
+	// avoid underflow
+	if sum < sa.GratisStorageOffset {
+		return 0
+	}
+
+	return sum - sa.GratisStorageOffset
 }
 
 // AddPreimage adds a preimage to the service account's preimage lookup and metadata
-// (9.6 v0.5.0) ∀a ∈ A, (h ↦ p) ∈ ap ⇒ h = H(p) ∧ {h, |p|} ∈ K(al)
+// (9.6 v0.7.0) ∀a ∈ A, (h ↦ d) ∈ ap ⇒ h = H(d) ∧ {h, |d|} ∈ K(al)
 func (sa *ServiceAccount) AddPreimage(serviceID block.ServiceId, p []byte, currentTimeslot jamtime.Timeslot) error {
 	h := crypto.HashData(p)
 	k, err := statekey.NewPreimageMeta(serviceID, h, uint32(len(p)))
