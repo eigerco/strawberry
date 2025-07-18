@@ -475,6 +475,24 @@ func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]by
 	}, nil
 }
 
+// GetFullState gets the full state
+func (t *Trie) GetFullState(rootHash crypto.Hash) ([]KeyValuePair, error) {
+	var startKey [31]byte
+	var endKey [31]byte
+
+	for i := range endKey {
+		endKey[i] = 0xFF
+	}
+	const maxSize = uint32(1 << 30)
+
+	result, err := t.FetchStateTrieRange(rootHash, startKey, endKey, maxSize)
+	if err != nil {
+		return nil, err
+	}
+
+	return result.Pairs, nil
+}
+
 // extractBoundaryNodes creates a slice of boundary nodes from the given paths
 func extractBoundaryNodes(firstKeyPath, lastKeyPath []crypto.Hash, allNodes map[crypto.Hash]trie.Node) []trie.Node {
 	// Use a map to eliminate duplicates
