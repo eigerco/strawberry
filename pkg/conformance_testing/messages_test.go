@@ -17,79 +17,60 @@ func TestMessageEncoding(t *testing.T) {
 		msg  *Message
 	}{{
 		name: "peer info",
-		msg: &Message{
-			Choice: PeerInfo{
-				Name: []byte("test 123"),
-				AppVersion: Version{
-					Major: 1,
-					Minor: 2,
-					Patch: 3,
-				},
-				JamVersion: Version{
-					Major: 4,
-					Minor: 5,
-					Patch: 6,
-				},
+		msg: NewMessage(PeerInfo{
+			Name: []byte("test 123"),
+			AppVersion: Version{
+				Major: 1,
+				Minor: 2,
+				Patch: 3,
 			},
-		},
+			JamVersion: Version{
+				Major: 4,
+				Minor: 5,
+				Patch: 6,
+			},
+		}),
 	}, {
 		name: "import block",
-		msg: &Message{
-			Choice: ImportBlock{
-				Block: block.Block{
-					Header: block.Header{
-						ParentHash: testutils.RandomHash(t),
-					},
-					Extrinsic: block.Extrinsic{
-						EA: block.AssurancesExtrinsic{{
-							Anchor: testutils.RandomHash(t),
-						}},
-					},
-				},
-			},
-		},
-	}, {
-		name: "set state",
-		msg: &Message{
-			Choice: SetState{
+		msg: NewMessage(ImportBlock{
+			Block: block.Block{
 				Header: block.Header{
 					ParentHash: testutils.RandomHash(t),
 				},
-				State: State{StateItems: []KeyValue{{
-					Key:   statekey.NewBasic(1),
-					Value: testutils.RandomBytes(t, 100),
-				}}},
+				Extrinsic: block.Extrinsic{
+					EA: block.AssurancesExtrinsic{{
+						Anchor: testutils.RandomHash(t),
+					}},
+				},
 			},
-		},
+		}),
+	}, {
+		name: "set state",
+		msg: NewMessage(SetState{
+			Header: block.Header{
+				ParentHash: testutils.RandomHash(t),
+			},
+			State: State{StateItems: []KeyValue{{
+				Key:   statekey.NewBasic(1),
+				Value: testutils.RandomBytes(t, 100),
+			}}},
+		}),
 	}, {
 		name: "get state",
-		msg: &Message{
-			Choice: GetState{
-				HeaderHash: testutils.RandomHash(t),
-			},
-		},
-	}, {
-		name: "get state",
-		msg: &Message{
-			Choice: GetState{
-				HeaderHash: testutils.RandomHash(t),
-			},
-		},
+		msg: NewMessage(GetState{
+			HeaderHash: testutils.RandomHash(t),
+		}),
 	}, {
 		name: "state",
-		msg: &Message{
-			Choice: State{StateItems: []KeyValue{{
-				Key:   statekey.NewBasic(2),
-				Value: testutils.RandomBytes(t, 50),
-			}}},
-		},
+		msg: NewMessage(State{StateItems: []KeyValue{{
+			Key:   statekey.NewBasic(2),
+			Value: testutils.RandomBytes(t, 50),
+		}}}),
 	}, {
 		name: "state root",
-		msg: &Message{
-			Choice: StateRoot{
-				StateRootHash: testutils.RandomHash(t),
-			},
-		},
+		msg: NewMessage(StateRoot{
+			StateRootHash: testutils.RandomHash(t),
+		}),
 	}}
 
 	for _, test := range tests {

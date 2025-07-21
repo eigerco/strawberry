@@ -2,6 +2,7 @@ package conformance_testing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -25,14 +26,15 @@ import (
 type Node struct {
 	socketPath string
 
-	mu sync.RWMutex
+	mu sync.Mutex
 
 	state    *state.State
 	chain    *store.Chain
 	trie     *store.Trie
 	listener net.Listener
 
-	headerHash2stateRootMap map[crypto.Hash]crypto.Hash
+	headerToStateRoot map[crypto.Hash]crypto.Hash
+	handshakeDone     bool
 
 	// app info
 	appName    []byte
@@ -43,14 +45,14 @@ type Node struct {
 // NewNode create a new conformance testing node
 func NewNode(socketPath string, chain *store.Chain, trie *store.Trie, appName []byte, appVersion, jamVersion Version) *Node {
 	return &Node{
-		socketPath:              socketPath,
-		mu:                      sync.RWMutex{},
-		chain:                   chain,
-		trie:                    trie,
-		appName:                 appName,
-		appVersion:              appVersion,
-		jamVersion:              jamVersion,
-		headerHash2stateRootMap: make(map[crypto.Hash]crypto.Hash),
+		socketPath:        socketPath,
+		mu:                sync.Mutex{},
+		chain:             chain,
+		trie:              trie,
+		appName:           appName,
+		appVersion:        appVersion,
+		jamVersion:        jamVersion,
+		headerToStateRoot: make(map[crypto.Hash]crypto.Hash),
 	}
 }
 
@@ -85,6 +87,7 @@ func (n *Node) Stop() error {
 }
 
 func (n *Node) handleConnection(conn net.Conn) {
+	defer conn.Close()
 	for {
 		ctx := context.Background()
 
@@ -102,34 +105,44 @@ func (n *Node) handleConnection(conn net.Conn) {
 		responseMsg, err := n.messageHandler(msg)
 		if err != nil {
 			log.Printf("error handling message: %v", err)
+			return
 		}
 
 		respMsgBytes, err := jam.Marshal(responseMsg)
 		if err != nil {
 			log.Printf("error marshalling response: %v", err)
+			return
 		}
 
 		if err := handlers.WriteMessageWithContext(ctx, conn, respMsgBytes); err != nil {
 			log.Printf("error writing response: %v", err)
+			return
 		}
 	}
 }
 
 // messageHandler handling of each message choice type according to the protocol description
 func (n *Node) messageHandler(msg *Message) (*Message, error) {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-	switch choice := msg.Choice.(type) {
-	case PeerInfo:
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if choice, ok := msg.Get().(PeerInfo); ok {
 		log.Println("Client handshake initiated:")
 		log.Println("Client app name", string(choice.Name))
 		log.Println("Client app version", choice.AppVersion.String())
 		log.Println("Client jam version", choice.JamVersion.String())
-		return &Message{Choice: PeerInfo{
+		n.handshakeDone = true
+		return NewMessage(PeerInfo{
 			Name:       n.appName,
 			AppVersion: n.appVersion,
 			JamVersion: n.jamVersion,
-		}}, nil
+		}), nil
+	}
+
+	if !n.handshakeDone {
+		return nil, errors.New("handshake was not performed, peer info message should be sent first")
+	}
+	switch choice := msg.Get().(type) {
 	case SetState:
 		// Initialize state
 		newState, err := deserializeState(choice.State.StateItems)
@@ -145,15 +158,16 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 		if err := n.chain.PutHeader(choice.Header); err != nil {
 			return nil, fmt.Errorf("failed to put header: %v", err)
 		}
-
-		return &Message{Choice: StateRoot{
-			StateRootHash: stateRoot,
-		}}, nil
-	case ImportBlock:
-		if err := n.chain.PutBlock(choice.Block); err != nil {
+		headerHash, err := choice.Header.Hash()
+		if err != nil {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
+		n.headerToStateRoot[headerHash] = stateRoot
 
+		return NewMessage(StateRoot{
+			StateRootHash: stateRoot,
+		}), nil
+	case ImportBlock:
 		if n.state == nil {
 			return nil, fmt.Errorf("state not imported")
 		}
@@ -166,19 +180,23 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
 
+		if err := n.chain.PutBlock(choice.Block); err != nil {
+			return nil, fmt.Errorf("failed to import block: %v", err)
+		}
+
 		headerHash, err := choice.Block.Header.Hash()
 		if err != nil {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
 
-		n.headerHash2stateRootMap[headerHash] = stateRoot
+		n.headerToStateRoot[headerHash] = stateRoot
 
-		return &Message{Choice: StateRoot{
+		return NewMessage(StateRoot{
 			StateRootHash: stateRoot,
-		}}, nil
+		}), nil
 
 	case GetState:
-		stateRoot, ok := n.headerHash2stateRootMap[choice.HeaderHash]
+		stateRoot, ok := n.headerToStateRoot[choice.HeaderHash]
 		if !ok {
 			return nil, fmt.Errorf("header hash not found")
 		}
@@ -196,9 +214,9 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 			})
 		}
 
-		return &Message{Choice: State{
+		return NewMessage(State{
 			StateItems: stateKeyValues,
-		}}, nil
+		}), nil
 	}
 
 	return nil, fmt.Errorf("unknown message type")

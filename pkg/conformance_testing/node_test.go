@@ -72,13 +72,13 @@ func TestMessage(t *testing.T) {
 	})
 
 	// exchange peer info and handshake
-	getStateMsg := Message{Choice: PeerInfo{
+	requestMsg := NewMessage(PeerInfo{
 		Name:       []byte("app name"),
 		AppVersion: Version{7, 8, 9},
 		JamVersion: Version{10, 11, 12},
-	}}
+	})
 
-	msgBytes, err := jam.Marshal(&getStateMsg)
+	msgBytes, err := jam.Marshal(requestMsg)
 	assert.NoError(t, err)
 
 	ctx := context.Background()
@@ -89,16 +89,14 @@ func TestMessage(t *testing.T) {
 	bb, err := handlers.ReadMessageWithContext(ctx, conn)
 	assert.NoError(t, err)
 
-	respMsg := Message{}
-	err = jam.Unmarshal(bb.Content, &respMsg)
+	respMsg := &Message{}
+	err = jam.Unmarshal(bb.Content, respMsg)
 
-	assert.Equal(t, Message{
-		Choice: PeerInfo{
-			Name:       appName,
-			AppVersion: appVersion,
-			JamVersion: jamVersion,
-		},
-	}, respMsg)
+	assert.Equal(t, NewMessage(PeerInfo{
+		Name:       appName,
+		AppVersion: appVersion,
+		JamVersion: jamVersion,
+	}), respMsg)
 
 	// set initial state
 	data, err := os.ReadFile("../../tests/simulation/ticket_prestate_001.json")
@@ -130,16 +128,17 @@ func TestMessage(t *testing.T) {
 		&currentState,
 		keys,
 	)
+	require.NoError(t, err)
 
 	genesisBlock, err := simulation.ProduceBlock(currentTimeslot, crypto.Hash{}, &currentState, trieStore, slotLeaderKey, block.Extrinsic{})
 	require.NoError(t, err)
 
-	getStateMsg = Message{Choice: SetState{
+	requestMsg = NewMessage(SetState{
 		Header: genesisBlock.Header,
 		State:  currentStateItems,
-	}}
+	})
 
-	msgBytes, err = jam.Marshal(&getStateMsg)
+	msgBytes, err = jam.Marshal(requestMsg)
 	assert.NoError(t, err)
 
 	err = handlers.WriteMessageWithContext(ctx, conn, msgBytes)
@@ -148,14 +147,13 @@ func TestMessage(t *testing.T) {
 	bb, err = handlers.ReadMessageWithContext(ctx, conn)
 	assert.NoError(t, err)
 
-	respMsg = Message{}
-	err = jam.Unmarshal(bb.Content, &respMsg)
+	respMsg = &Message{}
+	err = jam.Unmarshal(bb.Content, respMsg)
 
-	assert.Equal(t, Message{
-		Choice: StateRoot{
-			StateRootHash: computeStateRoot(t, serializedState),
-		},
-	}, respMsg)
+	assert.Equal(t, NewMessage(StateRoot{
+		StateRootHash: computeStateRoot(t, serializedState),
+	},
+	), respMsg)
 
 	block1, err := genesisBlock.Header.Hash()
 	require.NoError(t, err)
@@ -172,11 +170,11 @@ func TestMessage(t *testing.T) {
 	block2, err := simulation.ProduceBlock(currentTimeslot, block1, &currentState, trieStore, slotLeaderKey, block.Extrinsic{})
 	require.NoError(t, err)
 
-	getStateMsg = Message{Choice: ImportBlock{
+	requestMsg = NewMessage(ImportBlock{
 		Block: block2,
-	}}
+	})
 
-	msgBytes, err = jam.Marshal(&getStateMsg)
+	msgBytes, err = jam.Marshal(requestMsg)
 	assert.NoError(t, err)
 
 	ctx = context.Background()
@@ -187,7 +185,7 @@ func TestMessage(t *testing.T) {
 	bb, err = handlers.ReadMessageWithContext(ctx, conn)
 	assert.NoError(t, err)
 
-	respMsg = Message{}
+	respMsg = &Message{}
 	err = jam.Unmarshal(bb.Content, &respMsg)
 
 	err = statetransition.UpdateState(&currentState, block2, chain, trieStore)
@@ -196,21 +194,20 @@ func TestMessage(t *testing.T) {
 	serializedState, err = serialization.SerializeState(currentState)
 	require.NoError(t, err)
 
-	assert.Equal(t, Message{
-		Choice: StateRoot{
-			StateRootHash: computeStateRoot(t, serializedState),
-		},
-	}, respMsg)
+	assert.Equal(t, NewMessage(StateRoot{
+		StateRootHash: computeStateRoot(t, serializedState),
+	},
+	), respMsg)
 
 	// get state
 	block2Hash, err := block2.Header.Hash()
 	require.NoError(t, err)
 
-	getStateMsg = Message{Choice: GetState{
+	requestMsg = NewMessage(GetState{
 		HeaderHash: block2Hash,
-	}}
+	})
 
-	msgBytes, err = jam.Marshal(&getStateMsg)
+	msgBytes, err = jam.Marshal(requestMsg)
 	assert.NoError(t, err)
 
 	ctx = context.Background()
@@ -221,7 +218,7 @@ func TestMessage(t *testing.T) {
 	bb, err = handlers.ReadMessageWithContext(ctx, conn)
 	assert.NoError(t, err)
 
-	respMsg = Message{}
+	respMsg = &Message{}
 	err = jam.Unmarshal(bb.Content, &respMsg)
 
 	expectedState := State{}
@@ -239,9 +236,72 @@ func TestMessage(t *testing.T) {
 		}
 		return 0
 	})
-	assert.Equal(t, Message{
-		Choice: expectedState,
-	}, respMsg)
+	assert.Equal(t, NewMessage(expectedState), respMsg)
+
+	conn.Close()
+
+}
+
+func TestHandshake(t *testing.T) {
+	socketPath := "/tmp/test_socket"
+
+	db, err := pebble.NewKVStore()
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Log("db close error:", err)
+		}
+	})
+
+	chain := store.NewChain(db)
+	trieStore := store.NewTrie(chain)
+
+	appName := []byte("app name")
+	appVersion := Version{1, 2, 3}
+	jamVersion := Version{4, 5, 6}
+
+	go func() {
+		n := NewNode(socketPath, chain, trieStore, appName, appVersion, jamVersion)
+		if err := n.Start(); err != nil {
+			t.Logf("failed to start Node: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := n.Stop(); err != nil {
+				t.Logf("failed to stop Node: %v", err)
+			}
+		})
+	}()
+
+	time.Sleep(1 * time.Second)
+
+	conn, err := net.Dial("unix", socketPath)
+	if err != nil {
+		panic(err)
+	}
+	t.Cleanup(func() {
+		if err := conn.Close(); err != nil {
+			t.Logf("failed to close connection: %v", err)
+		}
+	})
+
+	// exchange peer info and handshake
+	requestMsg := NewMessage(ImportBlock{
+		Block: block.Block{
+			Header:    block.Header{},
+			Extrinsic: block.Extrinsic{},
+		},
+	})
+
+	msgBytes, err := jam.Marshal(requestMsg)
+	assert.NoError(t, err)
+
+	ctx := context.Background()
+
+	err = handlers.WriteMessageWithContext(ctx, conn, msgBytes)
+	assert.NoError(t, err)
+
+	_, err = handlers.ReadMessageWithContext(ctx, conn)
+	assert.Error(t, err)
 
 	conn.Close()
 

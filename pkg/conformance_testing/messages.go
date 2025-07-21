@@ -6,7 +6,6 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-	"io"
 )
 
 const (
@@ -76,84 +75,75 @@ type State struct {
 
 func (s State) isMessageChoice() {}
 
-type Message struct {
-	// One of: PeerInfo, ImportBlock, SetState, GetState, State, StateRoot
-	Choice MessageChoice
+// NewMessage creates a new message with the inner choice
+func NewMessage(choice MessageChoice) *Message {
+	return &Message{
+		choice: choice,
+	}
 }
 
-func (m *Message) UnmarshalJAM(reader io.Reader) error {
-	msgType := make([]byte, 1)
-	if _, err := reader.Read(msgType); err != nil {
-		return err
-	}
-	switch msgType[0] {
-	case peerInfoKind:
-		innerMsg := PeerInfo{}
-		if err := jam.NewDecoder(reader).Decode(&innerMsg); err != nil {
-			return err
-		}
-		m.Choice = innerMsg
-	case importBlockKind:
-		innerMsg := ImportBlock{}
-		if err := jam.NewDecoder(reader).Decode(&innerMsg); err != nil {
-			return err
-		}
-		m.Choice = innerMsg
-	case setStateKind:
-		innerMsg := SetState{}
-		if err := jam.NewDecoder(reader).Decode(&innerMsg); err != nil {
-			return err
-		}
-		m.Choice = innerMsg
-	case getStateKind:
-		innerMsg := GetState{}
-		if err := jam.NewDecoder(reader).Decode(&innerMsg); err != nil {
-			return err
-		}
-		m.Choice = innerMsg
-	case stateKind:
-		innerMsg := State{}
-		if err := jam.NewDecoder(reader).Decode(&innerMsg); err != nil {
-			return err
-		}
-		m.Choice = innerMsg
-	case stateRootKind:
-		innerMsg := StateRoot{}
-		if err := jam.NewDecoder(reader).Decode(&innerMsg); err != nil {
-			return err
-		}
-		m.Choice = innerMsg
+type Message struct {
+	// One of: PeerInfo, ImportBlock, SetState, GetState, State, StateRoot
+	choice MessageChoice
+}
+
+func (m *Message) IndexValue() (index uint, value any, err error) {
+	switch m.choice.(type) {
+	case PeerInfo:
+		return peerInfoKind, m.choice, nil
+	case ImportBlock:
+		return importBlockKind, m.choice, nil
+	case SetState:
+		return setStateKind, m.choice, nil
+	case GetState:
+		return getStateKind, m.choice, nil
+	case State:
+		return stateKind, m.choice, nil
+	case StateRoot:
+		return stateRootKind, m.choice, nil
 	default:
-		return fmt.Errorf("unknown choice type")
+		return 0, nil, jam.ErrUnsupportedEnumTypeValue
+	}
+}
+
+func (m *Message) ValueAt(index uint) (value any, err error) {
+	switch index {
+	case peerInfoKind:
+		return PeerInfo{}, nil
+	case importBlockKind:
+		return ImportBlock{}, nil
+	case setStateKind:
+		return SetState{}, nil
+	case getStateKind:
+		return GetState{}, nil
+	case stateKind:
+		return State{}, nil
+	case stateRootKind:
+		return StateRoot{}, nil
+	}
+	return nil, jam.ErrUnsupportedEnumTypeValue
+}
+
+func (m *Message) SetValue(value any) error {
+	switch value := value.(type) {
+	case PeerInfo:
+		m.choice = value
+	case ImportBlock:
+		m.choice = value
+	case SetState:
+		m.choice = value
+	case GetState:
+		m.choice = value
+	case State:
+		m.choice = value
+	case StateRoot:
+		m.choice = value
+	default:
+		return fmt.Errorf(jam.ErrUnsupportedType, value)
 	}
 	return nil
 }
 
-func (m *Message) MarshalJAM() ([]byte, error) {
-	var choiceByte byte
-	if m.Choice == nil {
-		return nil, fmt.Errorf("empty message choice")
-	}
-	switch m.Choice.(type) {
-	case PeerInfo:
-		choiceByte = peerInfoKind
-	case ImportBlock:
-		choiceByte = importBlockKind
-	case SetState:
-		choiceByte = setStateKind
-	case GetState:
-		choiceByte = getStateKind
-	case State:
-		choiceByte = stateKind
-	case StateRoot:
-		choiceByte = stateRootKind
-	default:
-		return nil, fmt.Errorf("unknown choice type")
-	}
-	bytes, err := jam.Marshal(m.Choice)
-	if err != nil {
-		return nil, err
-	}
-	bytes = append([]byte{choiceByte}, bytes...)
-	return bytes, nil
+func (m *Message) Get() MessageChoice {
+	return m.choice
 }
