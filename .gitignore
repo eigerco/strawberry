@@ -13,5 +13,5 @@ go.work.sum
 .DS_Store
 coverage.txt
 target
-strawberry
 tests/simulation/output
+/strawberry
