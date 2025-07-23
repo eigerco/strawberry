@@ -87,41 +87,41 @@ func (f FullValidatorInfo) ToMetadata() ([]byte, error) {
 // go run main.go -index 0
 func main() {
 	ctx := context.Background()
-	index := flag.String("index", "", "Validator Index")
+	index := flag.String("index", "", "Validator Configuration Index")
 	flag.Parse()
 
 	if *index == "" {
-		log.Fatal("listen address is required")
+		log.Fatal("validator configuration index is required")
 	}
 	vs, err := loadFullValidatorInfos("test_validators.json")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("loading validator configuration failed: %v", err)
 	}
 	i, err := strconv.Atoi(*index)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("index parameter conversion failed: %v", err)
 	}
 	if i < 0 || i >= len(vs) {
-		log.Fatalf("index %d out of bounds", i)
+		log.Fatalf("validator configuration index %d out of bounds", i)
 	}
 	address := vs[i].IP
 	port := vs[i].Port
 	udpAddress, err := net.ResolveUDPAddr("udp", net.JoinHostPort(address, strconv.Itoa(port)))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("address (%s:%d) resolve failed: %v", address, port, err)
 	}
 	fmt.Printf("listening on: %v\n", address)
 	prv, err := hex.DecodeString(vs[i].Ed25519Prv)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("own private key decode failed: %v", err)
 	}
 	pub, err := hex.DecodeString(vs[i].Ed25519Pub)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("own public key decode failed: %v", err)
 	}
 	privateKey := ed25519.PrivateKey(prv)
 	publicKey := ed25519.PublicKey(pub)
-	vk := validator.ValidatorKeys{
+	vkeys := validator.ValidatorKeys{
 		EdPrv: privateKey,
 		EdPub: publicKey,
 	}
@@ -129,11 +129,11 @@ func main() {
 	for i, k := range vs {
 		pub, err := hex.DecodeString(k.Ed25519Pub)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("validator (index: %d) public key decode failed: %v", i, err)
 		}
 		meta, err := k.ToMetadata()
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("validator (index: %d) metadata decode failed: %v", i, err)
 		}
 		vk := crypto.ValidatorKey{
 			Ed25519:  ed25519.PublicKey(pub),
@@ -152,13 +152,13 @@ func main() {
 		ValidatorState: vstate,
 	}
 
-	node, err := node.NewNode(ctx, udpAddress, vk, state, uint16(i))
+	node, err := node.NewNode(ctx, udpAddress, vkeys, state, uint16(i))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("node creation failed: %v", err)
 	}
 	err = node.Start()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("node start failed: %v", err)
 	}
 	select {}
 }
