@@ -3,6 +3,7 @@
 package simulation
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -14,16 +15,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestSimulateDisputes tests a very simple happy path for adding a dispute. We
-// create a dispute with 2/3 of the validators voting that the report was good.
-// This naturally implies that there is at least one validator at fault. We add
-// two validators at fault who incorrectly said that the report was bad. We
-// expect the report to be added the 'good' set of reports in the judgements
-// state. We also expect that each of the offenders are added to the offenders
-// list in order.
+// TestSimulateDisputes tests:
+// 1. adding a good report via a good verdict
+// 2. adding a faulting validator via a fault on the good report
+// 3. adding a culprit for a report in the bad report list
 func TestSimulateDisputes(t *testing.T) {
+	data, err := os.ReadFile("keys.json")
+	require.NoError(t, err)
+
+	// Genesis validator keys
+	var keys []ValidatorKeys
+	err = json.Unmarshal(data, &keys)
+	require.NoError(t, err)
 	// Prestate
-	data, err := os.ReadFile("disputes_prestate_001.json")
+	data, err = os.ReadFile("disputes_prestate_001.json")
 	require.NoError(t, err)
 	var currentState *state.State
 	restoredPreState := jsonutils.RestoreStateSnapshot(data)
@@ -34,24 +39,14 @@ func TestSimulateDisputes(t *testing.T) {
 	require.NoError(t, err)
 	testBlock := jsonutils.RestoreBlockSnapshot(data)
 
-	if len(testBlock.Extrinsic.ED.Verdicts) == 0 {
-		t.Fatalf("block disputes missing")
-	}
-
-	if len(testBlock.Extrinsic.ED.Faults) < 2 {
-		t.Fatalf("missing faluts")
-	}
-
 	db, err := pebble.NewKVStore()
 	require.NoError(t, err)
 	defer func() {
 		err := db.Close()
 		require.NoError(t, err, "failed to close db")
 	}()
-
 	trieDB := store.NewTrie(db)
 	require.NoError(t, err)
-
 	chainDB := store.NewChain(db)
 	require.NoError(t, err)
 
@@ -64,14 +59,10 @@ func TestSimulateDisputes(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Check that verdict report is put into the 'good' set.
 	require.Equal(t, testBlock.Extrinsic.ED.Verdicts[0].ReportHash, currentState.PastJudgements.GoodWorkReports[0])
-
-	// Check the faults, we expect each fault to point to the same good work
-	// report hash, and also that each faulty validator is added to the state's
-	// offenders list.
 	require.Equal(t, testBlock.Extrinsic.ED.Faults[0].ReportHash, currentState.PastJudgements.GoodWorkReports[0])
-	require.Equal(t, testBlock.Extrinsic.ED.Faults[0].ValidatorEd25519PublicKey, currentState.PastJudgements.OffendingValidators[0])
-	require.Equal(t, testBlock.Extrinsic.ED.Faults[1].ReportHash, currentState.PastJudgements.GoodWorkReports[0])
-	require.Equal(t, testBlock.Extrinsic.ED.Faults[1].ValidatorEd25519PublicKey, currentState.PastJudgements.OffendingValidators[1])
+	require.Len(t, currentState.PastJudgements.OffendingValidators, 2, "Expected exactly two offenders")
+	require.Contains(t, currentState.PastJudgements.OffendingValidators, testBlock.Extrinsic.ED.Culprits[0].ValidatorEd25519PublicKey)
+	require.Contains(t, currentState.PastJudgements.OffendingValidators, testBlock.Extrinsic.ED.Faults[0].ValidatorEd25519PublicKey)
+
 }

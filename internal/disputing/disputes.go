@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"errors"
+	"fmt"
 	"log"
+	"sort"
 
 	"slices"
 
@@ -77,7 +79,6 @@ func verifyVerdictSignatures(currentTimeslot jamtime.Timeslot, verdict block.Ver
 	if verdict.EpochIndex != currentEpoch {
 		validatorSet = archivedValidators
 	}
-
 	for _, judgment := range verdict.Judgements {
 		context := state.SignatureContextValid
 		if !judgment.IsValid {
@@ -85,7 +86,6 @@ func verifyVerdictSignatures(currentTimeslot jamtime.Timeslot, verdict block.Ver
 		}
 
 		message := append([]byte(context), verdict.ReportHash[:]...)
-
 		if !ed25519.Verify(validatorSet[judgment.ValidatorIndex].Ed25519, message, judgment.Signature[:]) {
 			return errors.New("bad signature")
 		}
@@ -322,7 +322,7 @@ func ValidateDisputesExtrinsicAndProduceJudgements(prevTimeslot jamtime.Timeslot
 	}
 	// Prepare to collect verdict summaries and track new offending validators
 	summs := make([]block.VerdictSummary, 0, len(disputes.Verdicts))
-	newOffenders := []ed25519.PublicKey{}
+	newOffendersMap := make(map[string]ed25519.PublicKey)
 
 	// Clone the existing judgements state to build upon it
 	newJudgements := state.Judgements{
@@ -335,11 +335,11 @@ func ValidateDisputesExtrinsicAndProduceJudgements(prevTimeslot jamtime.Timeslot
 	// Process each verdict in the disputes extrinsic
 	for _, v := range disputes.Verdicts {
 		// Verify the verdict is from the current or previous epoch only.
-		// Verdicts from future epochs are invalid, and verdicts older than
-		// one epoch are considered stale and rejected.
+		// Verdicts from future epochs are invalid.
 		if v.EpochIndex > prevTimeslot.ToEpoch() {
 			return state.Judgements{}, errors.New("bad judgement age")
 		}
+		// Verdicts older than one epoch are considered stale and rejected.
 		if prevTimeslot.ToEpoch()-v.EpochIndex > 1 {
 			return state.Judgements{}, errors.New("bad judgement age")
 		}
@@ -391,7 +391,8 @@ func ValidateDisputesExtrinsicAndProduceJudgements(prevTimeslot jamtime.Timeslot
 			return state.Judgements{}, errors.New("bad guarantor key")
 		}
 		// Add to new offenders list
-		newOffenders = append(newOffenders, c.ValidatorEd25519PublicKey)
+		stringKey := string(c.ValidatorEd25519PublicKey)
+		newOffendersMap[stringKey] = c.ValidatorEd25519PublicKey
 	}
 
 	// Process faults - validators who made judgments that contradict the verdict.
@@ -405,10 +406,169 @@ func ValidateDisputesExtrinsicAndProduceJudgements(prevTimeslot jamtime.Timeslot
 			return state.Judgements{}, errors.New("bad auditor key")
 		}
 		// Add to new offenders list
-		newOffenders = append(newOffenders, f.ValidatorEd25519PublicKey)
+		newOffendersMap[string(f.ValidatorEd25519PublicKey)] = f.ValidatorEd25519PublicKey
 	}
 	// Add all newly identified offending validators to the permanent record
-	newJudgements.OffendingValidators = append(newJudgements.OffendingValidators, newOffenders...)
+	// Convert map to slice, ensuring no duplicates as per equation 10.19 (v0.7.0)
+	// ψ'O ≡ ψO ∪ { f |(f, . . . ) ∈ EC } ∪ { f |(f, . . . ) ∈ EF }
+	for _, key := range newOffendersMap {
+		newJudgements.OffendingValidators = append(newJudgements.OffendingValidators, key)
+	}
 
 	return newJudgements, nil
+}
+
+// Extrinsic creation functions
+
+// GetJudgmentSignaturePayload constructs the message to sign for judgments
+// The signature payload is: context ⌢ reportHash
+func GetJudgmentSignaturePayload(reportHash crypto.Hash, isValid bool) []byte {
+	context := state.SignatureContextInvalid
+	if isValid {
+		context = state.SignatureContextValid
+	}
+
+	// Create payload: context ⌢ reportHash
+	payload := make([]byte, len(context)+len(reportHash))
+	copy(payload, []byte(context))
+	copy(payload[len(context):], reportHash[:])
+
+	return payload
+}
+
+// CreateJudgment creates and signs a judgment on a work-report
+func CreateJudgment(validatorIndex uint16, validatorKey ed25519.PrivateKey, reportHash crypto.Hash, isValid bool) (block.Judgement, error) {
+	// Validate the validator index
+	if validatorIndex >= common.NumberOfValidators {
+		return block.Judgement{}, errors.New("invalid validator index")
+	}
+
+	// Get the signature payload
+	payload := GetJudgmentSignaturePayload(reportHash, isValid)
+
+	// Sign the payload
+	signature := ed25519.Sign(validatorKey, payload)
+
+	// Create the judgment
+	judgment := block.Judgement{
+		IsValid:        isValid,
+		ValidatorIndex: validatorIndex,
+		Signature:      [64]byte(signature),
+	}
+
+	return judgment, nil
+}
+
+// CreateVerdict assembles judgments into a verdict
+func CreateVerdict(reportHash crypto.Hash, epochIndex jamtime.Epoch, judgments []block.Judgement) (block.Verdict, error) {
+	// Check if we have the required number of judgments
+	if len(judgments) != int(common.ValidatorsSuperMajority) {
+		return block.Verdict{}, errors.New("invalid number of judgments")
+	}
+
+	// Create a copy of judgments to sort
+	sortedJudgments := make([]block.Judgement, len(judgments))
+	copy(sortedJudgments, judgments)
+
+	// Sort judgments by validator index
+	sort.Slice(sortedJudgments, func(i, j int) bool {
+		return sortedJudgments[i].ValidatorIndex < sortedJudgments[j].ValidatorIndex
+	})
+
+	// Check for duplicate validator indices
+	for i := 1; i < len(sortedJudgments); i++ {
+		if sortedJudgments[i-1].ValidatorIndex == sortedJudgments[i].ValidatorIndex {
+			return block.Verdict{}, errors.New("duplicate validator index in judgments")
+		}
+	}
+
+	// Convert sorted slice to fixed-size array
+	var judgmentsArray [common.ValidatorsSuperMajority]block.Judgement
+	copy(judgmentsArray[:], sortedJudgments)
+
+	verdict := block.Verdict{
+		ReportHash: reportHash,
+		EpochIndex: epochIndex,
+		Judgements: judgmentsArray,
+	}
+
+	return verdict, nil
+}
+
+// CreateDisputeExtrinsic constructs a DisputeExtrinsic from verdicts, culprits, and faults.
+func CreateDisputeExtrinsic(verdicts []block.Verdict, culprits []block.Culprit, faults []block.Fault) (block.DisputeExtrinsic, error) {
+	// 1. Create copies to ensure input immutability.
+	sortedVerdicts := make([]block.Verdict, len(verdicts))
+	copy(sortedVerdicts, verdicts)
+
+	sortedCulprits := make([]block.Culprit, len(culprits))
+	copy(sortedCulprits, culprits)
+
+	sortedFaults := make([]block.Fault, len(faults))
+	copy(sortedFaults, faults)
+
+	// 2. Sort all slices
+	sort.Slice(sortedVerdicts, func(i, j int) bool {
+		return bytes.Compare(sortedVerdicts[i].ReportHash[:], sortedVerdicts[j].ReportHash[:]) < 0
+	})
+	sort.Slice(sortedCulprits, func(i, j int) bool {
+		return bytes.Compare(sortedCulprits[i].ValidatorEd25519PublicKey, sortedCulprits[j].ValidatorEd25519PublicKey) < 0
+	})
+	sort.Slice(sortedFaults, func(i, j int) bool {
+		return bytes.Compare(sortedFaults[i].ValidatorEd25519PublicKey, sortedFaults[j].ValidatorEd25519PublicKey) < 0
+	})
+
+	// 3. Check for duplicates in the now-sorted slices
+	for i := 1; i < len(sortedVerdicts); i++ {
+		if sortedVerdicts[i-1].ReportHash == sortedVerdicts[i].ReportHash {
+			return block.DisputeExtrinsic{}, fmt.Errorf("duplicate report hash in verdicts: %x", sortedVerdicts[i].ReportHash)
+		}
+	}
+	for i := 1; i < len(sortedCulprits); i++ {
+		if bytes.Equal(sortedCulprits[i-1].ValidatorEd25519PublicKey, sortedCulprits[i].ValidatorEd25519PublicKey) {
+			return block.DisputeExtrinsic{}, fmt.Errorf("duplicate validator key in culprits: %x", sortedCulprits[i].ValidatorEd25519PublicKey)
+		}
+	}
+	for i := 1; i < len(sortedFaults); i++ {
+		if bytes.Equal(sortedFaults[i-1].ValidatorEd25519PublicKey, sortedFaults[i].ValidatorEd25519PublicKey) {
+			return block.DisputeExtrinsic{}, fmt.Errorf("duplicate validator key in faults: %x", sortedFaults[i].ValidatorEd25519PublicKey)
+		}
+	}
+
+	// 4. Validate cross-dependencies between the slices.
+	for _, verdict := range sortedVerdicts {
+		positiveCount := CountPositiveJudgements(verdict)
+
+		// equation 10.13 v0.7.0: Good verdicts need at least one *invalid* fault.
+		if positiveCount == DisputeVoteGood {
+			invalidFaultCount := 0
+			for _, fault := range sortedFaults {
+				if fault.ReportHash == verdict.ReportHash && !fault.IsValid {
+					invalidFaultCount++
+				}
+			}
+			if invalidFaultCount == 0 {
+				return block.DisputeExtrinsic{}, fmt.Errorf("good verdict for report %x is missing required invalid faults", verdict.ReportHash)
+			}
+		}
+
+		// equation 10.14 v0.7.0: Bad verdicts need at least 2 culprits.
+		if positiveCount == DisputeVoteBad {
+			culpritCount := 0
+			for _, culprit := range sortedCulprits {
+				if culprit.ReportHash == verdict.ReportHash {
+					culpritCount++
+				}
+			}
+			if culpritCount < 2 {
+				return block.DisputeExtrinsic{}, fmt.Errorf("bad verdict for report %x has %d culprits, but needs at least 2", verdict.ReportHash, culpritCount)
+			}
+		}
+	}
+
+	return block.DisputeExtrinsic{
+		Verdicts: sortedVerdicts,
+		Culprits: sortedCulprits,
+		Faults:   sortedFaults,
+	}, nil
 }

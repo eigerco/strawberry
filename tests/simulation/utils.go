@@ -243,12 +243,32 @@ func (v *ValidatorKeys) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+	ed25519Seed, err := hexToBytes(vke.Ed25519Private)
+	if err != nil {
+		return err
+	}
+	ed25519Public, err := hexToBytes(vke.Ed25519Public)
+	if err != nil {
+		return err
+	}
+
+	// Convert seed to full private key (seed + public key)
+	var ed25519Private ed25519.PrivateKey
+	if len(ed25519Seed) == 32 {
+		// If it's a seed, generate the full private key
+		ed25519Private = ed25519.NewKeyFromSeed(ed25519Seed)
+	} else if len(ed25519Seed) == 64 {
+		// If it's already a full private key, use it as is
+		ed25519Private = ed25519.PrivateKey(ed25519Seed)
+	} else {
+		return fmt.Errorf("invalid ed25519 private key length: %d", len(ed25519Seed))
+	}
 
 	*v = ValidatorKeys{
 		Name:                vke.Name,
 		Seed:                vke.Seed,
-		Ed25519Private:      ed25519.PrivateKey(vke.Ed25519Private),
-		Ed25519Public:       ed25519.PublicKey(vke.Ed25519Public),
+		Ed25519Private:      ed25519Private,
+		Ed25519Public:       ed25519.PublicKey(ed25519Public),
 		BandersnatchPrivate: crypto.BandersnatchPrivateKey(bandersnatchPrivate),
 		BandersnatchPublic:  crypto.BandersnatchPublicKey(bandersnatchPublic),
 		DnsAltName:          vke.DnsAltName,
