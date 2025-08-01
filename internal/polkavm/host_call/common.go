@@ -25,6 +25,7 @@ const (
 	SolicitCost
 	ForgetCost
 	YieldCost
+	ProvideCost
 	HistoricalLookupCost
 	FetchCost
 	ExportCost
@@ -66,6 +67,7 @@ const (
 	VoidID
 	InvokeID
 	ExpungeID
+	ProvideID
 
 	LogID = 100
 )

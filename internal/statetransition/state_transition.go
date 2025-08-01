@@ -2669,7 +2669,8 @@ func (a *Accumulator) Delta1(
 	}
 
 	// InvokePVM VM for accumulation (ΨA)
-	return a.InvokePVM(accumulationState, a.newTimeslot, serviceIndex, gasLimit, operands)
+	newState, transfers, hash, gasUsed, _ := a.InvokePVM(accumulationState, a.newTimeslot, serviceIndex, gasLimit, operands)
+	return newState, transfers, hash, gasUsed
 }
 
 func mod(a, b int) int {

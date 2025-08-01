@@ -20,12 +20,12 @@ import (
 
 type AccountInfo struct {
 	CodeHash               crypto.Hash // tc
-	Balance                uint64      // tb
-	ThresholdBalance       uint64      // tt
-	GasLimitForAccumulator uint64      // tg
-	GasLimitOnTransfer     uint64      // tm
-	TotalStorageSize       uint64      // tl
-	TotalItems             uint32      // ti
+	Balance                uint64      `jam:"encoding=compact"` // tb
+	ThresholdBalance       uint64      `jam:"encoding=compact"` // tt
+	GasLimitForAccumulator uint64      `jam:"encoding=compact"` // tg
+	GasLimitOnTransfer     uint64      `jam:"encoding=compact"` // tm
+	TotalStorageSize       uint64      `jam:"encoding=compact"` // tl
+	TotalItems             uint32      `jam:"encoding=compact"` // ti
 }
 
 // WorkItemMetadata is used for custom serialization of a work item in the fetch host call, following the S(w) format

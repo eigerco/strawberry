@@ -345,6 +345,12 @@ type AccumulateContext struct {
 	NewServiceId      block.ServiceId            // i
 	DeferredTransfers []service.DeferredTransfer // t
 	AccumulationHash  *crypto.Hash               // y
+	ProvidedPreimages []ProvidedPreimage         // p
+}
+
+type ProvidedPreimage struct {
+	ServiceId block.ServiceId
+	Data      []byte
 }
 
 // ServiceAccount x_s

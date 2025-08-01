@@ -2,6 +2,7 @@ package host_call
 
 import (
 	"bytes"
+	"math"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -24,7 +25,7 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	// let [m, a, v, o, n] = ω7...12
 	managerServiceId, assignServiceId, designateServiceId, addr, servicesNr := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
 	// let g = {(s ↦ g) where E4(s) ⌢ E8(g) = μ_o+12i⋅⋅⋅+12 | i ∈ Nn} if Zo⋅⋅⋅+12n ⊂ Vμ otherwise ∇
-	for i := range servicesNr {
+	for i := range servicesNr / 12 {
 		serviceId, err := readNumber[block.ServiceId](mem, addr+(12*i), 4)
 		if err != nil {
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
@@ -153,6 +154,11 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Ga
 
 	// if a ≠ ∇ ∧ s_b ≥ (xs)t
 	if b >= ctxPair.RegularCtx.ServiceAccount().ThresholdBalance() {
+
+		// (x'u)d = (xu)d ∪ {xi ↦ a, xs ↦ s}
+		ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = currentAccount
+		ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.NewServiceId] = account
+
 		// ω′7 = x_i
 		regs[A0] = uint64(ctxPair.RegularCtx.NewServiceId)
 		currentAccount.Balance = b
@@ -163,11 +169,6 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Ga
 			ctxPair.RegularCtx.AccumulationState.ServiceState,
 		)
 		ctxPair.RegularCtx.NewServiceId = newId
-
-		// (x'u)d = (xu)d ∪ {xi ↦ a, xs ↦ s}
-		ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = currentAccount
-		ctxPair.RegularCtx.AccumulationState.ServiceState[newId] = account
-
 		return gas, regs, mem, ctxPair, nil
 	}
 
@@ -488,6 +489,66 @@ func Yield(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	// (ω′7, x′_y) = (OK, h) otherwise
 	h := crypto.Hash(hBytes)
 	ctxPair.RegularCtx.AccumulationHash = &h
+
+	return gas, withCode(regs, OK), mem, ctxPair, nil
+}
+
+// Provide Ω_Aries(ϱ, ω, µ, (x,y), s)
+func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceId block.ServiceId) (Gas, Registers, Memory, AccumulateContextPair, error) {
+	if gas < ProvideCost {
+		return gas, regs, mem, ctxPair, ErrOutOfGas
+	}
+	gas -= ProvideCost
+
+	// let [o, z] = ω8,9
+	o, z := regs[A1], regs[A2]
+	omega7 := regs[A0]
+
+	// let d = xd ∪ (xu)d
+	allServices := ctxPair.RegularCtx.AccumulationState.ServiceState
+
+	// s* = ω7
+	ss := block.ServiceId(omega7)
+	if uint64(omega7) == math.MaxUint64 {
+		ss = serviceId // s* = s
+	}
+
+	// a = d[s∗] if s∗ ∈ K(d)
+	a, ok := allServices[ss]
+	if !ok {
+		// if a = ∅
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
+
+	// i = µ[o..o+z]
+	i := make([]byte, z)
+	if err := mem.Read(o, i); err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+
+	k := service.PreImageMetaKey{
+		Hash:   crypto.HashData(i),
+		Length: service.PreimageLength(z),
+	}
+
+	meta := a.PreimageMeta[k]
+	// if al[H(i), z] ≠ []
+	if len(meta) > 0 {
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
+	}
+
+	for _, p := range ctxPair.RegularCtx.ProvidedPreimages {
+		if p.ServiceId == ss && bytes.Equal(p.Data, i) {
+			// if (s*,i) ∈ xp
+			return gas, withCode(regs, HUH), mem, ctxPair, nil
+		}
+	}
+
+	// x′p = xp ∪ {(s*, i)}
+	ctxPair.RegularCtx.ProvidedPreimages = append(ctxPair.RegularCtx.ProvidedPreimages, ProvidedPreimage{
+		ServiceId: ss,
+		Data:      i,
+	})
 
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
