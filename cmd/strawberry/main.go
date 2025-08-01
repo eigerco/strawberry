@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"github.com/eigerco/strawberry/internal/safrole"
 	chainState "github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/validator"
+	"github.com/eigerco/strawberry/pkg/logger"
 	"github.com/eigerco/strawberry/pkg/network/node"
 )
 
@@ -90,35 +90,41 @@ func main() {
 	index := flag.String("index", "", "Validator Configuration Index")
 	flag.Parse()
 
+	log := logger.NewConsoleLogger(logger.Options{Debug: true})
 	if *index == "" {
-		log.Fatal("validator configuration index is required")
+		log.Fatal().Str("missing commandline flag", "-index").Msg("validator configuration index is required")
 	}
+
 	vs, err := loadFullValidatorInfos("test_validators.json")
 	if err != nil {
-		log.Fatalf("loading validator configuration failed: %v", err)
+		log.Fatal().Err(err).Msgf("loading validator configuration failed")
 	}
+
 	i, err := strconv.Atoi(*index)
 	if err != nil {
-		log.Fatalf("index parameter conversion failed: %v", err)
+		log.Fatal().Err(err).Msgf("index parameter conversion failed")
 	}
+
 	if i < 0 || i >= len(vs) {
-		log.Fatalf("validator configuration index %d out of bounds", i)
+		log.Fatal().Int("index", i).Msgf("validator configuration index out of bounds")
 	}
 	address := vs[i].IP
 	port := vs[i].Port
 	udpAddress, err := net.ResolveUDPAddr("udp", net.JoinHostPort(address, strconv.Itoa(port)))
 	if err != nil {
-		log.Fatalf("address (%s:%d) resolve failed: %v", address, port, err)
+		log.Fatal().Str("address", address).Int("port", port).Err(err).Msgf("address resolve failed")
 	}
-	fmt.Printf("listening on: %v\n", address)
+
+	log.Info().Msgf("listening on: %v", address)
 	prv, err := hex.DecodeString(vs[i].Ed25519Prv)
 	if err != nil {
-		log.Fatalf("own private key decode failed: %v", err)
+		log.Fatal().Err(err).Msg("own private key decode failed")
 	}
 	pub, err := hex.DecodeString(vs[i].Ed25519Pub)
 	if err != nil {
-		log.Fatalf("own public key decode failed: %v", err)
+		log.Fatal().Err(err).Msg("own public key decode failed")
 	}
+
 	privateKey := ed25519.PrivateKey(prv)
 	publicKey := ed25519.PublicKey(pub)
 	vkeys := validator.ValidatorKeys{
@@ -126,15 +132,18 @@ func main() {
 		EdPub: publicKey,
 	}
 	validatorsData := safrole.ValidatorsData{}
+
 	for i, k := range vs {
 		pub, err := hex.DecodeString(k.Ed25519Pub)
 		if err != nil {
-			log.Fatalf("validator (index: %d) public key decode failed: %v", i, err)
+			log.Fatal().Int("index", i).Err(err).Msg("validator public key decode failed")
 		}
+
 		meta, err := k.ToMetadata()
 		if err != nil {
-			log.Fatalf("validator (index: %d) metadata decode failed: %v", i, err)
+			log.Fatal().Int("index", i).Err(err).Msg("validator metadata decode failed")
 		}
+
 		vk := crypto.ValidatorKey{
 			Ed25519:  ed25519.PublicKey(pub),
 			Metadata: crypto.MetadataKey(meta),
@@ -154,11 +163,11 @@ func main() {
 
 	node, err := node.NewNode(ctx, udpAddress, vkeys, state, uint16(i))
 	if err != nil {
-		log.Fatalf("node creation failed: %v", err)
+		log.Fatal().Err(err).Msg("node creation failed")
 	}
 	err = node.Start()
 	if err != nil {
-		log.Fatalf("node start failed: %v", err)
+		log.Fatal().Err(err).Msg("node start failed")
 	}
 	select {}
 }
