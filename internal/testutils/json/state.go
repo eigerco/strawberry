@@ -138,8 +138,8 @@ func NewBlockInfo(blockState state.BlockState) BlockInfo {
 }
 
 type RecentHistory struct {
-	BlockHistory          []BlockInfo `json:"block_history"`
-	AccumulationOutputLog MMR         `json:"accumulation_output_log"`
+	BlockHistory          []BlockInfo `json:"history"`
+	AccumulationOutputLog MMR         `json:"mmr"`
 }
 
 func (rh RecentHistory) To() state.RecentHistory {

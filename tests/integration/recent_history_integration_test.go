@@ -10,16 +10,16 @@ import (
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/merkle/mountain_ranges"
-	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/testutils"
+	jsonutils "github.com/eigerco/strawberry/internal/testutils/json"
+
 	"github.com/stretchr/testify/require"
 )
 
 func TestRecentHistory(t *testing.T) {
 	testFiles := []string{
-		// Empty hjstory queue.
+		// Empty history queue.
 		"vectors/recenthistory/progress_blocks_history-1.json",
 
 		// Not empty nor full history queue.
@@ -46,7 +46,7 @@ func TestRecentHistory(t *testing.T) {
 			parentStateRoot := crypto.Hash(testutils.MustFromHex(t, tv.Input.ParentStateRoot))
 			accumulateRoot := crypto.Hash(testutils.MustFromHex(t, tv.Input.AccumulateRoot))
 
-			preRecentHistory := toRecentHistory(t, tv.PreState)
+			preRecentHistory := tv.PreState.Beta.To()
 
 			workPackages := map[crypto.Hash]crypto.Hash{}
 			for _, wp := range tv.Input.WorkPackages {
@@ -62,61 +62,10 @@ func TestRecentHistory(t *testing.T) {
 			newRecentHistory, err := statetransition.UpdateRecentHistory(headerHash, accumulateRoot, workPackages, intermediateRecentHistory)
 			require.NoError(t, err)
 
-			postRecentHistory := toRecentHistory(t, tv.PostState)
+			postRecentHistory := tv.PostState.Beta.To()
 			require.Equal(t, postRecentHistory, newRecentHistory)
 		})
 
-	}
-}
-
-// TODO this is a temporary mapping for recent history, when we have new test
-// vectors for v0.6.7 this will need to be updated.
-func toRecentHistory(t *testing.T, s RecentHistoryTestVectorState) state.RecentHistory {
-	newBlocks := make([]state.BlockState, len(s.Beta))
-	for i, bs := range s.Beta {
-		accResultMMR := make([]*crypto.Hash, len(bs.MMR.Peaks))
-		for i, p := range bs.MMR.Peaks {
-			if p != nil {
-				peak := crypto.Hash(testutils.MustFromHex(t, *p))
-				accResultMMR[i] = &peak
-			}
-		}
-		mountainRange := mountain_ranges.New()
-		beefRoot := mountainRange.SuperPeak(accResultMMR, crypto.KeccakData)
-
-		workReportHashes := map[crypto.Hash]crypto.Hash{}
-		for _, wr := range bs.Reported {
-			hash := crypto.Hash(testutils.MustFromHex(t, wr.Hash))
-			exportsRoot := crypto.Hash(testutils.MustFromHex(t, wr.ExportsRoot))
-
-			workReportHashes[hash] = exportsRoot
-		}
-
-		newBlocks[i] = state.BlockState{
-			HeaderHash: crypto.Hash(testutils.MustFromHex(t, bs.HeaderHash)),
-			StateRoot:  crypto.Hash(testutils.MustFromHex(t, bs.StateRoot)),
-			BeefyRoot:  beefRoot,
-			Reported:   workReportHashes,
-		}
-	}
-
-	var outputLog []*crypto.Hash
-	if len(s.Beta) > 0 {
-		lastBlock := s.Beta[len(s.Beta)-1]
-		for _, p := range lastBlock.MMR.Peaks {
-			if p == nil {
-				outputLog = append(outputLog, nil)
-				continue
-			}
-			peak := crypto.Hash(testutils.MustFromHex(t, *p))
-			outputLog = append(outputLog, &peak)
-		}
-
-	}
-
-	return state.RecentHistory{
-		BlockHistory:          newBlocks,
-		AccumulationOutputLog: outputLog,
 	}
 }
 
@@ -130,21 +79,11 @@ type RecentHistoryTestVector struct {
 			ExportsRoot string `json:"exports_root"`
 		} `json:"work_packages"`
 	} `json:"input"`
-	PreState  RecentHistoryTestVectorState `json:"pre_state"`
-	Output    interface{}                  `json:"output"`
-	PostState RecentHistoryTestVectorState `json:"post_state"`
+	PreState  RecentHistoryTestState `json:"pre_state"`
+	Output    interface{}            `json:"output"`
+	PostState RecentHistoryTestState `json:"post_state"`
 }
 
-type RecentHistoryTestVectorState struct {
-	Beta []struct {
-		HeaderHash string `json:"header_hash"`
-		MMR        struct {
-			Peaks []*string `json:"peaks"`
-		} `json:"mmr"`
-		StateRoot string `json:"state_root"`
-		Reported  []struct {
-			Hash        string `json:"hash"`
-			ExportsRoot string `json:"exports_root"`
-		} `json:"reported"`
-	} `json:"beta"`
+type RecentHistoryTestState struct {
+	Beta jsonutils.RecentHistory `json:"beta"`
 }
