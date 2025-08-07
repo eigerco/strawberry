@@ -858,18 +858,14 @@ func CalculateNewCoreStatistics(
 	for _, guarantee := range blk.Extrinsic.EG.Guarantees {
 		workReport := guarantee.WorkReport
 		coreIndex := workReport.CoreIndex
+		newCoreStats[coreIndex].BundleSize += workReport.AvailabilitySpecification.AuditableWorkBundleLength
 		for _, workResult := range workReport.WorkDigests {
-
 			newCoreStats[coreIndex].Imports += workResult.SegmentsImportedCount
 			newCoreStats[coreIndex].Exports += workResult.SegmentsExportedCount
 			newCoreStats[coreIndex].ExtrinsicCount += workResult.ExtrinsicCount
 			newCoreStats[coreIndex].ExtrinsicSize += workResult.ExtrinsicSize
 			newCoreStats[coreIndex].GasUsed += workResult.GasUsed
-			// TODO this might be out of the loop, but the equation looks like it's done for each result.
-			newCoreStats[coreIndex].BundleSize += workReport.AvailabilitySpecification.AuditableWorkBundleLength
-
 		}
-
 	}
 
 	// Equation 13.10

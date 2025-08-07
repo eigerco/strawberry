@@ -283,6 +283,10 @@ func isValidatorAssignedToCore(validatorIndex uint16, coreIndex uint16, coreAssi
 // ∀r ∈ I : ρ‡[rc] = ∅ ∧ ra ∈ αrc (eq. 11.29 v0.7.0)(auth part only)
 func verifyAuth(ge block.GuaranteesExtrinsic, cap state.CoreAuthorizersPool) error {
 	for _, g := range ge.Guarantees {
+		// Check if core index is valid
+		if g.WorkReport.CoreIndex >= uint16(len(cap)) {
+			return errors.New("bad core index")
+		}
 		// Validate core index is within bounds based on auth pools length
 		if int(g.WorkReport.CoreIndex) >= len(cap) {
 			return errors.New("bad core index")
