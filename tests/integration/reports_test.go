@@ -14,7 +14,6 @@ import (
 	"github.com/eigerco/strawberry/internal/assuring"
 	"github.com/eigerco/strawberry/internal/disputing"
 	"github.com/eigerco/strawberry/internal/guaranteeing"
-	"github.com/eigerco/strawberry/internal/merkle/mountain_ranges"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
@@ -173,20 +172,58 @@ type AvailAssignments struct {
 	Timeout int    `json:"timeout"`
 }
 
+type CoreStatistics struct {
+	DALoad         uint32 `json:"da_load"`
+	Popularity     uint16 `json:"popularity"`
+	Imports        uint16 `json:"imports"`
+	Exports        uint16 `json:"exports"`
+	ExtrinsicSize  uint32 `json:"extrinsic_size"`
+	ExtrinsicCount uint16 `json:"extrinsic_count"`
+	BundleSize     uint32 `json:"bundle_size"`
+	GasUsed        uint64 `json:"gas_used"`
+}
+
+type ServiceStatisticsRecord struct {
+	ProvidedCount      uint16 `json:"provided_count"`
+	ProvidedSize       uint32 `json:"provided_size"`
+	RefinementCount    uint32 `json:"refinement_count"`
+	RefinementGasUsed  uint64 `json:"refinement_gas_used"`
+	Imports            uint32 `json:"imports"`
+	Exports            uint32 `json:"exports"`
+	ExtrinsicSize      uint32 `json:"extrinsic_size"`
+	ExtrinsicCount     uint32 `json:"extrinsic_count"`
+	AccumulateCount    uint64 `json:"accumulate_count"`
+	AccumulateGasUsed  uint64 `json:"accumulate_gas_used"`
+	OnTransfersCount   uint32 `json:"on_transfers_count"`
+	OnTransfersGasUsed uint64 `json:"on_transfers_gas_used"`
+}
+
+type ServiceStatistics struct {
+	ID     int                     `json:"id"`
+	Record ServiceStatisticsRecord `json:"record"`
+}
+
 type State struct {
-	AvailAssignments []*AvailAssignments `json:"avail_assignments"`
-	CurrValidators   []ValidatorKey      `json:"curr_validators"`
-	PrevValidators   []ValidatorKey      `json:"prev_validators"`
-	Entropy          []string            `json:"entropy"`
-	Offenders        []string            `json:"offenders"`
-	RecentBlocks     []BlockState        `json:"recent_blocks"`
-	AuthPools        [][]string          `json:"auth_pools"`
-	Services         []ServiceInfo       `json:"accounts"`
+	AvailAssignments   []*AvailAssignments `json:"avail_assignments"`
+	CurrValidators     []ValidatorKey      `json:"curr_validators"`
+	PrevValidators     []ValidatorKey      `json:"prev_validators"`
+	Entropy            []string            `json:"entropy"`
+	Offenders          []string            `json:"offenders"`
+	RecentBlocks       RecentBlocks        `json:"recent_blocks"`
+	AuthPools          [][]string          `json:"auth_pools"`
+	Services           []ServiceInfo       `json:"accounts"`
+	CoresStatistics    []CoreStatistics    `json:"cores_statistics"`
+	ServicesStatistics []ServiceStatistics `json:"services_statistics"`
+}
+
+type RecentBlocks struct {
+	History []BlockState `json:"history"`
+	MMR     MMRPeaks     `json:"mmr"`
 }
 
 type BlockState struct {
 	HeaderHash string         `json:"header_hash"`
-	MMR        MMRPeaks       `json:"mmr"`
+	BeefyRoot  string         `json:"beefy_root"`
 	StateRoot  string         `json:"state_root"`
 	Reported   []ReportedWork `json:"reported"`
 }
@@ -297,130 +334,6 @@ func mapGuarantee(g Guarantee) block.Guarantee {
 	}
 }
 
-func TestReports(t *testing.T) {
-	files, err := os.ReadDir("vectors/reports/tiny")
-	require.NoError(t, err, "failed to read tiny directory")
-
-	db, err := pebble.NewKVStore()
-	require.NoError(t, err)
-
-	chain := store.NewChain(db)
-	defer chain.Close()
-
-	for _, file := range files {
-		if !strings.HasSuffix(file.Name(), ".json") {
-			continue
-		}
-
-		t.Run(file.Name(), func(t *testing.T) {
-			filePath := fmt.Sprintf("vectors/reports/tiny/%s", file.Name())
-			data, err := ReadJSONFile(filePath)
-			require.NoError(t, err, "failed to read JSON file: %s", filePath)
-
-			preState := mapState(data.PreState)
-
-			// Create block
-			header := block.Header{
-				TimeSlotIndex: jamtime.Timeslot(data.Input.Slot),
-			}
-			guarantees := make([]block.Guarantee, len(data.Input.Guarantees))
-			for i, g := range data.Input.Guarantees {
-				guarantees[i] = mapGuarantee(g)
-			}
-			newBlock := block.Block{
-				Header: header,
-				Extrinsic: block.Extrinsic{
-					ET: block.TicketExtrinsic{},
-					EP: block.PreimageExtrinsic{},
-					EG: block.GuaranteesExtrinsic{Guarantees: guarantees},
-					EA: block.AssurancesExtrinsic{},
-					ED: block.DisputeExtrinsic{},
-				},
-			}
-
-			newTimeState := statetransition.CalculateNewTimeState(newBlock.Header)
-			// ρ†
-			intermediateCoreAssignments := disputing.CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, preState.CoreAssignments)
-			// ρ‡
-			intermediateCoreAssignments, _, err = assuring.CalculateIntermediateCoreAssignmentsAndAvailableWorkReports(newBlock.Extrinsic.EA, preState.ValidatorState.CurrentValidators, intermediateCoreAssignments,
-				newBlock.Header)
-			require.NoError(t, err)
-
-			reporters, err := guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(newBlock.Extrinsic.EG, &preState, chain, newTimeState, preState.RecentHistory,
-				newBlock.Header, intermediateCoreAssignments)
-			//Verify results
-			if data.Output.Err != "" {
-				require.Error(t, err)
-				require.EqualError(t, err, strings.ReplaceAll(data.Output.Err, "_", " "))
-				return
-			}
-			require.NoError(t, err)
-			newCoreAssignments := guaranteeing.CalculatePosteriorCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, newTimeState)
-
-			expectedPostState := mapState(data.PostState)
-
-			// Verify reporters if present in output
-			if len(data.Output.Ok.Reporters) > 0 {
-				// Verify each expected reporter exists in the reporters set
-				for _, reporter := range data.Output.Ok.Reporters {
-					reporterKey := ed25519.PublicKey(mustStringToHex(reporter))
-					require.True(t, reporters.Has(reporterKey), "Missing expected reporter")
-				}
-				// Verify no extra reporters
-				require.Equal(t, len(data.Output.Ok.Reporters), len(reporters))
-			}
-
-			// Verify output.Ok.Reported
-			if len(data.Output.Ok.Reported) > 0 {
-				for _, r := range data.Output.Ok.Reported {
-					wpHash := crypto.Hash(mustStringToHex(r.WorkPackageHash))
-					segRoot := crypto.Hash(mustStringToHex(r.SegmentTreeRoot))
-					found := false
-					for _, newCoreAssignment := range newCoreAssignments {
-						if newCoreAssignment.WorkReport.AvailabilitySpecification.WorkPackageHash == wpHash &&
-							newCoreAssignment.WorkReport.AvailabilitySpecification.SegmentRoot == segRoot {
-							found = true
-							break
-						}
-					}
-					require.True(t, found, "Reported work package not found in guarantees: %s", r.WorkPackageHash)
-				}
-			}
-
-			// Verify core assignments
-			require.Equal(t, len(expectedPostState.CoreAssignments), len(newCoreAssignments),
-				"Mismatch in CoreAssignments length")
-			for i := range expectedPostState.CoreAssignments {
-				if expectedPostState.CoreAssignments[i] == nil {
-					require.Nil(t, newCoreAssignments[i],
-						"CoreAssignment[%d] should be nil", i)
-					continue
-				}
-				require.Equal(t, expectedPostState.CoreAssignments[i].Time,
-					newCoreAssignments[i].Time,
-					"Mismatch in CoreAssignment[%d] Time", i)
-				require.Equal(t, expectedPostState.CoreAssignments[i].WorkReport,
-					newCoreAssignments[i].WorkReport,
-					"Mismatch in CoreAssignment[%d] WorkReport", i)
-			}
-
-			// Verify validators haven't changed
-			require.ElementsMatch(t, expectedPostState.ValidatorState.CurrentValidators,
-				preState.ValidatorState.CurrentValidators,
-				"CurrentValidators should not have changed")
-			require.ElementsMatch(t, expectedPostState.ValidatorState.ArchivedValidators,
-				preState.ValidatorState.ArchivedValidators,
-				"ArchivedValidators should not have changed")
-
-			// Verify entropy pool hasn't changed
-			for i := range expectedPostState.EntropyPool {
-				require.Equal(t, expectedPostState.EntropyPool[i], preState.EntropyPool[i],
-					"EntropyPool should not have changed")
-			}
-		})
-	}
-}
-
 func mapServices(services []ServiceInfo) service.ServiceState {
 	serviceState := make(service.ServiceState)
 
@@ -449,7 +362,8 @@ func mapValidators(validators []ValidatorKey) safrole.ValidatorsData {
 
 // TODO this is a temporary mapping for recent history, when we have new test
 // vectors for v0.6.7 this will need to be updated.
-func mapRecentHistory(blocks []BlockState) state.RecentHistory {
+func mapRecentHistory(recentBlocks RecentBlocks) state.RecentHistory {
+	blocks := recentBlocks.History
 	newBlocks := make([]state.BlockState, len(blocks))
 
 	for i, b := range blocks {
@@ -461,42 +375,26 @@ func mapRecentHistory(blocks []BlockState) state.RecentHistory {
 			workReportHashes[wpHash] = segHash
 		}
 
-		// MMR peaks conversion
-		mmr := make([]*crypto.Hash, len(b.MMR.Peaks))
-		for j, peak := range b.MMR.Peaks {
-			if peak == "" {
-				mmr[j] = nil
-				continue
-			}
-			hash := crypto.Hash(mustStringToHex(peak))
-			mmr[j] = &hash
-		}
-		mountainRange := mountain_ranges.New()
-		beefRoot := mountainRange.SuperPeak(mmr, crypto.KeccakData)
-
 		headerHash := crypto.Hash(mustStringToHex(b.HeaderHash))
 		stateRoot := crypto.Hash(mustStringToHex(b.StateRoot))
+		beefyRoot := crypto.Hash(mustStringToHex(b.BeefyRoot))
 
 		newBlocks[i] = state.BlockState{
 			HeaderHash: headerHash,
 			StateRoot:  stateRoot,
-			BeefyRoot:  beefRoot,
+			BeefyRoot:  beefyRoot,
 			Reported:   workReportHashes,
 		}
 	}
 
 	var outputLog []*crypto.Hash
-	if len(blocks) > 0 {
-		lastBlock := blocks[len(blocks)-1]
-		for _, peak := range lastBlock.MMR.Peaks {
-			if peak == "" {
-				outputLog = append(outputLog, nil)
-				continue
-			}
-			hash := crypto.Hash(mustStringToHex(peak))
-			outputLog = append(outputLog, &hash)
+	for _, peak := range recentBlocks.MMR.Peaks {
+		if peak == "" {
+			outputLog = append(outputLog, nil)
+			continue
 		}
-
+		hash := crypto.Hash(mustStringToHex(peak))
+		outputLog = append(outputLog, &hash)
 	}
 
 	return state.RecentHistory{
@@ -576,5 +474,208 @@ func mapState(s State) state.State {
 		CoreAuthorizersPool: mapAuthPools(s.AuthPools),
 		Services:            mapServices(s.Services),
 		EntropyPool:         mapEntropyPool(s.Entropy),
+		ActivityStatistics: validator.ActivityStatisticsState{
+			Cores:    mapCoresStatistics(s.CoresStatistics),
+			Services: mapServiceStatistics(s.ServicesStatistics),
+		},
+	}
+}
+
+// Map []CoreStatistics from JSON to [common.TotalNumberOfCores]validator.CoreStatistics
+func mapCoresStatistics(stats []CoreStatistics) [common.TotalNumberOfCores]validator.CoreStatistics {
+	var result [common.TotalNumberOfCores]validator.CoreStatistics
+	for i, s := range stats {
+		if i >= int(common.TotalNumberOfCores) {
+			break
+		}
+		result[i] = validator.CoreStatistics{
+			DALoad:         s.DALoad,
+			Popularity:     s.Popularity,
+			Imports:        s.Imports,
+			Exports:        s.Exports,
+			ExtrinsicSize:  s.ExtrinsicSize,
+			ExtrinsicCount: s.ExtrinsicCount,
+			BundleSize:     s.BundleSize,
+			GasUsed:        s.GasUsed,
+		}
+	}
+	return result
+}
+
+// Map []ServiceStatistics from JSON to validator.ServiceStatistics
+func mapServiceStatistics(stats []ServiceStatistics) validator.ServiceStatistics {
+	result := make(validator.ServiceStatistics)
+	for _, s := range stats {
+		result[block.ServiceId(s.ID)] = validator.ServiceActivityRecord{
+			ProvidedCount:      s.Record.ProvidedCount,
+			ProvidedSize:       s.Record.ProvidedSize,
+			RefinementCount:    s.Record.RefinementCount,
+			RefinementGasUsed:  s.Record.RefinementGasUsed,
+			Imports:            s.Record.Imports,
+			Exports:            s.Record.Exports,
+			ExtrinsicSize:      s.Record.ExtrinsicSize,
+			ExtrinsicCount:     s.Record.ExtrinsicCount,
+			AccumulateCount:    uint32(s.Record.AccumulateCount), // Cast if needed
+			AccumulateGasUsed:  s.Record.AccumulateGasUsed,
+			OnTransfersCount:   s.Record.OnTransfersCount,
+			OnTransfersGasUsed: s.Record.OnTransfersGasUsed,
+		}
+	}
+	return result
+}
+
+func TestReports(t *testing.T) {
+	files, err := os.ReadDir("vectors/reports/tiny")
+	require.NoError(t, err, "failed to read tiny directory")
+
+	db, err := pebble.NewKVStore()
+	require.NoError(t, err)
+
+	chain := store.NewChain(db)
+	defer chain.Close()
+
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".json") {
+			continue
+		}
+
+		t.Run(file.Name(), func(t *testing.T) {
+			filePath := fmt.Sprintf("vectors/reports/tiny/%s", file.Name())
+			data, err := ReadJSONFile(filePath)
+			require.NoError(t, err, "failed to read JSON file: %s", filePath)
+
+			preState := mapState(data.PreState)
+
+			// Create block
+			header := block.Header{
+				TimeSlotIndex: jamtime.Timeslot(data.Input.Slot),
+			}
+			guarantees := make([]block.Guarantee, len(data.Input.Guarantees))
+			for i, g := range data.Input.Guarantees {
+				guarantees[i] = mapGuarantee(g)
+			}
+			newBlock := block.Block{
+				Header: header,
+				Extrinsic: block.Extrinsic{
+					ET: block.TicketExtrinsic{},
+					EP: block.PreimageExtrinsic{},
+					EG: block.GuaranteesExtrinsic{Guarantees: guarantees},
+					EA: block.AssurancesExtrinsic{},
+					ED: block.DisputeExtrinsic{},
+				},
+			}
+
+			var processingError error
+			var reporters crypto.ED25519PublicKeySet
+			var newCoreAssignments state.CoreAssignments
+			var newValidatorStatistics validator.ActivityStatisticsState
+
+			newTimeState := statetransition.CalculateNewTimeState(newBlock.Header)
+			// ρ†
+			intermediateCoreAssignments := disputing.CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, preState.CoreAssignments)
+			// ρ‡
+			intermediateCoreAssignments, availableWorkReports, err := assuring.CalculateIntermediateCoreAssignmentsAndAvailableWorkReports(
+				newBlock.Extrinsic.EA,
+				preState.ValidatorState.CurrentValidators,
+				intermediateCoreAssignments,
+				newBlock.Header,
+			)
+
+			if err != nil {
+				processingError = err
+			} else {
+				// Only proceed if no error in assuring
+				reporters, err = guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(
+					newBlock.Extrinsic.EG,
+					&preState,
+					chain,
+					newTimeState,
+					preState.RecentHistory,
+					newBlock.Header,
+					intermediateCoreAssignments,
+				)
+
+				if err != nil {
+					processingError = err
+				} else {
+					// Only proceed if no error in guaranteeing
+					newCoreAssignments = guaranteeing.CalculatePosteriorCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, newTimeState)
+					preState.CoreAssignments = newCoreAssignments
+					_, _, _, _, _, _, _, accumulationStats, transferStats := statetransition.CalculateWorkReportsAndAccumulate(
+						&newBlock.Header,
+						&preState,
+						newBlock.Header.TimeSlotIndex,
+						availableWorkReports,
+					)
+
+					newValidatorStatistics = statetransition.CalculateNewActivityStatistics(
+						newBlock,
+						preState.TimeslotIndex,
+						preState.ActivityStatistics,
+						reporters,
+						preState.ValidatorState.CurrentValidators,
+						[]block.WorkReport{},
+						accumulationStats,
+						transferStats,
+					)
+					preState.ActivityStatistics = newValidatorStatistics
+				}
+			}
+
+			// Now handle assertions based on whether we had an error
+			if processingError != nil {
+				// If we expected an error, verify it matches
+				if data.Output.Err != "" {
+					require.Error(t, processingError, "Expected error but got none")
+					require.EqualError(t, processingError, strings.ReplaceAll(data.Output.Err, "_", " "))
+				} else {
+					// We got an error but didn't expect one
+					require.NoError(t, processingError, "Unexpected error occurred")
+				}
+
+			} else {
+				// No error occurred - verify we didn't expect one
+				if data.Output.Err != "" {
+					t.Errorf("Expected error '%s' but got none", data.Output.Err)
+				}
+
+				// Now do all the success-case assertions
+				expectedPostState := mapState(data.PostState)
+
+				// Verify reporters if present in output
+				if len(data.Output.Ok.Reporters) > 0 {
+					// Verify each expected reporter exists in the reporters set
+					for _, reporter := range data.Output.Ok.Reporters {
+						reporterKey := ed25519.PublicKey(mustStringToHex(reporter))
+						require.True(t, reporters.Has(reporterKey), "Missing expected reporter")
+					}
+					// Verify no extra reporters
+					require.Equal(t, len(data.Output.Ok.Reporters), len(reporters))
+				}
+
+				// Verify output.Ok.Reported
+				if len(data.Output.Ok.Reported) > 0 {
+					for _, r := range data.Output.Ok.Reported {
+						wpHash := crypto.Hash(mustStringToHex(r.WorkPackageHash))
+						segRoot := crypto.Hash(mustStringToHex(r.SegmentTreeRoot))
+						found := false
+						for _, newCoreAssignment := range newCoreAssignments {
+							if newCoreAssignment.WorkReport.AvailabilitySpecification.WorkPackageHash == wpHash &&
+								newCoreAssignment.WorkReport.AvailabilitySpecification.SegmentRoot == segRoot {
+								found = true
+								break
+							}
+						}
+						require.True(t, found, "Reported work package not found in guarantees: %s", r.WorkPackageHash)
+					}
+				}
+
+				// Set ValidatorsCurrent and ValidatorsLast to empty as the test vectors do not include it
+				preState.ActivityStatistics.ValidatorsCurrent = [6]validator.ValidatorStatistics{}
+				preState.ActivityStatistics.ValidatorsLast = [6]validator.ValidatorStatistics{}
+
+				require.Equal(t, expectedPostState, preState)
+			}
+		})
 	}
 }
