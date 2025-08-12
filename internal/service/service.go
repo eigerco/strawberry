@@ -74,11 +74,7 @@ func (sa *ServiceAccount) SetGlobalKVItems(globalKV map[statekey.StateKey][]byte
 // GetStorage retrieves the preimage storage associated with the given key
 func (sa *ServiceAccount) GetStorage(key statekey.StateKey) ([]byte, bool) {
 	value, ok := sa.globalKV[key]
-	if !ok {
-		return nil, false
-	}
-
-	return value, true
+	return value, ok
 }
 
 // GetTotalNumberOfItems returns `ai` total number of items in storage
@@ -293,12 +289,12 @@ func (sa *ServiceAccount) LookupPreimage(serviceID block.ServiceId, t jamtime.Ti
 
 // Clone returns a deep copy of the service account
 func (sa *ServiceAccount) Clone() ServiceAccount {
-	cloned := sa
+	cloned := *sa
 
-	cloned.globalKV = cloneMapOfSlices(cloned.globalKV)
+	cloned.globalKV = cloneMapOfSlices(sa.globalKV)
 	cloned.PreimageLookup = cloneMapOfSlices(sa.PreimageLookup)
 
-	return *cloned
+	return cloned
 }
 
 // isPreimageAvailableAt determines availability based on historical timeslots

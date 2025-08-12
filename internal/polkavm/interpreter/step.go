@@ -587,6 +587,8 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
+	default:
+		return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 	}
 	return 0, nil
 }

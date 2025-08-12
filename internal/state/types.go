@@ -94,15 +94,16 @@ type AccumulationState struct {
 	AmountOfGasPerServiceId  map[block.ServiceId]uint64                         // (z)
 }
 
-// AccumulationOperand represents a single operand for accumulation (I) (eq. 12.19 v0.7.0)
+// AccumulationOperand represents a single operand for accumulation (I) (eq. 12.19 v0.6.7)
 type AccumulationOperand struct {
-	WorkPackageHash   crypto.Hash                   // Work-package hash (p ∈ H)
-	SegmentRoot       crypto.Hash                   // Segment root (e ∈ H)
-	AuthorizationHash crypto.Hash                   // Authorization hash (a ∈ H)
-	PayloadHash       crypto.Hash                   // Payload hash (y ∈ H)
-	GasLimit          uint64                        `jam:"encoding=compact"` // Gas limit (g ∈ NG)
-	Trace             []byte                        // Trace of the work report (t ∈ B)
-	OutputOrError     block.WorkResultOutputOrError // Output or error (l ∈ B ∪ E)
+	WorkPackageHash   crypto.Hash // Work-package hash (p ∈ H)
+	SegmentRoot       crypto.Hash // Segment root (e ∈ H)
+	AuthorizationHash crypto.Hash // Authorization hash (a ∈ H)
+	PayloadHash       crypto.Hash // Payload hash (y ∈ H)
+	GasLimit          uint64      `jam:"encoding=compact"` // Gas limit (g ∈ NG)
+	// TODO revert back the order of fields when upgrading to v0.7.x
+	OutputOrError block.WorkResultOutputOrError // Output or error (l ∈ B ∪ E)
+	Trace         []byte                        // Trace of the work report (t ∈ B)
 }
 
 // AccumulationOutputLog θ ∈ ⟦(NS, H)⟧ (eq. 7.4)

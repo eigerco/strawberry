@@ -3,7 +3,6 @@ package polkavm
 import (
 	"bytes"
 	"fmt"
-
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -41,12 +40,13 @@ func ParseBlob(data []byte) (program *Program, err error) {
 	if int(program.ProgramMemorySizes.RODataSize) != len(program.ROData) {
 		return nil, fmt.Errorf("ro data size mismatch")
 	}
-	if int(program.ProgramMemorySizes.RWDataSize) != len(program.RWData) {
-		return nil, fmt.Errorf("rw data size mismatch")
-	}
 	if err := dec.DecodeFixedLength(&program.RWData, uint(program.ProgramMemorySizes.RWDataSize)); err != nil {
 		return nil, err
 	}
+	if int(program.ProgramMemorySizes.RWDataSize) != len(program.RWData) {
+		return nil, fmt.Errorf("rw data size mismatch")
+	}
+
 	var codeSize uint32
 	if err := dec.Decode(&codeSize); err != nil {
 		return nil, err
