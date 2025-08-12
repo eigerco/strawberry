@@ -627,7 +627,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		//      ⎧ a except a′_a = τ′ if s ∈ K(S)
 		// a′ = ⎨
 		//      ⎩ a otherwise
-		if _, ok := accumulationStats[serviceId]; !ok {
+		if _, ok := accumulationStats[serviceId]; ok {
 			newService.MostRecentAccumulationTimeslot = newTimeslot
 		}
 
