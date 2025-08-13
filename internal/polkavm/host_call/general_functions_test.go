@@ -484,7 +484,7 @@ func TestWrite(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, keyData, actualKey)
 
-	require.Equal(t, uint64(len(value)), regs[polkavm.A0])
+	require.Equal(t, uint64(host_call.NONE), regs[polkavm.A0])
 	require.NotNil(t, updatedSa)
 	storedValue, keyExists := updatedSa.GetStorage(k)
 	require.True(t, keyExists)

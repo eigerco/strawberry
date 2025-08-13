@@ -70,7 +70,7 @@ func InitializeMemory(roData, rwData, argsData []byte, stackSize uint32, initial
 			data:    copySized(argsData, alignToPage(uint64(len(argsData)))),
 		},
 	}
-	mem.currentHeapPointer = mem.rw.address + uint64(len(mem.rw.data)) + PageSize // Note: extra Z_P is debatable
+	mem.currentHeapPointer = mem.rw.address + alignToPage(uint64(len(rwData))) + uint64(initialPages)*PageSize
 	return mem, nil
 }
 

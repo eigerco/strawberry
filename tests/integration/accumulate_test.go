@@ -21,7 +21,6 @@ import (
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/validator"
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 type AccumulateInput struct {
@@ -108,12 +107,16 @@ type AccumulateServiceAccount struct {
 	Id   block.ServiceId `json:"id"`
 	Data struct {
 		Service struct {
-			CodeHash   string `json:"code_hash"`
-			Balance    uint64 `json:"balance"`
-			MinItemGas uint64 `json:"min_item_gas"`
-			MinMemoGas uint64 `json:"min_memo_gas"`
-			Bytes      uint64 `json:"bytes"`
-			Items      uint32 `json:"items"`
+			CodeHash             string           `json:"code_hash"`
+			Balance              uint64           `json:"balance"`
+			MinItemGas           uint64           `json:"min_item_gas"`
+			MinMemoGas           uint64           `json:"min_memo_gas"`
+			Bytes                uint64           `json:"bytes"`
+			Items                uint32           `json:"items"`
+			DepositOffset        uint64           `json:"deposit_offset"`
+			CreationSlot         jamtime.Timeslot `json:"creation_slot"`
+			LastAccumulationSlot jamtime.Timeslot `json:"last_accumulation_slot"`
+			ParentService        block.ServiceId  `json:"parent_service"`
 		} `json:"service"`
 		Preimages []struct {
 			Hash string `json:"hash"`
@@ -139,9 +142,6 @@ type AccumulateTestCase struct {
 func TestAccumulate(t *testing.T) {
 	files, err := os.ReadDir("vectors/accumulate/tiny")
 	require.NoError(t, err)
-
-	// TODO: Remove test skip after updating to test vectors v0.6.7
-	t.Skip()
 
 	for _, file := range files {
 		t.Run(file.Name(), func(t *testing.T) {
@@ -193,7 +193,7 @@ func TestAccumulate(t *testing.T) {
 				stateStat.OnTransfersGasUsed = stat.OnTransfersGasUsed
 				newState.ActivityStatistics.Services[id] = stateStat
 			}
-			assert.Equal(t, postState, newState)
+			assert.EqualExportedValues(t, postState, newState)
 		})
 	}
 }
@@ -319,11 +319,15 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 	serviceAccounts := service.ServiceState{}
 	for _, account := range accounts {
 		sa := service.ServiceAccount{
-			PreimageLookup:         make(map[crypto.Hash][]byte),
-			CodeHash:               mapHash(account.Data.Service.CodeHash),
-			Balance:                account.Data.Service.Balance,
-			GasLimitForAccumulator: account.Data.Service.MinItemGas,
-			GasLimitOnTransfer:     account.Data.Service.MinMemoGas,
+			PreimageLookup:                 make(map[crypto.Hash][]byte),
+			GratisStorageOffset:            account.Data.Service.DepositOffset,
+			CodeHash:                       mapHash(account.Data.Service.CodeHash),
+			Balance:                        account.Data.Service.Balance,
+			GasLimitForAccumulator:         account.Data.Service.MinItemGas,
+			GasLimitOnTransfer:             account.Data.Service.MinMemoGas,
+			CreationTimeslot:               account.Data.Service.CreationSlot,
+			MostRecentAccumulationTimeslot: account.Data.Service.LastAccumulationSlot,
+			ParentService:                  account.Data.Service.ParentService,
 		}
 		for _, preimage := range account.Data.Preimages {
 			sa.PreimageLookup[mapHash(preimage.Hash)] = mustStringToHex(preimage.Blob)
@@ -336,26 +340,26 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 		}
 		for _, storage := range account.Data.Storage {
 			serviceId := account.Id
-			serviceIdBytes, err := jam.Marshal(serviceId)
-			require.NoError(t, err)
 
 			// The vectors store the raw key instead of using function C for generating the storage keys
 			// our code however implements the storage keys correctly as the output of C not the raw value
 			// this creates a discrepancy which fails the tests, so we use the same logic here
 			// to create the same result and being able to compare the values properly
-			sk, err := statekey.NewStorage(serviceId, append(serviceIdBytes, mustStringToHex(storage.Key)...))
+			sk, err := statekey.NewStorage(serviceId, mustStringToHex(storage.Key))
 			require.NoError(t, err)
 
 			sa.InsertStorage(sk, uint64(len(mustStringToHex(storage.Key))), mustStringToHex(storage.Value))
 		}
 
+		// TODO check the latest GP for more info, it is possible we misunderstood something and it is the expected behaviour
 		// Skip this test verification, the storage footprint for this service seems to be wrong in the test vector
 		// as service does not contain any preimages or storage items so the expected size is zero
 		// see issue: https://github.com/w3f/jamtestvectors/issues/50
-		t.Log("ignoring TestAccumulate/same_code_different_services-1.json threshold verification!")
 		if t.Name() != "TestAccumulate/same_code_different_services-1.json" {
 			assert.Equal(t, account.Data.Service.Bytes, sa.GetTotalNumberOfOctets())
 			assert.Equal(t, account.Data.Service.Items, sa.GetTotalNumberOfItems())
+		} else {
+			t.Log("ignoring TestAccumulate/same_code_different_services-1.json threshold verification!")
 		}
 		serviceAccounts[account.Id] = sa
 	}

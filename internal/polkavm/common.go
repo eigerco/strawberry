@@ -115,6 +115,8 @@ func (m *Memory) Sbrk(size uint64) (uint64, error) {
 		return m.currentHeapPointer, nil
 	}
 
+	result := m.currentHeapPointer
+
 	nextPageBoundary := alignToPage(m.currentHeapPointer)
 	newHeapPointer := m.currentHeapPointer + size
 
@@ -129,7 +131,7 @@ func (m *Memory) Sbrk(size uint64) (uint64, error) {
 
 	// Advance the heap
 	m.currentHeapPointer = newHeapPointer
-	return m.currentHeapPointer, nil
+	return result, nil
 }
 
 func (m *Memory) allocatePages(startPage uint64, count uint64) {

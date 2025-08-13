@@ -77,13 +77,13 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 
 	// E(t, s, ↕o)
 	args, err := jam.Marshal(struct {
-		Timeslot             jamtime.Timeslot `jam:"encoding=compact"`
-		ServiceID            block.ServiceId  `jam:"encoding=compact"`
-		AccumulationOperands []state.AccumulationOperand
+		Timeslot                   jamtime.Timeslot `jam:"encoding=compact"`
+		ServiceID                  block.ServiceId  `jam:"encoding=compact"`
+		AccumulationOperandsLength uint             `jam:"encoding=compact"`
 	}{
-		Timeslot:             newTime,
-		ServiceID:            serviceIndex,
-		AccumulationOperands: accOperand,
+		Timeslot:                   newTime,
+		ServiceID:                  serviceIndex,
+		AccumulationOperandsLength: uint(len(accOperand)),
 	})
 	if err != nil {
 		log.Println("error encoding arguments", "err", err)
@@ -174,6 +174,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		return output
 	}
 
+	output.GasUsed = uint64(gasUsed)
 	output.AccumulationState = newCtxPair.RegularCtx.AccumulationState
 	output.DeferredTransfers = newCtxPair.RegularCtx.DeferredTransfers
 	output.ProvidedPreimages = newCtxPair.RegularCtx.ProvidedPreimages

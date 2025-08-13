@@ -30,10 +30,12 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.G
 	if err == nil {
 		return 0, nil, x1, polkavm.ErrPanicf("abnormal program termination, program should finish with one of: halt, out-of-gas, panic or page-fault")
 	}
+
+	_, gasRemaining, regs, memory1 := i.Results()
+	// u = ϱ − max(ϱ′, 0)
+	gasUsed := initialGas - polkavm.Gas(max(gasRemaining, 0))
+
 	if errors.Is(err, polkavm.ErrHalt) {
-		_, gasRemaining, regs, memory1 := i.Results()
-		// u = ϱ − max(ϱ′, 0)
-		gasUsed := max(int64(initialGas)-gasRemaining, 0)
 		result := make([]byte, regs[polkavm.A1])
 		if err := memory1.Read(regs[polkavm.A0], result); err != nil {
 			// Do not return anything if registers 7 and 8 are not pointing to a valid memory page
@@ -43,11 +45,18 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.G
 
 		// Return the memory that registers 7 and 8 are pointing to, if it's a valid memory page
 		// (u, μ′φ′7⋅⋅⋅+φ′8, x′) if ε = ∎ ∧ Nφ′7⋅⋅⋅+φ′8 ⊆ Vμ′
-		return polkavm.Gas(gasUsed), result, x1, nil
+		return gasUsed, result, x1, nil
 	}
-
-	// if ε ∈ {∞, ☇}
-	return 0, nil, x1, err
+	// if ε = ∞
+	if errors.Is(err, polkavm.ErrOutOfGas) {
+		return gasUsed, []byte{}, x1, err
+	}
+	errPageFault := &polkavm.ErrPageFault{}
+	if errors.As(err, &errPageFault) {
+		return gasUsed, []byte{}, x1, polkavm.ErrPanicf(err.Error())
+	}
+	// otherwise
+	return gasUsed, nil, x1, err
 }
 
 // InvokeHostCall host call invocation (ΨH eq. A.35 v0.7.0)
