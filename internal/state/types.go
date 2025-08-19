@@ -94,6 +94,18 @@ type AccumulationState struct {
 	AmountOfGasPerServiceId  map[block.ServiceId]uint64                         // (z)
 }
 
+func (j AccumulationState) Clone() AccumulationState {
+	return AccumulationState{
+		ServiceState:             j.ServiceState.Clone(),
+		ValidatorKeys:            j.ValidatorKeys,
+		PendingAuthorizersQueues: j.PendingAuthorizersQueues,
+		ManagerServiceId:         j.ManagerServiceId,
+		AssignedServiceIds:       j.AssignedServiceIds,
+		DesignateServiceId:       j.DesignateServiceId,
+		AmountOfGasPerServiceId:  j.AmountOfGasPerServiceId,
+	}
+}
+
 // AccumulationOperand represents a single operand for accumulation (I) (eq. 12.19 v0.6.7)
 type AccumulationOperand struct {
 	WorkPackageHash   crypto.Hash // Work-package hash (p ∈ H)

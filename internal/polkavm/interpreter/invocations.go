@@ -2,7 +2,6 @@ package interpreter
 
 import (
 	"errors"
-
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
