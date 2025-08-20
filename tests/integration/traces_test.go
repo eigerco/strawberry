@@ -4,6 +4,7 @@ package integration
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,7 +26,15 @@ import (
 )
 
 func TestTraceFallback(t *testing.T) {
-	files, err := filepath.Glob("traces/fallback/*.json")
+	runTracesTests(t, "traces/fallback")
+}
+
+func TestTraceSafrole(t *testing.T) {
+	runTracesTests(t, "traces/safrole")
+}
+
+func runTracesTests(t *testing.T, directory string) {
+	files, err := filepath.Glob(fmt.Sprintf("%s/*.json", directory))
 	require.NoError(t, err)
 	require.NotEmpty(t, files, "no JSON files found in traces/fallback/")
 
@@ -36,12 +45,12 @@ func TestTraceFallback(t *testing.T) {
 			continue // Skip the genesis trace since this is mostly there for reference.
 		}
 		t.Run(filepath.Base(file), func(t *testing.T) {
-			runTraceFallbackTest(t, file)
+			runTraceTest(t, file)
 		})
 	}
 }
 
-func runTraceFallbackTest(t *testing.T, filename string) {
+func runTraceTest(t *testing.T, filename string) {
 	data, err := os.ReadFile(filename)
 	require.NoError(t, err)
 
