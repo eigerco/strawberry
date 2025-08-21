@@ -2,7 +2,7 @@ package statetransition
 
 import (
 	"errors"
-	"log"
+	"github.com/eigerco/strawberry/pkg/log"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -64,12 +64,12 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	)
 	newCtxPair.RegularCtx, err = a.newCtx(accState.Clone(), serviceIndex)
 	if err != nil {
-		log.Println("error creating context", "err", err)
+		log.VM.Error().Err(err).Msgf("error creating context")
 		return output
 	}
 	newCtxPair.ExceptionalCtx, err = a.newCtx(accState.Clone(), serviceIndex)
 	if err != nil {
-		log.Println("error creating context", "err", err)
+		log.VM.Error().Err(err).Msgf("error creating context")
 		return output
 	}
 
@@ -84,7 +84,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		AccumulationOperandsLength: uint(len(accOperand)),
 	})
 	if err != nil {
-		log.Println("error encoding arguments", "err", err)
+		log.VM.Error().Err(err).Msgf("error encoding arguments")
 		return output
 	}
 
@@ -157,7 +157,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 
 		errPanic := &polkavm.ErrPanic{}
 		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {
-			log.Println("Program invocation failed with error:", err)
+			log.VM.Error().Err(err).Msgf("Program invocation failed")
 			output.AccumulationState = newCtxPair.ExceptionalCtx.AccumulationState
 			output.DeferredTransfers = newCtxPair.ExceptionalCtx.DeferredTransfers
 			output.ProvidedPreimages = newCtxPair.ExceptionalCtx.ProvidedPreimages

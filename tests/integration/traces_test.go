@@ -1,10 +1,12 @@
-//go:build integration
+//go:build integration && traces
 
 package integration
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/log"
+	"github.com/rs/zerolog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,6 +26,10 @@ import (
 	jsonutils "github.com/eigerco/strawberry/internal/testutils/json"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 )
+
+func init() {
+	log.Init(log.Options{LogLevel: zerolog.ErrorLevel})
+}
 
 func TestTracePreimagesLight(t *testing.T) {
 	runTracesTests(t, "traces/preimages_light")
