@@ -18,10 +18,6 @@ const (
 	// Each timeslot is exactly 6 seconds long, as specified in the JAM Graypaper.
 	// This constant duration is used for conversions between timeslots and actual time.
 	TimeslotDuration = SlotPeriodInSeconds * time.Second
-
-	// The period in timeslots after which an unreferenced preimage may be expunged.
-	// D = L + 4,800 where L = 14,400 (maximum age of lookup anchor)
-	PreimageExpulsionPeriod = 19_200 // D ≡ L + 4_800 = 19_200 (equation B.3 v0.6.6)
 )
 
 // Timeslot represents a 6-second window in JAM time

@@ -59,16 +59,16 @@ func GasRemaining(gas polkavm.Gas, regs polkavm.Registers) (polkavm.Gas, polkavm
 
 // Fetch ΩY(ρ, φ, µ, p, n, r, i, i, x, o, t, ...)
 func Fetch(
-	gas polkavm.Gas,                      // ρ
-	regs polkavm.Registers,               // φ
-	mem polkavm.Memory,                   // µ
-	workPackage *work.Package,            // p
-	entropy *crypto.Hash,                 // n
-	authorizerHashOutput []byte,          // r
-	itemIndex *uint32,                    // i
-	importedSegments []work.Segment,      // i
-	extrinsicPreimages [][]byte,          // x
-	operand []state.AccumulationOperand,  // o
+	gas polkavm.Gas, // ρ
+	regs polkavm.Registers, // φ
+	mem polkavm.Memory, // µ
+	workPackage *work.Package, // p
+	entropy *crypto.Hash, // n
+	authorizerHashOutput []byte, // r
+	itemIndex *uint32, // i
+	importedSegments []work.Segment, // i
+	extrinsicPreimages [][]byte, // x
+	operand []state.AccumulationOperand, // o
 	transfers []service.DeferredTransfer, // t
 ) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < FetchCost {

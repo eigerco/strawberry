@@ -22,7 +22,6 @@ import (
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
-	"log"
 	"maps"
 	"math"
 	"slices"
@@ -84,7 +83,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 	if err != nil {
 		return err
 	}
-
+	s.EntropyPool = newEntropyPool
 	reporters, err := guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(newBlock.Extrinsic.EG, s, chain, newTimeSlot, intermediateRecentHistory, newBlock.Header, intermediateCoreAssignments)
 	if err != nil {
 		return err
@@ -1088,7 +1087,6 @@ func (a *Accumulator) ParallelDelta(
 		serviceIndices[svcId] = struct{}{}
 	}
 
-	var totalGasUsed uint64
 	var allTransfers []service.DeferredTransfer
 	// u = [(s, ∆1(o, w, f , s)u) | s <− s]
 	accumHashPairs := make(ServiceHashPairs, 0)
@@ -1108,9 +1106,6 @@ func (a *Accumulator) ParallelDelta(
 		// Process single service using Delta1
 		output := a.Delta1(initialAccState.Clone(), workReports, alwaysAccumulate, serviceId)
 		accState, deferredTransfers, resultHash, gasUsed, preimageProvisions := output.AccumulationState, output.DeferredTransfers, output.Result, output.GasUsed, output.ProvidedPreimages
-
-		// Update total gas used
-		totalGasUsed += gasUsed
 
 		// Collect transfers
 		if len(deferredTransfers) > 0 {
@@ -1170,17 +1165,10 @@ func (a *Accumulator) ParallelDelta(
 		newAccState.PendingAuthorizersQueues[core] = output.AccumulationState.PendingAuthorizersQueues[core]
 	}
 
-	// Wait for manager, assign, designate and worker services
-
-	// d′ = P ((d ∪ n) ∖ m, [⋃s∈s] ∆1(o, w, f , s)p)
-	newAccState.ServiceState = a.preimageIntegration(newAccState.ServiceState, allPreimageProvisions)
-
 	// ∀c ∈ NC ∶ a′_c = ((∆1(o, w, f, a*_c )e)a)c
 	for core, assignServiceId := range intermediateAssignServiceId {
 		// Process single service using Delta1
-		log.Println("BEGIN#assign_intermediate@core#", assignServiceId, core)
 		output := a.Delta1(initialAccState.Clone(), workReports, alwaysAccumulate, assignServiceId)
-		log.Println("END#assign_intermediate@core#", assignServiceId, core)
 		newAccState.AssignedServiceIds[core] = output.AccumulationState.AssignedServiceIds[core]
 	}
 
@@ -1190,7 +1178,8 @@ func (a *Accumulator) ParallelDelta(
 	output = a.Delta1(initialAccState.Clone(), workReports, alwaysAccumulate, intermediateDesignateServiceId)
 	newAccState.DesignateServiceId = output.AccumulationState.DesignateServiceId
 
-	// Wait for the intermediate assign and designate services id assign
+	// d′ = P ((d ∪ n) ∖ m, [⋃s∈s] ∆1(o, w, f , s)p)
+	newAccState.ServiceState = a.preimageIntegration(newAccState.ServiceState, allPreimageProvisions)
 
 	// Sort accumulation pairs by service ID to ensure deterministic output
 	sort.Slice(accumHashPairs, func(i, j int) bool {

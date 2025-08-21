@@ -47,32 +47,30 @@ type Accumulator struct {
 // InvokePVM ΨA(U, N_T, N_S, N_G, ⟦I⟧) → O Equation (B.9)
 func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) AccumulationOutput {
 	output := AccumulationOutput{
-		AccumulationState: accState,
+		AccumulationState: accState.Clone(),
 	}
 
 	account := accState.ServiceState[serviceIndex]
 	c := account.EncodedCodeAndMetadata()
 	// if c = ∅ ∨ ∣c∣ > WC
 	if c == nil || len(c) == work.MaxSizeServiceCode {
-		ctx, err := a.newCtx(accState, serviceIndex)
-		if err != nil {
-			log.Println("error creating context", "err", err)
-		}
-		output.AccumulationState = ctx.AccumulationState
 		return output
 	}
 
-	ctx, err := a.newCtx(accState, serviceIndex)
+	// I(u, s)^2
+	var (
+		newCtxPair polkavm.AccumulateContextPair
+		err        error
+	)
+	newCtxPair.RegularCtx, err = a.newCtx(accState.Clone(), serviceIndex)
 	if err != nil {
 		log.Println("error creating context", "err", err)
-		output.AccumulationState = ctx.AccumulationState
 		return output
 	}
-
-	// I(u, s), I(u, s)
-	newCtxPair := polkavm.AccumulateContextPair{
-		RegularCtx:     ctx,
-		ExceptionalCtx: ctx,
+	newCtxPair.ExceptionalCtx, err = a.newCtx(accState.Clone(), serviceIndex)
+	if err != nil {
+		log.Println("error creating context", "err", err)
+		return output
 	}
 
 	// E(t, s, ↕o)
@@ -87,14 +85,13 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	})
 	if err != nil {
 		log.Println("error encoding arguments", "err", err)
-		output.AccumulationState = ctx.AccumulationState
 		return output
 	}
 
 	// F (equation B.10)
 	hostCallFunc := func(hostCall uint64, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctx polkavm.AccumulateContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.AccumulateContextPair, error) {
-		// s
-		currentService := accState.ServiceState[serviceIndex]
+		// s = (xu)d[xs]
+		currentService := newCtxPair.RegularCtx.AccumulationState.ServiceState[serviceIndex]
 
 		if currentService.PreimageLookup == nil {
 			currentService.PreimageLookup = make(map[crypto.Hash][]byte)
@@ -193,8 +190,6 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 
 // newCtx (B.9)
 func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.ServiceId) (polkavm.AccumulateContext, error) {
-	serviceState := u.ServiceState.Clone()
-	delete(serviceState, serviceIndex)
 	ctx := polkavm.AccumulateContext{
 		ServiceId:         serviceIndex,
 		AccumulationState: u,
