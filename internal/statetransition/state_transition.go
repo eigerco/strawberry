@@ -86,6 +86,8 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		return err
 	}
 
+	// TODO temporary fix, refactor this to pass the new entropy pool instead of mutating the state hereit a
+	s.EntropyPool = newEntropyPool
 	reporters, err := guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(newBlock.Extrinsic.EG, s, chain, newTimeSlot, intermediateRecentHistory, newBlock.Header, intermediateCoreAssignments)
 	if err != nil {
 		return err
@@ -110,9 +112,8 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		return err
 	}
 
-	// TODO: pass correct available reports.
 	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators,
-		[]block.WorkReport{}, accumulationStats, transferStats)
+		availableWorkReports, accumulationStats, transferStats)
 
 	newRecentHistory, err := CalculateNewRecentHistory(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentHistory, accumulationOutputLog)
 	if err != nil {
@@ -1089,7 +1090,6 @@ func (a *Accumulator) ParallelDelta(
 		serviceIndices[svcId] = struct{}{}
 	}
 
-	var totalGasUsed uint64
 	var allTransfers []service.DeferredTransfer
 	// u = [(s, ∆1(o, w, f , s)u) | s <− s]
 	accumHashPairs := make(ServiceHashPairs, 0)
@@ -1118,9 +1118,6 @@ func (a *Accumulator) ParallelDelta(
 			accState, deferredTransfers, resultHash, gasUsed, preimageProvisions := output.AccumulationState, output.DeferredTransfers, output.Result, output.GasUsed, output.ProvidedPreimages
 			mu.Lock()
 			defer mu.Unlock()
-
-			// Update total gas used
-			totalGasUsed += gasUsed
 
 			// Collect transfers
 			if len(deferredTransfers) > 0 {

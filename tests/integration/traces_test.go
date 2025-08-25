@@ -1,10 +1,12 @@
-//go:build integration
+//go:build integration && traces
 
 package integration
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/log"
+	"github.com/rs/zerolog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,6 +26,26 @@ import (
 	jsonutils "github.com/eigerco/strawberry/internal/testutils/json"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 )
+
+func init() {
+	log.Init(log.Options{LogLevel: zerolog.ErrorLevel})
+}
+
+func TestTracePreimagesLight(t *testing.T) {
+	runTracesTests(t, "traces/preimages_light")
+}
+
+func TestTracePreimages(t *testing.T) {
+	runTracesTests(t, "traces/preimages")
+}
+
+func TestTraceStorageLight(t *testing.T) {
+	runTracesTests(t, "traces/storage_light")
+}
+
+func TestTraceStorage(t *testing.T) {
+	runTracesTests(t, "traces/storage")
+}
 
 func TestTraceFallback(t *testing.T) {
 	runTracesTests(t, "traces/fallback")
@@ -45,6 +67,7 @@ func runTracesTests(t *testing.T, directory string) {
 			continue // Skip the genesis trace since this is mostly there for reference.
 		}
 		t.Run(filepath.Base(file), func(t *testing.T) {
+			t.Parallel()
 			runTraceTest(t, file)
 		})
 	}

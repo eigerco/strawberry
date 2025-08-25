@@ -105,9 +105,12 @@ func (sa *ServiceAccount) InsertStorage(key statekey.StateKey, originalKeySize u
 		sa.globalKV = make(map[statekey.StateKey][]byte)
 	}
 
-	if _, ok := sa.GetStorage(key); !ok {
+	if prevVal, ok := sa.GetStorage(key); !ok {
 		sa.totalNumberOfItems += 1
 		sa.totalNumberOfOctets += 34 + originalKeySize + uint64(len(value))
+	} else {
+		sa.totalNumberOfOctets -= uint64(len(prevVal))
+		sa.totalNumberOfOctets += uint64(len(value))
 	}
 
 	sa.globalKV[key] = value

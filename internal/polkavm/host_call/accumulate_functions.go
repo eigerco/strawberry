@@ -150,7 +150,7 @@ func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPa
 	}
 	gas -= CheckpointCost
 
-	ctxPair.ExceptionalCtx = ctxPair.RegularCtx
+	ctxPair.ExceptionalCtx = ctxPair.RegularCtx // TODO should clone?
 
 	// Set the new ϱ' value into φ′7
 	regs[A0] = uint64(gas)
@@ -527,7 +527,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 		return gas, withCode(regs, OK), mem, ctxPair, nil
 
 	case 2: // if (xs)l[h, z] ∈ {[], [X, Y]}, Y < t − D
-		if historicalTimeslots[1] < timeslot-jamtime.PreimageExpulsionPeriod {
+		if int(historicalTimeslots[1]) < int(timeslot)-jamtime.PreimageExpulsionPeriod {
 
 			// except: K(al) = K((xs)l) ∖ {(h, z)}
 			// except: K(ap) = K((xs)p) ∖ {h}
@@ -551,7 +551,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 		return gas, withCode(regs, OK), mem, ctxPair, nil
 
 	case 3: // if (xs)l[h, z] = [X, Y, w]
-		if historicalTimeslots[1] < timeslot-jamtime.PreimageExpulsionPeriod { // if Y < t − D
+		if int(historicalTimeslots[1]) < int(timeslot)-jamtime.PreimageExpulsionPeriod { // if Y < t − D
 
 			// except: al[h, z] = [w, t] if (xs)l[h, z] = [x, y, w], y < t − D
 			newHistoricalTimeslots := service.PreimageHistoricalTimeslots{historicalTimeslots[2], timeslot}

@@ -10,4 +10,5 @@ const (
 	TicketSubmissionTimeSlots       = 10
 	ValidatorRotationPeriod         = Timeslot(4)
 	SlotPeriodInSeconds             = 6
+	PreimageExpulsionPeriod         = 32 // see https://github.com/davxy/jam-test-vectors/tree/master/traces#preimage-expunge-delay
 )

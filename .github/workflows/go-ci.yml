@@ -75,3 +75,6 @@ jobs:
 
       - name: execute integration tests
         run: make integration
+
+      - name: execute traces
+        run: make traces

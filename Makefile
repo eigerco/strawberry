@@ -47,6 +47,11 @@ test: build-bandersnatch build-erasurecoding
 integration: build-bandersnatch build-erasurecoding
 	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=integration
 
+
+## integration: Runs traces tests.
+traces: build-bandersnatch build-erasurecoding
+	go test ./tests/... $(DARWIN_TEST_GOFLAGS) --tags=integration,traces
+
 ## install-hooks: Install git-hooks from .githooks directory.
 .PHONY: install-hooks
 install-hooks:
