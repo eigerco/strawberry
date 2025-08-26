@@ -31,4 +31,8 @@ const (
 	ValidatorRotationPeriod = Timeslot(10)
 
 	SlotPeriodInSeconds = 6 // P = 6: The slot period, in seconds
+
+	// The period in timeslots after which an unreferenced preimage may be expunged.
+	// D = L + 4,800 where L = 14,400 (maximum age of lookup anchor)
+	PreimageExpulsionPeriod = 19_200 // D ≡ L + 4_800 = 19_200 (equation B.3 v0.6.6)
 )

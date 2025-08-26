@@ -543,8 +543,8 @@ func TestInfo(t *testing.T) {
 	omega1 := polkavm.RWAddressBase
 	initialRegs[polkavm.A0] = uint64(serviceId)
 	initialRegs[polkavm.A1] = uint64(omega1)
-	initialRegs[polkavm.A4] = 0
-	initialRegs[polkavm.A5] = expectedByteLength
+	initialRegs[polkavm.A2] = 0
+	initialRegs[polkavm.A3] = expectedByteLength
 
 	gasRemaining, regs, mem, err := host_call.Info(initialGas, initialRegs, mem, serviceId, serviceState)
 	require.NoError(t, err)

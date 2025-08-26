@@ -3,7 +3,7 @@ package host_call
 import (
 	"bytes"
 	"fmt"
-	"log"
+	"github.com/eigerco/strawberry/pkg/log"
 	"math"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -460,7 +460,7 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
-	if err = writeFromOffset(mem, o, v, regs[polkavm.A4], regs[polkavm.A5]); err != nil {
+	if err = writeFromOffset(mem, o, v, regs[polkavm.A2], regs[polkavm.A3]); err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
@@ -514,7 +514,7 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 		targetBytes := make([]byte, tz)
 		err := mem.Read(to, targetBytes)
 		if err != nil {
-			log.Printf("unable to access memory for target: address %d length %d", to, tz)
+			log.VM.Error().Msgf("unable to access memory for target: address %d length %d", to, tz)
 		}
 
 		_, _ = fmt.Fprintf(fullMsg, " %s", targetBytes)
@@ -523,13 +523,13 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 	msgBytes := make([]byte, xz)
 	err := mem.Read(xo, msgBytes)
 	if err != nil {
-		log.Printf("unable to access memory for target: address %d length %d", to, tz)
+		log.VM.Error().Msgf("unable to access memory for target: address %d length %d", to, tz)
 	}
 
 	// Write message
 	_, _ = fmt.Fprintf(fullMsg, " %s", msgBytes)
 
-	log.Println(fullMsg.String())
+	log.VM.Info().Str("msg", fullMsg.String()).Msg("Service log")
 	return gas, regs, mem, nil
 }
 
