@@ -1,8 +1,8 @@
 {
     "header": {
         "parent": "0x476243ad7cc4fc49cb6cb362c6568e931731d8650d917007a6037cceedd62244",
-        "parent_state_root": "2446877a5112dfd3205a89520dc736a4d5677e66f4b11aed3cbeaaeea683ed28",
-        "extrinsic_hash": "3036bacb7441c4d64788359af949b454b4bfd051a0b3e93488ded8e4ed13d526",
+        "parent_state_root": "0x5636551c2ae6eb2ccb38e552c30611f2c43cf3c33367769bb4cb13aa88c290f0",
+        "extrinsic_hash": "0x3036bacb7441c4d64788359af949b454b4bfd051a0b3e93488ded8e4ed13d526",
         "slot": 1,
         "epoch_mark": null,
         "tickets_mark": null,
@@ -11,8 +11,8 @@
             "0xe68e0cf7f26c59f963b5846202d2327cc8bc0c4eff8cb9abd4012f9a71decf00"
         ],
         "author_index": 0,
-        "entropy_source": "471e9a13ad977962ae5c68898274c0ef255ec80c9d31b26c80c2e18cf76fbc2e3dc9de282931e780db3a282fcc7abf34056404db728c64d8073c8074bc8cb51a7b6bfc64c8f902ad8e85f83a3c85bc1b2757fb3dd7ebab33c00a065823ffdc17",
-        "seal": "abc77c8ba19cee69325f04258b882d6515ee600e4f5da8b44b17985e096a3b29a7748b9c45413a6f04ee1207be1d1c8f6b84ac780b1119cdd5fdd7818a9b5c197f4eff78dce53c1bfd2c286b37c264a963ab7b0b56faec23492842e756c0811b"
+        "entropy_source": "0x471e9a13ad977962ae5c68898274c0ef255ec80c9d31b26c80c2e18cf76fbc2e3dc9de282931e780db3a282fcc7abf34056404db728c64d8073c8074bc8cb51a7b6bfc64c8f902ad8e85f83a3c85bc1b2757fb3dd7ebab33c00a065823ffdc17",
+        "seal": "0xabc77c8ba19cee69325f04258b882d6515ee600e4f5da8b44b17985e096a3b29f98354d1f742b0dd481eae749c078d299ae3f8f5ed60c382e8401783b0e8020b60029bb53483c9519ba38ee71c21d8d3177c1dac90aa43cb659632698709430d"
     },
     "extrinsic": {
         "tickets": [],
@@ -52,13 +52,12 @@
                         }
                     ]
                 }
-             
             ],
             "culprits": [
                 {
-                    "target": "484932de3cb4b456300090de507dde04bc7f66b6e08c2e95d0fd5af67a53e8e1",
+                    "target": "0x484932de3cb4b456300090de507dde04bc7f66b6e08c2e95d0fd5af67a53e8e1",
                     "key": "0x3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
-                    "signature": "50836a02f2eaa8e185e95927b9bc901f6470a1506db3c9f7f6f0e31881b9fc614cadcde0e15da7cc4475482ec0eb399e7386def10201e27833c2703e1e252901"
+                    "signature": "0x50836a02f2eaa8e185e95927b9bc901f6470a1506db3c9f7f6f0e31881b9fc614cadcde0e15da7cc4475482ec0eb399e7386def10201e27833c2703e1e252901"
                 }
             ],
             "faults": [
