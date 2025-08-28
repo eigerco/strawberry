@@ -388,28 +388,30 @@ type Account struct {
 }
 
 type AccountData struct {
-	Service    ServiceInfo      `json:"service"`
-	Preimages  []PreimageInfo   `json:"preimages"`
-	LookupMeta []LookupMetaInfo `json:"lookup_meta"`
-	Storage    *Storage         `json:"storage"`
+	Service   ServiceInfo       `json:"service"`
+	Preimages []PreimageInfo    `json:"preimages"`
+	KeyValues []AccountKeyValue `json:"keyvals"`
+}
+
+type AccountKeyValue struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 func (ad AccountData) To(id block.ServiceId) service.ServiceAccount {
 	account := service.ServiceAccount{
-		CodeHash:               hexToHash(ad.Service.CodeHash),
-		Balance:                ad.Service.Balance,
-		GasLimitForAccumulator: ad.Service.MinItemGas,
-		GasLimitOnTransfer:     ad.Service.MinMemoGas,
+		GratisStorageOffset:            ad.Service.GratisStorageOffset,
+		CodeHash:                       hexToHash(ad.Service.CodeHash),
+		Balance:                        ad.Service.Balance,
+		GasLimitForAccumulator:         ad.Service.MinItemGas,
+		GasLimitOnTransfer:             ad.Service.MinMemoGas,
+		CreationTimeslot:               jamtime.Timeslot(ad.Service.CreationTimeslot),
+		MostRecentAccumulationTimeslot: jamtime.Timeslot(ad.Service.MostRecentAccumulationTimeslot),
+		ParentService:                  block.ServiceId(ad.Service.ParentService),
 	}
 
-	if ad.Storage != nil {
-		for k, v := range *ad.Storage {
-			stateKey := hexToBytes(k)
-			// TODO this is wrong since it uses statekey size, we need to have original key size to produce correct balance results
-			account.InsertStorage(statekey.StateKey(stateKey), uint64(len(stateKey)), hexToBytes(v))
-
-		}
-	}
+	account.SetTotalNumberOfOctets(ad.Service.Bytes)
+	account.SetTotalNumberOfItems(ad.Service.Items)
 
 	preimages := map[crypto.Hash][]byte{}
 	for _, preimage := range ad.Preimages {
@@ -418,21 +420,14 @@ func (ad AccountData) To(id block.ServiceId) service.ServiceAccount {
 
 	account.PreimageLookup = preimages
 
-	for _, meta := range ad.LookupMeta {
-		values := make(service.PreimageHistoricalTimeslots, len(meta.Value))
-		for i, slot := range meta.Value {
-			values[i] = jamtime.Timeslot(slot)
-		}
-
-		k, err := statekey.NewPreimageMeta(id, hexToHash(meta.Key.Hash), meta.Key.Length)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create preimage meta key: %v", err))
-		}
-
-		if err := account.InsertPreimageMeta(k, uint64(meta.Key.Length), values); err != nil {
-			panic(fmt.Sprintf("failed to insert preimage meta: %v", err))
-		}
+	globalKV := map[statekey.StateKey][]byte{}
+	for _, kv := range ad.KeyValues {
+		stateKey := statekey.StateKey{}
+		copy(stateKey[:], hexToBytes(kv.Key))
+		globalKV[stateKey] = hexToBytes(kv.Value)
 	}
+
+	account.SetGlobalKVItems(globalKV)
 
 	return account
 }
@@ -445,51 +440,56 @@ func NewAccountData(account service.ServiceAccount) AccountData {
 			Blob: bytesToHex(blob),
 		})
 	}
-	// Sort as per state serialization in the GP (D.2).
-	// h_1...29
 	sort.Slice(preimages, func(i, j int) bool {
-		hi := hexToBytes(preimages[i].Hash)
-		hj := hexToBytes(preimages[j].Hash)
-		return bytes.Compare(hi[1:29+1], hj[1:29+1]) < 0
+		return strings.Compare(preimages[i].Hash, preimages[j].Hash) < 0
+	})
+
+	globalKVs := account.GetGlobalKVItems()
+	keyvals := make([]AccountKeyValue, 0, len(globalKVs))
+	for k, v := range globalKVs {
+		keyvals = append(keyvals, AccountKeyValue{
+			Key:   bytesToHex(k[:]),
+			Value: bytesToHex(v),
+		})
+	}
+	sort.Slice(keyvals, func(i, j int) bool {
+		return strings.Compare(keyvals[i].Key, keyvals[j].Key) < 0
 	})
 
 	return AccountData{
 		Service: ServiceInfo{
-			CodeHash:   bytesToHex(account.CodeHash[:]),
-			Balance:    account.Balance,
-			MinItemGas: account.GasLimitForAccumulator,
-			MinMemoGas: account.GasLimitOnTransfer,
-			Bytes:      account.GetTotalNumberOfOctets(),
-			Items:      account.GetTotalNumberOfItems(),
+			GratisStorageOffset:            account.GratisStorageOffset,
+			CodeHash:                       bytesToHex(account.CodeHash[:]),
+			Balance:                        account.Balance,
+			MinItemGas:                     account.GasLimitForAccumulator,
+			MinMemoGas:                     account.GasLimitOnTransfer,
+			CreationTimeslot:               uint32(account.CreationTimeslot),
+			MostRecentAccumulationTimeslot: uint32(account.MostRecentAccumulationTimeslot),
+			ParentService:                  uint32(account.ParentService),
+			Bytes:                          account.GetTotalNumberOfOctets(),
+			Items:                          account.GetTotalNumberOfItems(),
 		},
 		Preimages: preimages,
+		KeyValues: keyvals,
 	}
 }
 
-type Storage map[string]string
-
 type ServiceInfo struct {
-	CodeHash   string `json:"code_hash"`
-	Balance    uint64 `json:"balance"`
-	MinItemGas uint64 `json:"min_item_gas"`
-	MinMemoGas uint64 `json:"min_memo_gas"`
-	Bytes      uint64 `json:"bytes"`
-	Items      uint32 `json:"items"`
+	GratisStorageOffset            uint64 `json:"gratis_storage_offset"`
+	CodeHash                       string `json:"code_hash"`
+	Balance                        uint64 `json:"balance"`
+	MinItemGas                     uint64 `json:"min_item_gas"`
+	MinMemoGas                     uint64 `json:"min_memo_gas"`
+	CreationTimeslot               uint32 `json:"timeslot_creation"`
+	MostRecentAccumulationTimeslot uint32 `json:"timeslot_most_recent_acc"`
+	ParentService                  uint32 `json:"parent_service"`
+	Bytes                          uint64 `json:"bytes"`
+	Items                          uint32 `json:"items"`
 }
 
 type PreimageInfo struct {
 	Hash string `json:"hash"`
 	Blob string `json:"blob"`
-}
-
-type LookupMetaInfo struct {
-	Key   LookupMetaKey `json:"key"`
-	Value []uint32      `json:"value"`
-}
-
-type LookupMetaKey struct {
-	Hash   string `json:"hash"`
-	Length uint32 `json:"length"`
 }
 
 type ActivityStatistics struct {
