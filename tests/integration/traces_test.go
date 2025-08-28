@@ -1,17 +1,19 @@
-//go:build integration && traces
+//go:build tiny && traces
 
 package integration
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/eigerco/strawberry/pkg/log"
-	"github.com/rs/zerolog"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
 
+	"github.com/eigerco/strawberry/pkg/log"
+	"github.com/rs/zerolog"
+
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/stretchr/testify/require"
@@ -28,7 +30,7 @@ import (
 )
 
 func init() {
-	log.Init(log.Options{LogLevel: zerolog.ErrorLevel})
+	log.Init(log.Options{LogLevel: zerolog.InfoLevel})
 }
 
 func TestTracePreimagesLight(t *testing.T) {
@@ -74,6 +76,7 @@ func runTracesTests(t *testing.T, directory string) {
 }
 
 func runTraceTest(t *testing.T, filename string) {
+	log.Root.Info().Msg(fmt.Sprintf("NumberOfValidators: %d", common.NumberOfValidators))
 	data, err := os.ReadFile(filename)
 	require.NoError(t, err)
 

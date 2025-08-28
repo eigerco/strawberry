@@ -3,10 +3,10 @@
 package integration
 
 import (
-	"embed"
 	"encoding/json"
+	"fmt"
 	"io"
-	"path"
+	"os"
 	"strings"
 	"testing"
 
@@ -22,9 +22,6 @@ import (
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/validator"
 )
-
-//go:embed vectors/assurances
-var assurancestestvectors embed.FS
 
 type AssurancesJSONData struct {
 	Input     AssurancesInput  `json:"input"`
@@ -170,33 +167,37 @@ func mapHash(s string) crypto.Hash {
 	}
 	return crypto.Hash(mustStringToHex(s))
 }
-
-func TestAssurancesTiny(t *testing.T) {
-	rootPath := "vectors/assurances/tiny"
-	ff, err := assurancestestvectors.ReadDir(rootPath)
+func ReadAssurancesJSONFile(filename string) (*AssurancesJSONData, error) {
+	file, err := os.Open(filename)
 	if err != nil {
-		t.Fatal(err)
+		return nil, fmt.Errorf("failed to open file: %v", err)
 	}
-	for _, file := range ff {
+	defer file.Close()
+
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %v", err)
+	}
+
+	var data AssurancesJSONData
+	if err := json.Unmarshal(bytes, &data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
+	}
+
+	return &data, nil
+}
+func TestAssurancesTiny(t *testing.T) {
+	files, err := os.ReadDir(fmt.Sprintf("vectors/assurances/%s", vectorsType))
+	require.NoError(t, err, "failed to read directory: vectors/assurances/%s", vectorsType)
+	for _, file := range files {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
 
 		t.Run(file.Name(), func(t *testing.T) {
-			tc := &AssurancesJSONData{}
-			f, err := assurancestestvectors.Open(path.Join(rootPath, file.Name()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() {
-				_ = f.Close()
-			})
-			bb, err := io.ReadAll(f)
-			require.NoError(t, err)
-
-			if err := json.Unmarshal(bb, tc); err != nil {
-				t.Fatal(err)
-			}
+			filePath := fmt.Sprintf("vectors/assurances/%s/%s", vectorsType, file.Name())
+			tc, err := ReadAssurancesJSONFile(filePath)
+			require.NoError(t, err, "failed to read JSON file: %s", filePath)
 
 			newBlock := mapBlock(tc.Input)
 			theState := mapAssurancesState(tc.PreState)

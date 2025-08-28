@@ -16,7 +16,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 )
 
-type TestCase struct {
+type ShufflingTestCase struct {
 	Input          uint32
 	Entropy        string
 	ExpectedOutput []uint32 `json:"output"`
@@ -27,7 +27,7 @@ func TestShuffleVectors(t *testing.T) {
 	fileData, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
-	var testCases []TestCase
+	var testCases []ShufflingTestCase
 	err = json.Unmarshal(fileData, &testCases)
 	require.NoError(t, err)
 

@@ -43,14 +43,19 @@ test: build-bandersnatch build-erasurecoding
 	go test ./... -race -v $(DARWIN_TEST_GOFLAGS)
 
 .PHONY: integration
-## integration: Runs integration tests.
+## integration: Runs integration tests with tiny configuration.
 integration: build-bandersnatch build-erasurecoding
-	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=integration
+	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=tiny,integration
 
+.PHONY: integration-full
+## integration-full: Runs integration tests with full configuration.
+integration-full: build-bandersnatch build-erasurecoding
+	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=full,integration
 
-## integration: Runs traces tests.
+.PHONY: traces
+## traces: Runs traces tests.
 traces: build-bandersnatch build-erasurecoding
-	go test ./tests/... $(DARWIN_TEST_GOFLAGS) --tags=integration,traces
+	go test ./tests/... $(DARWIN_TEST_GOFLAGS) --tags=tiny,traces
 
 ## install-hooks: Install git-hooks from .githooks directory.
 .PHONY: install-hooks
