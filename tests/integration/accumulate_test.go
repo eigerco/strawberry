@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -140,12 +141,15 @@ type AccumulateTestCase struct {
 }
 
 func TestAccumulate(t *testing.T) {
-	files, err := os.ReadDir("vectors/accumulate/tiny")
-	require.NoError(t, err)
+	files, err := os.ReadDir(fmt.Sprintf("vectors/accumulate/%s", vectorsType))
+	require.NoError(t, err, "failed to read directory: vectors/accumulate/%s", vectorsType)
 
 	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".json") {
+			continue
+		}
 		t.Run(file.Name(), func(t *testing.T) {
-			f, err := os.Open(fmt.Sprintf("vectors/accumulate/tiny/%s", file.Name()))
+			f, err := os.Open(fmt.Sprintf("vectors/accumulate/%s/%s", vectorsType, file.Name()))
 			require.NoError(t, err)
 			defer f.Close()
 

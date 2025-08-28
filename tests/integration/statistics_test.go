@@ -3,10 +3,11 @@
 package integration
 
 import (
-	"embed"
 	"encoding/json"
+	"fmt"
 	"io"
-	"path"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -19,9 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-//go:embed vectors/statistics
-var statisticstestvectors embed.FS
 
 type StatisticsJSONData struct {
 	Input     StatisticsInput `json:"input"`
@@ -71,15 +69,25 @@ type Preimage struct {
 	Requester uint32 `json:"requester"`
 	Blob      string `json:"blob"`
 }
-type Guarantee struct {
-	Report     Report      `json:"report"`
-	Slot       int         `json:"slot"`
-	Signatures []Signature `json:"signatures"`
-}
 
-type Signature struct {
-	ValidatorIndex uint16 `json:"validator_index"`
-	Signature      string `json:"signature"`
+func ReadStatisticsJSONFile(filename string) (*StatisticsJSONData, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %v", err)
+	}
+
+	var data StatisticsJSONData
+	if err := json.Unmarshal(bytes, &data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
+	}
+
+	return &data, nil
 }
 
 func mapStatisticsInput(s StatisticsInput) block.Block {
@@ -162,27 +170,16 @@ func mapStatisticsState(s StatisticsState) state.State {
 }
 
 func TestStatistics(t *testing.T) {
-	rootPath := "vectors/statistics/tiny"
-	ff, err := statisticstestvectors.ReadDir(rootPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, file := range ff {
+	files, err := os.ReadDir(fmt.Sprintf("vectors/statistics/%s", vectorsType))
+	require.NoError(t, err, "failed to read directory: vectors/statistics/%s')", vectorsType)
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".json") {
+			continue
+		}
 		t.Run(file.Name(), func(t *testing.T) {
-			tc := &StatisticsJSONData{}
-			f, err := statisticstestvectors.Open(path.Join(rootPath, file.Name()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() {
-				_ = f.Close()
-			})
-			bb, err := io.ReadAll(f)
-			require.NoError(t, err)
-
-			if err := json.Unmarshal(bb, tc); err != nil {
-				t.Fatal(err)
-			}
+			filePath := fmt.Sprintf("vectors/statistics/%s/%s", vectorsType, file.Name())
+			tc, err := ReadStatisticsJSONFile(filePath)
+			require.NoError(t, err, "failed to read JSON file: %s", filePath)
 			newBlock := mapStatisticsInput(tc.Input)
 			preState := mapStatisticsState(tc.PreState)
 			reporters := make(crypto.ED25519PublicKeySet)

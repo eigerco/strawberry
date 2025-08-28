@@ -1,11 +1,13 @@
 //go:build integration
 
-package integration_test
+package integration
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -17,29 +19,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRecentHistory(t *testing.T) {
-	testFiles := []string{
-		// Empty history queue.
-		"vectors/recenthistory/progress_blocks_history-1.json",
+func ReadRecentHistoryJSONFile(filename string) (*RecentHistoryTestVector, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %v", err)
+	}
+	defer file.Close()
 
-		// Not empty nor full history queue.
-		"vectors/recenthistory/progress_blocks_history-2.json",
-
-		// Fill the history queue.
-		"vectors/recenthistory/progress_blocks_history-3.json",
-
-		// Shift the history queue.
-		"vectors/recenthistory/progress_blocks_history-4.json",
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %v", err)
 	}
 
-	for _, tf := range testFiles {
-		t.Run(filepath.Base(tf), func(t *testing.T) {
-			file, err := os.ReadFile(tf)
-			require.NoError(t, err)
+	var data RecentHistoryTestVector
+	if err := json.Unmarshal(bytes, &data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
+	}
 
-			var tv RecentHistoryTestVector
-			err = json.Unmarshal(file, &tv)
-			require.NoError(t, err)
+	return &data, nil
+}
+
+// Empty history queue.
+// "vectors/recenthistory/progress_blocks_history-1.json",
+// Not empty nor full history queue.
+// "vectors/recenthistory/progress_blocks_history-2.json",
+// Fill the history queue.
+// "vectors/recenthistory/progress_blocks_history-3.json",
+// Shift the history queue.
+// "vectors/recenthistory/progress_blocks_history-4.json",
+func TestRecentHistory(t *testing.T) {
+	files, err := os.ReadDir(fmt.Sprintf("vectors/recenthistory/%s", vectorsType))
+	require.NoError(t, err, "failed to read directory: vectors/recenthistory/%s", vectorsType)
+
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".json") {
+			continue
+		}
+		t.Run(file.Name(), func(t *testing.T) {
+			filePath := fmt.Sprintf("vectors/recenthistory/%s/%s", vectorsType, file.Name())
+			tv, err := ReadRecentHistoryJSONFile(filePath)
+			require.NoError(t, err, "failed to read JSON file: %s", filePath)
 
 			// Inputs.
 			headerHash := crypto.Hash(testutils.MustFromHex(t, tv.Input.HeaderHash))
