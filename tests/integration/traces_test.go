@@ -133,23 +133,7 @@ func RequireEqualStates(t *testing.T, expected, actual *state.State) {
 	}
 }
 
-type TraceJSON struct {
-	PreState  TraceJSONState  `json:"pre_state"`
-	PostState TraceJSONState  `json:"post_state"`
-	Block     jsonutils.Block `json:"block"`
-}
-
-type TraceJSONStateEntry struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-type TraceJSONState struct {
-	StateRoot string                `json:"state_root"`
-	Keyvals   []TraceJSONStateEntry `json:"keyvals"`
-}
-
-// parseTrace deserializes a TraceState into a state.State and validates that
+// parseTrace deserializes a RawState into a state.State and validates that
 // the state root matches the one provided by the trace. Returns the state root
 // and deserialized state.
 func parseTrace(t *testing.T, traceState RawState, trie *store.Trie) *state.State {
