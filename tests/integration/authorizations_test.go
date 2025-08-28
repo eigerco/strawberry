@@ -101,8 +101,8 @@ func mapAuthState(s AuthState) state.State {
 }
 
 func TestAuthorizations(t *testing.T) {
-	files, err := os.ReadDir("vectors/authorizations/tiny")
-	require.NoError(t, err, "failed to read authorizations directory")
+	files, err := os.ReadDir(fmt.Sprintf("vectors/authorizations/%s", vectorsType))
+	require.NoError(t, err, "failed to read directory: vectors/authorizations/%s", vectorsType)
 
 	for _, file := range files {
 		if !strings.HasSuffix(file.Name(), ".json") {
@@ -110,7 +110,7 @@ func TestAuthorizations(t *testing.T) {
 		}
 
 		t.Run(file.Name(), func(t *testing.T) {
-			filePath := fmt.Sprintf("vectors/authorizations/tiny/%s", file.Name())
+			filePath := fmt.Sprintf("vectors/authorizations/%s/%s", vectorsType, file.Name())
 			data, err := readAuthJSONFile(filePath)
 			require.NoError(t, err, "failed to read JSON file: %s", filePath)
 

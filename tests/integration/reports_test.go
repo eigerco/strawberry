@@ -1,6 +1,6 @@
 //go:build integration
 
-package integration_test
+package integration
 
 import (
 	"crypto/ed25519"
@@ -31,7 +31,7 @@ import (
 	"github.com/eigerco/strawberry/internal/state"
 )
 
-func ReadJSONFile(filename string) (*JSONData, error) {
+func ReadReportsJSONFile(filename string) (*ReportsJSONData, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %v", err)
@@ -43,7 +43,7 @@ func ReadJSONFile(filename string) (*JSONData, error) {
 		return nil, fmt.Errorf("failed to read file: %v", err)
 	}
 
-	var data JSONData
+	var data ReportsJSONData
 	if err := json.Unmarshal(bytes, &data); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
 	}
@@ -83,15 +83,6 @@ type WorkPackageSpec struct {
 	ExportsCount int    `json:"exports_count"`
 }
 
-type Context struct {
-	Anchor           string   `json:"anchor"`
-	StateRoot        string   `json:"state_root"`
-	BeefyRoot        string   `json:"beefy_root"`
-	LookupAnchor     string   `json:"lookup_anchor"`
-	LookupAnchorSlot int      `json:"lookup_anchor_slot"`
-	Prerequisites    []string `json:"prerequisites"`
-}
-
 type WorkResult struct {
 	ServiceID   int               `json:"service_id"`
 	CodeHash    string            `json:"code_hash"`
@@ -112,7 +103,7 @@ type SegmentRootLookupEntry struct {
 	SegmentTreeRoot string `json:"segment_tree_root"`
 }
 
-type Report struct {
+type WorkReport struct {
 	PackageSpec       WorkPackageSpec          `json:"package_spec"`
 	Context           Context                  `json:"context"`
 	CoreIndex         uint16                   `json:"core_index"`
@@ -128,22 +119,22 @@ type Signature struct {
 }
 
 type Guarantee struct {
-	Report     Report      `json:"Report"`
+	Report     WorkReport  `json:"Report"`
 	Slot       int         `json:"slot"`
 	Signatures []Signature `json:"signatures"`
 }
 
-type Input struct {
+type ReportsInput struct {
 	Guarantees []Guarantee `json:"guarantees"`
 	Slot       int         `json:"slot"`
 }
 
-type Output struct {
-	Ok  OutputOk `json:"ok"`
-	Err string   `json:"err"`
+type ReportsOutput struct {
+	Ok  RepoetsOutputOk `json:"ok"`
+	Err string          `json:"err"`
 }
 
-type OutputOk struct {
+type RepoetsOutputOk struct {
 	Reported  []ReportedWorkOutput `json:"reported"`
 	Reporters []string             `json:"reporters"`
 }
@@ -153,23 +144,16 @@ type ReportedWorkOutput struct {
 	SegmentTreeRoot string `json:"segment_tree_root"`
 }
 
-type JSONData struct {
-	Input     Input  `json:"input"`
-	PreState  State  `json:"pre_state"`
-	Output    Output `json:"output"`
-	PostState State  `json:"post_state"`
-}
-
-type ValidatorKey struct {
-	Bandersnatch string `json:"bandersnatch"`
-	Ed25519      string `json:"ed25519"`
-	BLS          string `json:"bls"`
-	Metadata     string `json:"metadata"`
+type ReportsJSONData struct {
+	Input     ReportsInput  `json:"input"`
+	PreState  ReportsState  `json:"pre_state"`
+	Output    ReportsOutput `json:"output"`
+	PostState ReportsState  `json:"post_state"`
 }
 
 type AvailAssignments struct {
-	Report  Report `json:"report"`
-	Timeout int    `json:"timeout"`
+	Report  WorkReport `json:"report"`
+	Timeout int        `json:"timeout"`
 }
 
 type CoreStatistics struct {
@@ -203,7 +187,7 @@ type ServiceStatistics struct {
 	Record ServiceStatisticsRecord `json:"record"`
 }
 
-type State struct {
+type ReportsState struct {
 	AvailAssignments   []*AvailAssignments `json:"avail_assignments"`
 	CurrValidators     []ValidatorKey      `json:"curr_validators"`
 	PrevValidators     []ValidatorKey      `json:"prev_validators"`
@@ -237,24 +221,7 @@ type MMRPeaks struct {
 	Peaks []string `json:"peaks"`
 }
 
-func mapKey(v ValidatorKey) crypto.ValidatorKey {
-	return crypto.ValidatorKey{
-		Bandersnatch: crypto.BandersnatchPublicKey(mustStringToHex(v.Bandersnatch)),
-		Ed25519:      ed25519.PublicKey(mustStringToHex(v.Ed25519)),
-		Bls:          crypto.BlsKey(mustStringToHex(v.BLS)),
-		Metadata:     crypto.MetadataKey(mustStringToHex(v.Metadata)),
-	}
-}
-
-func mustStringToHex(s string) []byte {
-	bytes, err := crypto.StringToHex(s)
-	if err != nil {
-		panic(err)
-	}
-	return bytes
-}
-
-func mapWorkReport(r Report) block.WorkReport {
+func mapWorkReport(r WorkReport) block.WorkReport {
 	segmentRootLookup := make(map[crypto.Hash]crypto.Hash)
 	for _, entry := range r.SegmentRootLookup {
 		wpHash := crypto.Hash(mustStringToHex(entry.WorkPackageHash))
@@ -463,7 +430,7 @@ func mapEntropyPool(entropyStrings []string) state.EntropyPool {
 }
 
 // Helper function to map pre or post state from JSON to internal state
-func mapState(s State) state.State {
+func mapState(s ReportsState) state.State {
 	return state.State{
 		CoreAssignments: mapAvailAssignments(s.AvailAssignments),
 		ValidatorState: validator.ValidatorState{
@@ -525,8 +492,8 @@ func mapServiceStatistics(stats []ServiceStatistics) validator.ServiceStatistics
 }
 
 func TestReports(t *testing.T) {
-	files, err := os.ReadDir("vectors/reports/tiny")
-	require.NoError(t, err, "failed to read tiny directory")
+	files, err := os.ReadDir(fmt.Sprintf("vectors/reports/%s", vectorsType))
+	require.NoError(t, err, "failed to read directory: vectors/reports/%s')", vectorsType)
 
 	db, err := pebble.NewKVStore()
 	require.NoError(t, err)
@@ -540,8 +507,8 @@ func TestReports(t *testing.T) {
 		}
 
 		t.Run(file.Name(), func(t *testing.T) {
-			filePath := fmt.Sprintf("vectors/reports/tiny/%s", file.Name())
-			data, err := ReadJSONFile(filePath)
+			filePath := fmt.Sprintf("vectors/reports/%s/%s", vectorsType, file.Name())
+			data, err := ReadReportsJSONFile(filePath)
 			require.NoError(t, err, "failed to read JSON file: %s", filePath)
 
 			preState := mapState(data.PreState)
@@ -671,8 +638,8 @@ func TestReports(t *testing.T) {
 				}
 
 				// Set ValidatorsCurrent and ValidatorsLast to empty as the test vectors do not include it
-				preState.ActivityStatistics.ValidatorsCurrent = [6]validator.ValidatorStatistics{}
-				preState.ActivityStatistics.ValidatorsLast = [6]validator.ValidatorStatistics{}
+				preState.ActivityStatistics.ValidatorsCurrent = [common.NumberOfValidators]validator.ValidatorStatistics{}
+				preState.ActivityStatistics.ValidatorsLast = [common.NumberOfValidators]validator.ValidatorStatistics{}
 
 				require.Equal(t, expectedPostState, preState)
 			}

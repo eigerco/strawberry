@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func ReadJSONFile(filename string) (*JSONData, error) {
+func ReadDisputesJSONFile(filename string) (*DisputesJSONData, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %v", err)
@@ -33,7 +33,7 @@ func ReadJSONFile(filename string) (*JSONData, error) {
 		return nil, fmt.Errorf("failed to read file: %v", err)
 	}
 
-	var data JSONData
+	var data DisputesJSONData
 	if err := json.Unmarshal(bytes, &data); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
 	}
@@ -135,13 +135,13 @@ type ValidatorKey struct {
 	Metadata     string `json:"metadata"`
 }
 
-type OutputOk struct {
+type DisputesOutputOk struct {
 	OffendersMark []string `json:"offenders_mark,omitempty"`
 }
 
 type Output struct {
-	Ok  OutputOk `json:"ok"`
-	Err string   `json:"err"`
+	Ok  DisputesOutputOk `json:"ok"`
+	Err string           `json:"err"`
 }
 
 type State struct {
@@ -164,7 +164,7 @@ type PostState struct {
 	Lambda []ValidatorKey `json:"lambda"`
 }
 
-type JSONData struct {
+type DisputesJSONData struct {
 	Input     Input     `json:"input"`
 	PreState  State     `json:"pre_state"`
 	Output    Output    `json:"output"`
@@ -275,17 +275,17 @@ func mapDisputes(disputes Disputes) block.DisputeExtrinsic {
 }
 
 func TestDisputes(t *testing.T) {
-	files, err := os.ReadDir("vectors/disputes/tiny")
-	require.NoError(t, err, "failed to read tiny directory")
+	files, err := os.ReadDir(fmt.Sprintf("vectors/disputes/%s", vectorsType))
+	require.NoError(t, err, "failed to read directory: vectors/disputes/%s", vectorsType)
 
 	for _, file := range files {
-		if !strings.HasSuffix(file.Name(), "il_assignments-1.json") {
+		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
 
 		t.Run(file.Name(), func(t *testing.T) {
-			filePath := fmt.Sprintf("vectors/disputes/tiny/%s", file.Name())
-			data, err := ReadJSONFile(filePath)
+			filePath := fmt.Sprintf("vectors/disputes/%s/%s", vectorsType, file.Name())
+			data, err := ReadDisputesJSONFile(filePath)
 			require.NoError(t, err, "failed to read JSON file: %s", filePath)
 
 			input := data.Input

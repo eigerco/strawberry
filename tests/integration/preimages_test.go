@@ -1,6 +1,6 @@
 //go:build integration
 
-package integration_test
+package integration
 
 import (
 	"encoding/json"
@@ -107,8 +107,8 @@ type OutputData struct {
 }
 
 func TestPreimage(t *testing.T) {
-	files, err := os.ReadDir("vectors/preimages")
-	require.NoError(t, err, "failed to read directory")
+	files, err := os.ReadDir(fmt.Sprintf("vectors/preimages/%s", vectorsType))
+	require.NoError(t, err, "failed to read directory: vectors/preimages/%s", vectorsType)
 
 	db, err := pebble.NewKVStore()
 	require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestPreimage(t *testing.T) {
 
 		t.Run(file.Name(), func(t *testing.T) {
 
-			filePath := fmt.Sprintf("vectors/preimages/%s", file.Name())
+			filePath := fmt.Sprintf("vectors/preimages/%s/%s", vectorsType, file.Name())
 			data, err := ReadPreimageJSONFile(filePath)
 			require.NoError(t, err, "failed to read JSON file: %s", filePath)
 

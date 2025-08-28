@@ -11,26 +11,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
-
-type KeyValue struct {
-	Key   [31]byte `json:"key"`
-	Value []byte   `json:"value"`
-}
-
-type RawState struct {
-	StateRoot crypto.Hash
-	KeyValues []KeyValue
-}
-
-type Trace struct {
-	PreState  RawState
-	Block     block.Block
-	PostState RawState
-}
 
 func TestExtrinsicHash(t *testing.T) {
 	// Traces taken from: https://github.com/davxy/jam-test-vectors/blob/traces/traces
