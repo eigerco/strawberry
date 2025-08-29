@@ -1,9 +1,8 @@
-//go:build tiny && traces
+//go:build full && traces
 
 package integration
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,7 +13,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/eigerco/strawberry/internal/common"
-	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/stretchr/testify/require"
 
@@ -24,9 +22,9 @@ import (
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/store"
-	"github.com/eigerco/strawberry/internal/testutils"
 	jsonutils "github.com/eigerco/strawberry/internal/testutils/json"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 func init() {
@@ -58,14 +56,14 @@ func TestTraceSafrole(t *testing.T) {
 }
 
 func runTracesTests(t *testing.T, directory string) {
-	files, err := filepath.Glob(fmt.Sprintf("%s/*.json", directory))
+	files, err := filepath.Glob(fmt.Sprintf("%s/*.bin", directory))
 	require.NoError(t, err)
 	require.NotEmpty(t, files, "no JSON files found in traces/fallback/")
 
 	sort.Strings(files)
 
 	for _, file := range files {
-		if filepath.Base(file) == "genesis.json" {
+		if filepath.Base(file) == "genesis.bin" {
 			continue // Skip the genesis trace since this is mostly there for reference.
 		}
 		t.Run(filepath.Base(file), func(t *testing.T) {
@@ -92,13 +90,13 @@ func runTraceTest(t *testing.T, filename string) {
 	chainDB := store.NewChain(db)
 	require.NoError(t, err)
 
-	var trace TraceJSON
-	err = json.Unmarshal(data, &trace)
+	var trace Trace
+	err = jam.Unmarshal(data, &trace)
 	require.NoError(t, err)
 
-	_, currentState := parseTrace(t, trace.PreState, trieDB)
-	postStateRoot, postState := parseTrace(t, trace.PostState, trieDB)
-	block := trace.Block.To()
+	currentState := parseTrace(t, trace.PreState, trieDB)
+	postState := parseTrace(t, trace.PostState, trieDB)
+	block := trace.Block
 
 	err = statetransition.UpdateState(
 		currentState,
@@ -113,7 +111,7 @@ func runTraceTest(t *testing.T, filename string) {
 	// Double check the state root matches the one in the trace.
 	currentStateRoot, err := merkle.MerklizeState(*currentState, trieDB)
 	require.NoError(t, err, "failed to merklize current state")
-	require.Equal(t, postStateRoot, currentStateRoot, "state root mismatch")
+	require.Equal(t, trace.PostState.StateRoot, currentStateRoot, "state root mismatch")
 
 }
 
@@ -138,48 +136,21 @@ func RequireEqualStates(t *testing.T, expected, actual *state.State) {
 	}
 }
 
-type TraceJSON struct {
-	PreState  TraceJSONState  `json:"pre_state"`
-	PostState TraceJSONState  `json:"post_state"`
-	Block     jsonutils.Block `json:"block"`
-}
-
-type TraceJSONStateEntry struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-type TraceJSONState struct {
-	StateRoot string                `json:"state_root"`
-	Keyvals   []TraceJSONStateEntry `json:"keyvals"`
-}
-
-// parseTrace deserializes a TraceState into a state.State and validates that
-// the state root matches the one provided by the trace. Returns the state root
-// and deserialized state.
-func parseTrace(t *testing.T, traceState TraceJSONState, trie *store.Trie) (crypto.Hash, *state.State) {
+// parseTrace deserializes a RawState into a state.State and validates that
+// the state root matches the one provided by the trace. Returns the deserialized state.
+func parseTrace(t *testing.T, traceState RawState, trie *store.Trie) *state.State {
 	serializedState := map[statekey.StateKey][]byte{}
-	for _, entry := range traceState.Keyvals {
-		stateKeyBytes := testutils.MustFromHex(t, entry.Key)
-		stateKey := statekey.StateKey{}
-		copy(stateKey[:], stateKeyBytes)
-
-		valueBytes := testutils.MustFromHex(t, entry.Value)
-
-		serializedState[stateKey] = valueBytes
+	for _, entry := range traceState.KeyValues {
+		serializedState[entry.Key] = entry.Value
 	}
 
 	state, err := serialization.DeserializeState(serializedState)
 	require.NoError(t, err, "failed to deserialize state")
 
-	stateRoot := crypto.Hash{}
-	stateRootBytes := testutils.MustFromHex(t, traceState.StateRoot)
-	copy(stateRoot[:], stateRootBytes)
-
 	expectedStateRoot, err := merkle.MerklizeState(state, trie)
 	require.NoError(t, err, "failed to merklize state")
 
-	require.Equal(t, expectedStateRoot, stateRoot, "state root mismatch")
+	require.Equal(t, expectedStateRoot, traceState.StateRoot, "state root mismatch")
 
-	return stateRoot, &state
+	return &state
 }

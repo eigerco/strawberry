@@ -218,7 +218,6 @@ func ReadSafroleJSONFile(filename string) (*SafroleTestVector, error) {
 	return &data, nil
 }
 
-
 // Helper to construct the validator state from the test vector's state.
 func toValidatorState(t *testing.T, s SafroleTestVectorState) validator.ValidatorState {
 	currentValidators := safrole.ValidatorsData{}
