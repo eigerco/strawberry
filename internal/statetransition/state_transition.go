@@ -86,9 +86,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		return err
 	}
 
-	// TODO temporary fix, refactor this to pass the new entropy pool instead of mutating the state hereit a
-	s.EntropyPool = newEntropyPool
-	reporters, err := guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(newBlock.Extrinsic.EG, s, chain, newTimeSlot, intermediateRecentHistory, newBlock.Header, intermediateCoreAssignments)
+	reporters, err := guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(newBlock.Extrinsic.EG, s, newEntropyPool, chain, newTimeSlot, intermediateRecentHistory, newBlock.Header, intermediateCoreAssignments)
 	if err != nil {
 		return err
 	}

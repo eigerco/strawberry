@@ -23,7 +23,7 @@ import (
 // ValidateGuaranteExtrinsicAndReturnReporters validates the guarantees extrinsic according to section 11.4.
 // It performs all validity checks required for work report guarantees and returns the set of reporters.
 // A specific order of the functions inside is required to pass the test vectors
-func ValidateGuaranteExtrinsicAndReturnReporters(ge block.GuaranteesExtrinsic, s *state.State, chain *store.Chain, newTimeslot jamtime.Timeslot,
+func ValidateGuaranteExtrinsicAndReturnReporters(ge block.GuaranteesExtrinsic, s *state.State, newEntropyPool state.EntropyPool, chain *store.Chain, newTimeslot jamtime.Timeslot,
 	intermediateRecentHistory state.RecentHistory, newBlockHeader block.Header, intermediateCoreAssignments state.CoreAssignments) (crypto.ED25519PublicKeySet, error) {
 	if err := verifySortedUnique(ge); err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func ValidateGuaranteExtrinsicAndReturnReporters(ge block.GuaranteesExtrinsic, s
 	if err := validateWorkReports(ge, s, intermediateRecentHistory, newBlockHeader, chain, intermediateCoreAssignments, newTimeslot); err != nil {
 		return nil, err
 	}
-	reporters, err := verifySignatures(ge, s.ValidatorState, s.EntropyPool, newTimeslot)
+	reporters, err := verifySignatures(ge, s.ValidatorState, newEntropyPool, newTimeslot)
 	if err != nil {
 		return nil, err
 	}

@@ -536,8 +536,8 @@ func TestReports(t *testing.T) {
 			var reporters crypto.ED25519PublicKeySet
 			var newCoreAssignments state.CoreAssignments
 			var newValidatorStatistics validator.ActivityStatisticsState
-
 			newTimeState := statetransition.CalculateNewTimeState(newBlock.Header)
+
 			// ρ†
 			intermediateCoreAssignments := disputing.CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, preState.CoreAssignments)
 			// ρ‡
@@ -555,6 +555,8 @@ func TestReports(t *testing.T) {
 				reporters, err = guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(
 					newBlock.Extrinsic.EG,
 					&preState,
+					// TODO find a better way to get correct (new) entropy pool.
+					preState.EntropyPool,
 					chain,
 					newTimeState,
 					preState.RecentHistory,
