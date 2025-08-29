@@ -137,8 +137,7 @@ func RequireEqualStates(t *testing.T, expected, actual *state.State) {
 }
 
 // parseTrace deserializes a RawState into a state.State and validates that
-// the state root matches the one provided by the trace. Returns the state root
-// and deserialized state.
+// the state root matches the one provided by the trace. Returns the deserialized state.
 func parseTrace(t *testing.T, traceState RawState, trie *store.Trie) *state.State {
 	serializedState := map[statekey.StateKey][]byte{}
 	for _, entry := range traceState.KeyValues {
