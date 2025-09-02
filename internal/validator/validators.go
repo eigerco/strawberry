@@ -68,8 +68,9 @@ type ServiceStatistics map[block.ServiceId]ServiceActivityRecord
 // Implements equation 6.14 from the graypaper, i.e Φ(k). If any of the queued
 // validator data matches the offenders list (ψ′_o), all the keys for that
 // validator are zero'd out. v0.7.0
-func NullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed25519.PublicKey) safrole.ValidatorsData {
+func NullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed25519.PublicKey) (safrole.ValidatorsData, []ed25519.PublicKey) {
 	offenderMap := make(crypto.ED25519PublicKeySet)
+	nullifiedKeys := make([]ed25519.PublicKey, 0, len(offenders))
 	for _, key := range offenders {
 		offenderMap.Add(key)
 	}
@@ -80,7 +81,8 @@ func NullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed255
 				// - maybe use a custom wrapper type for [32]byte ?
 				Ed25519: make([]byte, 32),
 			} // Nullify the validator.
+			nullifiedKeys = append(nullifiedKeys, validator.Ed25519)
 		}
 	}
-	return queuedValidators
+	return queuedValidators, nullifiedKeys
 }

@@ -181,7 +181,7 @@ func UpdateSafroleState(
 	if epoch > preEpoch {
 		// Equation 6.14: Φ(k) ≡ [0, 0, ...] if ke ∈ ψ′o
 		//                     k otherwise
-		newValidatorState.SafroleState.NextValidators = validator.NullifyOffenders(validatorState.QueuedValidators, offenders)
+		newValidatorState.SafroleState.NextValidators, _ = validator.NullifyOffenders(validatorState.QueuedValidators, offenders)
 		newValidatorState.CurrentValidators = validatorState.SafroleState.NextValidators
 		newValidatorState.ArchivedValidators = validatorState.CurrentValidators
 

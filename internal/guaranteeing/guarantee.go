@@ -35,7 +35,7 @@ func ValidateGuaranteExtrinsicAndReturnReporters(ge block.GuaranteesExtrinsic, s
 	if err := validateWorkReports(ge, s, intermediateRecentHistory, newBlockHeader, chain, intermediateCoreAssignments, newTimeslot); err != nil {
 		return nil, err
 	}
-	reporters, err := verifySignatures(ge, s.ValidatorState, newEntropyPool, newTimeslot)
+	reporters, err := verifySignatures(ge, s.ValidatorState, s.PastJudgements.OffendingValidators, newEntropyPool, newTimeslot)
 	if err != nil {
 		return nil, err
 	}
@@ -130,9 +130,10 @@ func DetermineValidatorsAndDataForPermutation(
 	guaranteeTimeslot jamtime.Timeslot, // t
 	newTimeslot jamtime.Timeslot, // τ'
 	entropyPool state.EntropyPool, // [η₀', η₁', η₂', η₃']
+	offendingValidators []ed25519.PublicKey,
 	currentValidators safrole.ValidatorsData, // κ'
 	archivedValidators safrole.ValidatorsData, // λ'
-) (safrole.ValidatorsData, crypto.Hash, jamtime.Timeslot) {
+) (safrole.ValidatorsData, crypto.Hash, jamtime.Timeslot, error) {
 	currentRotation := newTimeslot / jamtime.ValidatorRotationPeriod
 	guaranteeRotation := guaranteeTimeslot / jamtime.ValidatorRotationPeriod
 
@@ -163,7 +164,12 @@ func DetermineValidatorsAndDataForPermutation(
 		}
 	}
 
-	return validators, entropy, timeslotForPermutation
+	validators, nullifiedKeys := validator.NullifyOffenders(validators, offendingValidators)
+	// If a banned validator was found to have participated, return an error
+	if len(nullifiedKeys) > 0 {
+		return safrole.ValidatorsData{}, crypto.Hash{}, 0, errors.New("banned validator")
+	}
+	return validators, entropy, timeslotForPermutation, nil
 }
 
 // EG ∈ ⟦{r ∈ R, t ∈ NT, a ∈ ⟦{NV,V̄}⟧2∶3}⟧∶C (eq. 11.23 v 0.7.0)
@@ -215,7 +221,7 @@ func verifySortedUnique(ge block.GuaranteesExtrinsic) error {
 //	    M* otherwise
 //	  }
 //	} (eq. 11.26 v0.7.0)
-func verifySignatures(ge block.GuaranteesExtrinsic, validatorState validator.ValidatorState,
+func verifySignatures(ge block.GuaranteesExtrinsic, validatorState validator.ValidatorState, offendingValidators []ed25519.PublicKey,
 	entropyPool state.EntropyPool, newTimeslot jamtime.Timeslot) (crypto.ED25519PublicKeySet, error) {
 	reporters := make(crypto.ED25519PublicKeySet)
 	for _, g := range ge.Guarantees {
@@ -223,19 +229,24 @@ func verifySignatures(ge block.GuaranteesExtrinsic, validatorState validator.Val
 		if len(g.Credentials) < 2 {
 			return reporters, errors.New("insufficient guarantees")
 		}
-		validators, entropy, timeslotForPermutation := DetermineValidatorsAndDataForPermutation(
+		validators, entropy, timeslotForPermutation, err := DetermineValidatorsAndDataForPermutation(
 			g.Timeslot,
 			newTimeslot,
 			entropyPool,
+			offendingValidators,
 			validatorState.CurrentValidators,
 			validatorState.ArchivedValidators,
 		)
+
+		// If a banned validator was found to have participated, return an error
+		if err != nil {
+			return reporters, err
+		}
 
 		coreAssignments, err := PermuteAssignments(entropy, timeslotForPermutation)
 		if err != nil {
 			return reporters, fmt.Errorf("failed to compute core assignments: %w", err)
 		}
-		log.Printf("Core assignments for timeslot %d: %v", timeslotForPermutation, coreAssignments)
 
 		// Generate work report hash
 		reportHash, err := g.WorkReport.Hash()
