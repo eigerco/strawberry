@@ -429,6 +429,14 @@ func mapEntropyPool(entropyStrings []string) state.EntropyPool {
 	return entropyPool
 }
 
+func mapPastJudgements(offenders []string) state.Judgements {
+	var mapped state.Judgements
+	for _, j := range offenders {
+		mapped.OffendingValidators = append(mapped.OffendingValidators, ed25519.PublicKey(mustStringToHex(j)))
+	}
+	return mapped
+}
+
 // Helper function to map pre or post state from JSON to internal state
 func mapState(s ReportsState) state.State {
 	return state.State{
@@ -441,6 +449,7 @@ func mapState(s ReportsState) state.State {
 		CoreAuthorizersPool: mapAuthPools(s.AuthPools),
 		Services:            mapServices(s.Services),
 		EntropyPool:         mapEntropyPool(s.Entropy),
+		PastJudgements:      mapPastJudgements(s.Offenders),
 		ActivityStatistics: validator.ActivityStatisticsState{
 			Cores:    mapCoresStatistics(s.CoresStatistics),
 			Services: mapServiceStatistics(s.ServicesStatistics),
