@@ -18,9 +18,12 @@ const (
 	NumberOfErasureCodecPiecesInSegment          = 1026
 	ErasureCodingOriginalShards                  = 2
 	ErasureCodingChunkSize                       = 4
+	MaxAllocatedGasRefine                        = 1_000_000_000
 	MaxAllocatedGasAccumulation                  = 10_000_000
 	MaxAllocatedGasIsAuthorized                  = 50_000_000
-	WorkReportMaxSumOfDependencies               = 8
-	MaxWorkPackageSizeBytes                      = 48 * 1024
-	MaxNrImportsExports                          = 3072
+	TotalGasAccumulation                         = 20_000
+
+	WorkReportMaxSumOfDependencies = 8
+	MaxWorkPackageSizeBytes        = 48 * 1024
+	MaxNrImportsExports            = 3072
 )

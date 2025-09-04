@@ -145,7 +145,7 @@ func submitTickets(
 	entropy := currentState.EntropyPool[2]
 	pendingValidators := currentState.ValidatorState.SafroleState.NextValidators
 	if nextEpoch > previousEpoch {
-		pendingValidators = validator.NullifyOffenders(currentState.ValidatorState.QueuedValidators, currentState.PastJudgements.OffendingValidators)
+		pendingValidators, _ = validator.NullifyOffenders(currentState.ValidatorState.QueuedValidators, currentState.PastJudgements.OffendingValidators)
 		entropy = currentState.EntropyPool[1]
 	}
 
