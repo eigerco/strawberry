@@ -72,7 +72,7 @@ func Test_ValidateGas(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Exceed refine
-	p.WorkItems[1].GasLimitRefine = work.MaxAllocatedGasRefine + 1
+	p.WorkItems[1].GasLimitRefine = common.MaxAllocatedGasRefine + 1
 	err = p.ValidateGas()
 	assert.Error(t, err)
 

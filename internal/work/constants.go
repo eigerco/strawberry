@@ -8,6 +8,5 @@ const (
 	MaxNumberOfDependencyItems  = 8         //J = 8 : The maximum sum of dependency items in a work-report
 	MaxNumberOfExtrinsics       = 128       // T = 128: The maximum number of extrinsics in a work-package.
 	SegmentsPerPage             = 64
-	MaxSizeOfEncodedWorkPackage = 12 * 1 << 20  // WB = 12*2^20 = 12MB: The maximum size of an encoded work-package together with its extrinsic data and import implications, in octets.
-	MaxAllocatedGasRefine       = 5_000_000_000 // GR = 5,000,000,000: The gas allocated to invoke a work-package’s Refine logic.
+	MaxSizeOfEncodedWorkPackage = 12 * 1 << 20 // WB = 12*2^20 = 12MB: The maximum size of an encoded work-package together with its extrinsic data and import implications, in octets.
 )

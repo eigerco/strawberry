@@ -72,8 +72,8 @@ func (wp *Package) ValidateGas() error {
 	if totalAccumulate >= common.MaxAllocatedGasAccumulation {
 		return fmt.Errorf("accumulation gas exceeds limit GA: %d/%d", totalAccumulate, common.MaxAllocatedGasAccumulation)
 	}
-	if totalRefine >= MaxAllocatedGasRefine {
-		return fmt.Errorf("refine gas exceeds limit GR: %d/%d", totalRefine, MaxAllocatedGasRefine)
+	if totalRefine >= common.MaxAllocatedGasRefine {
+		return fmt.Errorf("refine gas exceeds limit GR: %d/%d", totalRefine, common.MaxAllocatedGasRefine)
 	}
 
 	return nil

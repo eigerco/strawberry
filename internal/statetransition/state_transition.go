@@ -551,7 +551,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		privSvcGas += gas
 	}
 	// let g = max(GT, GA ⋅ C + [∑x∈V(χ_Z)](x)) (eq. 12.22 v0.7.0)
-	gasLimit := max(service.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
+	gasLimit := max(common.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
 
 	accumulator := NewAccumulator(currentState, header, newTimeslot)
 	// e = (d: δ, i: ι, q: ϕ, m: χ_M, a: χ_A, v: χ_V, z: χ_Z) (eq. 12.23 v0.7.0)

@@ -3,8 +3,9 @@ package host_call
 import (
 	"bytes"
 	"fmt"
-	"github.com/eigerco/strawberry/pkg/log"
 	"math"
+
+	"github.com/eigerco/strawberry/pkg/log"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -588,8 +589,8 @@ func GetChainConstants() ([]byte, error) {
 		jamtime.TimeslotsPerEpoch,
 		common.MaxAllocatedGasAccumulation,
 		common.MaxAllocatedGasIsAuthorized,
-		work.MaxAllocatedGasRefine,
-		service.TotalGasAccumulation,
+		common.MaxAllocatedGasRefine,
+		common.TotalGasAccumulation,
 		state.MaxRecentBlocks,
 		work.MaxNumberOfItems,
 		work.MaxNumberOfDependencyItems,

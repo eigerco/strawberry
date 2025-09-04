@@ -18,9 +18,12 @@ const (
 	NumberOfErasureCodecPiecesInSegment          = 6                                                            // WP = 6: The number of erasure-coded pieces in a segment.
 	ErasureCodingOriginalShards                  = 342                                                          // The number of original shards.
 	ErasureCodingChunkSize                       = 684                                                          // WE = 684: The basic size of erasure-coded pieces in octets.
+	MaxAllocatedGasRefine                        = 5_000_000_000                                                // GR = 5,000,000,000: The gas allocated to invoke a work-package’s Refine logic.
 	MaxAllocatedGasAccumulation                  = 10_000_000                                                   // GA: The gas allocated to invoke a work-report’s Accumulation logic.
 	MaxAllocatedGasIsAuthorized                  = 50_000_000                                                   // GI: The gas allocated to invoke a work-package’s Is-Authorized logic.
-	WorkReportMaxSumOfDependencies               = 8                                                            // (J) The maximum sum of dependency items in a work-report.
-	MaxWorkPackageSizeBytes                      = 48 * 1024                                                    // (WR) Maximum size of a serialized work-package in bytes
-	MaxNrImportsExports                          = 3072                                                         // WM = 3072: The maximum number of imports and exports in a work-package.
+	TotalGasAccumulation                         = 341_000_000                                                  // GT = 341,000,000: Total gas allocated across all cores for Accumulation
+
+	WorkReportMaxSumOfDependencies = 8         // (J) The maximum sum of dependency items in a work-report.
+	MaxWorkPackageSizeBytes        = 48 * 1024 // (WR) Maximum size of a serialized work-package in bytes
+	MaxNrImportsExports            = 3072      // WM = 3072: The maximum number of imports and exports in a work-package.
 )
