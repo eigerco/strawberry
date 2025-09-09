@@ -1,4 +1,4 @@
-//go:build full && traces
+//go:build tiny && traces
 
 package integration
 

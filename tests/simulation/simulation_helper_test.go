@@ -32,14 +32,14 @@ func TestBlockGenerator(t *testing.T) {
 	require.NoError(t, err)
 
 	// Prestate state. Change this to whatever your prestate is.
-	preStateBytes, err = os.ReadFile("guarantee_prestate_001.json")
+	preStateBytes, err = os.ReadFile("assurance_prestate_001.json")
 	require.NoError(t, err)
 	var currentState *state.State
 	restoredPreState := jsonutils.RestoreStateSnapshot(preStateBytes)
 	currentState = &restoredPreState
 
 	// Template block. Change this to your own block.
-	blockBytes, err := os.ReadFile("guarantee_block_001.json")
+	blockBytes, err := os.ReadFile("assurance_block_001.json")
 	require.NoError(t, err)
 	templateBlock := jsonutils.RestoreBlockSnapshot(blockBytes)
 

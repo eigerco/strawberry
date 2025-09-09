@@ -31,15 +31,16 @@ type CredentialSignature struct {
 
 // WorkReport represents a work report in the JAM state
 // R ≡ {s ∈ Y, c ∈ C, c ∈ NC, a ∈ H, t ∈ B, l ∈ ⟦H → H⟧, d ∈ ⟦D⟧1:I, g ∈ NG} (eq. 11.2 v 0.7.0)
+// E(rs, rc, rc, ra, rg , ↕rt, ↕rl, ↕rd)
 type WorkReport struct {
 	AvailabilitySpecification AvailabilitySpecification   // Availability specification (s)
 	RefinementContext         RefinementContext           // Refinement context (c)(c bold)
 	CoreIndex                 uint16                      `jam:"encoding=compact"` // Core index (c) - Max value: TotalNumberOfCores
 	AuthorizerHash            crypto.Hash                 // HeaderHash of the authorizer (a)
+	AuthGasUsed               uint64                      `jam:"encoding=compact"` // The amount of gas used during authorization (g)
 	AuthorizerTrace           []byte                      // Trace from Is-Authorized invocation (t)
 	SegmentRootLookup         map[crypto.Hash]crypto.Hash // A segment-root lookup dictionary (l ∈ ⟨H → H⟩)
 	WorkDigests               []WorkDigest                // Results of the evaluation of each of the items in the work-package (d) - Min value: MinWorkPackageResultsSize. Max value: MaxWorkPackageResultsSize.
-	AuthGasUsed               uint64                      `jam:"encoding=compact"` // The amount of gas used during authorization (g)
 }
 
 // AvailabilitySpecification represents // Y ≡ {p ∈ H, l ∈ NL, u ∈ H, e ∈ H, n ∈ N} (eq. 11.5 v 0.7.0)
