@@ -28,17 +28,13 @@ type StatisticsJSONData struct {
 }
 
 type StatisticsState struct {
-	Pi         Pi               `json:"pi"`
-	Tau        jamtime.Timeslot `json:"tau"`
-	KappaPrime []ValidatorKey   `json:"kappa_prime"`
+	ValsCurrent       []StatisticsData `json:"vals_curr_stats"`
+	ValsLast          []StatisticsData `json:"vals_last_stats"`
+	Slot              jamtime.Timeslot `json:"slot"`
+	CurrentValidators []ValidatorKey   `json:"curr_validators"`
 }
 
-type Pi struct {
-	ValsCurrent []PiData `json:"current"`
-	ValsLast    []PiData `json:"last"`
-}
-
-type PiData struct {
+type StatisticsData struct {
 	Blocks        uint32 `json:"blocks"`
 	Tickets       uint32 `json:"tickets"`
 	PreImages     uint32 `json:"pre_images"`
@@ -141,30 +137,30 @@ func mapStatisticsInput(s StatisticsInput) block.Block {
 func mapStatisticsState(s StatisticsState) state.State {
 	return state.State{
 		ActivityStatistics: validator.ActivityStatisticsState{
-			ValidatorsLast: [common.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.Pi.ValsLast, func(pi PiData) validator.ValidatorStatistics {
+			ValidatorsLast: [common.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.ValsLast, func(sd StatisticsData) validator.ValidatorStatistics {
 				return validator.ValidatorStatistics{
-					NumOfBlocks:                 pi.Blocks,
-					NumOfTickets:                pi.Tickets,
-					NumOfPreimages:              pi.PreImages,
-					NumOfBytesAllPreimages:      pi.PreImagesSize,
-					NumOfGuaranteedReports:      pi.Guarantees,
-					NumOfAvailabilityAssurances: pi.Assurances,
+					NumOfBlocks:                 sd.Blocks,
+					NumOfTickets:                sd.Tickets,
+					NumOfPreimages:              sd.PreImages,
+					NumOfBytesAllPreimages:      sd.PreImagesSize,
+					NumOfGuaranteedReports:      sd.Guarantees,
+					NumOfAvailabilityAssurances: sd.Assurances,
 				}
 			})),
-			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.Pi.ValsCurrent, func(pi PiData) validator.ValidatorStatistics {
+			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.ValsCurrent, func(sd StatisticsData) validator.ValidatorStatistics {
 				return validator.ValidatorStatistics{
-					NumOfBlocks:                 pi.Blocks,
-					NumOfTickets:                pi.Tickets,
-					NumOfPreimages:              pi.PreImages,
-					NumOfBytesAllPreimages:      pi.PreImagesSize,
-					NumOfGuaranteedReports:      pi.Guarantees,
-					NumOfAvailabilityAssurances: pi.Assurances,
+					NumOfBlocks:                 sd.Blocks,
+					NumOfTickets:                sd.Tickets,
+					NumOfPreimages:              sd.PreImages,
+					NumOfBytesAllPreimages:      sd.PreImagesSize,
+					NumOfGuaranteedReports:      sd.Guarantees,
+					NumOfAvailabilityAssurances: sd.Assurances,
 				}
 			})),
 		},
-		TimeslotIndex: s.Tau,
+		TimeslotIndex: s.Slot,
 		ValidatorState: validator.ValidatorState{
-			CurrentValidators: mapCurrValidators(s.KappaPrime),
+			CurrentValidators: mapCurrValidators(s.CurrentValidators),
 		},
 	}
 }
@@ -182,9 +178,17 @@ func TestStatistics(t *testing.T) {
 			require.NoError(t, err, "failed to read JSON file: %s", filePath)
 			newBlock := mapStatisticsInput(tc.Input)
 			preState := mapStatisticsState(tc.PreState)
+
+			// Need to recreate the reporters set manually here because the test
+			// vector guarantees are not semantically correct.
 			reporters := make(crypto.ED25519PublicKeySet)
-			for _, reporter := range tc.Input.Reporters {
-				reporters.Add(mustStringToHex(reporter))
+			for _, g := range newBlock.Extrinsic.EG.Guarantees {
+				for _, c := range g.Credentials {
+					if int(c.ValidatorIndex) >= len(tc.PreState.CurrentValidators) {
+						t.Fatal("invalid guarantee credential")
+					}
+					reporters.Add(mustStringToHex(tc.PreState.CurrentValidators[c.ValidatorIndex].Ed25519))
+				}
 			}
 
 			preState.ActivityStatistics = statetransition.CalculateNewActivityStatistics(newBlock, preState.TimeslotIndex, preState.ActivityStatistics, reporters, preState.ValidatorState.CurrentValidators,
