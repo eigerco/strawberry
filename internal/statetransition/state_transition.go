@@ -762,8 +762,6 @@ func transfersForReceiver(transfers []service.DeferredTransfer, serviceId block.
 // It implements equation 4.20:
 // π′ ≺ (EG, EP , EA, ET , τ, κ′, π, H, I, X)
 // And the entire section 13.
-// TODO complete service and core stats. For now we only support service stats
-// for preimages, and no core stats yet.
 func CalculateNewActivityStatistics(
 	blk block.Block,
 	prevTimeslot jamtime.Timeslot,
@@ -893,7 +891,6 @@ func CalculateNewCoreStatistics(
 
 // CalculateNewServiceStatistics updates service statistics.
 // It implements equation 13.11 - 13.15.
-// TODO complete service stats, for now this only supports preimage stats.
 func CalculateNewServiceStatistics(
 	blk block.Block,
 	accumulationStats AccumulationStats,
