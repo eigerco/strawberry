@@ -18,9 +18,9 @@ type Header struct {
 	TimeSlotIndex        jamtime.Timeslot             // Ht
 	EpochMarker          *EpochMarker                 // He
 	WinningTicketsMarker *WinningTicketMarker         // Hw
-	OffendersMarkers     []ed25519.PublicKey          // Ho, the culprit's and fault's public keys
 	BlockAuthorIndex     uint16                       // Hi
 	VRFSignature         crypto.BandersnatchSignature // Hv
+	OffendersMarkers     []ed25519.PublicKey          // Ho, the culprit's and fault's public keys
 	BlockSealSignature   crypto.BandersnatchSignature // Hs
 }
 
