@@ -41,9 +41,9 @@ type CoreStatistics struct {
 	DALoad         uint32 `jam:"encoding=compact"`
 	Popularity     uint16 `jam:"encoding=compact"` // Popularity (p) is the number of validators which formed super-majority for assurance.
 	Imports        uint16 `jam:"encoding=compact"` // Imports (i) is the number of segments imported from DA made by core for reported work.
-	Exports        uint16 `jam:"encoding=compact"` // Exports (e) is the number of segments exported into DA made by core for reported work.
-	ExtrinsicSize  uint32 `jam:"encoding=compact"` // ExtrinsicSize (x) is the total size of extrinsics used by core for reported work.
 	ExtrinsicCount uint16 `jam:"encoding=compact"` // ExtrinsicCount (z) is the total number of extrinsics used by core for reported work.
+	ExtrinsicSize  uint32 `jam:"encoding=compact"` // ExtrinsicSize (x) is the total size of extrinsics used by core for reported work.
+	Exports        uint16 `jam:"encoding=compact"` // Exports (e) is the number of segments exported into DA made by core for reported work.
 	BundleSize     uint32 `jam:"encoding=compact"` // BundleSize (b) is the work-bundle size. This is the size of data being placed into Audits DA by the core.
 	GasUsed        uint64 `jam:"encoding=compact"` // GasUsed (g) is the total gas consumed by core for reported work. Includes all refinement and authorizations.
 }
@@ -54,9 +54,9 @@ type ServiceActivityRecord struct {
 	RefinementCount    uint32 `jam:"encoding=compact"` // RefinementCount (r.0) is the number of work-items refined by service for reported work.
 	RefinementGasUsed  uint64 `jam:"encoding=compact"` // RefinementGasUsed (r.1) is the amount of gas used for refinement by service for reported work.
 	Imports            uint32 `jam:"encoding=compact"` // Imports (i) is the number of segments imported from the DL by service for reported work.
-	Exports            uint32 `jam:"encoding=compact"` // Exports (e) is the number of segments exported into the DL by service for reported work.
-	ExtrinsicSize      uint32 `jam:"encoding=compact"` // ExtrinsicSize (x) is the total size of extrinsics used by service for reported work.
 	ExtrinsicCount     uint32 `jam:"encoding=compact"` // ExtrinsicCount (z) is the total number of extrinsics used by service for reported work.
+	ExtrinsicSize      uint32 `jam:"encoding=compact"` // ExtrinsicSize (x) is the total size of extrinsics used by service for reported work.
+	Exports            uint32 `jam:"encoding=compact"` // Exports (e) is the number of segments exported into the DL by service for reported work.
 	AccumulateCount    uint32 `jam:"encoding=compact"` // AccumulateCount (a.0) is the number of work-items accumulated by service.
 	AccumulateGasUsed  uint64 `jam:"encoding=compact"` // AccumulateGasUsed (a.1) is the amount of gas used for accumulation by service.
 	OnTransfersCount   uint32 `jam:"encoding=compact"` // OnTransfersCount (t.0) is the number of transfers processed by service.

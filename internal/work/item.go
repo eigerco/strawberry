@@ -20,15 +20,16 @@ type Extrinsic struct {
 }
 
 // Item represents I (14.2 v0.5.4)
+// EE4(ws), wc, E8(wg ), E8(wa), E2(we), ↕wy, Õ × ÖI#(wi), ↕[(h, E4(i)) S (h, i) <− wx]
 type Item struct {
 	ServiceId          block.ServiceId   // s ∈ N_S
 	CodeHash           crypto.Hash       // h ∈ H
-	Payload            []byte            // y ∈ B
 	GasLimitRefine     uint64            // g ∈ N_G
 	GasLimitAccumulate uint64            // a ∈ N_G
+	ExportedSegments   uint16            // e ∈ N
+	Payload            []byte            // y ∈ B
 	ImportedSegments   []ImportedSegment // i ∈ ⟦{H ∪ (H⊞), N}⟧
 	Extrinsics         []Extrinsic       // x ∈ ⟦(H, N)⟧
-	ExportedSegments   uint16            // e ∈ N
 }
 
 func (w *Item) Size() uint64 {

@@ -425,8 +425,8 @@ func compareWorkItemFields(t *testing.T, expected ExpectedWorkItem, actual work.
 func compareWorkPackageFields(t *testing.T, expected ExpectedWorkPackage, actual work.Package) {
 	require.Equal(t, expected.Authorization, toHex(actual.AuthorizationToken))
 	require.Equal(t, expected.AuthCodeHost, actual.AuthorizerService)
-	require.Equal(t, expected.Authorizer.CodeHash, toHex(actual.AuthCodeHash))
-	require.Equal(t, expected.Authorizer.Params, toHex(actual.Parameterization))
+	require.Equal(t, expected.AuthCodeHash, toHex(actual.AuthCodeHash))
+	require.Equal(t, expected.Params, toHex(actual.Parameterization))
 	compareRefinementContextFields(t, expected.Context, actual.Context)
 
 	for i := range expected.Items {
@@ -634,12 +634,10 @@ type ExpectedWorkItem struct {
 }
 
 type ExpectedWorkPackage struct {
-	Authorization string `json:"authorization"`
-	AuthCodeHost  uint32 `json:"auth_code_host"`
-	Authorizer    struct {
-		CodeHash string `json:"code_hash"`
-		Params   string `json:"params"`
-	} `json:"authorizer"`
-	Context ExpectedRefinementContext `json:"context"`
-	Items   []ExpectedWorkItem        `json:"items"`
+	Authorization string                    `json:"authorization"`
+	AuthCodeHost  uint32                    `json:"auth_code_host"`
+	AuthCodeHash  string                    `json:"auth_code_hash"`
+	Params        string                    `json:"authorizer_config"`
+	Context       ExpectedRefinementContext `json:"context"`
+	Items         []ExpectedWorkItem        `json:"items"`
 }
