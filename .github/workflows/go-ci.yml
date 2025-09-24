@@ -45,6 +45,13 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      - name: create rust lib placeholders
+        run: |
+          mkdir -p internal/erasurecoding/reedsolomon/lib
+          touch internal/erasurecoding/reedsolomon/lib/liberasurecoding.so
+          mkdir -p internal/crypto/bandersnatch/lib
+          touch internal/crypto/bandersnatch/lib/libbandersnatch.so
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:

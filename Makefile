@@ -8,6 +8,18 @@ endif
 GOOS := $(shell go env GOOS)
 GOARCH := $(shell go env GOARCH)
 
+# Determine the extension for our Rust library (used via FFI)
+ifeq ($(GOOS),darwin)
+    LIB_EXT = dylib
+else ifeq ($(GOOS),linux)
+    LIB_EXT = so
+else
+  $(error Unsupported platform: $(GOOS))
+endif
+
+BANDERSNATCH_LIB = libbandersnatch.$(LIB_EXT)
+ERASURECODING_LIB = liberasurecoding.$(LIB_EXT)
+
 all: help
 
 .PHONY: help
@@ -31,11 +43,15 @@ lint:
 ## build-bandersnatch: Builds the bandersnatch library
 build-bandersnatch:
 	cargo build --release --lib --manifest-path=bandersnatch/Cargo.toml
+	mkdir -p internal/crypto/bandersnatch/lib
+	cp bandersnatch/target/release/$(BANDERSNATCH_LIB) internal/crypto/bandersnatch/lib/$(BANDERSNATCH_LIB)
 
 .PHONY: build-erasurecoding
 ## build-erasurecoding: Builds the erasure coding library
 build-erasurecoding:
 	cargo build --release --lib --manifest-path=erasurecoding/Cargo.toml
+	mkdir -p internal/erasurecoding/reedsolomon/lib
+	cp erasurecoding/target/release/$(ERASURECODING_LIB) internal/erasurecoding/reedsolomon/lib/$(ERASURECODING_LIB)
 
 .PHONY: test
 ## test: Runs unit tests.

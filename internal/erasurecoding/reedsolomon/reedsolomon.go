@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/eigerco/strawberry/internal/common"
 
@@ -259,23 +258,17 @@ func init() {
 }
 
 func getErasurecodingLibaryPath() (string, error) {
-	var ext string
-	switch runtime.GOOS {
-	case "darwin":
-		ext = "dylib"
-	case "linux":
-		ext = "so"
-	default:
-		return "", fmt.Errorf("GOOS=%s is not supported", runtime.GOOS)
+	tmpDir, err := os.MkdirTemp("", "strawberry-erasurecoding-lib-")
+	if err != nil {
+		return "", err
 	}
 
-	_, filePath, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", fmt.Errorf("unable to retrieve the caller info")
+	libPath := filepath.Join(tmpDir, rustLibraryName)
+	err = os.WriteFile(libPath, rustLibraryBytes, 0755)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		return "", err
 	}
-
-	baseDir := filepath.Dir(filePath)
-	libPath := filepath.Join(baseDir, fmt.Sprintf("../../../erasurecoding/target/release/liberasurecoding.%s", ext))
 
 	return libPath, nil
 }

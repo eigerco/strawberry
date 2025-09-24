@@ -15,3 +15,5 @@ coverage.txt
 target
 tests/simulation/output
 /strawberry
+internal/crypto/bandersnatch/lib
+internal/erasurecoding/reedsolomon/lib

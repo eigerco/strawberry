@@ -6,14 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
 
+	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 )
-import "github.com/eigerco/strawberry/internal/common"
 
 var (
 	initRingSize func(ring_size C.size_t) (cerr int)
@@ -105,6 +104,22 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func getBandersnatchLibraryPath() (string, error) {
+	tmpDir, err := os.MkdirTemp("", "strawberry-bandersnatch-lib-")
+	if err != nil {
+		return "", err
+	}
+
+	libPath := filepath.Join(tmpDir, rustLibraryName)
+	err = os.WriteFile(libPath, rustLibraryBytes, 0755)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		return "", err
+	}
+
+	return libPath, nil
 }
 
 // Initializes the ring size for ring related functions. The ring size
@@ -332,26 +347,4 @@ func (r *RingVrfProver) Sign(vrfInputData []byte, auxData []byte) (signature cry
 	}
 
 	return signature, nil
-}
-
-func getBandersnatchLibraryPath() (string, error) {
-	var ext string
-	switch runtime.GOOS {
-	case "darwin":
-		ext = "dylib"
-	case "linux":
-		ext = "so"
-	default:
-		return "", fmt.Errorf("GOOS=%s is not supported", runtime.GOOS)
-	}
-
-	_, filePath, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", fmt.Errorf("unable to retrieve the caller info")
-	}
-
-	baseDir := filepath.Dir(filePath)
-	libPath := filepath.Join(baseDir, fmt.Sprintf("../../../bandersnatch/target/release/libbandersnatch.%s", ext))
-
-	return libPath, nil
 }
