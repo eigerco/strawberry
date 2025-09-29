@@ -1,4 +1,4 @@
-//go:build integration
+//go:build tiny
 
 // Genesis state, block and keys adapted from: https://github.com/jam-duna/jamtestnet
 package simulation
