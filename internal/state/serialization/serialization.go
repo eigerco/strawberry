@@ -161,3 +161,17 @@ func sortByteSlicesCopy(slice interface{}) interface{} {
 		panic("unsupported type for sorting")
 	}
 }
+
+func CloneState(in state.State) (state.State, error) {
+	serialized, err := SerializeState(in)
+	if err != nil {
+		return state.State{}, err
+	}
+
+	out, err := DeserializeState(serialized)
+	if err != nil {
+		return state.State{}, err
+	}
+
+	return out, nil
+}
