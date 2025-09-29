@@ -23,10 +23,6 @@ import (
 	"github.com/eigerco/strawberry/internal/store"
 )
 
-var (
-	ErrPreimages = errors.New("preimage not needed")
-)
-
 // Node is a conformance testing node complying with fuzzer protocol https://github.com/davxy/jam-stuff/tree/main/fuzz-proto
 // opens a connection via a unix socket and listens to fuzzer messages and updates the state accordingly
 type Node struct {
