@@ -1,3 +1,5 @@
+//go:build !tiny
+
 package state
 
 const (

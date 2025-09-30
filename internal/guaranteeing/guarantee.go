@@ -459,9 +459,16 @@ func validateRefinementContexts(contexts []block.RefinementContext, intermediate
 
 		// Validate lookup anchor timeslot
 		// ∀x ∈ x : xt ≥ HT − L (eq. 11.34 v 0.7.0)
-		if context.LookupAnchor.Timeslot >= newBlockHeader.TimeSlotIndex-state.MaxTimeslotsForLookupAnchor {
-			return fmt.Errorf("lookup anchor block (timeslot %d) not within the last %d timeslots (current timeslot: %d)",
-				context.LookupAnchor.Timeslot, state.MaxTimeslotsForLookupAnchor, newBlockHeader.TimeSlotIndex)
+		var minValidTimeslot jamtime.Timeslot
+		if newBlockHeader.TimeSlotIndex > state.MaxTimeslotsForLookupAnchor {
+			minValidTimeslot = newBlockHeader.TimeSlotIndex - state.MaxTimeslotsForLookupAnchor
+		} else {
+			minValidTimeslot = 0 // Any timeslot is valid if we're within the first L slots
+		}
+
+		if context.LookupAnchor.Timeslot < minValidTimeslot {
+			return fmt.Errorf("lookup anchor block (timeslot %d) not within the last %d timeslots (current timeslot: %d, minimum valid: %d)",
+				context.LookupAnchor.Timeslot, state.MaxTimeslotsForLookupAnchor, newBlockHeader.TimeSlotIndex, minValidTimeslot)
 		}
 
 		// Validate header exists in chain
