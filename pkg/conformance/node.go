@@ -113,7 +113,11 @@ func (n *Node) handleConnection(conn net.Conn) {
 			} else if strings.Contains(err.Error(), "bad validator index") {
 				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: assurances error: bad attestation validator index")})
 			} else if strings.Contains(err.Error(), "block seal or vrf signature is invalid") {
+				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: BadSealSignature")})
+			} else if strings.Contains(err.Error(), "unexpected author") {
 				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: UnexpectedAuthor")})
+			} else if strings.Contains(err.Error(), "epoch marker") {
+				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: InvalidEpochMark")})
 			} else {
 				return
 			}

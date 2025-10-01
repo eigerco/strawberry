@@ -499,7 +499,7 @@ func VerifyBlockSignatures(
 	// start.
 	case crypto.BandersnatchPublicKey:
 		if tok != publicKey {
-			return false, nil
+			return false, errors.New("unexpected author")
 		}
 
 		ok, _ := bandersnatch.Verify(
