@@ -54,10 +54,6 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		return err
 	}
 
-	if err := ValidatePreimages(newBlock.Extrinsic.EP, s.Services); err != nil {
-		return err
-	}
-
 	// TODO: verify header offenders marker.
 
 	// Update SAFROLE state.
@@ -78,6 +74,10 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 	err = VerifyBlockHeaderSafrole(newValidatorState, safroleOutput, newBlock)
 	if err != nil {
 		return fmt.Errorf("failed to verify block header: %w", err)
+	}
+
+	if err := ValidatePreimages(newBlock.Extrinsic.EP, s.Services); err != nil {
+		return err
 	}
 
 	// ρ‡ ≺ (EA, ρ†) (eq. 4.13 v0.7.0) and R* ≺ (EA, ρ†) (eq 4.15 v0.7.0)
@@ -184,9 +184,6 @@ func isPreimagesSortedUnique(preimages block.PreimageExtrinsic) bool {
 // ValidatePreimages implements equations 12.39 and 12.40 v0.7.0
 // checks that the preimages are ordered, unique and solicited by a service
 func ValidatePreimages(preimages block.PreimageExtrinsic, serviceState service.ServiceState) error {
-	if !isPreimagesSortedUnique(preimages) {
-		return errors.New("preimages not sorted unique")
-	}
 
 	for _, preimage := range preimages {
 		serviceId := block.ServiceId(preimage.ServiceIndex)
@@ -197,6 +194,9 @@ func ValidatePreimages(preimages block.PreimageExtrinsic, serviceState service.S
 		if !preimageHasBeenSolicited(serviceState, serviceId, preimageHash, preimageLength) {
 			return errors.New("preimage unneeded")
 		}
+	}
+	if !isPreimagesSortedUnique(preimages) {
+		return errors.New("preimages not sorted unique")
 	}
 
 	return nil
