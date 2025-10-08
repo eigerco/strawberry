@@ -85,12 +85,13 @@ type GuarantorAssignments struct {
 type WorkResultError uint8
 
 const (
-	NoError                WorkResultError = iota // Represents no error, successful execution
-	OutOfGas                                      // ∞ Out-of-gas error
-	UnexpectedTermination                         // ☇ Unexpected program termination.
-	InvalidNumberOfExports                        // ⊚ The number of exports made was invalidly reported
-	CodeNotAvailable                              // BAD The service’s code was not available for lookup in state at the posterior state of the lookup-anchor block.
-	CodeTooLarge                                  // BIG The code was available but was beyond the maximum size allowed WC.
+	NoError                 WorkResultError = iota // Represents no error, successful execution
+	OutOfGas                                       // ∞ Out-of-gas error
+	UnexpectedTermination                          // ☇ Unexpected program termination.
+	InvalidNumberOfExports                         // ⊚ The number of exports made was invalidly reported
+	DigestSizeLimitExceeded                        // ⊖ Digest size limit exceeded
+	CodeNotAvailable                               // BAD The service’s code was not available for lookup in state at the posterior state of the lookup-anchor block.
+	CodeTooLarge                                   // BIG The code was available but was beyond the maximum size allowed WC.
 )
 
 type ServiceId uint32
@@ -145,7 +146,7 @@ func (wer WorkResultOutputOrError) ValueAt(index uint) (any, error) {
 	switch index {
 	case uint(NoError):
 		return []byte{}, nil
-	case uint(OutOfGas), uint(UnexpectedTermination), uint(InvalidNumberOfExports), uint(CodeNotAvailable), uint(CodeTooLarge):
+	case uint(OutOfGas), uint(UnexpectedTermination), uint(InvalidNumberOfExports), uint(DigestSizeLimitExceeded), uint(CodeNotAvailable), uint(CodeTooLarge):
 		return nil, nil
 	}
 
