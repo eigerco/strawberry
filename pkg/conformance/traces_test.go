@@ -60,7 +60,7 @@ func (StateRootChoice) isFuzzerType()   {}
 func (ImportBlockChoice) isFuzzerType() {}
 func (GetStateChoice) isFuzzerType()    {}
 
-var tracesDir = "traces/no_forks"
+var tracesDir = "traces/forks"
 
 func getFuzzerFileNames(t *testing.T) []string {
 	files, err := filepath.Glob(tracesDir + "/*fuzzer*.bin")
@@ -142,7 +142,8 @@ func createTargetNode(t *testing.T) (*Node, func()) {
 	appName := []byte("polkajam")
 	appVersion := Version{Major: 0, Minor: 1, Patch: 25}
 	jamVersion := Version{Major: 0, Minor: 7, Patch: 0}
-	node := NewNode(socketPath, chain, trieStore, appName, appVersion, jamVersion)
+	features := FeatureFork
+	node := NewNode(socketPath, chain, trieStore, appName, appVersion, jamVersion, features)
 	cleanup := func() {
 		db.Close()
 		os.Remove(socketPath)
@@ -193,6 +194,13 @@ func TestNoForksTraces(t *testing.T) {
 			respMsg := &Message{}
 			err = jam.Unmarshal(response.Content, respMsg)
 			require.NoError(t, err)
+			// If running the faulty folder traces/faulty
+			// 29 is expected to return wrong state root in order to trigger the fuzzer to request `GetState`
+			// 30 is supposed to return wrong state as we have different state compared expected due to 20
+			// `In this scenario, the target responds with its current state, which is expected not to match a correctly computed state.`
+			// if i != 29 && i != 30 {
+			// 	require.Equal(t, respMsg.Get(), expected)
+			// }
 			require.Equal(t, respMsg.Get(), expected)
 		})
 	}

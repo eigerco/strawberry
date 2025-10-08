@@ -36,7 +36,7 @@ func (v Version) String() string {
 
 type PeerInfo struct {
 	FuzzVersion  uint8
-	FuzzFeatures uint32
+	FuzzFeatures Features
 	JamVersion   Version
 	AppVersion   Version
 	Name         []byte

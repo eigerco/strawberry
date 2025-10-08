@@ -46,9 +46,10 @@ func TestMessage(t *testing.T) {
 	appName := []byte("app name")
 	appVersion := Version{1, 2, 3}
 	jamVersion := Version{4, 5, 6}
+	features := FeatureFork
 
 	go func() {
-		n := NewNode(socketPath, chain, trieStore, appName, appVersion, jamVersion)
+		n := NewNode(socketPath, chain, trieStore, appName, appVersion, jamVersion, features)
 		if err := n.Start(); err != nil {
 			t.Logf("failed to start Node: %v", err)
 		}

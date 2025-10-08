@@ -23,6 +23,16 @@ import (
 	"github.com/eigerco/strawberry/internal/store"
 )
 
+type Features uint32
+
+const (
+	FeatureNone            Features = 0
+	FeatureAncestry        Features = 1
+	FeatureFork            Features = 2
+	FeatureAncestryAndFork Features = 3
+	FeatureReserved        Features = 2147483648
+)
+
 // Node is a conformance testing node complying with fuzzer protocol https://github.com/davxy/jam-stuff/tree/main/fuzz-proto
 // opens a connection via a unix socket and listens to fuzzer messages and updates the state accordingly
 type Node struct {
@@ -38,11 +48,13 @@ type Node struct {
 }
 
 // NewNode create a new conformance testing node
-func NewNode(socketPath string, chain *store.Chain, trie *store.Trie, appName []byte, appVersion, jamVersion Version) *Node {
+func NewNode(socketPath string, chain *store.Chain, trie *store.Trie, appName []byte, appVersion, jamVersion Version, features Features) *Node {
 	peerInfo := PeerInfo{
-		Name:       appName,
-		AppVersion: appVersion,
-		JamVersion: jamVersion,
+		FuzzVersion:  1,
+		FuzzFeatures: features,
+		JamVersion:   jamVersion,
+		AppVersion:   appVersion,
+		Name:         appName,
 	}
 	return &Node{
 		socketPath:    socketPath,
@@ -56,8 +68,11 @@ func NewNode(socketPath string, chain *store.Chain, trie *store.Trie, appName []
 
 // Start starts the node server
 func (n *Node) Start() error {
+	// If the socket file exists, try to remove it.
 	if _, err := os.Stat(n.socketPath); err == nil {
-		os.Remove(n.socketPath)
+		if err := os.Remove(n.socketPath); err != nil {
+			return fmt.Errorf("failed to remove existing socket file: %v", err)
+		}
 	}
 
 	// Listen on the Unix socket
@@ -83,7 +98,11 @@ func (n *Node) Stop() error {
 }
 
 func (n *Node) handleConnection(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("error closing connection: %v", err)
+		}
+	}()
 	for {
 		ctx := context.Background()
 
@@ -116,8 +135,17 @@ func (n *Node) handleConnection(conn net.Conn) {
 				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: BadSealSignature")})
 			} else if strings.Contains(err.Error(), "unexpected author") {
 				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: UnexpectedAuthor")})
+				// responseMsg = NewMessage(Error{Message: []byte("Chain error: block verification failure: unexpected author")}) //fauty vectors have the error in different format
 			} else if strings.Contains(err.Error(), "epoch marker") {
 				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: InvalidEpochMark")})
+				// responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: InvalidEpochMark")}) //fauty vectors have the error in different format
+			} else if strings.Contains(err.Error(), "winning ticket marker") {
+				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: InvalidTicketsMark")})
+				// responseMsg = NewMessage(Error{Message: []byte("Chain error: block verification failure: invalid tickets mark")}) //fauty vectors have the error in different format
+			} else if strings.Contains(err.Error(), "core unauthorized") {
+				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: reports error: code unauthorized")})
+			} else if strings.Contains(err.Error(), "future report slot") {
+				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: reports error: report refers to slot in the future")})
 			} else {
 				return
 			}
