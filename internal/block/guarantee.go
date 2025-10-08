@@ -146,7 +146,7 @@ func (wer WorkResultOutputOrError) ValueAt(index uint) (any, error) {
 	switch index {
 	case uint(NoError):
 		return []byte{}, nil
-	case uint(OutOfGas), uint(UnexpectedTermination), uint(InvalidNumberOfExports), uint(CodeNotAvailable), uint(CodeTooLarge):
+	case uint(OutOfGas), uint(UnexpectedTermination), uint(InvalidNumberOfExports), uint(DigestSizeLimitExceeded), uint(CodeNotAvailable), uint(CodeTooLarge):
 		return nil, nil
 	}
 
