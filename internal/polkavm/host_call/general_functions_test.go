@@ -86,8 +86,11 @@ func TestFetch(t *testing.T) {
 	extrinsicPreimages := [][]byte{preimageBytes}
 	itemIndex := uint32(0)
 
-	operand := []state.AccumulationOperand{
-		{Trace: testutils.RandomBytes(t, 5), OutputOrError: block.WorkResultOutputOrError{Inner: block.UnexpectedTermination}},
+	op := state.AccumulationInput{}
+	err = op.SetValue(state.AccumulationOperand{Trace: testutils.RandomBytes(t, 5), OutputOrError: block.WorkResultOutputOrError{Inner: block.UnexpectedTermination}})
+	require.NoError(t, err)
+	operand := []state.AccumulationInput{
+		op,
 	}
 	transfers := []service.DeferredTransfer{
 		{Balance: 100, Memo: [service.TransferMemoSizeBytes]byte{1, 2, 3}},
@@ -307,7 +310,7 @@ func TestFetch(t *testing.T) {
 				initialGas, regs, mem,
 				workPackage, &entropy, authorizerHashOutput,
 				&itemIndex, importedSegments, extrinsicPreimages,
-				operand, transfers,
+				operand,
 			)
 			require.NoError(t, err)
 

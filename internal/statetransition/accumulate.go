@@ -21,7 +21,7 @@ const (
 	AccumulateCost = 10
 )
 
-// AccumulationOutput (O) (eq. 12.20 v0.7.0)
+// AccumulationOutput (O) (eq. 12.23 v0.7.2)
 type AccumulationOutput struct {
 	AccumulationState state.AccumulationState    // e ∈ S
 	DeferredTransfers []service.DeferredTransfer // t ∈ ⟦X⟧
@@ -45,7 +45,7 @@ type Accumulator struct {
 }
 
 // InvokePVM ΨA(U, N_T, N_S, N_G, ⟦I⟧) → O Equation (B.9)
-func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) AccumulationOutput {
+func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationInput) AccumulationOutput {
 	output := AccumulationOutput{
 		AccumulationState: accState.Clone(),
 	}
@@ -103,7 +103,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
 		case host_call.FetchID:
 			entropy := a.state.EntropyPool[0]
-			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, nil, &entropy, nil, nil, nil, nil, accOperand, nil)
+			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, nil, &entropy, nil, nil, nil, nil, accOperand)
 		case host_call.ReadID:
 			gasCounter, regs, mem, err = host_call.Read(gasCounter, regs, mem, currentService, serviceIndex, ctx.RegularCtx.AccumulationState.ServiceState)
 			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
