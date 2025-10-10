@@ -148,7 +148,7 @@ func TestPreimage(t *testing.T) {
 				Extrinsic: block.Extrinsic{
 					EP: preimages,
 				},
-			}, statetransition.AccumulationStats{}, statetransition.DeferredTransfersStats{})
+			}, statetransition.AccumulationStats{})
 
 			expectedPostServiceState := mapServiceState(t, data.PostState)
 

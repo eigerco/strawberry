@@ -175,7 +175,6 @@ func TestAccumulate(t *testing.T) {
 			}
 
 			var accStat statetransition.AccumulationStats
-			var transfStat statetransition.DeferredTransfersStats
 			header := &block.Header{TimeSlotIndex: tc.Input.Slot}
 			newState.TimeslotIndex = statetransition.CalculateNewTimeState(*header)
 			newState.AccumulationQueue,
@@ -184,17 +183,11 @@ func TestAccumulate(t *testing.T) {
 				newState.PrivilegedServices,
 				newState.ValidatorState.QueuedValidators,
 				newState.PendingAuthorizersQueues,
-				_, accStat, transfStat = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports)
+				_, accStat = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports)
 			for id, stat := range accStat {
 				stateStat := newState.ActivityStatistics.Services[id]
 				stateStat.AccumulateCount = stat.AccumulateCount
 				stateStat.AccumulateGasUsed = stat.AccumulateGasUsed
-				newState.ActivityStatistics.Services[id] = stateStat
-			}
-			for id, stat := range transfStat {
-				stateStat := newState.ActivityStatistics.Services[id]
-				stateStat.OnTransfersCount = stat.OnTransfersCount
-				stateStat.OnTransfersGasUsed = stat.OnTransfersGasUsed
 				newState.ActivityStatistics.Services[id] = stateStat
 			}
 			assert.EqualExportedValues(t, postState, newState)
@@ -229,10 +222,8 @@ func mapStatistics(servicesStats []ServiceStat) validator.ActivityStatisticsStat
 	}
 	for _, svcStat := range servicesStats {
 		stats.Services[svcStat.Id] = validator.ServiceActivityRecord{
-			AccumulateCount:    svcStat.Record.AccumulateCount,
-			AccumulateGasUsed:  svcStat.Record.AccumulateGasUsed,
-			OnTransfersCount:   svcStat.Record.OnTransfersCount,
-			OnTransfersGasUsed: svcStat.Record.OnTransfersGasUsed,
+			AccumulateCount:   svcStat.Record.AccumulateCount,
+			AccumulateGasUsed: svcStat.Record.AccumulateGasUsed,
 		}
 	}
 	return stats

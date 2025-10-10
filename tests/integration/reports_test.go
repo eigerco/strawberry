@@ -483,18 +483,16 @@ func mapServiceStatistics(stats []ServiceStatistics) validator.ServiceStatistics
 	result := make(validator.ServiceStatistics)
 	for _, s := range stats {
 		result[block.ServiceId(s.ID)] = validator.ServiceActivityRecord{
-			ProvidedCount:      s.Record.ProvidedCount,
-			ProvidedSize:       s.Record.ProvidedSize,
-			RefinementCount:    s.Record.RefinementCount,
-			RefinementGasUsed:  s.Record.RefinementGasUsed,
-			Imports:            s.Record.Imports,
-			Exports:            s.Record.Exports,
-			ExtrinsicSize:      s.Record.ExtrinsicSize,
-			ExtrinsicCount:     s.Record.ExtrinsicCount,
-			AccumulateCount:    uint32(s.Record.AccumulateCount), // Cast if needed
-			AccumulateGasUsed:  s.Record.AccumulateGasUsed,
-			OnTransfersCount:   s.Record.OnTransfersCount,
-			OnTransfersGasUsed: s.Record.OnTransfersGasUsed,
+			ProvidedCount:     s.Record.ProvidedCount,
+			ProvidedSize:      s.Record.ProvidedSize,
+			RefinementCount:   s.Record.RefinementCount,
+			RefinementGasUsed: s.Record.RefinementGasUsed,
+			Imports:           s.Record.Imports,
+			Exports:           s.Record.Exports,
+			ExtrinsicSize:     s.Record.ExtrinsicSize,
+			ExtrinsicCount:    s.Record.ExtrinsicCount,
+			AccumulateCount:   uint32(s.Record.AccumulateCount), // Cast if needed
+			AccumulateGasUsed: s.Record.AccumulateGasUsed,
 		}
 	}
 	return result
@@ -579,7 +577,7 @@ func TestReports(t *testing.T) {
 					// Only proceed if no error in guaranteeing
 					newCoreAssignments = guaranteeing.CalculatePosteriorCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, newTimeState)
 					preState.CoreAssignments = newCoreAssignments
-					_, _, _, _, _, _, _, accumulationStats, transferStats := statetransition.CalculateWorkReportsAndAccumulate(
+					_, _, _, _, _, _, _, accumulationStats := statetransition.CalculateWorkReportsAndAccumulate(
 						&newBlock.Header,
 						&preState,
 						newBlock.Header.TimeSlotIndex,
@@ -594,7 +592,6 @@ func TestReports(t *testing.T) {
 						preState.ValidatorState.CurrentValidators,
 						[]block.WorkReport{},
 						accumulationStats,
-						transferStats,
 					)
 					preState.ActivityStatistics = newValidatorStatistics
 				}

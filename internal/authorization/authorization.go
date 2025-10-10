@@ -58,7 +58,7 @@ func (a *Authorization) InvokePVM(
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
 		case host_call.FetchID:
-			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, &workPackage, nil, nil, nil, nil, nil, nil, nil)
+			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, &workPackage, nil, nil, nil, nil, nil, nil)
 		default:
 			// (▸, ϱ−10, [φ0,…,φ6, WHAT, φ8,…], µ)
 			regs[polkavm.A0] = uint64(host_call.WHAT)
