@@ -2,6 +2,7 @@ package host_call
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math"
 
@@ -69,7 +70,7 @@ func Fetch(
 	itemIndex *uint32, // i
 	importedSegments []work.Segment, // i
 	extrinsicPreimages [][]byte, // x
-	operand []state.AccumulationInput, // o
+	operand []*state.AccumulationInput, // o
 ) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < FetchCost {
 		return gas, regs, mem, polkavm.ErrOutOfGas
@@ -223,6 +224,7 @@ func Fetch(
 			if err != nil {
 				return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 			}
+			fmt.Println("OP:", hex.EncodeToString(out))
 			v = out
 		}
 	case 15:
@@ -234,26 +236,6 @@ func Fetch(
 			}
 			v = out
 		}
-	case 16:
-		// if t ≠ ∅ ∧ φ10 = 16
-		// TODO
-		//if len(transfers) > 0 {
-		//	out, err := jam.Marshal(transfers)
-		//	if err != nil {
-		//		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
-		//	}
-		//	v = out
-		//}
-	case 17:
-		// if t ≠ ∅ ∧ φ10 = 17 ∧ φ11 < ∣t∣
-		// TODO
-		//if len(transfers) > 0 && int(idx1) < len(transfers) {
-		//	out, err := jam.Marshal(transfers[idx1])
-		//	if err != nil {
-		//		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
-		//	}
-		//	v = out
-		//}
 	default:
 		return gas, withCode(regs, NONE), mem, nil
 	}
