@@ -639,18 +639,16 @@ func (s ServiceStatistics) To() validator.ServiceStatistics {
 	newServiceStats := make(validator.ServiceStatistics, len(s))
 	for _, statEntry := range s {
 		newServiceStats[block.ServiceId(statEntry.ID)] = validator.ServiceActivityRecord{
-			ProvidedCount:      statEntry.Record.ProvidedCount,
-			ProvidedSize:       statEntry.Record.ProvidedSize,
-			RefinementCount:    statEntry.Record.RefinementCount,
-			RefinementGasUsed:  statEntry.Record.RefinementGasUsed,
-			Imports:            statEntry.Record.Imports,
-			Exports:            statEntry.Record.Exports,
-			ExtrinsicSize:      statEntry.Record.ExtrinsicSize,
-			ExtrinsicCount:     statEntry.Record.ExtrinsicCount,
-			AccumulateCount:    statEntry.Record.AccumulateCount,
-			AccumulateGasUsed:  statEntry.Record.AccumulateGasUsed,
-			OnTransfersCount:   statEntry.Record.OnTransfersCount,
-			OnTransfersGasUsed: statEntry.Record.OnTransfersGasUsed,
+			ProvidedCount:     statEntry.Record.ProvidedCount,
+			ProvidedSize:      statEntry.Record.ProvidedSize,
+			RefinementCount:   statEntry.Record.RefinementCount,
+			RefinementGasUsed: statEntry.Record.RefinementGasUsed,
+			Imports:           statEntry.Record.Imports,
+			Exports:           statEntry.Record.Exports,
+			ExtrinsicSize:     statEntry.Record.ExtrinsicSize,
+			ExtrinsicCount:    statEntry.Record.ExtrinsicCount,
+			AccumulateCount:   statEntry.Record.AccumulateCount,
+			AccumulateGasUsed: statEntry.Record.AccumulateGasUsed,
 		}
 	}
 
@@ -663,18 +661,16 @@ func NewServiceStatistics(s validator.ServiceStatistics) ServiceStatistics {
 		newServiceStats = append(newServiceStats, ServiceStatisticsEntry{
 			ID: uint32(id),
 			Record: ServiceStatisticsRecord{
-				ProvidedCount:      record.ProvidedCount,
-				ProvidedSize:       record.ProvidedSize,
-				RefinementCount:    record.RefinementCount,
-				RefinementGasUsed:  record.RefinementGasUsed,
-				Imports:            record.Imports,
-				Exports:            record.Exports,
-				ExtrinsicSize:      record.ExtrinsicSize,
-				ExtrinsicCount:     record.ExtrinsicCount,
-				AccumulateCount:    record.AccumulateCount,
-				AccumulateGasUsed:  record.AccumulateGasUsed,
-				OnTransfersCount:   record.OnTransfersCount,
-				OnTransfersGasUsed: record.OnTransfersGasUsed,
+				ProvidedCount:     record.ProvidedCount,
+				ProvidedSize:      record.ProvidedSize,
+				RefinementCount:   record.RefinementCount,
+				RefinementGasUsed: record.RefinementGasUsed,
+				Imports:           record.Imports,
+				Exports:           record.Exports,
+				ExtrinsicSize:     record.ExtrinsicSize,
+				ExtrinsicCount:    record.ExtrinsicCount,
+				AccumulateCount:   record.AccumulateCount,
+				AccumulateGasUsed: record.AccumulateGasUsed,
 			},
 		})
 	}
