@@ -86,15 +86,20 @@ func TestFetch(t *testing.T) {
 	extrinsicPreimages := [][]byte{preimageBytes}
 	itemIndex := uint32(0)
 
-	op := state.AccumulationInput{}
-	err = op.SetValue(state.AccumulationOperand{Trace: testutils.RandomBytes(t, 5), OutputOrError: block.WorkResultOutputOrError{Inner: block.UnexpectedTermination}})
+	op1 := &state.AccumulationInput{}
+	err = op1.SetValue(state.AccumulationOperand{Trace: testutils.RandomBytes(t, 5), OutputOrError: block.WorkResultOutputOrError{Inner: block.UnexpectedTermination}})
 	require.NoError(t, err)
-	operand := []state.AccumulationInput{
-		op,
-	}
-	transfers := []service.DeferredTransfer{
-		{Balance: 100, Memo: [service.TransferMemoSizeBytes]byte{1, 2, 3}},
-		{Balance: 100, Memo: [service.TransferMemoSizeBytes]byte{4, 5, 6}},
+
+	transfer1 := &state.AccumulationInput{}
+	err = transfer1.SetValue(service.DeferredTransfer{Balance: 101, Memo: [service.TransferMemoSizeBytes]byte{1, 2, 3}})
+	require.NoError(t, err)
+
+	transfer2 := &state.AccumulationInput{}
+	err = transfer2.SetValue(service.DeferredTransfer{Balance: 100, Memo: [service.TransferMemoSizeBytes]byte{4, 5, 6}})
+	require.NoError(t, err)
+
+	operand := []*state.AccumulationInput{
+		op1, transfer1, transfer2,
 	}
 
 	entropy := testutils.RandomHash(t)
@@ -102,7 +107,7 @@ func TestFetch(t *testing.T) {
 	ho := polkavm.RWAddressBase + 100
 	initialGas := polkavm.Gas(100)
 	offset := uint64(0)
-	length := uint64(256)
+	length := uint64(512)
 
 	cases := []struct {
 		name   string
@@ -273,21 +278,11 @@ func TestFetch(t *testing.T) {
 			},
 		},
 		{
-			name:   "dataID 16 (↕transfers)",
-			dataID: 16,
-			expect: func() []byte {
-				out, err := jam.Marshal(transfers)
-				require.NoError(t, err)
-
-				return out
-			},
-		},
-		{
-			name:   "dataID 17 (transfers[1])",
-			dataID: 17,
+			name:   "dataID 15 (operand[1])",
+			dataID: 15,
 			idx1:   1,
 			expect: func() []byte {
-				out, err := jam.Marshal(transfers[1])
+				out, err := jam.Marshal(operand[1])
 				require.NoError(t, err)
 
 				return out

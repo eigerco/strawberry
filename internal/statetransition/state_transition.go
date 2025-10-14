@@ -1242,11 +1242,11 @@ func (a *Accumulator) Delta1(
 	}
 
 	// Collect work item operands (p)
-	var operands []state.AccumulationInput
+	var operands []*state.AccumulationInput
 	for _, report := range workReports {
 		for _, result := range report.WorkDigests {
 			if result.ServiceId == serviceIndex {
-				operand := state.AccumulationInput{}
+				operand := &state.AccumulationInput{}
 				err := operand.SetValue(state.AccumulationOperand{
 					WorkPackageHash:   report.AvailabilitySpecification.WorkPackageHash,
 					SegmentRoot:       report.AvailabilitySpecification.SegmentRoot,
