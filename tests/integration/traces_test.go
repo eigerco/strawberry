@@ -4,17 +4,12 @@ package integration
 
 import (
 	"fmt"
+	"github.com/pmezard/go-difflib/difflib"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
-
-	"github.com/eigerco/strawberry/pkg/log"
-	"github.com/rs/zerolog"
-
-	"github.com/eigerco/strawberry/internal/common"
-	"github.com/pmezard/go-difflib/difflib"
-	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/merkle"
@@ -26,10 +21,6 @@ import (
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
-
-func init() {
-	log.Init(log.Options{LogLevel: zerolog.InfoLevel})
-}
 
 func TestTracePreimagesLight(t *testing.T) {
 	runTracesTests(t, "traces/preimages_light")
@@ -55,10 +46,33 @@ func TestTraceSafrole(t *testing.T) {
 	runTracesTests(t, "traces/safrole")
 }
 
+func TestTraceFuzzer(t *testing.T) {
+	t.Skip("temporarily disabled until we fix the issues")
+
+	entries, err := os.ReadDir("traces/fuzzer")
+	require.NoError(t, err)
+
+	var directories []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			directories = append(directories, entry.Name())
+		}
+	}
+	require.NotEmpty(t, directories, "no fuzzer directories found in traces/fuzzer")
+
+	sort.Strings(directories)
+	for _, directory := range directories {
+		t.Run(directory, func(t *testing.T) {
+			t.Parallel()
+			runTracesTests(t, filepath.Join("traces/fuzzer", directory))
+		})
+	}
+}
+
 func runTracesTests(t *testing.T, directory string) {
 	files, err := filepath.Glob(fmt.Sprintf("%s/*.bin", directory))
 	require.NoError(t, err)
-	require.NotEmpty(t, files, "no JSON files found in traces/fallback/")
+	require.NotEmptyf(t, files, "no .bin files found in %s", directory)
 
 	sort.Strings(files)
 
@@ -74,7 +88,6 @@ func runTracesTests(t *testing.T, directory string) {
 }
 
 func runTraceTest(t *testing.T, filename string) {
-	log.Root.Info().Msg(fmt.Sprintf("NumberOfValidators: %d", common.NumberOfValidators))
 	data, err := os.ReadFile(filename)
 	require.NoError(t, err)
 
