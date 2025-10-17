@@ -86,7 +86,7 @@ func TestAccumulate(t *testing.T) {
 			fn:   fnStd(Bless),
 			alloc: alloc{
 				A1: make([]byte, uint32(4*common.TotalNumberOfCores)),
-				A3: slices.Concat(
+				A4: slices.Concat(
 					encodeNumber(t, uint32(123)),
 					encodeNumber(t, uint64(12341234)),
 					encodeNumber(t, uint32(234)),
@@ -98,7 +98,8 @@ func TestAccumulate(t *testing.T) {
 			initialRegs: deltaRegs{
 				A0: 111,
 				A2: 333,
-				A4: 3,
+				A3: 444,
+				A5: 3,
 			},
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(OK),
@@ -108,9 +109,10 @@ func TestAccumulate(t *testing.T) {
 			expectedGas: 90,
 			expectedX: AccumulateContext{
 				AccumulationState: state.AccumulationState{
-					ManagerServiceId:   111,
-					AssignedServiceIds: [common.TotalNumberOfCores]block.ServiceId{},
-					DesignateServiceId: 333,
+					ManagerServiceId:         111,
+					AssignedServiceIds:       [common.TotalNumberOfCores]block.ServiceId{},
+					DesignateServiceId:       333,
+					CreateProtectedServiceId: 444,
 					AmountOfGasPerServiceId: map[block.ServiceId]uint64{
 						123: 12341234,
 						234: 23452345,
@@ -199,7 +201,7 @@ func TestAccumulate(t *testing.T) {
 			expectedX: AccumulateContext{
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
-						service.CheckIndex(service.BumpIndex(newServiceID), make(service.ServiceState)): func() service.ServiceAccount {
+						newServiceID: func() service.ServiceAccount {
 							account := service.ServiceAccount{
 								CodeHash:               randomHash,
 								GasLimitForAccumulator: 100,
@@ -221,7 +223,7 @@ func TestAccumulate(t *testing.T) {
 						},
 					},
 				},
-				NewServiceId: service.CheckIndex(service.BumpIndex(newServiceID), make(service.ServiceState)),
+				NewServiceId: service.BumpIndex(newServiceID, make(service.ServiceState)),
 				ServiceId:    currentServiceID,
 			},
 		},
