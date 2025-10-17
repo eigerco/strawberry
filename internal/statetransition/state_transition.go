@@ -570,10 +570,11 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	// (d: δ†, i: ι′, q: ϕ′, m: χ′_M, a: χ′_A, v: χ′_V , z: χ′_Z ) ≡ e′ (eq. 12.25 v0.7.1)
 	intermediateServiceState := newAccumulationState.ServiceState
 	newPrivilegedServices = service.PrivilegedServices{
-		ManagerServiceId:        newAccumulationState.ManagerServiceId,
-		AssignedServiceIds:      newAccumulationState.AssignedServiceIds,
-		DesignateServiceId:      newAccumulationState.DesignateServiceId,
-		AmountOfGasPerServiceId: newAccumulationState.AmountOfGasPerServiceId,
+		ManagerServiceId:         newAccumulationState.ManagerServiceId,
+		AssignedServiceIds:       newAccumulationState.AssignedServiceIds,
+		DesignateServiceId:       newAccumulationState.DesignateServiceId,
+		CreateProtectedServiceId: newAccumulationState.CreateProtectedServiceId,
+		AmountOfGasPerServiceId:  newAccumulationState.AmountOfGasPerServiceId,
 	}
 	newValidatorKeys = newAccumulationState.ValidatorKeys
 	newPendingAuthorizersQueues = newAccumulationState.PendingAuthorizersQueues

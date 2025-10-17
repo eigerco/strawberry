@@ -15,55 +15,62 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-// Bless ΩB(ϱ, φ, μ, (x, y))
+// Bless ΩB(ϱ, φ, μ, (x, y)) (v0.7.1)
 func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < BlessCost {
-		return gas, regs, mem, ctxPair, ErrOutOfGas
+		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= BlessCost
 
-	xs := ctxPair.RegularCtx.ServiceId
-	manager := ctxPair.RegularCtx.AccumulationState.ManagerServiceId
-	// if f ≠ 0 ∧ xs ≠ (xu)m
-	if xs != manager {
-		return gas, withCode(regs, HUH), mem, ctxPair, nil
+	// let [m, a, v, r, o, n] = φ7...13
+	managerServiceId, assignServiceAddr, designateServiceId, createProtectedServiceId, addr, servicesNr := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4], regs[A5]
+	// (▷, WHO, (x_e)_(m,a,v,r,z)) otherwise if (m, v, r) ∉ ℕ³_S
+	if !(isServiceId(managerServiceId) && isServiceId(designateServiceId) && isServiceId(createProtectedServiceId)) {
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
 	}
-
-	// let [m, a, v, o, n] = φ7...12
-	managerServiceId, assignServiceAddr, designateServiceId, addr, servicesNr := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
-	// let g = {(s ↦ g) where E4(s) ⌢ E8(g) = μ_o+12i⋅⋅⋅+12 | i ∈ Nn} if Zo⋅⋅⋅+12n ⊂ Vμ otherwise ∇
+	// let g = {(s ↦ g) where E4(s) ⌢ E8(g) = μ_o+12i⋅⋅⋅+12 | i ∈ Nn} if No⋅⋅⋅+12n ⊂ Vμ otherwise ∇
+	gasPerServiceId := make(map[block.ServiceId]uint64)
 	for i := range servicesNr {
 		serviceId, err := readNumber[block.ServiceId](mem, addr+(12*i), 4)
 		if err != nil {
+			// (ℓ, φ_7, (x_e)_(m,a,v,r,z)) if {z, a} ∋ ∇
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
 		serviceGas, err := readNumber[uint64](mem, addr+(12*i)+4, 8)
 		if err != nil {
+			// (ℓ, φ_7, (x_e)_(m,a,v,r,z)) if {z, a} ∋ ∇
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
 
-		if ctxPair.RegularCtx.AccumulationState.AmountOfGasPerServiceId == nil {
-			ctxPair.RegularCtx.AccumulationState.AmountOfGasPerServiceId = make(map[block.ServiceId]uint64)
-		}
-		ctxPair.RegularCtx.AccumulationState.AmountOfGasPerServiceId[serviceId] = serviceGas
+		gasPerServiceId[serviceId] = serviceGas
 	}
-	ctxPair.RegularCtx.AccumulationState.ManagerServiceId = block.ServiceId(managerServiceId)
 
 	// Na⋅⋅⋅+4C ⊆ Vµ
 	assignersBytes := make([]byte, 4*common.TotalNumberOfCores)
 	if err := mem.Read(assignServiceAddr, assignersBytes); err != nil {
+		// (ℓ, φ_7, (x_e)_(m,a,v,r,z)) if {z, a} ∋ ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
-	// E−1(4) (µa⋅⋅⋅+4C)
+	// (E−1(4) (µa⋅⋅⋅+4C)
 	var assigners [common.TotalNumberOfCores]block.ServiceId
 	err := jam.Unmarshal(assignersBytes, &assigners)
 	if err != nil {
+		// (ℓ, φ_7, (x_e)_(m,a,v,r,z)) if {z, a} ∋ ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
+	// (▷, OK, (m, a, v, r, z)) otherwise
+	ctxPair.RegularCtx.AccumulationState.ManagerServiceId = block.ServiceId(managerServiceId)
 	ctxPair.RegularCtx.AccumulationState.AssignedServiceIds = assigners
 	ctxPair.RegularCtx.AccumulationState.DesignateServiceId = block.ServiceId(designateServiceId)
+	ctxPair.RegularCtx.AccumulationState.CreateProtectedServiceId = block.ServiceId(createProtectedServiceId)
+	ctxPair.RegularCtx.AccumulationState.AmountOfGasPerServiceId = gasPerServiceId
 	return gas, withCode(regs, OK), mem, ctxPair, nil
+}
+
+// Helper to check if a service id coming from a register is a uint32.
+func isServiceId(s uint64) bool {
+	return s <= math.MaxUint32
 }
 
 // Assign ΩA(ϱ, φ, μ, (x, y))
@@ -158,20 +165,20 @@ func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPa
 	return gas, regs, mem, ctxPair, nil
 }
 
-// New ΩN(ϱ, φ, μ, (x, y), t)
+// New ΩN(ϱ, φ, μ, (x, y), t) (v0.7.1)
 func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < NewCost {
-		return gas, regs, mem, ctxPair, ErrOutOfGas
+		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= NewCost
 
-	// let [o, l, g, m, f] = φ7..+5
-	addr, preimageLength, gasLimitAccumulator, gasLimitTransfer, gratisStorageOffset := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4]
+	// let [o, l, g, m, f, i] = φ7..+6
+	addr, preimageLength, gasLimitAccumulator, gasLimitTransfer, gratisStorageOffset, desiredId := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4], regs[A5]
 
-	xs := ctxPair.RegularCtx.ServiceId
-	manager := ctxPair.RegularCtx.AccumulationState.ManagerServiceId
-	// if f ≠ 0 ∧ xs ≠ (xu)m
-	if gratisStorageOffset != 0 && xs != manager {
+	// (▷, HUH, x_i, (x_e)_d) otherwise if f ≠ 0 ∧ x_s ≠ (x_e)_m
+	xsId := ctxPair.RegularCtx.ServiceId
+	managerId := ctxPair.RegularCtx.AccumulationState.ManagerServiceId
+	if gratisStorageOffset != 0 && xsId != managerId {
 		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
@@ -190,10 +197,10 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 		GasLimitOnTransfer:     gasLimitTransfer,
 		GratisStorageOffset:    gratisStorageOffset,
 		CreationTimeslot:       timeslot,
-		ParentService:          xs,
+		ParentService:          xsId,
 	}
 
-	k, err := statekey.NewPreimageMeta(xs, codeHash, uint32(preimageLength))
+	k, err := statekey.NewPreimageMeta(xsId, codeHash, uint32(preimageLength))
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -206,36 +213,44 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 	// b: at
 	account.Balance = account.ThresholdBalance()
 
-	// let s_b = (Xs)b − at
-	b := ctxPair.RegularCtx.ServiceAccount().Balance - account.ThresholdBalance()
+	// let s = x_s except s_b = (Xs)b − at
+	xs := ctxPair.RegularCtx.ServiceAccount()
+	s := xs.Clone()
+	s.Balance -= account.ThresholdBalance()
 
-	// let s = x_s
-	currentAccount := ctxPair.RegularCtx.ServiceAccount()
+	// (▷, CASH, x_i, (x_e)_d) otherwise if s_b < (x_s)_t
+	if s.Balance < xs.ThresholdBalance() {
+		return gas, withCode(regs, CASH), mem, ctxPair, nil
+	}
 
-	// if a ≠ ∇ ∧ s_b ≥ (xs)t
-	a := ctxPair.RegularCtx.ServiceAccount()
+	// otherwise if x_s = (x_e)_r ∧ i < S ∧ i ∈ K((x_e)_d)
+	createProtectedServiceId := ctxPair.RegularCtx.AccumulationState.CreateProtectedServiceId
+	if xsId == createProtectedServiceId && desiredId < service.S {
+		desiredId := block.ServiceId(desiredId)
 
-	if b >= a.ThresholdBalance() {
-		// φ′7 = x_i
-		regs[A0] = uint64(ctxPair.RegularCtx.NewServiceId)
-		currentAccount.Balance = b
+		// (▷, FULL, x_i, (x_e)_d)
+		if _, ok := ctxPair.RegularCtx.AccumulationState.ServiceState[block.ServiceId(desiredId)]; !ok {
+			return gas, withCode(regs, FULL), mem, ctxPair, nil
+		}
 
-		// x'_i = check(bump(x_i))
-		newId := service.CheckIndex(
-			service.BumpIndex(ctxPair.RegularCtx.NewServiceId),
-			ctxPair.RegularCtx.AccumulationState.ServiceState,
-		)
-		ctxPair.RegularCtx.NewServiceId = newId
-
-		// (x'u)d = (xu)d ∪ {xi ↦ a, xs ↦ s}
-		ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = currentAccount
-		ctxPair.RegularCtx.AccumulationState.ServiceState[newId] = account
-
+		// (▷, i, x_i, (x_e)_d ∪ d)  otherwise if x_s = (x_e)_r ∧ i < S
+		// where d = {(i ↦ a), (x_s ↦ s)}
+		regs[A0] = uint64(desiredId)
+		ctxPair.RegularCtx.AccumulationState.ServiceState[desiredId] = account
+		ctxPair.RegularCtx.AccumulationState.ServiceState[xsId] = s
 		return gas, regs, mem, ctxPair, nil
 	}
 
-	// otherwise
-	return gas, withCode(regs, CASH), mem, ctxPair, nil
+	// (▷, x_i, i*, (x_e)_d ∪ d)  otherwise
+	// where i* = check(S + (x_i - S + 42) mod (2^32 - S - 2^8))
+	// and d = {(x_i ↦ a), (x_s ↦ s)}
+	xi := ctxPair.RegularCtx.NewServiceId
+	regs[A0] = uint64(xi)
+	newId := service.BumpIndex(ctxPair.RegularCtx.NewServiceId, ctxPair.RegularCtx.AccumulationState.ServiceState)
+	ctxPair.RegularCtx.NewServiceId = newId
+	ctxPair.RegularCtx.AccumulationState.ServiceState[xi] = account
+	ctxPair.RegularCtx.AccumulationState.ServiceState[xsId] = s
+	return gas, regs, mem, ctxPair, nil
 }
 
 // Upgrade ΩU(ϱ, φ, μ, (x, y))
