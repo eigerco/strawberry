@@ -47,7 +47,7 @@ func SerializeState(s state.State) (map[statekey.StateKey][]byte, error) {
 		{9, s.ValidatorState.ArchivedValidators},
 		{10, s.CoreAssignments},
 		{11, s.TimeslotIndex},
-		{12, s.PrivilegedServices}, // TODO update when GP updates for this are released.
+		{12, s.PrivilegedServices},
 		{13, s.ActivityStatistics},
 		{14, s.AccumulationQueue},
 		{15, s.AccumulationHistory},
