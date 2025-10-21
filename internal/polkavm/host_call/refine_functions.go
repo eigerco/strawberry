@@ -30,7 +30,7 @@ func HistoricalLookup(
 	t jamtime.Timeslot,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	if gas < HistoricalLookupCost {
-		return gas, regs, mem, ctxPair, ErrOutOfGas
+		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= HistoricalLookupCost
 
@@ -80,7 +80,7 @@ func Export(
 	exportOffset uint64,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	if gas < ExportCost {
-		return gas, regs, mem, ctxPair, ErrOutOfGas
+		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= ExportCost
 
@@ -124,7 +124,7 @@ func Machine(
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	if gas < MachineCost {
-		return gas, regs, mem, ctxPair, ErrOutOfGas
+		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= MachineCost
 
@@ -170,7 +170,7 @@ func Peek(
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	if gas < PeekCost {
-		return gas, regs, mem, ctxPair, ErrOutOfGas
+		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= PeekCost
 
@@ -206,7 +206,7 @@ func Poke(
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	if gas < PokeCost {
-		return gas, regs, mem, ctxPair, ErrOutOfGas
+		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= PokeCost
 
@@ -242,7 +242,7 @@ func Pages(
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	if gas < PagesCost {
-		return gas, regs, mem, ctxPair, ErrOutOfGas
+		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= PagesCost
 
@@ -316,7 +316,7 @@ func Invoke(
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	if gas < InvokeCost {
-		return gas, regs, mem, ctxPair, ErrOutOfGas
+		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= InvokeCost
 	// let [n, o] = φ7,8
@@ -406,7 +406,7 @@ func Expunge(
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	if gas < ExpungeCost {
-		return gas, regs, mem, ctxPair, ErrOutOfGas
+		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= ExpungeCost
 

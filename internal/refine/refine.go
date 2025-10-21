@@ -122,6 +122,9 @@ func (r *Refine) InvokePVM(
 			gasCounter, regs, mem, ctxPair, err = host_call.Expunge(gasCounter, regs, mem, ctxPair)
 		default:
 			regs[polkavm.A0] = uint64(host_call.WHAT)
+			if gasCounter < RefineCost {
+				return 0, regs, mem, ctxPair, polkavm.ErrOutOfGas
+			}
 			gasCounter -= RefineCost
 
 		}
