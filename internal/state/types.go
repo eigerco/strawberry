@@ -131,7 +131,6 @@ func (a *AccumulationInput) IndexValue() (index uint, value any, err error) {
 	case service.DeferredTransfer:
 		return 1, a.inner, nil
 	}
-
 	return 0, nil, jam.ErrUnsupportedEnumTypeValue
 }
 
