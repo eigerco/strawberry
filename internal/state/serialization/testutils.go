@@ -88,13 +88,15 @@ func RandomPrivilegedServices() service.PrivilegedServices {
 	amountOfGasPerServiceId := map[block.ServiceId]uint64{
 		block.ServiceId(123): 12344,
 		block.ServiceId(234): 23455,
+		block.ServiceId(245): 33333,
 		block.ServiceId(345): 34566,
 	}
 	return service.PrivilegedServices{
-		ManagerServiceId:        block.ServiceId(123),
-		AssignedServiceIds:      [common.TotalNumberOfCores]block.ServiceId{234},
-		DesignateServiceId:      block.ServiceId(345),
-		AmountOfGasPerServiceId: amountOfGasPerServiceId,
+		ManagerServiceId:         block.ServiceId(123),
+		AssignedServiceIds:       [common.TotalNumberOfCores]block.ServiceId{234},
+		CreateProtectedServiceId: block.ServiceId(245),
+		DesignateServiceId:       block.ServiceId(345),
+		AmountOfGasPerServiceId:  amountOfGasPerServiceId,
 	}
 }
 
