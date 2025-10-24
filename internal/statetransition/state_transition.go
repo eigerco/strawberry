@@ -5,7 +5,6 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
-	"log"
 	"maps"
 	"math"
 	"slices"
@@ -1115,7 +1114,6 @@ func (a *Accumulator) ParallelDelta(
 			deleteKeys(accState.ServiceState, slices.Collect(maps.Keys(initialServices))...)
 
 			maps.Copy(allAddedServices, accState.ServiceState)
-			log.Println()
 		}(svcId)
 	}
 	newAccState := state.AccumulationState{}
@@ -1185,12 +1183,12 @@ func (a *Accumulator) ParallelDelta(
 
 	// Wait for the rest of the processes
 	wg.Wait()
-	d := initialAccState.ServiceState.Clone()
 
-	maps.Copy(d, allAddedServices)                                 // d U n
-	deleteKeys(d, slices.Collect(maps.Keys(allRemovedIndices))...) // d \ m
+	initialServices := initialAccState.ServiceState.Clone()
+	maps.Copy(initialServices, allAddedServices)                                 // d U n
+	deleteKeys(initialServices, slices.Collect(maps.Keys(allRemovedIndices))...) // d \ m
 
-	newAccState.ServiceState = d
+	newAccState.ServiceState = initialServices
 	// (m′, z′) = e*_(m,z)
 	newAccState.ManagerServiceId = changedState.ManagerServiceId
 	newAccState.AmountOfGasPerServiceId = changedState.AmountOfGasPerServiceId
