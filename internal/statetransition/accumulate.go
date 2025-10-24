@@ -46,15 +46,11 @@ type Accumulator struct {
 
 // InvokePVM ΨA(U, N_T, N_S, N_G, ⟦I⟧) → O Equation (B.9)
 func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []*state.AccumulationInput) AccumulationOutput {
-	output := AccumulationOutput{
-		AccumulationState: accState.Clone(),
-	}
-
 	account := accState.ServiceState[serviceIndex]
 	c := account.EncodedCodeAndMetadata()
 	// if c = ∅ ∨ ∣c∣ > WC
 	if c == nil || len(c) == work.MaxSizeServiceCode {
-		return output
+		return AccumulationOutput{AccumulationState: accState.Clone()}
 	}
 
 	// I(u, s)^2
@@ -65,12 +61,12 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	newCtxPair.RegularCtx, err = a.newCtx(accState.Clone(), serviceIndex)
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error creating context")
-		return output
+		return AccumulationOutput{AccumulationState: accState.Clone()}
 	}
 	newCtxPair.ExceptionalCtx, err = a.newCtx(accState.Clone(), serviceIndex)
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error creating context")
-		return output
+		return AccumulationOutput{AccumulationState: accState.Clone()}
 	}
 
 	// E(t, s, ↕o)
@@ -85,7 +81,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	})
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error encoding arguments")
-		return output
+		return AccumulationOutput{AccumulationState: accState.Clone()}
 	}
 
 	// F (equation B.10)
@@ -151,31 +147,24 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		return gasCounter, regs, mem, ctx, err
 	}
 
+	errPanic := &polkavm.ErrPanic{}
 	gasUsed, ret, newCtxPair, err := interpreter.InvokeWholeProgram(account.EncodedCodeAndMetadata(), 5, polkavm.Gas(gas), args, hostCallFunc, newCtxPair)
-	if err != nil {
-		output.GasUsed = uint64(gasUsed)
-
-		errPanic := &polkavm.ErrPanic{}
-		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {
-			log.VM.Error().Err(err).Msgf("Program invocation failed")
-			output.AccumulationState = newCtxPair.ExceptionalCtx.AccumulationState
-			output.DeferredTransfers = newCtxPair.ExceptionalCtx.DeferredTransfers
-			output.ProvidedPreimages = newCtxPair.ExceptionalCtx.ProvidedPreimages
-
-			return output
+	if err != nil && (errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic)) {
+		log.VM.Error().Err(err).Msgf("Program invocation failed")
+		return AccumulationOutput{
+			GasUsed:           uint64(gasUsed),
+			AccumulationState: newCtxPair.ExceptionalCtx.AccumulationState,
+			DeferredTransfers: newCtxPair.ExceptionalCtx.DeferredTransfers,
+			ProvidedPreimages: newCtxPair.ExceptionalCtx.ProvidedPreimages,
 		}
-		output.AccumulationState = newCtxPair.RegularCtx.AccumulationState
-		output.DeferredTransfers = newCtxPair.RegularCtx.DeferredTransfers
-		output.ProvidedPreimages = newCtxPair.RegularCtx.ProvidedPreimages
-		// halt
-		return output
 	}
 
-	output.GasUsed = uint64(gasUsed)
-	output.AccumulationState = newCtxPair.RegularCtx.AccumulationState
-	output.DeferredTransfers = newCtxPair.RegularCtx.DeferredTransfers
-	output.ProvidedPreimages = newCtxPair.RegularCtx.ProvidedPreimages
-
+	output := AccumulationOutput{
+		GasUsed:           uint64(gasUsed),
+		AccumulationState: newCtxPair.RegularCtx.AccumulationState,
+		DeferredTransfers: newCtxPair.RegularCtx.DeferredTransfers,
+		ProvidedPreimages: newCtxPair.RegularCtx.ProvidedPreimages,
+	}
 	// if o ∈ B ∖ H. There is no sure way to check that a byte array is a hash
 	// one way would be to check the shannon entropy but this also not a guarantee, so we just limit to checking the size
 	if len(ret) == crypto.HashSize {

@@ -122,7 +122,11 @@ type AccumulateServiceAccount struct {
 		Preimages []struct {
 			Hash string `json:"hash"`
 			Blob string `json:"blob"`
-		} `json:"preimages"`
+		} `json:"preimages_blob"`
+		PreimagesStatus []struct {
+			Hash   string `json:"hash"`
+			Status []int  `json:"status"`
+		} `json:"preimages_status"`
 
 		Storage []struct {
 			Key   string `json:"key"`
@@ -196,7 +200,10 @@ func TestAccumulate(t *testing.T) {
 }
 
 func mapAccumulateState(t *testing.T, s AccumulateState) *state.State {
-	privilegedGas := map[block.ServiceId]uint64{}
+	var privilegedGas map[block.ServiceId]uint64
+	if len(s.Privileges.AlwaysAcc) > 0 {
+		privilegedGas = make(map[block.ServiceId]uint64)
+	}
 	for _, a := range s.Privileges.AlwaysAcc {
 		privilegedGas[a.ServiceId] = a.Gas
 	}
@@ -326,11 +333,16 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 		}
 		for _, preimage := range account.Data.Preimages {
 			sa.PreimageLookup[mapHash(preimage.Hash)] = mustStringToHex(preimage.Blob)
-
-			k, err := statekey.NewPreimageMeta(account.Id, mapHash(preimage.Hash), uint32(len(mustStringToHex(preimage.Blob))))
+		}
+		for _, preimageStatus := range account.Data.PreimagesStatus {
+			blob := sa.PreimageLookup[mapHash(preimageStatus.Hash)]
+			k, err := statekey.NewPreimageMeta(account.Id, mapHash(preimageStatus.Hash), uint32(len(blob)))
 			require.NoError(t, err)
-
-			err = sa.InsertPreimageMeta(k, uint64(len(mustStringToHex(preimage.Blob))), service.PreimageHistoricalTimeslots{})
+			tt := service.PreimageHistoricalTimeslots{}
+			for _, ps := range preimageStatus.Status {
+				tt = append(tt, jamtime.Timeslot(ps))
+			}
+			err = sa.InsertPreimageMeta(k, uint64(len(blob)), tt)
 			require.NoError(t, err)
 		}
 		for _, storage := range account.Data.Storage {
