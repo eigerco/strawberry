@@ -104,7 +104,7 @@ func (j AccumulationState) Clone() AccumulationState {
 		ManagerServiceId:         j.ManagerServiceId,
 		AssignedServiceIds:       j.AssignedServiceIds,
 		DesignateServiceId:       j.DesignateServiceId,
-		AmountOfGasPerServiceId:  j.AmountOfGasPerServiceId,
+		AmountOfGasPerServiceId:  j.AmountOfGasPerServiceId, // TODO clone properly
 	}
 }
 

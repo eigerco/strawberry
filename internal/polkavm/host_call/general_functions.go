@@ -2,7 +2,6 @@ package host_call
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"math"
 
@@ -224,7 +223,6 @@ func Fetch(
 			if err != nil {
 				return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 			}
-			fmt.Println("OP:", hex.EncodeToString(out))
 			v = out
 		}
 	case 15:

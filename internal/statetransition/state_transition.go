@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"log"
 	"maps"
 	"math"
 	"slices"
@@ -1063,26 +1064,24 @@ func (a *Accumulator) ParallelDelta(
 	// u = [(s, ∆(s)u) | s <− s]
 	accumHashPairs := make(ServiceHashPairs, 0)
 	accumGasPairs := make(ServiceGasPairs, 0)
-	newAccState := state.AccumulationState{
-		ServiceState: initialAccState.ServiceState.Clone(),
-	}
 
 	var allPreimageProvisions []polkavm.ProvidedPreimage
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
+	allAddedServices := service.ServiceState{}
+	allRemovedIndices := map[block.ServiceId]struct{}{}
+
 	for svcId := range serviceIndices {
 		wg.Add(1)
 		go func(serviceId block.ServiceId) {
 			defer wg.Done()
-
 			// Process single service using Delta1
 			output := delta(serviceId)
 			accState, deferredTransfers, resultHash, gasUsed, preimageProvisions := output.AccumulationState, output.DeferredTransfers, output.Result, output.GasUsed, output.ProvidedPreimages
 			mu.Lock()
 			defer mu.Unlock()
-
 			// Collect transfers
 			if len(deferredTransfers) > 0 {
 				allTransfers = append(allTransfers, deferredTransfers...)
@@ -1107,20 +1106,19 @@ func (a *Accumulator) ParallelDelta(
 			// n = ⋃[s∈s]((∆(s)e)d ∖ K(d ∖ {s}))
 			// m = ⋃[s∈s](K(d) ∖ K((∆(s)e)d))
 			// (d ∪ n) ∖ m
-			maps.Copy(newAccState.ServiceState, accState.ServiceState)
-			for svc := range newAccState.ServiceState {
-				if svc == serviceId {
-					continue
-				}
+			removedIndices := mapKeys(initialAccState.ServiceState)
+			deleteKeys(removedIndices, slices.Collect(maps.Keys(accState.ServiceState))...)
+			maps.Copy(allRemovedIndices, removedIndices)
 
-				_, ok := accState.ServiceState[svc]
-				if !ok {
-					delete(newAccState.ServiceState, svc)
-				}
-			}
+			initialServices := maps.Clone(initialAccState.ServiceState)
+			delete(initialServices, serviceId)
+			deleteKeys(accState.ServiceState, slices.Collect(maps.Keys(initialServices))...)
+
+			maps.Copy(allAddedServices, accState.ServiceState)
+			log.Println()
 		}(svcId)
 	}
-
+	newAccState := state.AccumulationState{}
 	// Manager changed state
 	// e* = ∆(m)e
 	var changedState state.AccumulationState
@@ -1135,10 +1133,6 @@ func (a *Accumulator) ParallelDelta(
 
 		changedState = output.AccumulationState
 	}(initialAccState.ManagerServiceId)
-
-	// (m′, z′) = e*_(m,z)
-	newAccState.ManagerServiceId = changedState.ManagerServiceId
-	newAccState.AmountOfGasPerServiceId = changedState.AmountOfGasPerServiceId
 
 	// i′ = (∆(v)e)i
 	// v′ = R(v, e∗v, (∆(v)e)v)
@@ -1191,6 +1185,15 @@ func (a *Accumulator) ParallelDelta(
 
 	// Wait for the rest of the processes
 	wg.Wait()
+	d := initialAccState.ServiceState.Clone()
+
+	maps.Copy(d, allAddedServices)                                 // d U n
+	deleteKeys(d, slices.Collect(maps.Keys(allRemovedIndices))...) // d \ m
+
+	newAccState.ServiceState = d
+	// (m′, z′) = e*_(m,z)
+	newAccState.ManagerServiceId = changedState.ManagerServiceId
+	newAccState.AmountOfGasPerServiceId = changedState.AmountOfGasPerServiceId
 
 	newAccState.DesignateServiceId = replaceIfChanged(initialAccState.DesignateServiceId, changedState.DesignateServiceId, selfChangedDesignateServiceId)
 	for _, core := range newAccState.AssignedServiceIds {
@@ -1207,6 +1210,20 @@ func (a *Accumulator) ParallelDelta(
 	})
 
 	return newAccState, allTransfers, accumHashPairs, accumGasPairs
+}
+
+func mapKeys[K comparable, V any](m map[K]V) map[K]struct{} {
+	keys := make(map[K]struct{})
+	for k := range m {
+		keys[k] = struct{}{}
+	}
+	return keys
+}
+
+func deleteKeys[K comparable, V any](m map[K]V, keys ...K) {
+	for _, key := range keys {
+		delete(m, key)
+	}
 }
 
 // Delta1 implements equation 12.23 v0.7.1 ∆1(S, ⟦X⟧, ⟦R⟧, ⟨NS → NG⟩, NS) → O

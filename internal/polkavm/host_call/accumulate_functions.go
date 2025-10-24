@@ -321,10 +321,13 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	// let b = (xs)b − a
 	// if b < (xs)t
 	account := ctxPair.RegularCtx.ServiceAccount()
-	if ctxPair.RegularCtx.ServiceAccount().Balance-newBalance < account.ThresholdBalance() {
+	b := account.Balance - newBalance
+	if b < account.ThresholdBalance() {
 		return gas, withCode(regs, CASH), mem, ctxPair, nil
 	}
 
+	account.Balance = b
+	ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = account
 	ctxPair.RegularCtx.DeferredTransfers = append(ctxPair.RegularCtx.DeferredTransfers, deferredTransfer)
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
@@ -370,9 +373,9 @@ func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, t
 	}
 
 	// l = max(81, d_o) - 81
-	l := max(81, len(serviceAccount.EncodedCodeAndMetadata())) - 81
+	l := max(81, serviceAccount.GetTotalNumberOfOctets()) - 81
 
-	k, err := statekey.NewPreimageMeta(ctxPair.RegularCtx.ServiceId, crypto.Hash(h), uint32(l))
+	k, err := statekey.NewPreimageMeta(block.ServiceId(d), crypto.Hash(h), uint32(l))
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
