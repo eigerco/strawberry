@@ -74,6 +74,7 @@ func SerializeState(s state.State) (map[statekey.StateKey][]byte, error) {
 func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[statekey.StateKey][]byte) error {
 	// Serialize the service account itself.
 	encodedServiceAccount := encodedServiceAccount{
+		Version:                        0,
 		CodeHash:                       serviceAccount.CodeHash,
 		Balance:                        serviceAccount.Balance,
 		GasLimitForAccumulator:         serviceAccount.GasLimitForAccumulator,
@@ -113,6 +114,7 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 }
 
 type encodedServiceAccount struct {
+	Version  byte
 	CodeHash crypto.Hash // a_c
 
 	Balance                uint64 // a_b
