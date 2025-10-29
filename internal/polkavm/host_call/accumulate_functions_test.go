@@ -524,7 +524,7 @@ func TestAccumulate(t *testing.T) {
 					},
 				},
 			},
-			expectedGas: 9,
+			expectedGas: 0,
 			expectedX: AccumulateContext{
 				ServiceId: currentServiceID,
 				AccumulationState: state.AccumulationState{
