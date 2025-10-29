@@ -291,7 +291,7 @@ func TestAccumulate(t *testing.T) {
 							GasLimitOnTransfer: 1,
 						},
 						block.ServiceId(123123123): {
-							Balance: 1000000100,
+							Balance: 100,
 						},
 					},
 				},
@@ -334,7 +334,7 @@ func TestAccumulate(t *testing.T) {
 								codeHash: make([]byte, 81),
 							}
 
-							k, err := statekey.NewPreimageMeta(222, randomHash, 0)
+							k, err := statekey.NewPreimageMeta(999, randomHash, 81)
 							require.NoError(t, err)
 
 							account := service.ServiceAccount{
@@ -343,9 +343,9 @@ func TestAccumulate(t *testing.T) {
 								PreimageLookup: preImgLookup,
 							}
 
-							slots := service.PreimageHistoricalTimeslots{50, 100}
+							slots := service.PreimageHistoricalTimeslots{5, 10}
 
-							err = account.InsertPreimageMeta(k, uint64(len(randomHash)), slots)
+							err = account.InsertPreimageMeta(k, uint64(81), slots)
 							require.NoError(t, err)
 
 							return account
