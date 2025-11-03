@@ -53,17 +53,17 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		return AccumulationOutput{AccumulationState: accState.Clone()}
 	}
 
-	// I(u, s)^2
+	// I(s, s)^2
 	var (
 		newCtxPair polkavm.AccumulateContextPair
 		err        error
 	)
-	newCtxPair.RegularCtx, err = a.newCtx(accState.Clone(), serviceIndex)
+	newCtxPair.RegularCtx, err = a.newCtx(addTransfersBalance(accState.Clone(), serviceIndex, accOperand), serviceIndex)
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error creating context")
 		return AccumulationOutput{AccumulationState: accState.Clone()}
 	}
-	newCtxPair.ExceptionalCtx, err = a.newCtx(accState.Clone(), serviceIndex)
+	newCtxPair.ExceptionalCtx, err = a.newCtx(addTransfersBalance(accState.Clone(), serviceIndex, accOperand), serviceIndex)
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error creating context")
 		return AccumulationOutput{AccumulationState: accState.Clone()}
@@ -178,6 +178,24 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	}
 
 	return output
+}
+
+// s = e except s_d[s]b = e_d[s]b + [∑ r∈x] r_a
+// x = [i S i <− i, i ∈ X] (part of eq. B.9 v0.7.1)
+func addTransfersBalance(accState state.AccumulationState, serviceId block.ServiceId, operands []*state.AccumulationInput) state.AccumulationState {
+	for _, op := range operands {
+		_, val, err := op.IndexValue()
+		if err != nil {
+			log.VM.Error().Err(err).Msgf("Failed to get operand")
+		}
+		dtransfer, ok := val.(service.DeferredTransfer)
+		if ok {
+			svc := accState.ServiceState[serviceId]
+			svc.Balance = dtransfer.Balance
+			accState.ServiceState[serviceId] = svc
+		}
+	}
+	return accState
 }
 
 // newCtx (B.9)

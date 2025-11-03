@@ -1246,19 +1246,19 @@ func (a *Accumulator) Delta1(
 			}
 		}
 	}
-
+	var operands []*state.AccumulationInput
 	for _, transfer := range transfers {
 		if transfer.ReceiverServiceIndex == serviceIndex {
-			operand := state.AccumulationInput{}
+			operand := &state.AccumulationInput{}
 			err := operand.SetValue(transfer)
 			if err != nil {
 				panic(err) // if we get an error here it means this function is implemented wrong so we should panic
 			}
+			operands = append(operands, operand)
 		}
 	}
 
 	// Collect work item operands (p)
-	var operands []*state.AccumulationInput
 	for _, report := range workReports {
 		for _, result := range report.WorkDigests {
 			if result.ServiceId == serviceIndex {
