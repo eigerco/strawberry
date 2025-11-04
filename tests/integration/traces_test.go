@@ -45,6 +45,12 @@ func TestTraceFallback(t *testing.T) {
 func TestTraceSafrole(t *testing.T) {
 	runTracesTests(t, "traces/safrole")
 }
+func TestTraceFuzzy(t *testing.T) {
+	runTracesTests(t, "traces/fuzzy")
+}
+func TestTraceFuzzyLight(t *testing.T) {
+	runTracesTests(t, "traces/fuzzy_light")
+}
 
 func TestTraceFuzzer(t *testing.T) {
 	t.Skip("temporarily disabled until we fix the issues")
