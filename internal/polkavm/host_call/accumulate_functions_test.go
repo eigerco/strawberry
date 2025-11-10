@@ -211,7 +211,7 @@ func TestAccumulate(t *testing.T) {
 								ParentService:          currentServiceID,
 							}
 
-							preimageStateKey, err := statekey.NewPreimageMeta(currentServiceID, randomHash, 100)
+							preimageStateKey, err := statekey.NewPreimageMeta(newServiceID, randomHash, 100)
 							require.NoError(t, err)
 							err = account.InsertPreimageMeta(preimageStateKey, uint64(100), service.PreimageHistoricalTimeslots{})
 							require.NoError(t, err)

@@ -61,7 +61,7 @@ func HistoricalLookup(
 		return gas, withCode(regs, NONE), mem, ctxPair, nil
 	}
 
-	if err := writeFromOffset(mem, addressToWrite, v, regs[A3], regs[A4]); err != nil {
+	if err := writeFromOffset(&mem, addressToWrite, v, regs[A3], regs[A4]); err != nil {
 		return gas, regs, mem, ctxPair, err
 	}
 
