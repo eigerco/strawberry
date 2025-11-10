@@ -242,7 +242,7 @@ func Fetch(
 		return gas, withCode(regs, NONE), mem, nil
 	}
 
-	if err := writeFromOffset(mem, output, v, offset, length); err != nil {
+	if err := writeFromOffset(&mem, output, v, offset, length); err != nil {
 		return gas, regs, mem, err
 	}
 
@@ -286,7 +286,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 		return gas, withCode(regs, NONE), mem, nil
 	}
 
-	if err := writeFromOffset(mem, o, v, regs[polkavm.A3], regs[polkavm.A4]); err != nil {
+	if err := writeFromOffset(&mem, o, v, regs[polkavm.A3], regs[polkavm.A4]); err != nil {
 		return gas, regs, mem, err
 	}
 
@@ -339,7 +339,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		return gas, withCode(regs, NONE), mem, nil
 	}
 
-	if err = writeFromOffset(mem, o, v, regs[polkavm.A4], regs[polkavm.A5]); err != nil {
+	if err = writeFromOffset(&mem, o, v, regs[polkavm.A4], regs[polkavm.A5]); err != nil {
 		return gas, regs, mem, err
 	}
 
@@ -442,7 +442,7 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
-	if err = writeFromOffset(mem, o, v, regs[polkavm.A2], regs[polkavm.A3]); err != nil {
+	if err = writeFromOffset(&mem, o, v, regs[polkavm.A2], regs[polkavm.A3]); err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 

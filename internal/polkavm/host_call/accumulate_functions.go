@@ -200,7 +200,7 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 		ParentService:          xsId,
 	}
 
-	k, err := statekey.NewPreimageMeta(xsId, codeHash, uint32(preimageLength))
+	k, err := statekey.NewPreimageMeta(ctxPair.RegularCtx.NewServiceId, codeHash, uint32(preimageLength))
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}

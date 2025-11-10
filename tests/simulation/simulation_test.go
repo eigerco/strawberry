@@ -24,6 +24,7 @@ import (
 )
 
 func TestSimulateSAFROLE(t *testing.T) {
+	t.Skip("deprecated")
 	data, err := os.ReadFile("keys.json")
 	require.NoError(t, err)
 

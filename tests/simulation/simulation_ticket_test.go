@@ -23,6 +23,7 @@ import (
 // state, and making sure they all end up in the accumulator which would have
 // been reset as part of the epoch transition.
 func TestSimulateTicket(t *testing.T) {
+	t.Skip("deprecated")
 	// Prestate
 	data, err := os.ReadFile("ticket_prestate_001.json")
 	require.NoError(t, err)

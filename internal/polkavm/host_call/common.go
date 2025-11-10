@@ -141,7 +141,7 @@ func withCode(regs Registers, s Code) Registers {
 }
 
 func writeFromOffset(
-	mem Memory,
+	mem *Memory,
 	addressToWrite uint64,
 	data []byte,
 	offset uint64,

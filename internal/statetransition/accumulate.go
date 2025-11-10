@@ -2,6 +2,7 @@ package statetransition
 
 import (
 	"errors"
+
 	"github.com/eigerco/strawberry/pkg/log"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -87,7 +88,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	// F (equation B.10)
 	hostCallFunc := func(hostCall uint64, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctx polkavm.AccumulateContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.AccumulateContextPair, error) {
 		// s = (xu)d[xs]
-		currentService := newCtxPair.RegularCtx.AccumulationState.ServiceState[serviceIndex]
+		currentService := ctx.RegularCtx.AccumulationState.ServiceState[serviceIndex]
 
 		if currentService.PreimageLookup == nil {
 			currentService.PreimageLookup = make(map[crypto.Hash][]byte)
@@ -217,9 +218,9 @@ func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.Servi
 
 func (a *Accumulator) newServiceID(serviceIndex block.ServiceId) (block.ServiceId, error) {
 	hashBytes, err := jam.Marshal(struct {
-		ServiceID block.ServiceId
+		ServiceID block.ServiceId `jam:"encoding=compact"`
 		Entropy   crypto.Hash
-		Timeslot  jamtime.Timeslot
+		Timeslot  jamtime.Timeslot `jam:"encoding=compact"`
 	}{
 		ServiceID: serviceIndex,
 		Entropy:   a.state.EntropyPool[0],

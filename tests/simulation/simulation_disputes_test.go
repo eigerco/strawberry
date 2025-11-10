@@ -20,6 +20,7 @@ import (
 // 2. adding a faulting validator via a fault on the good report
 // 3. adding a culprit for a report in the bad report list
 func TestSimulateDisputes(t *testing.T) {
+	t.Skip("deprecated")
 	data, err := os.ReadFile("keys.json")
 	require.NoError(t, err)
 

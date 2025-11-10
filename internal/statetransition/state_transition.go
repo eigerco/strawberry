@@ -93,6 +93,8 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 	// ρ′ ≺ (EG, ρ‡, κ, τ ′)
 	newCoreAssignments := guaranteeing.CalculatePosteriorCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, newTimeSlot)
 
+	// TODO: potentially refactor this to explicitly take the new entropy pool
+	s.EntropyPool = newEntropyPool
 	newAccumulationQueue,
 		newAccumulationHistory,
 		postAccumulationServiceState,
