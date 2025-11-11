@@ -48,11 +48,6 @@ type Accumulator struct {
 // InvokePVM ΨA(U, N_T, N_S, N_G, ⟦I⟧) → O Equation (B.9)
 func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []*state.AccumulationInput) AccumulationOutput {
 	account := accState.ServiceState[serviceIndex]
-	c := account.EncodedCodeAndMetadata()
-	// if c = ∅ ∨ ∣c∣ > WC
-	if c == nil || len(c) == work.MaxSizeServiceCode {
-		return AccumulationOutput{AccumulationState: accState.Clone()}
-	}
 
 	// I(s, s)^2
 	var (
@@ -68,6 +63,12 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error creating context")
 		return AccumulationOutput{AccumulationState: accState.Clone()}
+	}
+
+	c := account.EncodedCodeAndMetadata()
+	// if c = ∅ ∨ ∣c∣ > WC
+	if c == nil || len(c) == work.MaxSizeServiceCode {
+		return AccumulationOutput{AccumulationState: newCtxPair.RegularCtx.AccumulationState}
 	}
 
 	// E(t, s, ↕o)
@@ -192,7 +193,7 @@ func addTransfersBalance(accState state.AccumulationState, serviceId block.Servi
 		dtransfer, ok := val.(service.DeferredTransfer)
 		if ok {
 			svc := accState.ServiceState[serviceId]
-			svc.Balance = dtransfer.Balance
+			svc.Balance += dtransfer.Balance
 			accState.ServiceState[serviceId] = svc
 		}
 	}
