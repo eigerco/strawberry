@@ -209,6 +209,7 @@ func TestAccumulate(t *testing.T) {
 								Balance:                service.BasicMinimumBalance + service.AdditionalMinimumBalancePerItem*2 + service.AdditionalMinimumBalancePerOctet*(100+81), // =301 balance of the new service
 								CreationTimeslot:       200,
 								ParentService:          currentServiceID,
+								PreimageLookup:         make(map[crypto.Hash][]byte),
 							}
 
 							preimageStateKey, err := statekey.NewPreimageMeta(newServiceID, randomHash, 100)
