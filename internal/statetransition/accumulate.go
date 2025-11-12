@@ -193,9 +193,9 @@ func addTransfersBalance(accState state.AccumulationState, serviceId block.Servi
 		if err != nil {
 			log.VM.Error().Err(err).Msgf("Failed to get operand")
 		}
-		dtransfer, ok := val.(service.DeferredTransfer)
-		if ok {
-			svc := newAccState.ServiceState[serviceId]
+		dtransfer, isTransfer := val.(service.DeferredTransfer)
+		svc, serviceExists := newAccState.ServiceState[serviceId]
+		if isTransfer && serviceExists {
 			svc.Balance += dtransfer.Balance
 			newAccState.ServiceState[serviceId] = svc
 		}
