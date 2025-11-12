@@ -48,10 +48,13 @@ type Accumulator struct {
 // InvokePVM ΨA(U, N_T, N_S, N_G, ⟦I⟧) → O Equation (B.9)
 func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []*state.AccumulationInput) AccumulationOutput {
 	account := accState.ServiceState[serviceIndex]
+	// s = e except s_d[s]b = e_d[s]b + [∑ r∈x] r_a
+	stateWithBalance := addTransfersBalance(accState, serviceIndex, accOperand)
+
 	c := account.EncodedCodeAndMetadata()
 	// if c = ∅ ∨ ∣c∣ > WC
 	if c == nil || len(c) == work.MaxSizeServiceCode {
-		return AccumulationOutput{AccumulationState: accState.Clone()}
+		return AccumulationOutput{AccumulationState: stateWithBalance}
 	}
 
 	// I(s, s)^2
@@ -59,12 +62,12 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		newCtxPair polkavm.AccumulateContextPair
 		err        error
 	)
-	newCtxPair.RegularCtx, err = a.newCtx(addTransfersBalance(accState.Clone(), serviceIndex, accOperand), serviceIndex)
+	newCtxPair.RegularCtx, err = a.newCtx(stateWithBalance, serviceIndex)
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error creating context")
 		return AccumulationOutput{AccumulationState: accState.Clone()}
 	}
-	newCtxPair.ExceptionalCtx, err = a.newCtx(addTransfersBalance(accState.Clone(), serviceIndex, accOperand), serviceIndex)
+	newCtxPair.ExceptionalCtx, err = a.newCtx(stateWithBalance.Clone(), serviceIndex)
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error creating context")
 		return AccumulationOutput{AccumulationState: accState.Clone()}
@@ -184,6 +187,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 // s = e except s_d[s]b = e_d[s]b + [∑ r∈x] r_a
 // x = [i S i <− i, i ∈ X] (part of eq. B.9 v0.7.1)
 func addTransfersBalance(accState state.AccumulationState, serviceId block.ServiceId, operands []*state.AccumulationInput) state.AccumulationState {
+	newAccState := accState.Clone()
 	for _, op := range operands {
 		_, val, err := op.IndexValue()
 		if err != nil {
@@ -191,12 +195,12 @@ func addTransfersBalance(accState state.AccumulationState, serviceId block.Servi
 		}
 		dtransfer, ok := val.(service.DeferredTransfer)
 		if ok {
-			svc := accState.ServiceState[serviceId]
-			svc.Balance = dtransfer.Balance
-			accState.ServiceState[serviceId] = svc
+			svc := newAccState.ServiceState[serviceId]
+			svc.Balance += dtransfer.Balance
+			newAccState.ServiceState[serviceId] = svc
 		}
 	}
-	return accState
+	return newAccState
 }
 
 // newCtx (B.9)

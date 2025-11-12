@@ -198,6 +198,7 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 		GratisStorageOffset:    gratisStorageOffset,
 		CreationTimeslot:       timeslot,
 		ParentService:          xsId,
+		PreimageLookup:         make(map[crypto.Hash][]byte),
 	}
 
 	k, err := statekey.NewPreimageMeta(ctxPair.RegularCtx.NewServiceId, codeHash, uint32(preimageLength))

@@ -599,6 +599,11 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 
 		accumulateCount, ok := accumulateCountBySvc[gp.ServiceId]
 		if ok {
+			// G(s) + N(s) ≠ 0
+			if totalGas+uint64(accumulateCount) == 0 {
+				continue
+			}
+
 			accumulationStats[gp.ServiceId] = AccumulationStatEntry{
 				AccumulateGasUsed: totalGas,
 				AccumulateCount:   accumulateCount,
@@ -940,10 +945,6 @@ func (a *Accumulator) SequentialDelta(
 	ServiceHashPairs,
 	ServiceGasPairs,
 ) {
-	// If no work reports, return early
-	if len(workReports) == 0 {
-		return 0, ctx, ServiceHashPairs{}, ServiceGasPairs{}
-	}
 
 	// Calculate i = max(N|w|+1) : ∑w∈w...i∑r∈wd(rg) ≤ g
 	maxReports := 0
@@ -993,23 +994,21 @@ func (a *Accumulator) SequentialDelta(
 	}
 
 	// If we have remaining reports and gas, process recursively (∆+)
-	if maxReports < len(workReports) {
-		// g* − [∑ (s,u)∈u*] (u)
-		remainingGas := newGasLimit - gasUsed
-		if remainingGas > 0 {
-			moreItems, finalCtx, moreHashPairs, moreGasPairs := a.SequentialDelta(
-				remainingGas,
-				newTransfers,
-				workReports[maxReports:],
-				newCtx,
-				alwaysAccumulate,
-			)
+	// g* − [∑ (s,u)∈u*] (u)
+	remainingGas := newGasLimit - gasUsed
+	if remainingGas > 0 {
+		moreItems, finalCtx, moreHashPairs, moreGasPairs := a.SequentialDelta(
+			remainingGas,
+			newTransfers,
+			workReports[maxReports:],
+			newCtx,
+			alwaysAccumulate,
+		)
 
-			return uint32(maxReports) + moreItems,
-				finalCtx,
-				append(hashPairs, moreHashPairs...),
-				append(gasPairs, moreGasPairs...)
-		}
+		return uint32(maxReports) + moreItems,
+			finalCtx,
+			append(hashPairs, moreHashPairs...),
+			append(gasPairs, moreGasPairs...)
 	}
 
 	return uint32(maxReports), newCtx, hashPairs, gasPairs
