@@ -599,6 +599,11 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 
 		accumulateCount, ok := accumulateCountBySvc[gp.ServiceId]
 		if ok {
+			// G(s) + N(s) ≠ 0
+			if totalGas+uint64(accumulateCount) == 0 {
+				continue
+			}
+
 			accumulationStats[gp.ServiceId] = AccumulationStatEntry{
 				AccumulateGasUsed: totalGas,
 				AccumulateCount:   accumulateCount,
@@ -975,6 +980,7 @@ func (a *Accumulator) SequentialDelta(
 		workReports[:maxReports],
 		alwaysAccumulate,
 	)
+
 	// g* = g + [∑ t∈t](t_g)
 	newGasLimit := gasLimit
 	for _, transfer := range transfers {
