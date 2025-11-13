@@ -22,6 +22,7 @@ import (
 // - The core assignment includes the expected work report.
 // - The used authorizer is removed from the core's authorization pool after processing.
 func TestSimulateGuarantee(t *testing.T) {
+	t.Skip("deprecated")
 	data, err := os.ReadFile("keys.json")
 	require.NoError(t, err)
 

@@ -3,6 +3,7 @@ package state
 import (
 	"bytes"
 	"crypto/ed25519"
+	"fmt"
 	"sort"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -83,14 +84,15 @@ type AccumulationQueue [jamtime.TimeslotsPerEpoch][]WorkReportWithUnAccumulatedD
 // AccumulationHistory ξ ∈ ⟦{H}⟧_E (eq. 12.1 v0.7.0)
 type AccumulationHistory [jamtime.TimeslotsPerEpoch]map[crypto.Hash]struct{}
 
-// AccumulationState characterization of state components (eq. 12.13 v0.7.0)
+// AccumulationState characterization of state components (eq. 12.16 v0.7.1)
 type AccumulationState struct {
 	ServiceState             service.ServiceState                               // Service accounts δ (d ∈ D⟨NS → A⟩)
 	ValidatorKeys            safrole.ValidatorsData                             // Validator keys ι (i ∈ ⟦K⟧V)
 	PendingAuthorizersQueues [common.TotalNumberOfCores]PendingAuthorizersQueue // Queue of authorizers ϕ (q ∈ C⟦H⟧QHC)
 	ManagerServiceId         block.ServiceId                                    // (m)
 	AssignedServiceIds       [common.TotalNumberOfCores]block.ServiceId         // (a)
-	DesignateServiceId       block.ServiceId                                    // (u)
+	DesignateServiceId       block.ServiceId                                    // (v)
+	CreateProtectedServiceId block.ServiceId                                    // (r)
 	AmountOfGasPerServiceId  map[block.ServiceId]uint64                         // (z)
 }
 
@@ -102,20 +104,58 @@ func (j AccumulationState) Clone() AccumulationState {
 		ManagerServiceId:         j.ManagerServiceId,
 		AssignedServiceIds:       j.AssignedServiceIds,
 		DesignateServiceId:       j.DesignateServiceId,
-		AmountOfGasPerServiceId:  j.AmountOfGasPerServiceId,
+		AmountOfGasPerServiceId:  j.AmountOfGasPerServiceId, // TODO clone properly
 	}
 }
 
-// AccumulationOperand represents a single operand for accumulation (I) (eq. 12.19 v0.6.7)
+// AccumulationOperand represents a single operand for accumulation (U) (eq. 12.13 v0.7.1)
 type AccumulationOperand struct {
-	WorkPackageHash   crypto.Hash // Work-package hash (p ∈ H)
-	SegmentRoot       crypto.Hash // Segment root (e ∈ H)
-	AuthorizationHash crypto.Hash // Authorization hash (a ∈ H)
-	PayloadHash       crypto.Hash // Payload hash (y ∈ H)
-	GasLimit          uint64      `jam:"encoding=compact"` // Gas limit (g ∈ NG)
-	// TODO revert back the order of fields when upgrading to v0.7.x
-	OutputOrError block.WorkResultOutputOrError // Output or error (l ∈ B ∪ E)
-	Trace         []byte                        // Trace of the work report (t ∈ B)
+	WorkPackageHash   crypto.Hash                   // Work-package hash (p ∈ H)
+	SegmentRoot       crypto.Hash                   // Segment root (e ∈ H)
+	AuthorizationHash crypto.Hash                   // Authorization hash (a ∈ H)
+	PayloadHash       crypto.Hash                   // Payload hash (y ∈ H)
+	GasLimit          uint64                        `jam:"encoding=compact"` // Gas limit (g ∈ NG)
+	OutputOrError     block.WorkResultOutputOrError // Output or error (l ∈ B ∪ E)
+	Trace             []byte                        // Trace of the work report (t ∈ B)
+}
+
+// AccumulationInput I ≡ U ∪ X (eq. 12.15 v0.7.0)
+type AccumulationInput struct {
+	inner any
+}
+
+func (a *AccumulationInput) IndexValue() (index uint, value any, err error) {
+	switch a.inner.(type) {
+	case AccumulationOperand:
+		return 0, a.inner, nil
+	case service.DeferredTransfer:
+		return 1, a.inner, nil
+	}
+	return 0, nil, jam.ErrUnsupportedEnumTypeValue
+}
+
+func (a *AccumulationInput) ValueAt(index uint) (value any, err error) {
+	switch index {
+	case 0:
+		return AccumulationOperand{}, nil
+	case 1:
+		return service.DeferredTransfer{}, nil
+	}
+
+	return nil, jam.ErrUnknownEnumTypeValue
+}
+
+func (a *AccumulationInput) SetValue(value any) error {
+	switch v := value.(type) {
+	case AccumulationOperand:
+		a.inner = v
+	case service.DeferredTransfer:
+		a.inner = v
+	default:
+		return fmt.Errorf(jam.ErrUnsupportedType, v)
+	}
+
+	return nil
 }
 
 // AccumulationOutputLog θ ∈ ⟦(NS, H)⟧ (eq. 7.4)

@@ -2,6 +2,7 @@ package statetransition
 
 import (
 	"errors"
+
 	"github.com/eigerco/strawberry/pkg/log"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -21,7 +22,7 @@ const (
 	AccumulateCost = 10
 )
 
-// AccumulationOutput (O) (eq. 12.20 v0.7.0)
+// AccumulationOutput (O) (eq. 12.23 v0.7.2)
 type AccumulationOutput struct {
 	AccumulationState state.AccumulationState    // e ∈ S
 	DeferredTransfers []service.DeferredTransfer // t ∈ ⟦X⟧
@@ -45,32 +46,31 @@ type Accumulator struct {
 }
 
 // InvokePVM ΨA(U, N_T, N_S, N_G, ⟦I⟧) → O Equation (B.9)
-func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []state.AccumulationOperand) AccumulationOutput {
-	output := AccumulationOutput{
-		AccumulationState: accState.Clone(),
-	}
-
+func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []*state.AccumulationInput) AccumulationOutput {
 	account := accState.ServiceState[serviceIndex]
+	// s = e except s_d[s]b = e_d[s]b + [∑ r∈x] r_a
+	stateWithBalance := addTransfersBalance(accState, serviceIndex, accOperand)
+
 	c := account.EncodedCodeAndMetadata()
 	// if c = ∅ ∨ ∣c∣ > WC
 	if c == nil || len(c) == work.MaxSizeServiceCode {
-		return output
+		return AccumulationOutput{AccumulationState: stateWithBalance}
 	}
 
-	// I(u, s)^2
+	// I(s, s)^2
 	var (
 		newCtxPair polkavm.AccumulateContextPair
 		err        error
 	)
-	newCtxPair.RegularCtx, err = a.newCtx(accState.Clone(), serviceIndex)
+	newCtxPair.RegularCtx, err = a.newCtx(stateWithBalance, serviceIndex)
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error creating context")
-		return output
+		return AccumulationOutput{AccumulationState: accState.Clone()}
 	}
-	newCtxPair.ExceptionalCtx, err = a.newCtx(accState.Clone(), serviceIndex)
+	newCtxPair.ExceptionalCtx, err = a.newCtx(stateWithBalance.Clone(), serviceIndex)
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error creating context")
-		return output
+		return AccumulationOutput{AccumulationState: accState.Clone()}
 	}
 
 	// E(t, s, ↕o)
@@ -85,13 +85,13 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	})
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error encoding arguments")
-		return output
+		return AccumulationOutput{AccumulationState: accState.Clone()}
 	}
 
 	// F (equation B.10)
 	hostCallFunc := func(hostCall uint64, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctx polkavm.AccumulateContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.AccumulateContextPair, error) {
 		// s = (xu)d[xs]
-		currentService := newCtxPair.RegularCtx.AccumulationState.ServiceState[serviceIndex]
+		currentService := ctx.RegularCtx.AccumulationState.ServiceState[serviceIndex]
 
 		if currentService.PreimageLookup == nil {
 			currentService.PreimageLookup = make(map[crypto.Hash][]byte)
@@ -103,7 +103,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
 		case host_call.FetchID:
 			entropy := a.state.EntropyPool[0]
-			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, nil, &entropy, nil, nil, nil, nil, accOperand, nil)
+			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, nil, &entropy, nil, nil, nil, nil, accOperand)
 		case host_call.ReadID:
 			gasCounter, regs, mem, err = host_call.Read(gasCounter, regs, mem, currentService, serviceIndex, ctx.RegularCtx.AccumulationState.ServiceState)
 			ctx.RegularCtx.AccumulationState.ServiceState[ctx.RegularCtx.ServiceId] = currentService
@@ -154,31 +154,24 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		return gasCounter, regs, mem, ctx, err
 	}
 
+	errPanic := &polkavm.ErrPanic{}
 	gasUsed, ret, newCtxPair, err := interpreter.InvokeWholeProgram(account.EncodedCodeAndMetadata(), 5, polkavm.Gas(gas), args, hostCallFunc, newCtxPair)
-	if err != nil {
-		output.GasUsed = uint64(gasUsed)
-
-		errPanic := &polkavm.ErrPanic{}
-		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic) {
-			log.VM.Error().Err(err).Msgf("Program invocation failed")
-			output.AccumulationState = newCtxPair.ExceptionalCtx.AccumulationState
-			output.DeferredTransfers = newCtxPair.ExceptionalCtx.DeferredTransfers
-			output.ProvidedPreimages = newCtxPair.ExceptionalCtx.ProvidedPreimages
-
-			return output
+	if err != nil && (errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic)) {
+		log.VM.Error().Err(err).Msgf("Program invocation failed")
+		return AccumulationOutput{
+			GasUsed:           uint64(gasUsed),
+			AccumulationState: newCtxPair.ExceptionalCtx.AccumulationState,
+			DeferredTransfers: newCtxPair.ExceptionalCtx.DeferredTransfers,
+			ProvidedPreimages: newCtxPair.ExceptionalCtx.ProvidedPreimages,
 		}
-		output.AccumulationState = newCtxPair.RegularCtx.AccumulationState
-		output.DeferredTransfers = newCtxPair.RegularCtx.DeferredTransfers
-		output.ProvidedPreimages = newCtxPair.RegularCtx.ProvidedPreimages
-		// halt
-		return output
 	}
 
-	output.GasUsed = uint64(gasUsed)
-	output.AccumulationState = newCtxPair.RegularCtx.AccumulationState
-	output.DeferredTransfers = newCtxPair.RegularCtx.DeferredTransfers
-	output.ProvidedPreimages = newCtxPair.RegularCtx.ProvidedPreimages
-
+	output := AccumulationOutput{
+		GasUsed:           uint64(gasUsed),
+		AccumulationState: newCtxPair.RegularCtx.AccumulationState,
+		DeferredTransfers: newCtxPair.RegularCtx.DeferredTransfers,
+		ProvidedPreimages: newCtxPair.RegularCtx.ProvidedPreimages,
+	}
 	// if o ∈ B ∖ H. There is no sure way to check that a byte array is a hash
 	// one way would be to check the shannon entropy but this also not a guarantee, so we just limit to checking the size
 	if len(ret) == crypto.HashSize {
@@ -189,6 +182,25 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	}
 
 	return output
+}
+
+// s = e except s_d[s]b = e_d[s]b + [∑ r∈x] r_a
+// x = [i S i <− i, i ∈ X] (part of eq. B.9 v0.7.1)
+func addTransfersBalance(accState state.AccumulationState, serviceId block.ServiceId, operands []*state.AccumulationInput) state.AccumulationState {
+	newAccState := accState.Clone()
+	for _, op := range operands {
+		_, val, err := op.IndexValue()
+		if err != nil {
+			log.VM.Error().Err(err).Msgf("Failed to get operand")
+		}
+		dtransfer, isTransfer := val.(service.DeferredTransfer)
+		svc, serviceExists := newAccState.ServiceState[serviceId]
+		if isTransfer && serviceExists {
+			svc.Balance += dtransfer.Balance
+			newAccState.ServiceState[serviceId] = svc
+		}
+	}
+	return newAccState
 }
 
 // newCtx (B.9)
@@ -210,9 +222,9 @@ func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.Servi
 
 func (a *Accumulator) newServiceID(serviceIndex block.ServiceId) (block.ServiceId, error) {
 	hashBytes, err := jam.Marshal(struct {
-		ServiceID block.ServiceId
+		ServiceID block.ServiceId `jam:"encoding=compact"`
 		Entropy   crypto.Hash
-		Timeslot  jamtime.Timeslot
+		Timeslot  jamtime.Timeslot `jam:"encoding=compact"`
 	}{
 		ServiceID: serviceIndex,
 		Entropy:   a.state.EntropyPool[0],

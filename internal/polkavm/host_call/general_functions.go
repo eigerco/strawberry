@@ -69,8 +69,7 @@ func Fetch(
 	itemIndex *uint32, // i
 	importedSegments []work.Segment, // i
 	extrinsicPreimages [][]byte, // x
-	operand []state.AccumulationOperand, // o
-	transfers []service.DeferredTransfer, // t
+	operand []*state.AccumulationInput, // o
 ) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
 	if gas < FetchCost {
 		return 0, regs, mem, polkavm.ErrOutOfGas
@@ -235,24 +234,6 @@ func Fetch(
 			}
 			v = out
 		}
-	case 16:
-		// if t ≠ ∅ ∧ φ10 = 16
-		if len(transfers) > 0 {
-			out, err := jam.Marshal(transfers)
-			if err != nil {
-				return gas, regs, mem, polkavm.ErrPanicf(err.Error())
-			}
-			v = out
-		}
-	case 17:
-		// if t ≠ ∅ ∧ φ10 = 17 ∧ φ11 < ∣t∣
-		if len(transfers) > 0 && int(idx1) < len(transfers) {
-			out, err := jam.Marshal(transfers[idx1])
-			if err != nil {
-				return gas, regs, mem, polkavm.ErrPanicf(err.Error())
-			}
-			v = out
-		}
 	default:
 		return gas, withCode(regs, NONE), mem, nil
 	}
@@ -261,7 +242,7 @@ func Fetch(
 		return gas, withCode(regs, NONE), mem, nil
 	}
 
-	if err := writeFromOffset(mem, output, v, offset, length); err != nil {
+	if err := writeFromOffset(&mem, output, v, offset, length); err != nil {
 		return gas, regs, mem, err
 	}
 
@@ -305,7 +286,7 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 		return gas, withCode(regs, NONE), mem, nil
 	}
 
-	if err := writeFromOffset(mem, o, v, regs[polkavm.A3], regs[polkavm.A4]); err != nil {
+	if err := writeFromOffset(&mem, o, v, regs[polkavm.A3], regs[polkavm.A4]); err != nil {
 		return gas, regs, mem, err
 	}
 
@@ -358,7 +339,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		return gas, withCode(regs, NONE), mem, nil
 	}
 
-	if err = writeFromOffset(mem, o, v, regs[polkavm.A4], regs[polkavm.A5]); err != nil {
+	if err = writeFromOffset(&mem, o, v, regs[polkavm.A4], regs[polkavm.A5]); err != nil {
 		return gas, regs, mem, err
 	}
 
@@ -461,7 +442,7 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
-	if err = writeFromOffset(mem, o, v, regs[polkavm.A2], regs[polkavm.A3]); err != nil {
+	if err = writeFromOffset(&mem, o, v, regs[polkavm.A2], regs[polkavm.A3]); err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 

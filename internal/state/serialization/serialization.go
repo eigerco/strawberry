@@ -47,7 +47,7 @@ func SerializeState(s state.State) (map[statekey.StateKey][]byte, error) {
 		{9, s.ValidatorState.ArchivedValidators},
 		{10, s.CoreAssignments},
 		{11, s.TimeslotIndex},
-		{12, s.PrivilegedServices}, // TODO update when GP updates for this are released.
+		{12, s.PrivilegedServices},
 		{13, s.ActivityStatistics},
 		{14, s.AccumulationQueue},
 		{15, s.AccumulationHistory},
@@ -74,6 +74,7 @@ func SerializeState(s state.State) (map[statekey.StateKey][]byte, error) {
 func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.ServiceAccount, serializedState map[statekey.StateKey][]byte) error {
 	// Serialize the service account itself.
 	encodedServiceAccount := encodedServiceAccount{
+		Version:                        0,
 		CodeHash:                       serviceAccount.CodeHash,
 		Balance:                        serviceAccount.Balance,
 		GasLimitForAccumulator:         serviceAccount.GasLimitForAccumulator,
@@ -113,6 +114,7 @@ func serializeServiceAccount(serviceId block.ServiceId, serviceAccount service.S
 }
 
 type encodedServiceAccount struct {
+	Version  byte
 	CodeHash crypto.Hash // a_c
 
 	Balance                uint64 // a_b

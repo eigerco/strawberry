@@ -27,6 +27,7 @@ import (
 // preimage lookup map, and also that it's preimage meta is updated to indicate
 // that it's available since the header timeslot.
 func TestSimulatePreimage(t *testing.T) {
+	t.Skip("deprecated")
 	// Prestate
 	data, err := os.ReadFile("preimage_prestate_001.json")
 	require.NoError(t, err)

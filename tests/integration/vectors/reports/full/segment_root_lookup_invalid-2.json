@@ -13778,6 +13778,7 @@
                 "id": 42,
                 "data": {
                     "service": {
+                        "version": 0,
                         "code_hash": "0x6470fd21983eae8d706f1edd5e2dc5afe095980f8fb7bd4ebfd33550d8730246",
                         "balance": 20219,
                         "min_item_gas": 10,
@@ -30788,6 +30789,7 @@
                 "id": 42,
                 "data": {
                     "service": {
+                        "version": 0,
                         "code_hash": "0x6470fd21983eae8d706f1edd5e2dc5afe095980f8fb7bd4ebfd33550d8730246",
                         "balance": 20219,
                         "min_item_gas": 10,

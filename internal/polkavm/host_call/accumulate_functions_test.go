@@ -86,7 +86,7 @@ func TestAccumulate(t *testing.T) {
 			fn:   fnStd(Bless),
 			alloc: alloc{
 				A1: make([]byte, uint32(4*common.TotalNumberOfCores)),
-				A3: slices.Concat(
+				A4: slices.Concat(
 					encodeNumber(t, uint32(123)),
 					encodeNumber(t, uint64(12341234)),
 					encodeNumber(t, uint32(234)),
@@ -98,7 +98,8 @@ func TestAccumulate(t *testing.T) {
 			initialRegs: deltaRegs{
 				A0: 111,
 				A2: 333,
-				A4: 3,
+				A3: 444,
+				A5: 3,
 			},
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(OK),
@@ -108,9 +109,10 @@ func TestAccumulate(t *testing.T) {
 			expectedGas: 90,
 			expectedX: AccumulateContext{
 				AccumulationState: state.AccumulationState{
-					ManagerServiceId:   111,
-					AssignedServiceIds: [common.TotalNumberOfCores]block.ServiceId{},
-					DesignateServiceId: 333,
+					ManagerServiceId:         111,
+					AssignedServiceIds:       [common.TotalNumberOfCores]block.ServiceId{},
+					DesignateServiceId:       333,
+					CreateProtectedServiceId: 444,
 					AmountOfGasPerServiceId: map[block.ServiceId]uint64{
 						123: 12341234,
 						234: 23452345,
@@ -199,7 +201,7 @@ func TestAccumulate(t *testing.T) {
 			expectedX: AccumulateContext{
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
-						service.CheckIndex(service.BumpIndex(newServiceID), make(service.ServiceState)): func() service.ServiceAccount {
+						newServiceID: func() service.ServiceAccount {
 							account := service.ServiceAccount{
 								CodeHash:               randomHash,
 								GasLimitForAccumulator: 100,
@@ -207,9 +209,10 @@ func TestAccumulate(t *testing.T) {
 								Balance:                service.BasicMinimumBalance + service.AdditionalMinimumBalancePerItem*2 + service.AdditionalMinimumBalancePerOctet*(100+81), // =301 balance of the new service
 								CreationTimeslot:       200,
 								ParentService:          currentServiceID,
+								PreimageLookup:         make(map[crypto.Hash][]byte),
 							}
 
-							preimageStateKey, err := statekey.NewPreimageMeta(currentServiceID, randomHash, 100)
+							preimageStateKey, err := statekey.NewPreimageMeta(newServiceID, randomHash, 100)
 							require.NoError(t, err)
 							err = account.InsertPreimageMeta(preimageStateKey, uint64(100), service.PreimageHistoricalTimeslots{})
 							require.NoError(t, err)
@@ -221,7 +224,7 @@ func TestAccumulate(t *testing.T) {
 						},
 					},
 				},
-				NewServiceId: service.CheckIndex(service.BumpIndex(newServiceID), make(service.ServiceState)),
+				NewServiceId: service.BumpIndex(newServiceID, make(service.ServiceState)),
 				ServiceId:    currentServiceID,
 			},
 		},
@@ -289,7 +292,7 @@ func TestAccumulate(t *testing.T) {
 							GasLimitOnTransfer: 1,
 						},
 						block.ServiceId(123123123): {
-							Balance: 1000000100,
+							Balance: 100,
 						},
 					},
 				},
@@ -332,7 +335,7 @@ func TestAccumulate(t *testing.T) {
 								codeHash: make([]byte, 81),
 							}
 
-							k, err := statekey.NewPreimageMeta(222, randomHash, 0)
+							k, err := statekey.NewPreimageMeta(999, randomHash, 81)
 							require.NoError(t, err)
 
 							account := service.ServiceAccount{
@@ -341,9 +344,9 @@ func TestAccumulate(t *testing.T) {
 								PreimageLookup: preImgLookup,
 							}
 
-							slots := service.PreimageHistoricalTimeslots{50, 100}
+							slots := service.PreimageHistoricalTimeslots{5, 10}
 
-							err = account.InsertPreimageMeta(k, uint64(len(randomHash)), slots)
+							err = account.InsertPreimageMeta(k, uint64(81), slots)
 							require.NoError(t, err)
 
 							return account
