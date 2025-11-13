@@ -81,3 +81,14 @@ install-hooks:
 .PHONY: build
 build: build-bandersnatch build-erasurecoding
 	GOOS=${GOOS} GOARCH=${GOARCH} go build -o strawberry ./cmd/strawberry
+
+.PHONY: build-conformance
+## build-conformance: Builds the conformance tool
+build-conformance: build-bandersnatch build-erasurecoding
+	mkdir -p pkg/conformance/bin
+	go build -tags="tiny" -o pkg/conformance/bin/strawberry ./pkg/conformance/cmd/main.go
+
+.PHONY: run-target
+## run-target: Runs the conformance target with socket /tmp/jam_target.sock
+run-target:
+	./pkg/conformance/bin/strawberry --socket /tmp/jam_target.sock

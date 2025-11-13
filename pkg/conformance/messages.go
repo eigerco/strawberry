@@ -62,11 +62,6 @@ func (s StateRoot) String() string {
 	return "0x" + hex.EncodeToString(s.StateRootHash[:])
 }
 
-type KeyValue struct {
-	Key   statekey.StateKey
-	Value []byte
-}
-
 type ImportBlock struct {
 	Block block.Block
 }
@@ -80,7 +75,7 @@ type GetState struct {
 func (g GetState) isMessageChoice() {}
 
 type State struct {
-	StateItems []KeyValue
+	StateItems []statekey.KeyValue
 }
 
 func (s State) isMessageChoice() {}

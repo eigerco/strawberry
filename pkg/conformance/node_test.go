@@ -109,7 +109,7 @@ func TestMessage(t *testing.T) {
 
 	currentStateItems := State{}
 	for k, v := range serializedState {
-		currentStateItems.StateItems = append(currentStateItems.StateItems, KeyValue{
+		currentStateItems.StateItems = append(currentStateItems.StateItems, statekey.KeyValue{
 			Key:   k,
 			Value: v,
 		})
@@ -229,12 +229,12 @@ func TestMessage(t *testing.T) {
 
 	expectedState := State{}
 	for k, v := range serializedState {
-		expectedState.StateItems = append(expectedState.StateItems, KeyValue{
+		expectedState.StateItems = append(expectedState.StateItems, statekey.KeyValue{
 			Key:   k,
 			Value: v,
 		})
 	}
-	slices.SortFunc(expectedState.StateItems, func(a, b KeyValue) int {
+	slices.SortFunc(expectedState.StateItems, func(a, b statekey.KeyValue) int {
 		if string(a.Key[:]) > string(b.Key[:]) {
 			return 1
 		} else if string(a.Key[:]) < string(b.Key[:]) {

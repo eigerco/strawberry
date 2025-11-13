@@ -3,20 +3,21 @@ package integration
 import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 )
 
-type KeyValue struct {
-	Key   [31]byte `json:"key"`
-	Value []byte   `json:"value"`
-}
-
-type RawState struct {
+type StateWithRoot struct {
 	StateRoot crypto.Hash
-	KeyValues []KeyValue
+	KeyValues []statekey.KeyValue
 }
 
 type Trace struct {
-	PreState  RawState
+	PreState  StateWithRoot
 	Block     block.Block
-	PostState RawState
+	PostState StateWithRoot
+}
+
+type Genesis struct {
+	Header block.Header
+	State  StateWithRoot
 }

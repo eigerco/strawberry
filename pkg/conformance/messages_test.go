@@ -52,7 +52,7 @@ func TestMessageEncoding(t *testing.T) {
 			Header: block.Header{
 				ParentHash: testutils.RandomHash(t),
 			},
-			State: State{StateItems: []KeyValue{{
+			State: State{StateItems: []statekey.KeyValue{{
 				Key:   statekey.NewBasic(1),
 				Value: testutils.RandomBytes(t, 100),
 			}}},
@@ -63,7 +63,7 @@ func TestMessageEncoding(t *testing.T) {
 			Header: block.Header{
 				ParentHash: testutils.RandomHash(t),
 			},
-			State: State{StateItems: []KeyValue{{
+			State: State{StateItems: []statekey.KeyValue{{
 				Key:   statekey.NewBasic(3),
 				Value: testutils.RandomBytes(t, 64),
 			}}},
@@ -82,7 +82,7 @@ func TestMessageEncoding(t *testing.T) {
 		}),
 	}, {
 		name: "state",
-		msg: NewMessage(State{StateItems: []KeyValue{{
+		msg: NewMessage(State{StateItems: []statekey.KeyValue{{
 			Key:   statekey.NewBasic(2),
 			Value: testutils.RandomBytes(t, 50),
 		}}}),
