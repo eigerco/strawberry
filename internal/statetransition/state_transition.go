@@ -1240,16 +1240,10 @@ func (a *Accumulator) Delta1(
 	}
 
 	// Add gas from all relevant work items for this service
-	for _, report := range workReports {
-		for _, result := range report.WorkDigests {
-			if result.ServiceId == serviceIndex {
-				gasLimit += result.GasLimit
-			}
-		}
-	}
 	var operands []*state.AccumulationInput
 	for _, transfer := range transfers {
 		if transfer.ReceiverServiceIndex == serviceIndex {
+			gasLimit += transfer.GasLimit
 			operand := &state.AccumulationInput{}
 			err := operand.SetValue(transfer)
 			if err != nil {
@@ -1263,6 +1257,7 @@ func (a *Accumulator) Delta1(
 	for _, report := range workReports {
 		for _, result := range report.WorkDigests {
 			if result.ServiceId == serviceIndex {
+				gasLimit += result.GasLimit
 				operand := &state.AccumulationInput{}
 				err := operand.SetValue(state.AccumulationOperand{
 					WorkPackageHash:   report.AvailabilitySpecification.WorkPackageHash,
