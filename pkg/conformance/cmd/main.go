@@ -34,7 +34,7 @@ func main() {
 
 	appName := []byte("strawberry")
 	appVersion := conformance.Version{Major: 0, Minor: 0, Patch: 1}
-	jamVersion := conformance.Version{Major: 0, Minor: 7, Patch: 0}
+	jamVersion := conformance.Version{Major: 0, Minor: 7, Patch: 1}
 	features := conformance.FeatureFork
 	node := conformance.NewNode(*socketPath, chain, trieStore, appName, appVersion, jamVersion, features)
 	if err := node.Start(); err != nil {

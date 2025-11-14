@@ -22,6 +22,12 @@ const (
 // The output of the state key constructor function.
 type StateKey [31]byte
 
+// KeyValue represents a key-value pair in the state. Used for serialization.
+type KeyValue struct {
+	Key   StateKey `json:"key"`
+	Value []byte   `json:"value"`
+}
+
 // First arity of the stake-key constructor function
 // See equation D.1 in the graypaper 0.6.7
 func NewBasic(i uint8) StateKey {

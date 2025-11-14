@@ -1,4 +1,4 @@
-//go:build tiny
+//go:build tiny && traces
 
 package conformance
 
@@ -151,7 +151,9 @@ func createTargetNode(t *testing.T) (*Node, func()) {
 	return node, cleanup
 }
 
+// TODO update conformance traces to v0.7.1 when they are released
 func TestNoForksTraces(t *testing.T) {
+	t.Skip("The conformance traces are not yet updated to v0.7.1")
 	requests, err := getFuzzerFilesFromExamplesDir(t)
 	require.NoError(t, err)
 	responses, err := getTargetsFromExamplesDir(t)

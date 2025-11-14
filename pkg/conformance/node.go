@@ -251,15 +251,15 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 	return nil, fmt.Errorf("unknown message type")
 }
 
-func serializeState(s state.State) (keyValues []KeyValue, err error) {
+func serializeState(s state.State) (keyValues []statekey.KeyValue, err error) {
 	stateItemsMap, err := serialization.SerializeState(s)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize state: %v", err)
 	}
 
-	keyValues = make([]KeyValue, 0, len(stateItemsMap))
+	keyValues = make([]statekey.KeyValue, 0, len(stateItemsMap))
 	for key, value := range stateItemsMap {
-		keyValues = append(keyValues, KeyValue{
+		keyValues = append(keyValues, statekey.KeyValue{
 			Key:   key,
 			Value: value,
 		})
@@ -267,7 +267,7 @@ func serializeState(s state.State) (keyValues []KeyValue, err error) {
 	return keyValues, nil
 }
 
-func deserializeState(keyValues []KeyValue) (s state.State, err error) {
+func deserializeState(keyValues []statekey.KeyValue) (s state.State, err error) {
 	stateItemsMap := make(map[statekey.StateKey][]byte)
 	for _, kv := range keyValues {
 		stateItemsMap[kv.Key] = kv.Value

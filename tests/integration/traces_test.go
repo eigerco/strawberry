@@ -4,12 +4,13 @@ package integration
 
 import (
 	"fmt"
-	"github.com/pmezard/go-difflib/difflib"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
+
+	"github.com/pmezard/go-difflib/difflib"
+	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/merkle"
@@ -87,7 +88,7 @@ func runTracesTests(t *testing.T, directory string) {
 			continue // Skip the genesis trace since this is mostly there for reference.
 		}
 		t.Run(filepath.Base(file), func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 			runTraceTest(t, file)
 		})
 	}
@@ -157,7 +158,7 @@ func RequireEqualStates(t *testing.T, expected, actual *state.State) {
 
 // parseTrace deserializes a RawState into a state.State and validates that
 // the state root matches the one provided by the trace. Returns the deserialized state.
-func parseTrace(t *testing.T, traceState RawState, trie *store.Trie) *state.State {
+func parseTrace(t *testing.T, traceState StateWithRoot, trie *store.Trie) *state.State {
 	serializedState := map[statekey.StateKey][]byte{}
 	for _, entry := range traceState.KeyValues {
 		serializedState[entry.Key] = entry.Value
