@@ -583,7 +583,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 
 	// Compute accumulation statistics
 
-	// N(s) ≡ [d | r <− R*...n, r <− r_d, d_s = s] (eq. 12.27 v0.7.1)
+	// N(s) ≡ [d | r <− R*...n, r <− r_d, d_s = s] (eq. 12.29 v0.7.2)
 	accumulateCountBySvc := map[block.ServiceId]uint32{}
 	for _, workReport := range accumulatableWorkReports[:accumulatedCount] {
 		for _, result := range workReport.WorkDigests {
@@ -591,23 +591,22 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		}
 	}
 
-	// S ≡ {(s ↦ ([∑(s,u)∈u] (u), |N(s)|)) | N(s) ≠ []} (eq. 12.27 v0.7.1)
+	// S = {(s ↦ (G(s), N(s))) | G(s) + N(s) ≠ 0} (eq. 12.29 v0.7.2)
+	// where G(s) = ∑(s,u)∈u (u)
 	accumulationStats = AccumulationStats{}
 	for _, gp := range gasPairs {
 		totalGas := accumulationStats[gp.ServiceId].AccumulateGasUsed
 		totalGas += gp.Gas
 
-		accumulateCount, ok := accumulateCountBySvc[gp.ServiceId]
-		if ok {
-			// G(s) + N(s) ≠ 0
-			if totalGas+uint64(accumulateCount) == 0 {
-				continue
-			}
+		accumulateCount := accumulateCountBySvc[gp.ServiceId]
+		// G(s) + N(s) ≠ 0
+		if totalGas+uint64(accumulateCount) == 0 {
+			continue
+		}
 
-			accumulationStats[gp.ServiceId] = AccumulationStatEntry{
-				AccumulateGasUsed: totalGas,
-				AccumulateCount:   accumulateCount,
-			}
+		accumulationStats[gp.ServiceId] = AccumulationStatEntry{
+			AccumulateGasUsed: totalGas,
+			AccumulateCount:   accumulateCount,
 		}
 	}
 
