@@ -1,11 +1,11 @@
 package block
 
 import (
-	ed25519 "crypto/ed25519"
 	"fmt"
 
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )

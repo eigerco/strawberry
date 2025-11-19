@@ -5,7 +5,9 @@ package network_test
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"fmt"
 	"net"
 	"strings"

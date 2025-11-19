@@ -3,13 +3,14 @@
 package integration
 
 import (
-	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/assuring"
 	"github.com/eigerco/strawberry/internal/disputing"

@@ -1,13 +1,14 @@
 package guaranteeing
 
 import (
-	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log"
 	"maps"
 	"math"
 	"slices"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"

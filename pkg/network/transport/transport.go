@@ -2,12 +2,14 @@ package transport
 
 import (
 	"context"
-	"crypto/ed25519"
+
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/quic-go/quic-go"
 )

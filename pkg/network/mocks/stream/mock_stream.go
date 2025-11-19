@@ -2,7 +2,9 @@ package stream
 
 import (
 	"context"
-	"crypto/ed25519"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"time"
 
 	"github.com/quic-go/quic-go"

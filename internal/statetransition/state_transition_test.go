@@ -1,8 +1,9 @@
 package statetransition
 
 import (
-	"crypto/ed25519"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/disputing"
 	"github.com/eigerco/strawberry/internal/service"

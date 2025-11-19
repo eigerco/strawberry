@@ -2,10 +2,13 @@ package protocol
 
 import (
 	"context"
-	"crypto/ed25519"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"fmt"
-	"github.com/quic-go/quic-go"
 	"sync"
+
+	"github.com/quic-go/quic-go"
 )
 
 // TransportConn is an interface that abstracts the transport.Conn functionality

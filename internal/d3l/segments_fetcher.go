@@ -2,7 +2,9 @@ package d3l
 
 import (
 	"context"
-	"crypto/ed25519"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"fmt"
 	"log"
 

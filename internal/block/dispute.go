@@ -1,7 +1,7 @@
 package block
 
 import (
-	"crypto/ed25519"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"

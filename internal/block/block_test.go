@@ -1,10 +1,11 @@
 package block
 
 import (
-	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

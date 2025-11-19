@@ -3,7 +3,9 @@ package handlers_test
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"testing"
 
 	"github.com/stretchr/testify/mock"

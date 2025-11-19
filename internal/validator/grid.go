@@ -1,12 +1,14 @@
 package validator
 
 import (
-	"crypto/ed25519"
 	"fmt"
+	"math"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
-	"math"
 )
 
 // GridMapper manages the mapping between grid indices and validator information across epochs.

@@ -1,10 +1,11 @@
 package jam_test
 
 import (
-	"crypto/ed25519"
 	"io"
 	"math"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

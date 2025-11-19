@@ -1,10 +1,11 @@
 package cert
 
 import (
-	"crypto/ed25519"
 	"crypto/x509"
 	"testing"
 	"time"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

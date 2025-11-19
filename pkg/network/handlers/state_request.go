@@ -3,9 +3,12 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"encoding/binary"
 	"fmt"
+
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/merkle/trie"
 	"github.com/eigerco/strawberry/internal/store"
