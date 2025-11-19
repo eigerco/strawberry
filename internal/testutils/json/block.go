@@ -1,9 +1,10 @@
 package json
 
 import (
-	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"

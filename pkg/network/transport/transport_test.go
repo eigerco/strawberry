@@ -2,7 +2,7 @@ package transport
 
 import (
 	"context"
-	"crypto/ed25519"
+
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -12,6 +12,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/pkg/network/mocks"
 	"github.com/eigerco/strawberry/pkg/network/mocks/quicconn"

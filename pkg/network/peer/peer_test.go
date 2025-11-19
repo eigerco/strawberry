@@ -1,8 +1,9 @@
 package peer_test
 
 import (
-	"crypto/ed25519"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/pkg/network/peer"
 

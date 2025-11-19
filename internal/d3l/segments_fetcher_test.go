@@ -4,10 +4,12 @@ package d3l_test
 
 import (
 	"context"
-	"crypto/ed25519"
+
 	"crypto/rand"
 	"errors"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"

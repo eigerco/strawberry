@@ -1,13 +1,14 @@
 package testutils
 
 import (
-	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"iter"
 	mathRand "math/rand"
 	"strings"
 	"testing"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/jamtime"
 

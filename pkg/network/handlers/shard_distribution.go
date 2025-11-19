@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"context"
-	"crypto/ed25519"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"fmt"
+	"slices"
+
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
-	"slices"
 
 	"github.com/quic-go/quic-go"
 

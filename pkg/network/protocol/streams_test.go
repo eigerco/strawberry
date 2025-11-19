@@ -2,12 +2,15 @@ package protocol
 
 import (
 	"context"
-	"crypto/ed25519"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"errors"
+	"testing"
+
 	"github.com/eigerco/strawberry/pkg/network/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestNewJAMNPRegistry(t *testing.T) {

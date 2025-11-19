@@ -2,13 +2,15 @@ package node
 
 import (
 	"context"
-	"crypto/ed25519"
+
 	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/authorization"
 	"github.com/eigerco/strawberry/internal/block"

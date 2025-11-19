@@ -2,14 +2,15 @@ package handlers
 
 import (
 	"context"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
 	"sync"
 	"time"
-
-	"crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"

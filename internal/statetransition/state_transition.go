@@ -2,7 +2,9 @@ package statetransition
 
 import (
 	"bytes"
-	"crypto/ed25519"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"errors"
 	"fmt"
 	"maps"

@@ -1,7 +1,6 @@
 package cert
 
 import (
-	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -11,6 +10,8 @@ import (
 	"math/big"
 	"strings"
 	"time"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 )
 
 // DNSNamePrefix is prepended to all encoded public keys in certificate DNS names

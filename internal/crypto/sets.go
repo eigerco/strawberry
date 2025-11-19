@@ -1,6 +1,6 @@
 package crypto
 
-import "crypto/ed25519"
+import "github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 type ED25519PublicKeySet map[[Ed25519PublicSize]byte]struct{}
 

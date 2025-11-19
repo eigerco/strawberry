@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
