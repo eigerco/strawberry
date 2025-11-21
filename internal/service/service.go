@@ -322,9 +322,9 @@ func isPreimageAvailableAt(metadata PreimageHistoricalTimeslots, t jamtime.Times
 
 type PrivilegedServices struct {
 	ManagerServiceId         block.ServiceId                            // Manager service ID (M) - the service able to effect an alteration of PrivilegedServices from block to block. Also called Empower service.
+	AssignedServiceIds       [common.TotalNumberOfCores]block.ServiceId // Assigned service ids (A) - the service indices capable of altering the pending authorizer queue φ, one for each core.
 	DesignateServiceId       block.ServiceId                            // Designate service ID (V) - the service able to effect an alteration of the NextValidators in ValidatorState.
 	CreateProtectedServiceId block.ServiceId                            // Create protected service ID - (R) the service able to create new service accounts with indices in the protected range.
-	AssignedServiceIds       [common.TotalNumberOfCores]block.ServiceId // Assigned service ids (A) - the service indices capable of altering the pending authorizer queue φ, one for each core.
 	AmountOfGasPerServiceId  map[block.ServiceId]uint64                 // Amount of gas per service ID (Z) - small dictionary containing the indices of services which automatically accumulate in each block together with a basic amount of gas with which each accumulates.
 }
 
