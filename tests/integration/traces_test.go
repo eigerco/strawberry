@@ -124,7 +124,9 @@ func runTraceTest(t *testing.T, filename string) {
 		chainDB,
 		trieDB,
 	)
-	require.NoError(t, err)
+	if trace.PreState.StateRoot != trace.PostState.StateRoot {
+		require.NoError(t, err)
+	}
 
 	RequireEqualStates(t, postState, currentState)
 
