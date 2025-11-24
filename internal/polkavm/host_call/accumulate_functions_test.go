@@ -42,7 +42,9 @@ func TestAccumulate(t *testing.T) {
 			},
 			ValidatorKeys: safrole.ValidatorsData(generate(t, testutils.RandomValidatorKey, common.NumberOfValidators)),
 		},
-		ServiceId: 123,
+		ServiceId:         123,
+		ProvidedPreimages: []ProvidedPreimage{},
+		DeferredTransfers: []service.DeferredTransfer{},
 	}
 	var currentServiceID block.ServiceId = 123123
 	var newServiceID block.ServiceId = 123124

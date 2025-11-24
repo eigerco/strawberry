@@ -2,15 +2,14 @@ package state
 
 import (
 	"bytes"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
+	"maps"
 	"sort"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
@@ -106,7 +105,7 @@ func (j AccumulationState) Clone() AccumulationState {
 		ManagerServiceId:         j.ManagerServiceId,
 		AssignedServiceIds:       j.AssignedServiceIds,
 		DesignateServiceId:       j.DesignateServiceId,
-		AmountOfGasPerServiceId:  j.AmountOfGasPerServiceId, // TODO clone properly
+		AmountOfGasPerServiceId:  maps.Clone(j.AmountOfGasPerServiceId),
 	}
 }
 

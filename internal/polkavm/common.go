@@ -1,6 +1,8 @@
 package polkavm
 
 import (
+	"bytes"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
@@ -348,6 +350,37 @@ type AccumulateContext struct {
 	DeferredTransfers []service.DeferredTransfer // t
 	AccumulationHash  *crypto.Hash               // y
 	ProvidedPreimages []ProvidedPreimage         // p
+}
+
+func (s *AccumulateContext) Clone() AccumulateContext {
+	cc := AccumulateContext{
+		ServiceId:         s.ServiceId,
+		AccumulationState: s.AccumulationState.Clone(),
+		NewServiceId:      s.NewServiceId,
+		DeferredTransfers: make([]service.DeferredTransfer, len(s.DeferredTransfers)),
+		ProvidedPreimages: make([]ProvidedPreimage, len(s.ProvidedPreimages)),
+	}
+	if s.AccumulationHash != nil {
+		cc.AccumulationHash = new(crypto.Hash)
+		*cc.AccumulationHash = *s.AccumulationHash
+	}
+	for i, dt := range s.DeferredTransfers {
+		cc.DeferredTransfers[i] = service.DeferredTransfer{
+			SenderServiceIndex:   dt.SenderServiceIndex,
+			ReceiverServiceIndex: dt.ReceiverServiceIndex,
+			Balance:              dt.Balance,
+			Memo:                 dt.Memo,
+			GasLimit:             dt.GasLimit,
+		}
+	}
+
+	for i, p := range s.ProvidedPreimages {
+		cc.ProvidedPreimages[i] = ProvidedPreimage{
+			ServiceId: p.ServiceId,
+			Data:      bytes.Clone(p.Data),
+		}
+	}
+	return cc
 }
 
 type ProvidedPreimage struct {
