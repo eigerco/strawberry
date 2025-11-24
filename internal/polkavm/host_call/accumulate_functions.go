@@ -157,7 +157,7 @@ func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPa
 	}
 	gas -= CheckpointCost
 
-	ctxPair.ExceptionalCtx = ctxPair.RegularCtx // TODO should clone?
+	ctxPair.ExceptionalCtx = ctxPair.RegularCtx.Clone()
 
 	// Set the new ϱ' value into φ′7
 	regs[A0] = uint64(gas)
