@@ -281,7 +281,7 @@ func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair)
 // Transfer ΩT(ϱ, φ, μ, (x, y))
 func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	// let (d, a, l, o) = φ7..11
-	receiverId, newBalance, gasLimit, o := regs[A0], regs[A1], regs[A2], regs[A3]
+	receiverId, amount, gasLimit, o := regs[A0], regs[A1], regs[A2], regs[A3]
 
 	// g = 10 + φ9
 	transferCost := TransferBaseCost + Gas(gasLimit)
@@ -300,7 +300,7 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	deferredTransfer := service.DeferredTransfer{
 		SenderServiceIndex:   ctxPair.RegularCtx.ServiceId,
 		ReceiverServiceIndex: block.ServiceId(receiverId),
-		Balance:              newBalance,
+		Balance:              amount,
 		Memo:                 service.Memo(m),
 		GasLimit:             gasLimit,
 	}
@@ -322,7 +322,12 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	// let b = (xs)b − a
 	// if b < (xs)t
 	account := ctxPair.RegularCtx.ServiceAccount()
-	b := account.Balance - newBalance
+
+	var b uint64 = 0
+	if account.Balance > amount {
+		b = account.Balance - amount
+	}
+
 	if b < account.ThresholdBalance() {
 		return gas, withCode(regs, CASH), mem, ctxPair, nil
 	}
