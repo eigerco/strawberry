@@ -62,13 +62,13 @@ func TestComputeNode(t *testing.T) {
 			},
 			expected: func() []byte {
 				// Right side (blob2 and blob3)
-				leaf2 := []byte("blob2")
-				leaf3 := []byte("blob3")
-				rightNode := append([]byte("node"), append(leaf2, leaf3...)...)
-				rightHash := convertHashToBlob(testutils.MockHashData(rightNode))
+				leaf2 := []byte("blob1")
+				leaf3 := []byte("blob2")
+				ledtNode := append([]byte("node"), append(leaf2, leaf3...)...)
+				leftHash := convertHashToBlob(testutils.MockHashData(ledtNode))
 
 				// Left side (blob1)
-				leftHash := []byte("blob1")
+				rightHash := []byte("blob3")
 
 				// Combine
 				combined := append([]byte("node"), append(leftHash, rightHash...)...)
@@ -137,14 +137,14 @@ func TestComputeNode(t *testing.T) {
 				[]byte(""),
 			},
 			expected: func() []byte {
-				// Right side (large blob and empty blob)
+				// Left side with ceiling division: ["small", createBlob(1024)]
+				leaf1 := []byte("small")
 				leaf2 := createBlob(1024)
-				leaf3 := []byte("")
-				rightNode := append([]byte("node"), append(leaf2, leaf3...)...)
-				rightHash := convertHashToBlob(testutils.MockHashData(rightNode))
+				leftNode := append([]byte("node"), append(leaf1, leaf2...)...)
+				leftHash := convertHashToBlob(testutils.MockHashData(leftNode))
 
-				// Left side (small blob)
-				leftHash := []byte("small")
+				// Right side: [""]
+				rightHash := []byte("")
 
 				combined := append([]byte("node"), append(leftHash, rightHash...)...)
 				return convertHashToBlob(testutils.MockHashData(combined))
