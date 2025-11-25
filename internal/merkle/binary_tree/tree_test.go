@@ -46,12 +46,15 @@ func TestComputeWellBalancedRoot(t *testing.T) {
 				[]byte("blob3"),
 			},
 			expected: func() crypto.Hash {
-				// Should expect just one node prefix
+				leaf1 := []byte("blob1")
 				leaf2 := []byte("blob2")
-				leaf3 := []byte("blob3")
-				right := testutils.MockHashData(append([]byte("node"), append(leaf2, leaf3...)...))
-				left := []byte("blob1")
-				return testutils.MockHashData(append([]byte("node"), append(left, right[:]...)...))
+				left := testutils.MockHashData(append([]byte("node"), append(leaf1, leaf2...)...))
+
+				// Right subtree: [blob3] - single element, not hashed in N function
+				right := []byte("blob3")
+
+				// Combine with node prefix
+				return testutils.MockHashData(append([]byte("node"), append(left[:], right...)...))
 			}(),
 		},
 	}
