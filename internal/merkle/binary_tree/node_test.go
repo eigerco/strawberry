@@ -64,8 +64,8 @@ func TestComputeNode(t *testing.T) {
 				// Right side (blob2 and blob3)
 				leaf2 := []byte("blob1")
 				leaf3 := []byte("blob2")
-				ledtNode := append([]byte("node"), append(leaf2, leaf3...)...)
-				leftHash := convertHashToBlob(testutils.MockHashData(ledtNode))
+				leftNode := append([]byte("node"), append(leaf2, leaf3...)...)
+				leftHash := convertHashToBlob(testutils.MockHashData(leftNode))
 
 				// Left side (blob1)
 				rightHash := []byte("blob3")
