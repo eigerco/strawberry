@@ -293,7 +293,7 @@ func CalculateIntermediateRecentHistory(header block.Header, priorRecentHistory 
 // 4.17: β′_H ≺ (H, EG, β†_H , θ′)
 // 7.5 - 7.8
 // Computes the final recent history.
-func CalculateNewRecentHistory(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentHistory state.RecentHistory, serviceHashPairs ServiceHashPairs) (state.RecentHistory, error) {
+func CalculateNewRecentHistory(header block.Header, guarantees block.GuaranteesExtrinsic, intermediateRecentHistory state.RecentHistory, accumulationOutputLog state.AccumulationOutputLog) (state.RecentHistory, error) {
 
 	// Gather all the inputs we need.
 
@@ -306,7 +306,7 @@ func CalculateNewRecentHistory(header block.Header, guarantees block.GuaranteesE
 
 	// Equation 7.6: let s = [E_4(s) ⌢ E(h) | (s, h) <− θ′]
 	// And Equation 7.7: M_B(s, H_K)
-	accumulationRoot, err := computeAccumulationRoot(serviceHashPairs)
+	accumulationRoot, err := computeAccumulationRoot(accumulationOutputLog)
 	if err != nil {
 		return state.RecentHistory{}, err
 	}
@@ -365,15 +365,10 @@ func UpdateRecentHistory(
 // Implements:
 // Equation 7.6: let s = [E_4(s) ⌢ E(h) | (s, h) <− θ′]
 // Equation 7.7: M_B(s, H_K)
-func computeAccumulationRoot(pairs ServiceHashPairs) (crypto.Hash, error) {
+func computeAccumulationRoot(pairs state.AccumulationOutputLog) (crypto.Hash, error) {
 	if len(pairs) == 0 {
 		return crypto.Hash{}, nil
 	}
-
-	// Sort pairs to ensure deterministic ordering
-	sort.Slice(pairs, func(i, j int) bool {
-		return pairs[i].ServiceId < pairs[j].ServiceId
-	})
 
 	// Create sequence of [s ^^ E_4(s) ⌢ E(h)] for each (s,h) pair
 	items := make([][]byte, len(pairs))
@@ -516,7 +511,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	newPrivilegedServices service.PrivilegedServices,
 	newValidatorKeys safrole.ValidatorsData,
 	newPendingAuthorizersQueues state.PendingAuthorizersQueues,
-	accumulationOutputLog ServiceHashPairs,
+	accumulationOutputLog state.AccumulationOutputLog,
 	accumulationStats AccumulationStats,
 ) {
 	// R! ≡ [r | r <− R, |(r_c)p| = 0 ∧ r_l = {}] (eq. 12.4 v0.7.1)
@@ -559,7 +554,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	accumulator := NewAccumulator(currentState, header, newTimeslot)
 	// e = (d: δ, i: ι, q: ϕ, m: χ_M, a: χ_A, v: χ_V, r: χ_R, z: χ_Z) (eq. 12.24 v0.7.1)
 	// (n, e′, t, θ′, u) ≡ ∆+(g, R*, e, χ_Z) (eq. 12.25 v0.7.1)
-	accumulatedCount, newAccumulationState, accumulationOutputLog, gasPairs := accumulator.
+	accumulatedCount, newAccumulationState, serviceHashPairs, gasPairs := accumulator.
 		SequentialDelta(gasLimit, []service.DeferredTransfer{}, accumulatableWorkReports, state.AccumulationState{
 			ServiceState:             currentState.Services,
 			ValidatorKeys:            currentState.ValidatorState.QueuedValidators,
@@ -571,6 +566,13 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 			AmountOfGasPerServiceId:  currentState.PrivilegedServices.AmountOfGasPerServiceId,
 		}, currentState.PrivilegedServices.AmountOfGasPerServiceId)
 
+	// Convert ServiceHashPairSet to state.AccumulationOutputLog
+	accumulationOutputLog = slices.Collect(maps.Keys(serviceHashPairs))
+
+	// Sort accumulation output log by service ID for deterministic ordering
+	sort.Slice(accumulationOutputLog, func(i, j int) bool {
+		return accumulationOutputLog[i].ServiceId < accumulationOutputLog[j].ServiceId
+	})
 	// (d: δ†, i: ι′, q: ϕ′, m: χ′_M, a: χ′_A, v: χ′_V , z: χ′_Z ) ≡ e′ (eq. 12.25 v0.7.1)
 	intermediateServiceState := newAccumulationState.ServiceState
 	newPrivilegedServices = service.PrivilegedServices{
@@ -909,8 +911,8 @@ func CalculateNewServiceStatistics(
 	return newServiceStats
 }
 
-// ServiceHashPairs B ≡ {(NS , H)} (eq. 12.17 v0.7.1)
-type ServiceHashPairs []state.ServiceHashPair
+// ServiceHashPairSet B ≡ {(NS , H)} (eq. 12.17 v0.7.1)
+type ServiceHashPairSet map[state.ServiceHashPair]struct{}
 
 // ServiceGasPairs U ≡ ⟦(NS , NG)⟧ (eq. 12.17 v0.7.1)
 type ServiceGasPairs []ServiceGasPair
@@ -943,10 +945,9 @@ func (a *Accumulator) SequentialDelta(
 ) (
 	uint32,
 	state.AccumulationState,
-	ServiceHashPairs,
+	ServiceHashPairSet,
 	ServiceGasPairs,
 ) {
-
 	// Calculate i = max(N|w|+1) : ∑w∈w...i∑r∈wd(rg) ≤ g
 	maxReports := 0
 	totalGas := uint64(0)
@@ -971,7 +972,7 @@ func (a *Accumulator) SequentialDelta(
 
 	// If no reports can be processed, return early
 	if maxReportsAndTransfers == 0 {
-		return 0, ctx, ServiceHashPairs{}, ServiceGasPairs{}
+		return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}
 	}
 
 	// Process maxReports using ParallelDelta (∆*)
@@ -1006,9 +1007,12 @@ func (a *Accumulator) SequentialDelta(
 			alwaysAccumulate,
 		)
 
+		// merge moreHashPairs into hashPairs and keep uniqueness by ServiceId by keeping the last occurrence
+		maps.Copy(hashPairs, moreHashPairs)
+
 		return uint32(maxReports) + moreItems,
 			finalCtx,
-			append(hashPairs, moreHashPairs...),
+			hashPairs,
 			append(gasPairs, moreGasPairs...)
 	}
 
@@ -1033,7 +1037,7 @@ func (a *Accumulator) ParallelDelta(
 ) (
 	state.AccumulationState, // updated context
 	[]service.DeferredTransfer, // all transfers
-	ServiceHashPairs, // accumulation outputs
+	ServiceHashPairSet, // accumulation outputs
 	ServiceGasPairs, // accumulation gas
 ) {
 
@@ -1063,7 +1067,7 @@ func (a *Accumulator) ParallelDelta(
 
 	var allTransfers []service.DeferredTransfer
 	// u = [(s, ∆(s)u) | s <− s]
-	accumHashPairs := make(ServiceHashPairs, 0)
+	accumHashPairs := ServiceHashPairSet{}
 	accumGasPairs := make(ServiceGasPairs, 0)
 
 	var allPreimageProvisions []polkavm.ProvidedPreimage
@@ -1090,10 +1094,10 @@ func (a *Accumulator) ParallelDelta(
 
 			// Store accumulation result if present
 			if resultHash != nil {
-				accumHashPairs = append(accumHashPairs, state.ServiceHashPair{
+				accumHashPairs[state.ServiceHashPair{
 					ServiceId: serviceId,
 					Hash:      *resultHash,
-				})
+				}] = struct{}{}
 			}
 			accumGasPairs = append(accumGasPairs, ServiceGasPair{
 				ServiceId: serviceId,
@@ -1203,11 +1207,6 @@ func (a *Accumulator) ParallelDelta(
 
 	// d′ = P ((d ∪ n) ∖ m, [⋃s∈s] ∆1(o, w, f , s)p)
 	newAccState.ServiceState = a.preimageIntegration(newAccState.ServiceState, allPreimageProvisions)
-
-	// Sort accumulation pairs by service ID to ensure deterministic output
-	sort.Slice(accumHashPairs, func(i, j int) bool {
-		return accumHashPairs[i].ServiceId < accumHashPairs[j].ServiceId
-	})
 
 	return newAccState, allTransfers, accumHashPairs, accumGasPairs
 }
