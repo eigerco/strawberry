@@ -88,7 +88,7 @@ func runTracesTests(t *testing.T, directory string) {
 			continue // Skip the genesis trace since this is mostly there for reference.
 		}
 		t.Run(filepath.Base(file), func(t *testing.T) {
-			// t.Parallel()
+			t.Parallel()
 			runTraceTest(t, file)
 		})
 	}
