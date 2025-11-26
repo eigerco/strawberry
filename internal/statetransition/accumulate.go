@@ -163,6 +163,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 			AccumulationState: newCtxPair.ExceptionalCtx.AccumulationState,
 			DeferredTransfers: newCtxPair.ExceptionalCtx.DeferredTransfers,
 			ProvidedPreimages: newCtxPair.ExceptionalCtx.ProvidedPreimages,
+			Result:            newCtxPair.ExceptionalCtx.AccumulationHash,
 		}
 	}
 
@@ -171,6 +172,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		AccumulationState: newCtxPair.RegularCtx.AccumulationState,
 		DeferredTransfers: newCtxPair.RegularCtx.DeferredTransfers,
 		ProvidedPreimages: newCtxPair.RegularCtx.ProvidedPreimages,
+		Result:            newCtxPair.RegularCtx.AccumulationHash,
 	}
 	// if o ∈ B ∖ H. There is no sure way to check that a byte array is a hash
 	// one way would be to check the shannon entropy but this also not a guarantee, so we just limit to checking the size
