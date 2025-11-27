@@ -197,8 +197,8 @@ func (i *Instance) StoreImmIndirectU64(base polkavm.Reg, offset uint64, value ui
 // LoadImmAndJump load_imm_jump branch(νY , ⊺), φ′A = νX
 func (i *Instance) LoadImmAndJump(ra polkavm.Reg, value uint64, target uint64) error {
 	log.VM.Trace().Int64("gas", i.gasRemaining).Msgf("%d: load_imm_jump %s=0x%x v1=0x%x v2=0x%x", i.instructionCounter, ra, i.regs[ra], value, target)
-	i.LoadImm(ra, value)
-	return i.Jump(target)
+	i.regs[ra] = value
+	return i.branch(true, target)
 }
 
 // BranchEqImm branch_eq_imm branch(νY, φA = νX)
