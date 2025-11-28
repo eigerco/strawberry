@@ -3,12 +3,12 @@
 package state
 
 const (
-	MaxTimeslotsForLookupAnchor             = 24   // (L) Maximum age for lookup-anchor blocks in work reports
-	MaxRecentBlocks                         = 8    // (H) Maximum number of recent blocks to store
-	MaxAuthorizersPerCore                   = 8    // (O) The maximum number of items in the authorizers pool.
-	EntropyPoolSize                         = 4    // () Size of the entropy pool
-	PendingAuthorizersQueueSize             = 80   // (Q) The maximum number of items in the authorizers queue.
-	MaximumNumberOfEntriesAccumulationQueue = 1024 // (S) The maximum number of entries in the accumulation queue.
+	MaxTimeslotsForLookupAnchor             = 14400 // (L) Maximum age for lookup-anchor blocks in work reports
+	MaxRecentBlocks                         = 8     // (H) Maximum number of recent blocks to store
+	MaxAuthorizersPerCore                   = 8     // (O) The maximum number of items in the authorizers pool.
+	EntropyPoolSize                         = 4     // () Size of the entropy pool
+	PendingAuthorizersQueueSize             = 80    // (Q) The maximum number of items in the authorizers queue.
+	MaximumNumberOfEntriesAccumulationQueue = 1024  // (S) The maximum number of entries in the accumulation queue.
 
 	MaximumSizeIsAuthorizedCode = 64_000 // (WA) The maximum size of is-authorized code in octets
 
