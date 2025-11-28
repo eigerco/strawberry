@@ -21,7 +21,7 @@ const (
 	MaxAllocatedGasRefine                        = 1_000_000_000
 	MaxAllocatedGasAccumulation                  = 10_000_000
 	MaxAllocatedGasIsAuthorized                  = 50_000_000
-	TotalGasAccumulation                         = 20_000
+	TotalGasAccumulation                         = 20_000_000
 
 	WorkReportMaxSumOfDependencies = 8
 	MaxWorkPackageSizeBytes        = 48 * 1024
