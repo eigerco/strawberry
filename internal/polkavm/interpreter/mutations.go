@@ -598,13 +598,13 @@ func (i *Instance) NegateAndAddImm64(dst polkavm.Reg, regA polkavm.Reg, value ui
 // ShiftLogicalLeftImmAlt64 shlo_l_imm_alt_64 φ′A = (νX ⋅ 2φB mod 64) mod 2^64
 func (i *Instance) ShiftLogicalLeftImmAlt64(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	log.VM.Trace().Int64("gas", i.gasRemaining).Msgf("%d: shlo_l_imm_alt_64 %s=0x%x %s=0x%x v1=0x%x", i.instructionCounter, dst, i.regs[dst], regB, i.regs[regB], value)
-	i.setAndSkip(dst, value<<i.regs[regB])
+	i.setAndSkip(dst, value<<(i.regs[regB]&63))
 }
 
 // ShiftLogicalRightImmAlt64 shlo_r_imm_alt_64 φ′A = ⌊ νX ÷ 2^φB mod 64 ⌋
 func (i *Instance) ShiftLogicalRightImmAlt64(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	log.VM.Trace().Int64("gas", i.gasRemaining).Msgf("%d: shlo_r_imm_alt_64 %s=0x%x %s=0x%x v1=0x%x", i.instructionCounter, dst, i.regs[dst], regB, i.regs[regB], value)
-	i.setAndSkip(dst, value>>i.regs[regB])
+	i.setAndSkip(dst, value>>(i.regs[regB]&63))
 }
 
 // ShiftArithmeticRightImmAlt64 shar_r_imm_alt_64 φ′A = Z−1_8(⌊ Z8(νX) ÷ 2φB mod 64 ⌋)
