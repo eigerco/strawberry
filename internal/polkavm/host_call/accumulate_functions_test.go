@@ -132,13 +132,28 @@ func TestAccumulate(t *testing.T) {
 				A0: 1,   // core id
 				A2: 340, // new assigner
 			},
+			X: AccumulateContext{
+				ServiceId: 0, // current service - must match AssignedServiceIds[1]
+				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						340: service.ServiceAccount{}, // new assigner must exist
+					},
+					AssignedServiceIds: [common.TotalNumberOfCores]block.ServiceId{
+						1: 0, // current assigner for core 1 must match ServiceId (0)
+					},
+				},
+			},
 			initialGas:  100,
 			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
 				A0: uint64(OK),
 			},
 			expectedX: AccumulateContext{
+				ServiceId: 0,
 				AccumulationState: state.AccumulationState{
+					ServiceState: service.ServiceState{
+						340: service.ServiceAccount{},
+					},
 					PendingAuthorizersQueues: state.PendingAuthorizersQueues{
 						1: [state.PendingAuthorizersQueueSize]crypto.Hash(authHashes),
 					},
