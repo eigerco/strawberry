@@ -566,12 +566,15 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 			AmountOfGasPerServiceId:  currentState.PrivilegedServices.AmountOfGasPerServiceId,
 		}, currentState.PrivilegedServices.AmountOfGasPerServiceId)
 
-	// Convert ServiceHashPairSet to state.AccumulationOutputLog
 	accumulationOutputLog = slices.Collect(maps.Keys(serviceHashPairs))
 
-	// Sort accumulation output log by service ID for deterministic ordering
+	// Sort accumulation output log by service ID and Hash for deterministic ordering
 	sort.Slice(accumulationOutputLog, func(i, j int) bool {
-		return accumulationOutputLog[i].ServiceId < accumulationOutputLog[j].ServiceId
+		if accumulationOutputLog[i].ServiceId != accumulationOutputLog[j].ServiceId {
+			return accumulationOutputLog[i].ServiceId < accumulationOutputLog[j].ServiceId
+		}
+		// Same ServiceId, compare by Hash
+		return bytes.Compare(accumulationOutputLog[i].Hash[:], accumulationOutputLog[j].Hash[:]) < 0
 	})
 	// (d: δ†, i: ι′, q: ϕ′, m: χ′_M, a: χ′_A, v: χ′_V , z: χ′_Z ) ≡ e′ (eq. 12.25 v0.7.1)
 	intermediateServiceState := newAccumulationState.ServiceState
