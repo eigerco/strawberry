@@ -73,37 +73,62 @@ func isServiceId(s uint64) bool {
 	return s <= math.MaxUint32
 }
 
-// Assign ΩA(ϱ, φ, μ, (x, y))
+// Assign ΩA(ϱ, φ, μ, (x, y)) (v0.7.1)
+//
+// Function: assign = 15
+// Gas: g = 10
+//
+// let [c, o, a] = φ7···+3
+// let q = { [μo+32i···+32 | i ← NQ]  if No···+32Q ⊆ Vμ
+//
+//	{ ∇                        otherwise
+//
+// (ε', φ'7, (x'e)q[c], (x'e)a[c]) =
+//
+//	{ (☇, φ7, (xe)q[c], (xe)a[c])     if q = ∇
+//	{ (▸, CORE, (xe)q[c], (xe)a[c])   otherwise if c ≥ C
+//	{ (▸, HUH, (xe)q[c], (xe)a[c])    otherwise if xs ≠ (xe)a[c]
+//	{ (▸, WHO, (xe)q[c], (xe)a[c])    otherwise if a ∉ NS
+//	{ (▸, OK, q, a)                   otherwise
 func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	if gas < AssignCost {
 		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= AssignCost
 
-	// let [c, o, a] = φ7⋅⋅⋅+3
+	// let [c, o, a] = φ7···+3
 	core, addr, newAssigner := regs[A0], regs[A1], regs[A2]
 
-	if core >= uint64(common.TotalNumberOfCores) {
-		return gas, withCode(regs, CORE), mem, ctxPair, nil
-	}
-
-	xs := ctxPair.RegularCtx.ServiceId
-	currentAssigned := ctxPair.RegularCtx.AccumulationState.AssignedServiceIds[core]
-	//  if xs ≠ (xu)a[c]
-	if currentAssigned != xs {
-		return gas, withCode(regs, HUH), mem, ctxPair, nil
-	}
-
+	// Read the queue from memory first (can panic on invalid memory access)
+	// q = [μo+32i···+32 | i ← NQ] if No···+32Q ⊆ Vμ otherwise ∇
+	// (☇, φ7, (xe)q[c], (xe)a[c]) if q = ∇
 	var queue [state.PendingAuthorizersQueueSize]crypto.Hash
-	for i := 0; i < state.PendingAuthorizersQueueSize; i++ {
+	for i := range state.PendingAuthorizersQueueSize {
 		bytes := make([]byte, 32)
 		if err := mem.Read(addr+uint64(32*i), bytes); err != nil {
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
-		ctxPair.RegularCtx.AccumulationState.PendingAuthorizersQueues[core][i] = crypto.Hash(bytes)
 		queue[i] = crypto.Hash(bytes)
 	}
 
+	// (▸, CORE, ...) otherwise if c ≥ C
+	if core >= uint64(common.TotalNumberOfCores) {
+		return gas, withCode(regs, CORE), mem, ctxPair, nil
+	}
+
+	// (▸, HUH, ...) otherwise if xs ≠ (xe)a[c]
+	xs := ctxPair.RegularCtx.ServiceId
+	currentAssigned := ctxPair.RegularCtx.AccumulationState.AssignedServiceIds[core]
+	if currentAssigned != xs {
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
+	}
+
+	// (▸, WHO, ...) otherwise if a ∉ NS
+	if _, exists := ctxPair.RegularCtx.AccumulationState.ServiceState[block.ServiceId(newAssigner)]; !exists {
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
+
+	// (▸, OK, q, a) otherwise
 	ctxPair.RegularCtx.AccumulationState.PendingAuthorizersQueues[core] = queue
 	ctxPair.RegularCtx.AccumulationState.AssignedServiceIds[core] = block.ServiceId(newAssigner)
 
