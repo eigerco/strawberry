@@ -137,7 +137,7 @@ func (m *Memory) Sbrk(size uint64) (uint64, error) {
 }
 
 func (m *Memory) allocatePages(startPage uint64, count uint64) {
-	required := (startPage + count) * PageSize
+	required := ((startPage + count) * PageSize) - m.rw.address
 	if uint64(len(m.rw.data)) < required {
 		// Grow rw_data to fit new allocation
 		newData := make([]byte, required)
