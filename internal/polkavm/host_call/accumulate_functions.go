@@ -680,7 +680,7 @@ func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	}
 	meta, ok := a.GetPreimageMeta(k)
 	if !ok {
-		return gas, regs, mem, ctxPair, ErrPanicf("preimage meta not found")
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
 	// if al[H(i), z] ≠ []
