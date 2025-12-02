@@ -21,7 +21,7 @@ const (
 	MaxAllocatedGasRefine                        = 5_000_000_000                                                // GR = 5,000,000,000: The gas allocated to invoke a work-package’s Refine logic.
 	MaxAllocatedGasAccumulation                  = 10_000_000                                                   // GA: The gas allocated to invoke a work-report’s Accumulation logic.
 	MaxAllocatedGasIsAuthorized                  = 50_000_000                                                   // GI: The gas allocated to invoke a work-package’s Is-Authorized logic.
-	TotalGasAccumulation                         = 341_000_000                                                  // GT = 341,000,000: Total gas allocated across all cores for Accumulation
+	TotalGasAccumulation                         = 3_500_000_000                                                // GT = 341,000,000: Total gas allocated across all cores for Accumulation
 
 	WorkReportMaxSumOfDependencies = 8         // (J) The maximum sum of dependency items in a work-report.
 	MaxWorkPackageSizeBytes        = 48 * 1024 // (WR) Maximum size of a serialized work-package in bytes
