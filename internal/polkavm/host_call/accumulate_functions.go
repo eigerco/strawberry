@@ -561,7 +561,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 
 	historicalTimeslots, ok := serviceAccount.GetPreimageMeta(key)
 	if !ok {
-		return gas, regs, mem, ctxPair, ErrPanicf("preimage historical timeslots not found")
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
 	switch len(historicalTimeslots) {
