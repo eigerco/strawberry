@@ -525,19 +525,19 @@ func (i *Instance) SetGreaterThanSignedImm(dst polkavm.Reg, regA polkavm.Reg, va
 // ShiftLogicalLeftImmAlt32 shlo_l_imm_alt_32 φ′A = X4((νX ⋅ 2φB mod 32) mod 2^32)
 func (i *Instance) ShiftLogicalLeftImmAlt32(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	log.VM.Trace().Int64("gas", i.gasRemaining).Msgf("%d: shlo_l_imm_alt_32 %s=0x%x %s=0x%x v1=0x%x", i.instructionCounter, dst, i.regs[dst], regB, i.regs[regB], value)
-	i.setAndSkip(dst, sext(uint64(uint32(value<<i.regs[regB])), 4))
+	i.setAndSkip(dst, sext(uint64(uint32(value<<(i.regs[regB]&31))), 4))
 }
 
 // ShiftLogicalRightImmAlt32 shlo_r_imm_alt_32 φ′A = X4(⌊ νX mod 2^32 ÷ 2^φB mod 32 ⌋)
 func (i *Instance) ShiftLogicalRightImmAlt32(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	log.VM.Trace().Int64("gas", i.gasRemaining).Msgf("%d: shlo_r_imm_alt_32 %s=0x%x %s=0x%x v1=0x%x", i.instructionCounter, dst, i.regs[dst], regB, i.regs[regB], value)
-	i.setAndSkip(dst, sext(uint64(uint32(value)>>uint32(i.regs[regB])), 4))
+	i.setAndSkip(dst, sext(uint64(uint32(value)>>uint32(i.regs[regB]&31)), 4))
 }
 
 // ShiftArithmeticRightImmAlt32 shar_r_imm_alt_32 φ′A = Z−1_8(⌊ Z4(νX mod 2^32) ÷ 2φB mod 32 ⌋)
 func (i *Instance) ShiftArithmeticRightImmAlt32(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	log.VM.Trace().Int64("gas", i.gasRemaining).Msgf("%d: shar_r_imm_alt_32 %s=0x%x %s=0x%x v1=0x%x", i.instructionCounter, dst, i.regs[dst], regB, i.regs[regB], value)
-	i.setAndSkip(dst, uint64(int32(uint32(value))>>uint32(i.regs[regB])))
+	i.setAndSkip(dst, uint64(int32(uint32(value))>>uint32(i.regs[regB]&31)))
 }
 
 // CmovIfZeroImm cmov_iz_imm φ′A = νX if φB = 0 otherwise φA
@@ -610,7 +610,7 @@ func (i *Instance) ShiftLogicalRightImmAlt64(dst polkavm.Reg, regB polkavm.Reg, 
 // ShiftArithmeticRightImmAlt64 shar_r_imm_alt_64 φ′A = Z−1_8(⌊ Z8(νX) ÷ 2φB mod 64 ⌋)
 func (i *Instance) ShiftArithmeticRightImmAlt64(dst polkavm.Reg, regB polkavm.Reg, value uint64) {
 	log.VM.Trace().Int64("gas", i.gasRemaining).Msgf("%d: shar_r_imm_alt_64 %s=0x%x %s=0x%x v1=0x%x", i.instructionCounter, dst, i.regs[dst], regB, i.regs[regB], value)
-	i.setAndSkip(dst, uint64(int32(value)>>i.regs[regB]))
+	i.setAndSkip(dst, uint64(int64(value)>>(i.regs[regB]&63)))
 }
 
 // RotateRight64Imm rot_r_64_imm ∀i ∈ N64 ∶ B8(φ′A)_i = B8(φB)_{(i+νX) mod 64}
@@ -930,7 +930,7 @@ func (i *Instance) SetLessThanUnsigned(dst polkavm.Reg, regA, regB polkavm.Reg) 
 // SetLessThanSigned set_lt_s φ′D = Z8(φA) < Z8(φB)
 func (i *Instance) SetLessThanSigned(dst polkavm.Reg, regA, regB polkavm.Reg) {
 	log.VM.Trace().Int64("gas", i.gasRemaining).Msgf("%d: set_lt_s %s=0x%x %s=0x%x %s=0x%x", i.instructionCounter, dst, i.regs[dst], regA, i.regs[regA], regB, i.regs[regB])
-	i.setAndSkip(dst, bool2uint64(int32(i.regs[regA]) < int32(i.regs[regB])))
+	i.setAndSkip(dst, bool2uint64(int64(i.regs[regA]) < int64(i.regs[regB])))
 }
 
 // CmovIfZero cmov_iz φ′D = φA if φB = 0 otherwise φD
