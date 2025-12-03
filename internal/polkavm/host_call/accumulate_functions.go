@@ -191,23 +191,52 @@ func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPa
 }
 
 // New ΩN(ϱ, φ, μ, (x, y), t) (v0.7.1)
+// ΩN(ϱ, φ, µ, (x,y), t)
+// new = 18, g = 10
+// let [o, l, g, m, f, i] = φ7...+6
+// let c = µo...+32 if No...+32 ⊆ Vµ ∧ l ∈ N²³² otherwise ∇
+// let a = (c, s▸▸{}, l▸▸{((c,l)↦[])}, b▸▸at, g, m, p▸▸{}, r▸▸t, f, a▸▸0, p▸▸xs) if c ≠ ∇, otherwise ∇
+// let s = xs except sb = (xs)b − at
+// (ε′, φ′7, x′i, (x′e)d) ≡
+//
+//	(☇, φ7, xi, (xe)d)           if c = ∇
+//	(▸, HUH, xi, (xe)d)          otherwise if f ≠ 0 ∧ xs ≠ (xe)m
+//	(▸, CASH, xi, (xe)d)         otherwise if sb < (xs)t
+//	(▸, FULL, xi, (xe)d)         otherwise if xs = (xe)r ∧ i < S ∧ i ∈ K((xe)d)
+//	(▸, i, xi, (xe)d ∪ d)        otherwise if xs = (xe)r ∧ i < S
+//	                              where d = {(i ↦ a), (xs ↦ s)}
+//	(▸, xi, i*, (xe)d ∪ d)       otherwise
+//	                              where i* = check(S + (xi − S + 42) mod (2³² − S − 2⁸))
+//	                              and d = {(xi ↦ a), (xs ↦ s)}
+//
+// New ΩN(ϱ, φ, μ, (x, y), t) (v0.7.1)
 func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
+	// g = 10
 	if gas < NewCost {
 		return 0, regs, mem, ctxPair, ErrOutOfGas
 	}
 	gas -= NewCost
 
 	// let [o, l, g, m, f, i] = φ7..+6
-	addr, preimageLength, gasLimitAccumulator, gasLimitTransfer, gratisStorageOffset, desiredId := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4], regs[A5]
+	addr := regs[A0]
+	preimageLength := regs[A1]
+	gasLimitAccumulator := regs[A2]
+	gasLimitTransfer := regs[A3]
+	gratisStorageOffset := regs[A4]
+	desiredId := regs[A5]
 
-	// (▷, HUH, x_i, (x_e)_d) otherwise if f ≠ 0 ∧ x_s ≠ (x_e)_m
+	// (▸, HUH, x_i, (x_e)_d) otherwise if f ≠ 0 ∧ x_s ≠ (x_e)_m
 	xsId := ctxPair.RegularCtx.ServiceId
 	managerId := ctxPair.RegularCtx.AccumulationState.ManagerServiceId
 	if gratisStorageOffset != 0 && xsId != managerId {
 		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
-	// c = μo⋅⋅⋅+32 if No⋅⋅⋅+32 ⊂ Vμ otherwise ∇
+	// let c = μ_o⋅⋅⋅+32 if N_o⋅⋅⋅+32 ⊂ Vμ ∧ l ∈ N_2^32 otherwise ∇
+	if preimageLength >= math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("preimage length exceeds 2^32")
+	}
+
 	codeHashBytes := make([]byte, 32)
 	if err := mem.Read(addr, codeHashBytes); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
@@ -215,18 +244,32 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 
 	codeHash := crypto.Hash(codeHashBytes)
 
-	// let a = (c, s : {},l : {(c, l) ↦ []}, b : at, g, m,p : {}, r : t, f, a : 0, p : xs) if c ≠ ∇
-	account := service.ServiceAccount{
-		CodeHash:               codeHash,
-		GasLimitForAccumulator: gasLimitAccumulator,
-		GasLimitOnTransfer:     gasLimitTransfer,
-		GratisStorageOffset:    gratisStorageOffset,
-		CreationTimeslot:       timeslot,
-		ParentService:          xsId,
-		PreimageLookup:         make(map[crypto.Hash][]byte),
+	// Determine actual service ID for the new service
+	// Protected path: x_s = (x_e)_r ∧ i < S → use desiredId
+	// Regular path: use x_i (NewServiceId)
+	registrarId := ctxPair.RegularCtx.AccumulationState.CreateProtectedServiceId
+	isProtectedPath := xsId == registrarId && desiredId < service.S
+
+	var actualServiceId block.ServiceId
+	if isProtectedPath {
+		actualServiceId = block.ServiceId(desiredId)
+	} else {
+		actualServiceId = ctxPair.RegularCtx.NewServiceId
 	}
 
-	k, err := statekey.NewPreimageMeta(ctxPair.RegularCtx.NewServiceId, codeHash, uint32(preimageLength))
+	// let a = (c, s: {}, l: {(c, l) ↦ []}, b: a_t, g, m, p: {}, r: t, f, a: 0, p: x_s)
+	account := service.NewServiceAccount()
+	account.CodeHash = codeHash
+	account.GasLimitForAccumulator = gasLimitAccumulator
+	account.GasLimitOnTransfer = gasLimitTransfer
+	account.GratisStorageOffset = gratisStorageOffset
+	account.CreationTimeslot = timeslot
+	account.MostRecentAccumulationTimeslot = 0
+	account.ParentService = xsId
+
+	// l: {((c, l) ↦ [])} - preimage metadata keyed by (codeHash, preimageLength)
+	// Key must use actualServiceId since it's interleaved into the StateKey
+	k, err := statekey.NewPreimageMeta(actualServiceId, codeHash, uint32(preimageLength))
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -236,46 +279,54 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
-	// b: at
+	// b: a_t
 	account.Balance = account.ThresholdBalance()
 
-	// let s = x_s except s_b = (Xs)b − at
+	// let s = x_s except s_b = (x_s)_b − a_t
+	// (▸, CASH, x_i, (x_e)_d) otherwise if s_b < (x_s)_t
+	//
+	// Check: (x_s)_b - a_t >= (x_s)_t
+	// Rearranged to avoid underflow: (x_s)_b >= a_t + (x_s)_t
 	xs := ctxPair.RegularCtx.ServiceAccount()
-	s := xs.Clone()
-	s.Balance -= account.ThresholdBalance()
+	newAccountThreshold := account.ThresholdBalance()
+	creatorThreshold := xs.ThresholdBalance()
 
-	// (▷, CASH, x_i, (x_e)_d) otherwise if s_b < (x_s)_t
-	if s.Balance < xs.ThresholdBalance() {
+	// Check for addition overflow
+	requiredBalance := newAccountThreshold + creatorThreshold
+	if requiredBalance < newAccountThreshold {
 		return gas, withCode(regs, CASH), mem, ctxPair, nil
 	}
 
-	// otherwise if x_s = (x_e)_r ∧ i < S ∧ i ∈ K((x_e)_d)
-	createProtectedServiceId := ctxPair.RegularCtx.AccumulationState.CreateProtectedServiceId
-	if xsId == createProtectedServiceId && desiredId < service.S {
-		desiredId := block.ServiceId(desiredId)
+	if xs.Balance < requiredBalance {
+		return gas, withCode(regs, CASH), mem, ctxPair, nil
+	}
 
-		// (▷, FULL, x_i, (x_e)_d)
-		if _, ok := ctxPair.RegularCtx.AccumulationState.ServiceState[block.ServiceId(desiredId)]; !ok {
+	// Safe to subtract now
+	s := xs.Clone()
+	s.Balance -= newAccountThreshold
+
+	// Protected path
+	// (▸, FULL, x_i, (x_e)_d) otherwise if x_s = (x_e)_r ∧ i < S ∧ i ∈ K((x_e)_d)
+	// (▸, i, x_i, (x_e)_d ∪ d) otherwise if x_s = (x_e)_r ∧ i < S
+	if isProtectedPath {
+		if _, exists := ctxPair.RegularCtx.AccumulationState.ServiceState[actualServiceId]; exists {
 			return gas, withCode(regs, FULL), mem, ctxPair, nil
 		}
 
-		// (▷, i, x_i, (x_e)_d ∪ d)  otherwise if x_s = (x_e)_r ∧ i < S
-		// where d = {(i ↦ a), (x_s ↦ s)}
-		regs[A0] = uint64(desiredId)
-		ctxPair.RegularCtx.AccumulationState.ServiceState[desiredId] = account
+		regs[A0] = uint64(actualServiceId)
+		ctxPair.RegularCtx.AccumulationState.ServiceState[actualServiceId] = account
 		ctxPair.RegularCtx.AccumulationState.ServiceState[xsId] = s
 		return gas, regs, mem, ctxPair, nil
 	}
 
-	// (▷, x_i, i*, (x_e)_d ∪ d)  otherwise
-	// where i* = check(S + (x_i - S + 42) mod (2^32 - S - 2^8))
-	// and d = {(x_i ↦ a), (x_s ↦ s)}
-	xi := ctxPair.RegularCtx.NewServiceId
-	regs[A0] = uint64(xi)
-	newId := service.BumpIndex(ctxPair.RegularCtx.NewServiceId, ctxPair.RegularCtx.AccumulationState.ServiceState)
-	ctxPair.RegularCtx.NewServiceId = newId
-	ctxPair.RegularCtx.AccumulationState.ServiceState[xi] = account
+	// Regular path
+	// (▸, x_i, i*, (x_e)_d ∪ d) otherwise
+	regs[A0] = uint64(actualServiceId)
+	nextId := service.BumpIndex(ctxPair.RegularCtx.NewServiceId, ctxPair.RegularCtx.AccumulationState.ServiceState)
+	ctxPair.RegularCtx.NewServiceId = nextId
+	ctxPair.RegularCtx.AccumulationState.ServiceState[actualServiceId] = account
 	ctxPair.RegularCtx.AccumulationState.ServiceState[xsId] = s
+
 	return gas, regs, mem, ctxPair, nil
 }
 
