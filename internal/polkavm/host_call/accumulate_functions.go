@@ -24,10 +24,7 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 
 	// let [m, a, v, r, o, n] = φ7...13
 	managerServiceId, assignServiceAddr, designateServiceId, createProtectedServiceId, addr, servicesNr := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4], regs[A5]
-	// (▷, WHO, (x_e)_(m,a,v,r,z)) otherwise if (m, v, r) ∉ ℕ³_S
-	if !(isServiceId(managerServiceId) && isServiceId(designateServiceId) && isServiceId(createProtectedServiceId)) {
-		return gas, withCode(regs, WHO), mem, ctxPair, nil
-	}
+
 	// let g = {(s ↦ g) where E4(s) ⌢ E8(g) = μ_o+12i⋅⋅⋅+12 | i ∈ Nn} if No⋅⋅⋅+12n ⊂ Vμ otherwise ∇
 	gasPerServiceId := make(map[block.ServiceId]uint64)
 	for i := range servicesNr {
@@ -57,6 +54,10 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	if err != nil {
 		// (ℓ, φ_7, (x_e)_(m,a,v,r,z)) if {z, a} ∋ ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+	// (▷, WHO, (x_e)_(m,a,v,r,z)) otherwise if (m, v, r) ∉ ℕ³_S
+	if !isServiceId(managerServiceId) || !isServiceId(designateServiceId) || !isServiceId(createProtectedServiceId) {
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
 	}
 
 	// (▷, OK, (m, a, v, r, z)) otherwise
