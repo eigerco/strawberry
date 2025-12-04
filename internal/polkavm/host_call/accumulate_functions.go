@@ -399,17 +399,10 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	// let b = (xs)b − a
 	// if b < (xs)t
 	account := ctxPair.RegularCtx.ServiceAccount()
-
-	var b uint64 = 0
-	if account.Balance > amount {
-		b = account.Balance - amount
-	}
-
-	if b < account.ThresholdBalance() {
+	if amount > account.Balance || account.Balance-amount < account.ThresholdBalance() {
 		return gas, withCode(regs, CASH), mem, ctxPair, nil
 	}
-
-	account.Balance = b
+	account.Balance = account.Balance - amount
 	ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = account
 	ctxPair.RegularCtx.DeferredTransfers = append(ctxPair.RegularCtx.DeferredTransfers, deferredTransfer)
 	return gas, withCode(regs, OK), mem, ctxPair, nil
