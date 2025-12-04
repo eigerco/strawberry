@@ -83,5 +83,5 @@ jobs:
       - name: execute integration tests
         run: make integration
 
-#      - name: execute traces TODO temporarily disabled until all the traces pass
-#        run: make traces
+      - name: execute
+        run: make traces
