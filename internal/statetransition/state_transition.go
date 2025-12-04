@@ -1044,8 +1044,19 @@ func (a *Accumulator) ParallelDelta(
 	ServiceGasPairs, // accumulation gas
 ) {
 
+	outputCacheMutex := sync.Mutex{}
+	outputCachePerService := map[block.ServiceId]AccumulationOutput{}
+
 	delta := func(svcID block.ServiceId) AccumulationOutput {
-		return a.Delta1(initialAccState, transfers, workReports, alwaysAccumulate, svcID)
+		outputCacheMutex.Lock()
+		defer outputCacheMutex.Unlock()
+
+		if res, ok := outputCachePerService[svcID]; ok {
+			return res
+		}
+		res := a.Delta1(initialAccState, transfers, workReports, alwaysAccumulate, svcID)
+		outputCachePerService[svcID] = res
+		return res
 	}
 
 	// Get all unique service indices involved (s)
