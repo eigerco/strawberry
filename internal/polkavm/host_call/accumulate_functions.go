@@ -706,17 +706,17 @@ func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 		ss = serviceId // s* = s
 	}
 
+	// i = µ[o..o+z]
+	i := make([]byte, z)
+	if err := mem.Read(o, i); err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+
 	// a = d[s∗] if s∗ ∈ K(d)
 	a, ok := allServices[ss]
 	if !ok {
 		// if a = ∅
 		return gas, withCode(regs, WHO), mem, ctxPair, nil
-	}
-
-	// i = µ[o..o+z]
-	i := make([]byte, z)
-	if err := mem.Read(o, i); err != nil {
-		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
 	k, err := statekey.NewPreimageMeta(ss, crypto.HashData(i), uint32(z))

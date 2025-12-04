@@ -1041,11 +1041,14 @@ func TestAccumulate(t *testing.T) {
 			},
 		},
 		{
-			name:        "provide_service_not_found",
-			fn:          fnWithExtra[block.ServiceId](Provide),
-			extraParam:  block.ServiceId(1),
-			initialGas:  100,
-			initialRegs: deltaRegs{A0: 1},
+			name:       "provide_service_not_found",
+			fn:         fnWithExtra[block.ServiceId](Provide),
+			extraParam: block.ServiceId(1),
+			initialGas: 100,
+			alloc: alloc{
+				A1: hash2bytes(randomHash),
+			},
+			initialRegs: deltaRegs{A0: 1, A2: 32},
 			X: AccumulateContext{
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
