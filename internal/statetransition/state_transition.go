@@ -1044,19 +1044,37 @@ func (a *Accumulator) ParallelDelta(
 	ServiceGasPairs, // accumulation gas
 ) {
 
-	outputCacheMutex := sync.Mutex{}
-	outputCachePerService := map[block.ServiceId]AccumulationOutput{}
+	type execution struct {
+		mu       sync.Mutex
+		output   AccumulationOutput
+		finished bool
+	}
+	svcExecMu := sync.Mutex{}
+	// caches the output per each executed service to not run the same service multiple times
+	svcExec := make(map[block.ServiceId]*execution)
 
 	delta := func(svcID block.ServiceId) AccumulationOutput {
-		outputCacheMutex.Lock()
-		defer outputCacheMutex.Unlock()
-
-		if res, ok := outputCachePerService[svcID]; ok {
-			return res
+		svcExecMu.Lock()
+		res, ok := svcExec[svcID]
+		if !ok {
+			// create one execution entry per service and keep the pointer for later use
+			// this is safe because the entry itself has its own mutex
+			res = &execution{}
+			svcExec[svcID] = res
 		}
-		res := a.Delta1(initialAccState, transfers, workReports, alwaysAccumulate, svcID)
-		outputCachePerService[svcID] = res
-		return res
+		svcExecMu.Unlock()
+
+		res.mu.Lock()
+		defer res.mu.Unlock()
+
+		// if the service has already been executed return early with the cached result
+		if res.finished {
+			return res.output
+		}
+
+		res.output = a.Delta1(initialAccState, transfers, workReports, alwaysAccumulate, svcID)
+		res.finished = true
+		return res.output
 	}
 
 	// Get all unique service indices involved (s)
