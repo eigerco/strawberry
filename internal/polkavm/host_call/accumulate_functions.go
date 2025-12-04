@@ -2,6 +2,7 @@ package host_call
 
 import (
 	"bytes"
+	"errors"
 	"math"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -9,6 +10,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	. "github.com/eigerco/strawberry/internal/polkavm"
+	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
@@ -277,6 +279,9 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 
 	err = account.InsertPreimageMeta(k, preimageLength, service.PreimageHistoricalTimeslots{})
 	if err != nil {
+		if errors.Is(err, safemath.ErrOverflow) {
+			return gas, withCode(regs, FULL), mem, ctxPair, nil
+		}
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
@@ -556,6 +561,9 @@ func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 		// except: al[(h, z)] = [] if h ≠ ∇ ∧ (h, z) !∈ (xs)l
 		err = serviceAccount.InsertPreimageMeta(k, preimageLength, service.PreimageHistoricalTimeslots{})
 		if err != nil {
+			if errors.Is(err, safemath.ErrOverflow) {
+				return gas, withCode(regs, FULL), mem, ctxPair, nil
+			}
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
 	} else if len(preimageMeta) == 2 {
