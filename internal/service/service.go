@@ -8,6 +8,7 @@ import (
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
@@ -145,6 +146,7 @@ func (sa *ServiceAccount) GetPreimageMeta(key statekey.StateKey) (PreimageHistor
 }
 
 // InsertPreimageMeta adds a new preimage entry and updates the item and octet counters accordingly (9.8 v0.7.0)
+// can return either a codec error or an ErrOverflow
 func (sa *ServiceAccount) InsertPreimageMeta(key statekey.StateKey, length uint64, timeslots PreimageHistoricalTimeslots) error {
 	data, err := jam.Marshal(timeslots)
 	if err != nil {
@@ -156,8 +158,18 @@ func (sa *ServiceAccount) InsertPreimageMeta(key statekey.StateKey, length uint6
 
 	if _, ok := sa.GetPreimageMeta(key); !ok {
 		// Update footprint
-		sa.totalNumberOfItems += 2
-		sa.totalNumberOfOctets += 81 + length
+		sa.totalNumberOfItems, ok = safemath.Add32(sa.totalNumberOfItems, 2)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+		sa.totalNumberOfOctets, ok = safemath.Add64(sa.totalNumberOfOctets, 81)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+		sa.totalNumberOfOctets, ok = safemath.Add64(sa.totalNumberOfOctets, length)
+		if !ok {
+			return safemath.ErrOverflow
+		}
 	}
 
 	sa.globalKV[key] = data
