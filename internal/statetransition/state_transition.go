@@ -1063,23 +1063,25 @@ func (a *Accumulator) ParallelDelta(
 	}
 
 	// caches the output per each executed service to not run the same service multiple times
-	delta := map[block.ServiceId]AccumulationOutput{
+	execSvcIds := map[block.ServiceId]struct{}{
 		initState.ManagerServiceId:         {},
 		initState.DesignateServiceId:       {},
 		initState.CreateProtectedServiceId: {},
 	}
 	for serviceId := range serviceIndices {
-		delta[serviceId] = AccumulationOutput{}
+		execSvcIds[serviceId] = struct{}{}
 	}
 	for _, serviceId := range initState.AssignedServiceIds {
-		delta[serviceId] = AccumulationOutput{}
+		execSvcIds[serviceId] = struct{}{}
 	}
 
 	// execute all the services in parallel
 	mu := sync.Mutex{}
 	wg := sync.WaitGroup{}
-	wg.Add(len(delta))
-	for serviceId := range delta {
+	delta := map[block.ServiceId]AccumulationOutput{}
+
+	for serviceId := range execSvcIds {
+		wg.Add(1)
 		go func(serviceId block.ServiceId) {
 			defer wg.Done()
 			mu.Lock()
