@@ -108,6 +108,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		s,
 		newTimeSlot,
 		availableWorkReports,
+		newEntropyPool,
 	)
 	finalServicesState, err := CalculateNewServiceStateWithPreimages(newBlock.Extrinsic.EP, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
 	if err != nil {
@@ -504,7 +505,7 @@ func addUniqueEdPubKey(slice []ed25519.PublicKey, key ed25519.PublicKey) []ed255
 // CalculateWorkReportsAndAccumulate implements equations. We pass W instead of W* because we also need WQ for
 // updating the state queue.
 // (ω′, ξ′, δ‡, χ′, ι′, ϕ′, θ′, S) ≺ (R, ω, ξ, δ, χ, ι, ϕ, τ, τ′) (eq. 4.16)
-func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state.State, newTimeslot jamtime.Timeslot, workReports []block.WorkReport) (
+func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state.State, newTimeslot jamtime.Timeslot, workReports []block.WorkReport, newEntropyPool state.EntropyPool) (
 	newAccumulationQueue state.AccumulationQueue,
 	newAccumulationHistory state.AccumulationHistory,
 	postAccumulationServiceState service.ServiceState,
@@ -551,7 +552,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	// let g = max(GT, GA ⋅ C + [∑x∈V(χ_Z)](x)) (eq. 12.24 v0.7.1)
 	gasLimit := max(common.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
 
-	accumulator := NewAccumulator(currentState, header, newTimeslot)
+	accumulator := NewAccumulator(newEntropyPool, header, newTimeslot)
 	// e = (d: δ, i: ι, q: ϕ, m: χ_M, a: χ_A, v: χ_V, r: χ_R, z: χ_Z) (eq. 12.24 v0.7.1)
 	// (n, e′, t, θ′, u) ≡ ∆+(g, R*, e, χ_Z) (eq. 12.25 v0.7.1)
 	accumulatedCount, newAccumulationState, serviceHashPairs, gasPairs := accumulator.

@@ -313,7 +313,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		var exists bool
 		a, exists = serviceState[ss]
 		if !exists {
-			return gas, regs, mem, polkavm.ErrAccountNotFound
+			return gas, withCode(regs, NONE), mem, nil
 		}
 	}
 
