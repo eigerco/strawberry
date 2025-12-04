@@ -150,13 +150,6 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 		metadata     = bls + crypto.MetadataSize
 	)
 
-	xs := ctxPair.RegularCtx.ServiceId
-	designator := ctxPair.RegularCtx.AccumulationState.DesignateServiceId
-	if xs != designator {
-		// if xs ≠ (xu)v
-		return gas, withCode(regs, HUH), mem, ctxPair, nil
-	}
-
 	// let o = φ7
 	addr := regs[A0]
 	for i := 0; i < common.NumberOfValidators; i++ {
@@ -171,6 +164,13 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 			Bls:          crypto.BlsKey(bytes[ed25519:bls]),
 			Metadata:     crypto.MetadataKey(bytes[bls:metadata]),
 		}
+	}
+
+	xs := ctxPair.RegularCtx.ServiceId
+	designator := ctxPair.RegularCtx.AccumulationState.DesignateServiceId
+	if xs != designator {
+		// if xs ≠ (xe)v
+		return gas, withCode(regs, HUH), mem, ctxPair, nil
 	}
 
 	return gas, withCode(regs, OK), mem, ctxPair, nil
