@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/eigerco/strawberry/internal/block"
@@ -21,6 +22,15 @@ const (
 )
 
 type ServiceState map[block.ServiceId]ServiceAccount
+
+func (ss ServiceState) Delete(keys ...block.ServiceId) {
+	for _, key := range keys {
+		delete(ss, key)
+	}
+}
+func (ss ServiceState) Merge(moreServices ServiceState) {
+	maps.Copy(ss, moreServices)
+}
 
 func (ss ServiceState) Clone() ServiceState {
 	if ss == nil {
