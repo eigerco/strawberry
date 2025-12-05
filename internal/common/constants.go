@@ -14,7 +14,7 @@ const (
 	MaxTicketAttemptsPerValidator                = 2                                                            // N = 2: The number of ticket entries per validator.
 	MaxHistoricalTimeslotsForPreimageMeta        = 3                                                            // () Maximum number of historical timeslots for preimage metadata
 	SizeOfSegment                                = NumberOfErasureCodecPiecesInSegment * ErasureCodingChunkSize // WG = WP*WE = 4104: The size of a segment in octets.
-	MaxWorkPackageSize                           = 13_794_305                                                   // WB = 13,794,305 (~13.16MB): The maximum size of an encoded work-package together with its extrinsic data and import implications, in octets
+	MaxWorkPackageSize                           = 13_791_360                                                   // WB = 13,791,360 (~13.16MB): The maximum size of the concatenated variable-size blobs, extrinsics and imported segments of a work-package, in octets.
 	NumberOfErasureCodecPiecesInSegment          = 6                                                            // WP = 6: The number of erasure-coded pieces in a segment.
 	ErasureCodingOriginalShards                  = 342                                                          // The number of original shards.
 	ErasureCodingChunkSize                       = 684                                                          // WE = 684: The basic size of erasure-coded pieces in octets.
