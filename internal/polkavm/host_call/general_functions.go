@@ -512,7 +512,7 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 	_, _ = fmt.Fprintf(fullMsg, " %s", msgBytes)
 
 	log.VM.Info().Str("msg", fullMsg.String()).Msg("Service log")
-	return gas, regs, mem, nil
+	return gas, withCode(regs, WHAT), mem, nil
 }
 
 // GetChainConstants
