@@ -1155,11 +1155,12 @@ func (a *Accumulator) ParallelDelta(
 		newAssignedServiceIds[core] = replaceIfChanged(initState.AssignedServiceIds[core], managerState.AssignedServiceIds[core], delta[initState.AssignedServiceIds[core]].AccumulationState.AssignedServiceIds[core])
 	}
 
+	newServiceState := initState.ServiceState.Clone()
+	newServiceState.Merge(allAddedServices)
+	newServiceState.Delete(slices.Collect(maps.Keys(allRemovedIndices))...)
 	return state.AccumulationState{
 		// d′ = P((d ∪ n) ∖ m, ⋃ s∈s ∆(s)p))
-		ServiceState: a.preimageIntegration(initState.ServiceState.Clone().
-			Merge(allAddedServices).
-			Delete(slices.Collect(maps.Keys(allRemovedIndices))...), allPreimageProvisions),
+		ServiceState: a.preimageIntegration(newServiceState, allPreimageProvisions),
 		// i′ = (∆(v)e)i
 		ValidatorKeys: delta[initState.DesignateServiceId].AccumulationState.ValidatorKeys,
 		// (m′, z′) = e*_(m,z)

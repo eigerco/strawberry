@@ -23,15 +23,13 @@ const (
 
 type ServiceState map[block.ServiceId]ServiceAccount
 
-func (ss ServiceState) Delete(keys ...block.ServiceId) ServiceState {
+func (ss ServiceState) Delete(keys ...block.ServiceId) {
 	for _, key := range keys {
 		delete(ss, key)
 	}
-	return ss
 }
-func (ss ServiceState) Merge(moreServices ServiceState) ServiceState {
+func (ss ServiceState) Merge(moreServices ServiceState) {
 	maps.Copy(ss, moreServices)
-	return ss
 }
 
 func (ss ServiceState) Clone() ServiceState {
