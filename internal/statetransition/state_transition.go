@@ -1080,13 +1080,14 @@ func (a *Accumulator) ParallelDelta(
 	wg := sync.WaitGroup{}
 	delta := map[block.ServiceId]AccumulationOutput{}
 
+	wg.Add(len(execSvcIds))
 	for serviceId := range execSvcIds {
-		wg.Add(1)
 		go func(serviceId block.ServiceId) {
 			defer wg.Done()
+			output := a.Delta1(initState, transfers, workReports, alwaysAccumulate, serviceId)
 			mu.Lock()
-			defer mu.Unlock()
-			delta[serviceId] = a.Delta1(initState, transfers, workReports, alwaysAccumulate, serviceId)
+			delta[serviceId] = output
+			mu.Unlock()
 		}(serviceId)
 	}
 	wg.Wait()
