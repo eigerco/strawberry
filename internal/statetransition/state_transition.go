@@ -1101,8 +1101,10 @@ func (a *Accumulator) ParallelDelta(
 
 	allAddedServices := service.ServiceState{}
 	allRemovedIndices := map[block.ServiceId]struct{}{}
+	// t′=[Δ(s)t∣s←s]
+	sortedServices := slices.Sorted(maps.Keys(serviceIndices))
 
-	for serviceId := range serviceIndices {
+	for _, serviceId := range sortedServices {
 		// Process single service using Delta1
 		output := delta[serviceId]
 		accState, deferredTransfers, resultHash, gasUsed, preimageProvisions := output.AccumulationState, output.DeferredTransfers, output.Result, output.GasUsed, output.ProvidedPreimages
