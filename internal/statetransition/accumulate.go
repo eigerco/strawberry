@@ -31,18 +31,18 @@ type AccumulationOutput struct {
 	ProvidedPreimages []polkavm.ProvidedPreimage //  p ∈ {(N_S, B)}
 }
 
-func NewAccumulator(state *state.State, header *block.Header, newTimeslot jamtime.Timeslot) *Accumulator {
+func NewAccumulator(newEntropyPool state.EntropyPool, header *block.Header, newTimeslot jamtime.Timeslot) *Accumulator {
 	return &Accumulator{
-		header:      header,
-		state:       state,
-		newTimeslot: newTimeslot,
+		header:         header,
+		newEntropyPool: newEntropyPool,
+		newTimeslot:    newTimeslot,
 	}
 }
 
 type Accumulator struct {
-	header      *block.Header
-	state       *state.State
-	newTimeslot jamtime.Timeslot
+	header         *block.Header
+	newEntropyPool state.EntropyPool
+	newTimeslot    jamtime.Timeslot
 }
 
 // InvokePVM ΨA(U, N_T, N_S, N_G, ⟦I⟧) → O Equation (B.9)
@@ -102,7 +102,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
 		case host_call.FetchID:
-			entropy := a.state.EntropyPool[0]
+			entropy := a.newEntropyPool[0]
 			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, nil, &entropy, nil, nil, nil, nil, accOperand)
 		case host_call.ReadID:
 			gasCounter, regs, mem, err = host_call.Read(gasCounter, regs, mem, currentService, serviceIndex, ctx.RegularCtx.AccumulationState.ServiceState)
@@ -229,7 +229,7 @@ func (a *Accumulator) newServiceID(serviceIndex block.ServiceId) (block.ServiceI
 		Timeslot  jamtime.Timeslot `jam:"encoding=compact"`
 	}{
 		ServiceID: serviceIndex,
-		Entropy:   a.state.EntropyPool[0],
+		Entropy:   a.newEntropyPool[0],
 		Timeslot:  a.header.TimeSlotIndex,
 	})
 	if err != nil {

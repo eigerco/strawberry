@@ -35,7 +35,7 @@ const (
 	PagesCost
 	InvokeCost
 	ExpungeCost
-	LogCost = 0
+	LogCost
 )
 
 const (
