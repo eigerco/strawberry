@@ -101,12 +101,13 @@ func Test_FindHeader_ByParentHash(t *testing.T) {
 	require.NoError(t, chain.PutHeader(header1))
 	require.NoError(t, chain.PutHeader(header2))
 
-	// Find header by parent hash
-	found, err := chain.FindHeader(func(h block.Header) bool {
+	// Find h by parent hash
+	h, found, err := chain.FindHeader(func(h block.Header) bool {
 		return h.ParentHash == parentHash
 	})
 	require.NoError(t, err)
-	require.Equal(t, header1, found)
+	require.Equal(t, header1, h)
+	require.True(t, found)
 }
 
 func Test_FindHeader_ByTimeSlot(t *testing.T) {
@@ -133,11 +134,12 @@ func Test_FindHeader_ByTimeSlot(t *testing.T) {
 	require.NoError(t, chain.PutHeader(header2))
 
 	// Find header by timeslot
-	found, err := chain.FindHeader(func(h block.Header) bool {
+	h, found, err := chain.FindHeader(func(h block.Header) bool {
 		return h.TimeSlotIndex == targetSlot
 	})
 	require.NoError(t, err)
-	require.Equal(t, header1, found)
+	require.Equal(t, header1, h)
+	require.True(t, found)
 }
 
 func Test_FindHeader_NotFound(t *testing.T) {
@@ -155,10 +157,11 @@ func Test_FindHeader_NotFound(t *testing.T) {
 	require.NoError(t, chain.PutHeader(header))
 
 	// Try to find non-existent header
-	h, err := chain.FindHeader(func(h block.Header) bool {
+	h, found, err := chain.FindHeader(func(h block.Header) bool {
 		return h.TimeSlotIndex == jamtime.Timeslot(999)
 	})
 	require.NoError(t, err)
+	require.False(t, found)
 	require.Empty(t, h)
 }
 

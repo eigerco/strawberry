@@ -21,6 +21,16 @@ import (
 	"github.com/eigerco/strawberry/internal/validator"
 )
 
+// Ancestry determines whether to validate that lookup anchor headers exist in the chain's ancestor set.
+// GP: "We also require that we have a record of it; this is one of
+// the few conditions which cannot be checked purely with
+// on-chain state and must be checked by virtue of retain-
+// ing the series of the last L headers as the ancestor set A."
+// ∀x ∈ x : ∃h ∈ A : hT = xt ∧ H(h) = xl (eq. 11.35 v 0.7.0)
+// TODO: Make this configurable. Currently the test vectors and traces `do not use ancestry.
+// The conformance tests have the option to have it enabled or disabled.
+const Ancestry = false
+
 // ValidateGuaranteExtrinsicAndReturnReporters validates the guarantees extrinsic according to section 11.4.
 // It performs all validity checks required for work report guarantees and returns the set of reporters.
 // A specific order of the functions inside is required to pass the test vectors
@@ -472,17 +482,22 @@ func validateRefinementContexts(contexts []block.RefinementContext, intermediate
 				context.LookupAnchor.Timeslot, state.MaxTimeslotsForLookupAnchor, newBlockHeader.TimeSlotIndex, minValidTimeslot)
 		}
 
-		// Validate header exists in chain
-		// ∀x ∈ x : ∃h ∈ A : hT = xt ∧ H(h) = xl (eq. 11.35 v 0.7.0)
-		_, err = chain.FindHeader(func(ancestor block.Header) bool {
-			ancestorHash, err := ancestor.Hash()
+		if Ancestry {
+			// Validate header exists in chain
+			// ∀x ∈ x : ∃h ∈ A : hT = xt ∧ H(h) = xl (eq. 11.35 v 0.7.0)
+			_, found, err := chain.FindHeader(func(ancestor block.Header) bool {
+				ancestorHash, err := ancestor.Hash()
+				if err != nil {
+					return false
+				}
+				return ancestor.TimeSlotIndex == context.LookupAnchor.Timeslot && ancestorHash == context.LookupAnchor.HeaderHash
+			})
 			if err != nil {
-				return false
+				return fmt.Errorf("finding header: %w", err)
 			}
-			return ancestor.TimeSlotIndex == context.LookupAnchor.Timeslot && ancestorHash == context.LookupAnchor.HeaderHash
-		})
-		if err != nil {
-			return fmt.Errorf("no record of header found: %w", err)
+			if !found {
+				return fmt.Errorf("no record of header found")
+			}
 		}
 	}
 	return nil

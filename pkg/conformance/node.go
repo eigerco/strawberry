@@ -168,9 +168,7 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	if choice, ok := msg.Get().(PeerInfo); ok {
-		n.PeerInfo.FuzzVersion = choice.FuzzVersion
-		n.PeerInfo.FuzzFeatures = choice.FuzzFeatures
+	if _, ok := msg.Get().(PeerInfo); ok {
 		n.handshakeDone = true
 		return NewMessage(n.PeerInfo), nil
 	}
@@ -190,6 +188,15 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
 
+		if n.PeerInfo.FuzzFeatures == FeatureAncestryAndFork {
+			ancestry := choice.Ancestry
+			for _, item := range ancestry.Items {
+				err := n.chain.PutConformanceHeader(item.Hash, item.Slot)
+				if err != nil {
+					return nil, fmt.Errorf("failed to put ancestry header: %v", err)
+				}
+			}
+		}
 		stateRoot, err := merkle.MerklizeState(state, n.trie)
 		if err != nil {
 			return nil, fmt.Errorf("failed to merklize state: %v", err)
@@ -202,6 +209,7 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 		return NewMessage(StateRoot{
 			StateRootHash: stateRoot,
 		}), nil
+
 	case ImportBlock:
 		if len(n.headerToState) == 0 {
 			return nil, fmt.Errorf("state not imported")
