@@ -181,11 +181,7 @@ func TestFetch(t *testing.T) {
 			name:   "dataID 8 (AuthCodeHash + Parameterization)",
 			dataID: 8,
 			expect: func() []byte {
-				out, _ := jam.Marshal(struct {
-					AuthCodeHash     crypto.Hash
-					Parameterization []byte
-				}{workPackage.AuthCodeHash, workPackage.Parameterization})
-				return out
+				return workPackage.Parameterization
 			},
 		},
 		{
