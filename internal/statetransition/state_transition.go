@@ -1254,7 +1254,11 @@ func preimageIntegration(newTimeslot jamtime.Timeslot, services service.ServiceS
 				return nil, fmt.Errorf("failed to insert preimage meta")
 			}
 
+			if serviceWithPreimage.PreimageLookup == nil {
+				serviceWithPreimage.PreimageLookup = make(map[crypto.Hash][]byte)
+			}
 			serviceWithPreimage.PreimageLookup[preimageHash] = preimage.Data
+			servicesWithPreimages[preimage.ServiceIndex] = serviceWithPreimage
 		}
 	}
 	return servicesWithPreimages, nil
