@@ -80,8 +80,11 @@ jobs:
       - name: execute unit tests
         run: make test
 
-      - name: execute integration tests
-        run: make integration
+      - name: execute integration-tiny tests
+        run: make integration-tiny
+
+      - name: execute integration-full tests
+        run: make integration-full
 
       - name: execute
         run: make traces

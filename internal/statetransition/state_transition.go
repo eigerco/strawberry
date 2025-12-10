@@ -407,31 +407,28 @@ func buildWorkPackageMapping(guarantees []block.Guarantee) map[crypto.Hash]crypt
 	return workPackages
 }
 
-// CalculateNewCoreAuthorizations implements equation 4.19: α' ≺ (H, EG, φ', α) . Graypaper 0.5.4
+// CalculateNewCoreAuthorizations implements the authorization pool state transition. (v0.7.1)
+// Equation 4.19: α' ≺ (H, EG, φ', α)
+// Equation 8.2:  ∀c ∈ NC : α'[c] ≡ ←───── F(c) φ'[c][HT]↺O
 func CalculateNewCoreAuthorizations(header block.Header, guarantees block.GuaranteesExtrinsic, pendingAuthorizations state.PendingAuthorizersQueues, currentAuthorizations state.CoreAuthorizersPool) state.CoreAuthorizersPool {
 	var newCoreAuthorizations state.CoreAuthorizersPool
 
-	// For each core
-	for c := uint16(0); c < common.TotalNumberOfCores; c++ {
-		// Start with the existing authorizations for this core
+	// For each core c in Nc (Equation 8.2: ∀c ∈ Nc)
+	for c := range common.TotalNumberOfCores {
+		// Start with the existing authorizations for this core α[c]
 		newAuths := make([]crypto.Hash, len(currentAuthorizations[c]))
 		copy(newAuths, currentAuthorizations[c])
 
-		// Track whether a guarantee's authorizer removal has occurred
-		guaranteeAuthorizerRemoved := false
-
-		// F(c) - Remove authorizer if it was used in a guarantee for this core. 8.3 Graypaper 0.6.2
+		// Calculate F(c) - Equation 8.3
+		// F(c) ≡ α[c] \ {(gr)a} if ∃g ∈ EG : (gr)c = c
+		//        α[c]           otherwise
 		for _, guarantee := range guarantees.Guarantees {
+			// Check condition: (gr)c = c
 			if guarantee.WorkReport.CoreIndex == c {
-				// Remove the used authorizer from the list
+				// Remove the used authorizer from the list \ {(gr)a}
 				newAuths = removeAuthorizer(newAuths, guarantee.WorkReport.AuthorizerHash)
-				guaranteeAuthorizerRemoved = true
+				break // Optimization: Max 1 guarantee per core allowed
 			}
-		}
-
-		// If no guarantee was found for this core, then left-shift the authorizers (remove the first element)
-		if !guaranteeAuthorizerRemoved && len(newAuths) > 0 {
-			newAuths = newAuths[1:]
 		}
 
 		// Get new authorizer from the queue based on current timeslot
@@ -439,13 +436,11 @@ func CalculateNewCoreAuthorizations(header block.Header, guarantees block.Guaran
 		queueIndex := header.TimeSlotIndex % state.PendingAuthorizersQueueSize
 		newAuthorizer := pendingAuthorizations[c][queueIndex]
 
-		// Only add new authorizer if it's not empty
-		if newAuthorizer != (crypto.Hash{}) {
-			// ← Append new authorizer maintaining max size O
-			newAuths = appendAuthorizerLimited(newAuths, newAuthorizer, state.MaxAuthorizersPerCore)
-		}
+		// ← Append new authorizer maintaining max size O
+		// α'[c] ≡ ←O F(c) ⌢ φ'[c][Ht]↺O
+		newAuths = appendAuthorizerLimited(newAuths, newAuthorizer)
 
-		// Store the new authorizations for this core
+		// Store the new authorizations for this core α'[c]
 		newCoreAuthorizations[c] = newAuths
 	}
 
@@ -468,9 +463,9 @@ func removeAuthorizer(auths []crypto.Hash, toRemove crypto.Hash) []crypto.Hash {
 
 // appendAuthorizerLimited appends a new authorizer while maintaining max size limit
 // This implements the "←" (append limited) operator from the paper
-func appendAuthorizerLimited(auths []crypto.Hash, newAuth crypto.Hash, maxSize int) []crypto.Hash {
+func appendAuthorizerLimited(auths []crypto.Hash, newAuth crypto.Hash) []crypto.Hash {
 	// If at max size, remove oldest (leftmost) element
-	if len(auths) >= maxSize {
+	if len(auths) >= state.MaxAuthorizersPerCore {
 		copy(auths, auths[1:])
 		auths = auths[:len(auths)-1]
 	}
