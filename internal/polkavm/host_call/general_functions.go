@@ -135,18 +135,8 @@ func Fetch(
 	case 8:
 		// if p ≠ ∅ ∧ φ10 = 8
 		if workPackage != nil {
-			// E(pu, ↕pp)
-			out, err := jam.Marshal(struct {
-				AuthCodeHash     crypto.Hash
-				Parameterization []byte
-			}{
-				workPackage.AuthCodeHash,
-				workPackage.Parameterization,
-			})
-			if err != nil {
-				return gas, regs, mem, polkavm.ErrPanicf(err.Error())
-			}
-			v = out
+			//pf
+			v = workPackage.Parameterization
 		}
 	case 9:
 		// if p ≠ ∅ ∧ φ10 = 9
