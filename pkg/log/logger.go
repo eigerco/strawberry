@@ -22,10 +22,11 @@ const (
 )
 
 var (
-	Root     zerolog.Logger
-	Internal zerolog.Logger
-	Network  zerolog.Logger
-	VM       zerolog.Logger
+	Root            zerolog.Logger
+	Internal        zerolog.Logger
+	Network         zerolog.Logger
+	VM              zerolog.Logger
+	StateTransition zerolog.Logger
 )
 
 // Options for Logger
@@ -49,12 +50,14 @@ func Init(opts Options) {
 		Internal = Root.With().Str("component", "internal").Logger()
 		Network = Root.With().Str("component", "network").Logger()
 		VM = Root.With().Str("component", "vm").Logger()
+		StateTransition = Root.With().Str("component", "state_transition").Logger()
 	default:
 		Root = zerolog.New(os.Stdout).Level(opts.LogLevel).
 			With().Timestamp().Logger()
 		Internal = Root.With().Str("component", "internal").Logger()
 		Network = Root.With().Str("component", "network").Logger()
 		VM = Root.With().Str("component", "vm").Logger()
+		StateTransition = Root.With().Str("component", "state_transition").Logger()
 
 	}
 }

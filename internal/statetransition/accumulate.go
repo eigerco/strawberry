@@ -28,7 +28,7 @@ type AccumulationOutput struct {
 	DeferredTransfers []service.DeferredTransfer // t ∈ ⟦X⟧
 	Result            *crypto.Hash               // y ∈ H?
 	GasUsed           uint64                     //  u ∈ NG
-	ProvidedPreimages []polkavm.ProvidedPreimage //  p ∈ {(N_S, B)}
+	ProvidedPreimages []block.Preimage           //  p ∈ {(N_S, B)}
 }
 
 func NewAccumulator(newEntropyPool state.EntropyPool, header *block.Header, newTimeslot jamtime.Timeslot) *Accumulator {
@@ -211,7 +211,7 @@ func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.Servi
 		ServiceId:         serviceIndex,
 		AccumulationState: u,
 		DeferredTransfers: []service.DeferredTransfer{},
-		ProvidedPreimages: []polkavm.ProvidedPreimage{},
+		ProvidedPreimages: []block.Preimage{},
 	}
 
 	newServiceID, err := a.newServiceID(serviceIndex)

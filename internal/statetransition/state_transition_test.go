@@ -1021,3 +1021,67 @@ func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16
 		Judgements: judgments,
 	}
 }
+
+func TestDedupePreimage(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []block.Preimage
+		expected []block.Preimage
+	}{{
+		name: "no duplicates",
+		input: []block.Preimage{{
+			ServiceIndex: 1,
+			Data:         []byte("test1"),
+		}, {
+			ServiceIndex: 2,
+			Data:         []byte("test1"),
+		}, {
+			ServiceIndex: 2,
+			Data:         []byte("test2"),
+		}},
+		expected: []block.Preimage{{
+			ServiceIndex: 1,
+			Data:         []byte("test1"),
+		}, {
+			ServiceIndex: 2,
+			Data:         []byte("test1"),
+		}, {
+			ServiceIndex: 2,
+			Data:         []byte("test2"),
+		}},
+	}, {
+		name: "one duplicate",
+		input: []block.Preimage{{
+			ServiceIndex: 1,
+			Data:         []byte("test1"),
+		}, {
+			ServiceIndex: 1,
+			Data:         []byte("test1"),
+		}},
+		expected: []block.Preimage{{
+			ServiceIndex: 1,
+			Data:         []byte("test1"),
+		}},
+	}, {
+		name: "two duplicates",
+		input: []block.Preimage{{
+			ServiceIndex: 2,
+			Data:         []byte("test123"),
+		}, {
+			ServiceIndex: 2,
+			Data:         []byte("test123"),
+		}, {
+			ServiceIndex: 2,
+			Data:         []byte("test123"),
+		}},
+		expected: []block.Preimage{{
+			ServiceIndex: 2,
+			Data:         []byte("test123"),
+		}},
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, dedupePreimages(tc.input))
+		})
+	}
+}

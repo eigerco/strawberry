@@ -29,8 +29,8 @@
             {
                 "id": 36,
                 "data": {
-                    "preimages": [],
-                    "lookup_meta": [
+                    "preimage_blobs": [],
+                    "preimage_requests": [
                         {
                             "key": {
                                 "hash": "0x08a3ce25231d42c7568035069afebbba261f03a6385eedcdae053786f170fcad",
@@ -58,8 +58,8 @@
             {
                 "id": 45,
                 "data": {
-                    "preimages": [],
-                    "lookup_meta": [
+                    "preimage_blobs": [],
+                    "preimage_requests": [
                         {
                             "key": {
                                 "hash": "0x08a3ce25231d42c7568035069afebbba261f03a6385eedcdae053786f170fcad",
@@ -95,8 +95,8 @@
             {
                 "id": 36,
                 "data": {
-                    "preimages": [],
-                    "lookup_meta": [
+                    "preimage_blobs": [],
+                    "preimage_requests": [
                         {
                             "key": {
                                 "hash": "0x08a3ce25231d42c7568035069afebbba261f03a6385eedcdae053786f170fcad",
@@ -124,8 +124,8 @@
             {
                 "id": 45,
                 "data": {
-                    "preimages": [],
-                    "lookup_meta": [
+                    "preimage_blobs": [],
+                    "preimage_requests": [
                         {
                             "key": {
                                 "hash": "0x08a3ce25231d42c7568035069afebbba261f03a6385eedcdae053786f170fcad",

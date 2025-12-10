@@ -738,16 +738,16 @@ func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	}
 
 	for _, p := range ctxPair.RegularCtx.ProvidedPreimages {
-		if p.ServiceId == ss && bytes.Equal(p.Data, i) {
+		if p.ServiceIndex == ss && bytes.Equal(p.Data, i) {
 			// if (s*,i) ∈ xp
 			return gas, withCode(regs, HUH), mem, ctxPair, nil
 		}
 	}
 
 	// x′p = xp ∪ {(s*, i)}
-	ctxPair.RegularCtx.ProvidedPreimages = append(ctxPair.RegularCtx.ProvidedPreimages, ProvidedPreimage{
-		ServiceId: ss,
-		Data:      i,
+	ctxPair.RegularCtx.ProvidedPreimages = append(ctxPair.RegularCtx.ProvidedPreimages, block.Preimage{
+		ServiceIndex: ss,
+		Data:         i,
 	})
 
 	return gas, withCode(regs, OK), mem, ctxPair, nil
