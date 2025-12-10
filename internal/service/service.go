@@ -168,15 +168,15 @@ func (sa *ServiceAccount) InsertPreimageMeta(key statekey.StateKey, length uint6
 
 	if _, ok := sa.GetPreimageMeta(key); !ok {
 		// Update footprint
-		sa.totalNumberOfItems, ok = safemath.Add32(sa.totalNumberOfItems, 2)
+		sa.totalNumberOfItems, ok = safemath.Add(sa.totalNumberOfItems, 2)
 		if !ok {
 			return safemath.ErrOverflow
 		}
-		sa.totalNumberOfOctets, ok = safemath.Add64(sa.totalNumberOfOctets, 81)
+		sa.totalNumberOfOctets, ok = safemath.Add(sa.totalNumberOfOctets, 81)
 		if !ok {
 			return safemath.ErrOverflow
 		}
-		sa.totalNumberOfOctets, ok = safemath.Add64(sa.totalNumberOfOctets, length)
+		sa.totalNumberOfOctets, ok = safemath.Add(sa.totalNumberOfOctets, length)
 		if !ok {
 			return safemath.ErrOverflow
 		}
