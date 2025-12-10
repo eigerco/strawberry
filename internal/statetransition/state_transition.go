@@ -304,7 +304,7 @@ func CalculateNewRecentHistory(header block.Header, guarantees block.GuaranteesE
 
 	// Equation 7.6: let s = [E_4(s) ⌢ E(h) | (s, h) <− θ′]
 	// And Equation 7.7: M_B(s, H_K)
-	accumulationRoot, err := computeAccumulationRoot(accumulationOutputLog)
+	accumulationRoot, err := ComputeAccumulationRoot(accumulationOutputLog)
 	if err != nil {
 		return state.RecentHistory{}, err
 	}
@@ -359,11 +359,11 @@ func UpdateRecentHistory(
 	return newRecentHistory, nil
 }
 
-// This should create a Merkle tree from the accumulations and return the root.
+// ComputeAccumulationRoot creates a Merkle tree from the accumulations and return the root.
 // Implements:
 // Equation 7.6: let s = [E_4(s) ⌢ E(h) | (s, h) <− θ′]
 // Equation 7.7: M_B(s, H_K)
-func computeAccumulationRoot(pairs state.AccumulationOutputLog) (crypto.Hash, error) {
+func ComputeAccumulationRoot(pairs state.AccumulationOutputLog) (crypto.Hash, error) {
 	if len(pairs) == 0 {
 		return crypto.Hash{}, nil
 	}
