@@ -592,8 +592,9 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 			},
 		}
 
-		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(599), initialStats, make(crypto.ED25519PublicKeySet),
+		newStats, err := CalculateNewActivityStatistics(blk, jamtime.Timeslot(599), initialStats, make(crypto.ED25519PublicKeySet),
 			safrole.ValidatorsData{}, []block.WorkReport{}, AccumulationStats{})
+		require.NoError(t, err)
 
 		// Check that stats were rotated correctly
 		assert.Equal(t, uint32(10), newStats.ValidatorsLast[0].NumOfBlocks, "Previous current stats should become history")
@@ -623,8 +624,9 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 			},
 		}
 
-		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, make(crypto.ED25519PublicKeySet),
+		newStats, err := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, make(crypto.ED25519PublicKeySet),
 			safrole.ValidatorsData{}, []block.WorkReport{}, AccumulationStats{})
+		require.NoError(t, err)
 
 		// Check block author stats
 		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[1].NumOfBlocks, "Block count should increment")
@@ -672,8 +674,9 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 		reporters := make(crypto.ED25519PublicKeySet)
 		reporters.Add(ed25519key1)
 		reporters.Add(ed25519key2)
-		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}},
+		newStats, err := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}},
 			[]block.WorkReport{}, AccumulationStats{})
+		require.NoError(t, err)
 
 		// Check guarantees and assurances
 		assert.Equal(t, uint32(1), newStats.ValidatorsCurrent[0].NumOfGuaranteedReports, "Should count all guarantees for validator 0")
@@ -728,8 +731,9 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 		reporters := make(crypto.ED25519PublicKeySet)
 		reporters.Add(ed25519key1)
 		reporters.Add(ed25519key2)
-		newStats := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}},
+		newStats, err := CalculateNewActivityStatistics(blk, jamtime.Timeslot(5), initialStats, reporters, safrole.ValidatorsData{{Ed25519: ed25519key1}, {Ed25519: ed25519key2}},
 			[]block.WorkReport{}, AccumulationStats{})
+		require.NoError(t, err)
 
 		expected := validator.ValidatorStatistics{
 			NumOfBlocks:                 6,
@@ -872,7 +876,8 @@ func TestCalculateNewCoreStatistics(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			newCoreStats := CalculateNewCoreStatistics(tc.block, [common.TotalNumberOfCores]validator.CoreStatistics{}, tc.availableReports)
+			newCoreStats, err := CalculateNewCoreStatistics(tc.block, [common.TotalNumberOfCores]validator.CoreStatistics{}, tc.availableReports)
+			require.NoError(t, err)
 			require.Equal(t, tc.expectedCoreStats, newCoreStats)
 		})
 	}
@@ -994,7 +999,8 @@ func TestCalculateNewServiceStatistics(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			newServiceStats := CalculateNewServiceStatistics(tc.block, tc.accumulationStats)
+			newServiceStats, err := CalculateNewServiceStatistics(tc.block, tc.accumulationStats)
+			require.NoError(t, err)
 			require.Equal(t, tc.expectedServiceStats, newServiceStats)
 		})
 	}
