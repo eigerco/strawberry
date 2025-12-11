@@ -28,6 +28,7 @@ import (
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"golang.org/x/sync/errgroup"
 )
 
 // UpdateState updates the state
@@ -1297,45 +1298,31 @@ func (a *Accumulator) ParallelDelta(
 
 	// execute all the services in parallel
 	mu := sync.Mutex{}
-	wg := sync.WaitGroup{}
 	delta := map[block.ServiceId]AccumulationOutput{}
-	// Delta1 can return an error in two cases:
-	// 1. Gas limit overflow: when summing gas from deferred transfers and work reports
-	//    for a service, the total gas limit exceeds uint64 max value.
-	// 2. Unsupported operand type: AccumulationInput only accepts DeferredTransfer or
-	//    AccumulationOperand;
-	var firstErr error
+	var g errgroup.Group
 
-	wg.Add(len(execSvcIds))
 	for serviceId := range execSvcIds {
-		go func(serviceId block.ServiceId) {
-			defer wg.Done()
-			mu.Lock()
-			if firstErr != nil {
-				mu.Unlock()
-				return
-			}
-			mu.Unlock()
+		g.Go(func() error {
+			// Delta1 can return an error in two cases:
+			// 1. Gas limit overflow: when summing gas from deferred transfers and work reports
+			//    for a service, the total gas limit exceeds uint64 max value.
+			// 2. Unsupported operand type: AccumulationInput only accepts DeferredTransfer or
+			//    AccumulationOperand;
 			output, err := a.Delta1(initState, transfers, workReports, alwaysAccumulate, serviceId)
 			if err != nil {
-				mu.Lock()
-				if firstErr == nil {
-					firstErr = err
-				}
-				mu.Unlock()
-				return
+				return err
 			}
-			mu.Lock()
-			if firstErr == nil {
-				delta[serviceId] = output
-			}
-			mu.Unlock()
-		}(serviceId)
-	}
-	wg.Wait()
 
-	if firstErr != nil {
-		return state.AccumulationState{}, nil, nil, nil, firstErr
+			mu.Lock()
+			delta[serviceId] = output
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return state.AccumulationState{}, nil, nil, nil, err
 	}
 
 	var allTransfers []service.DeferredTransfer
