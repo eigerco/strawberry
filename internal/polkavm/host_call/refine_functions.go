@@ -29,9 +29,6 @@ func HistoricalLookup(
 	serviceState service.ServiceState,
 	t jamtime.Timeslot,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	if gas < HistoricalLookupCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= HistoricalLookupCost
 
 	omega7 := regs[A0]
@@ -79,9 +76,6 @@ func Export(
 	ctxPair RefineContextPair,
 	exportOffset uint64,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	if gas < ExportCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= ExportCost
 
 	p := regs[A0]               // φ7
@@ -123,9 +117,6 @@ func Machine(
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	if gas < MachineCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= MachineCost
 
 	// let [po, pz, i] = φ7...10
@@ -169,9 +160,6 @@ func Peek(
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	if gas < PeekCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= PeekCost
 
 	n, o, sReg, z := regs[A0], regs[A1], regs[A2], regs[A3]
@@ -205,9 +193,6 @@ func Poke(
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	if gas < PokeCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= PokeCost
 
 	n, sReg, o, z := regs[A0], regs[A1], regs[A2], regs[A3]
@@ -241,9 +226,6 @@ func Pages(
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	if gas < PagesCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= PagesCost
 
 	// let [n, p, c, r] = φ7⋅⋅⋅+4
@@ -315,15 +297,12 @@ func Invoke(
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	if gas < InvokeCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= InvokeCost
 	// let [n, o] = φ7,8
 	pvmKey, addr := regs[A0], regs[A1]
 
 	// let (g, w) = (g, w) ∶ E8(g) ⌢ E#8(w) = μo⋅⋅⋅+112 if No⋅⋅⋅+112 ⊂ V∗μ
-	invokeGas, err := readNumber[Gas](mem, addr, 8)
+	invokeGas, err := readNumber[UGas](mem, addr, 8)
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -405,9 +384,6 @@ func Expunge(
 	mem Memory,
 	ctxPair RefineContextPair,
 ) (Gas, Registers, Memory, RefineContextPair, error) {
-	if gas < ExpungeCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= ExpungeCost
 
 	n := regs[A0]

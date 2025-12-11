@@ -185,167 +185,19 @@ func (m *Memory) GetAccess(pageIndex uint64) MemoryAccess {
 
 type Registers [13]uint64
 
-type Gas uint64
+// Gas the set of signed gas values ZG ≡ Z_−2^63...2^63 (eq. 4.23 v0.7.2)
+type Gas int64
 
-// HostCall the generic Ω function definition Ω⟨⟩X ≡ (N, NG, ⟦NR⟧13, M, X) → ({▸, ∎, ☇, ∞}, NG, ⟦NR⟧13, M, X) ∪ {F} × NR (eq. A.36 v0.7.0)
+// UGas the set of unsigned gas values NG ≡ N_2^64 (eq. 4.23 v0.7.2)
+type UGas uint64
+
+// HostCall the generic Ω function definition Ω⟨X⟩ ≡ (N, NG, ⟦NR⟧13, M, X) → ({ ▸, ∎, ☇, ∞ }, NG, ⟦NR⟧13, M, X) (eq. A.36 v0.7.2)
 type HostCall[X any] func(hostCall uint64, gasCounter Gas, regs Registers, mem Memory, x X) (Gas, Registers, Memory, X, error)
 
-type Mutator interface {
-	Trap() error
-	Fallthrough()
-
-	LoadImm64(Reg, uint64)
-
-	StoreImmU8(uint64, uint64) error
-	StoreImmU16(uint64, uint64) error
-	StoreImmU32(uint64, uint64) error
-	StoreImmU64(uint64, uint64) error
-
-	Jump(uint64) error
-
-	JumpIndirect(Reg, uint64) error
-	LoadImm(Reg, uint64)
-	LoadU8(Reg, uint64) error
-	LoadI8(Reg, uint64) error
-	LoadU16(Reg, uint64) error
-	LoadI16(Reg, uint64) error
-	LoadU32(Reg, uint64) error
-	LoadI32(Reg, uint64) error
-	LoadU64(Reg, uint64) error
-	StoreU8(Reg, uint64) error
-	StoreU16(Reg, uint64) error
-	StoreU32(Reg, uint64) error
-	StoreU64(Reg, uint64) error
-
-	StoreImmIndirectU8(Reg, uint64, uint64) error
-	StoreImmIndirectU16(Reg, uint64, uint64) error
-	StoreImmIndirectU32(Reg, uint64, uint64) error
-	StoreImmIndirectU64(Reg, uint64, uint64) error
-
-	LoadImmAndJump(Reg, uint64, uint64) error
-	BranchEqImm(Reg, uint64, uint64) error
-	BranchNotEqImm(Reg, uint64, uint64) error
-	BranchLessUnsignedImm(Reg, uint64, uint64) error
-	BranchLessOrEqualUnsignedImm(Reg, uint64, uint64) error
-	BranchGreaterOrEqualUnsignedImm(Reg, uint64, uint64) error
-	BranchGreaterUnsignedImm(Reg, uint64, uint64) error
-	BranchLessSignedImm(Reg, uint64, uint64) error
-	BranchLessOrEqualSignedImm(Reg, uint64, uint64) error
-	BranchGreaterOrEqualSignedImm(Reg, uint64, uint64) error
-	BranchGreaterSignedImm(Reg, uint64, uint64) error
-
-	MoveReg(Reg, Reg)
-	Sbrk(Reg, Reg) error
-	CountSetBits64(Reg, Reg)
-	CountSetBits32(Reg, Reg)
-	LeadingZeroBits64(Reg, Reg)
-	LeadingZeroBits32(Reg, Reg)
-	TrailingZeroBits64(Reg, Reg)
-	TrailingZeroBits32(Reg, Reg)
-	SignExtend8(Reg, Reg)
-	SignExtend16(Reg, Reg)
-	ZeroExtend16(Reg, Reg)
-	ReverseBytes(Reg, Reg)
-
-	StoreIndirectU8(Reg, Reg, uint64) error
-	StoreIndirectU16(Reg, Reg, uint64) error
-	StoreIndirectU32(Reg, Reg, uint64) error
-	StoreIndirectU64(Reg, Reg, uint64) error
-	LoadIndirectU8(Reg, Reg, uint64) error
-	LoadIndirectI8(Reg, Reg, uint64) error
-	LoadIndirectU16(Reg, Reg, uint64) error
-	LoadIndirectI16(Reg, Reg, uint64) error
-	LoadIndirectU32(Reg, Reg, uint64) error
-	LoadIndirectI32(Reg, Reg, uint64) error
-	LoadIndirectU64(Reg, Reg, uint64) error
-	AddImm32(Reg, Reg, uint64)
-	AndImm(Reg, Reg, uint64)
-	XorImm(Reg, Reg, uint64)
-	OrImm(Reg, Reg, uint64)
-	MulImm32(Reg, Reg, uint64)
-	SetLessThanUnsignedImm(Reg, Reg, uint64)
-	SetLessThanSignedImm(Reg, Reg, uint64)
-	ShiftLogicalLeftImm32(Reg, Reg, uint64)
-	ShiftLogicalRightImm32(Reg, Reg, uint64)
-	ShiftArithmeticRightImm32(Reg, Reg, uint64)
-	NegateAndAddImm32(Reg, Reg, uint64)
-	SetGreaterThanUnsignedImm(Reg, Reg, uint64)
-	SetGreaterThanSignedImm(Reg, Reg, uint64)
-	ShiftLogicalLeftImmAlt32(Reg, Reg, uint64)
-	ShiftLogicalRightImmAlt32(Reg, Reg, uint64)
-	ShiftArithmeticRightImmAlt32(Reg, Reg, uint64)
-	CmovIfZeroImm(Reg, Reg, uint64)
-	CmovIfNotZeroImm(Reg, Reg, uint64)
-	AddImm64(Reg, Reg, uint64)
-	MulImm64(Reg, Reg, uint64)
-	ShiftLogicalLeftImm64(Reg, Reg, uint64)
-	ShiftLogicalRightImm64(Reg, Reg, uint64)
-	ShiftArithmeticRightImm64(Reg, Reg, uint64)
-	NegateAndAddImm64(Reg, Reg, uint64)
-	ShiftLogicalLeftImmAlt64(Reg, Reg, uint64)
-	ShiftLogicalRightImmAlt64(Reg, Reg, uint64)
-	ShiftArithmeticRightImmAlt64(Reg, Reg, uint64)
-	RotateRight64Imm(Reg, Reg, uint64)
-	RotateRight64ImmAlt(Reg, Reg, uint64)
-	RotateRight32Imm(Reg, Reg, uint64)
-	RotateRight32ImmAlt(Reg, Reg, uint64)
-
-	BranchEq(Reg, Reg, uint64) error
-	BranchNotEq(Reg, Reg, uint64) error
-	BranchLessUnsigned(Reg, Reg, uint64) error
-	BranchLessSigned(Reg, Reg, uint64) error
-	BranchGreaterOrEqualUnsigned(Reg, Reg, uint64) error
-	BranchGreaterOrEqualSigned(Reg, Reg, uint64) error
-
-	LoadImmAndJumpIndirect(Reg, Reg, uint64, uint64) error
-
-	Add32(Reg, Reg, Reg)
-	Sub32(Reg, Reg, Reg)
-	Mul32(Reg, Reg, Reg)
-	DivUnsigned32(Reg, Reg, Reg)
-	DivSigned32(Reg, Reg, Reg)
-	RemUnsigned32(Reg, Reg, Reg)
-	RemSigned32(Reg, Reg, Reg)
-	ShiftLogicalLeft32(Reg, Reg, Reg)
-	ShiftLogicalRight32(Reg, Reg, Reg)
-	ShiftArithmeticRight32(Reg, Reg, Reg)
-	Add64(Reg, Reg, Reg)
-	Sub64(Reg, Reg, Reg)
-	Mul64(Reg, Reg, Reg)
-	DivUnsigned64(Reg, Reg, Reg)
-	DivSigned64(Reg, Reg, Reg)
-	RemUnsigned64(Reg, Reg, Reg)
-	RemSigned64(Reg, Reg, Reg)
-	ShiftLogicalLeft64(Reg, Reg, Reg)
-	ShiftLogicalRight64(Reg, Reg, Reg)
-	ShiftArithmeticRight64(Reg, Reg, Reg)
-	And(Reg, Reg, Reg)
-	Xor(Reg, Reg, Reg)
-	Or(Reg, Reg, Reg)
-	MulUpperSignedSigned(Reg, Reg, Reg)
-	MulUpperUnsignedUnsigned(Reg, Reg, Reg)
-	MulUpperSignedUnsigned(Reg, Reg, Reg)
-	SetLessThanUnsigned(Reg, Reg, Reg)
-	SetLessThanSigned(Reg, Reg, Reg)
-	CmovIfZero(Reg, Reg, Reg)
-	CmovIfNotZero(Reg, Reg, Reg)
-	RotateLeft64(Reg, Reg, Reg)
-	RotateLeft32(Reg, Reg, Reg)
-	RotateRight64(Reg, Reg, Reg)
-	RotateRight32(Reg, Reg, Reg)
-	AndInverted(Reg, Reg, Reg)
-	OrInverted(Reg, Reg, Reg)
-	Xnor(Reg, Reg, Reg)
-	Max(Reg, Reg, Reg)
-	MaxUnsigned(Reg, Reg, Reg)
-	Min(Reg, Reg, Reg)
-	MinUnsigned(Reg, Reg, Reg)
-}
-
-// AccumulateContext B.7 (v0.6.7)
+// AccumulateContext L ≡ (s ∈ NS, e ∈ S, i ∈ NS, t ∈ ⟦X⟧, y ∈ H?, p ∈ {( NS, B )}) (eq. B.7 v0.7.2)
 type AccumulateContext struct {
 	ServiceId         block.ServiceId            // s
-	AccumulationState state.AccumulationState    // u
+	AccumulationState state.AccumulationState    // e
 	NewServiceId      block.ServiceId            // i
 	DeferredTransfers []service.DeferredTransfer // t
 	AccumulationHash  *crypto.Hash               // y
@@ -383,7 +235,7 @@ func (s *AccumulateContext) Clone() AccumulateContext {
 	return cc
 }
 
-// ServiceAccount x_s
+// ServiceAccount ∀x ∈ L ∶ xs ≡ (x_e)d[x_s] (eq. B.8 v0.7.2)
 func (s *AccumulateContext) ServiceAccount() service.ServiceAccount {
 	return s.AccumulationState.ServiceState[s.ServiceId]
 }

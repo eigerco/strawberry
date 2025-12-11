@@ -146,16 +146,17 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 			gasCounter, regs, mem, err = host_call.Log(gasCounter, regs, mem, nil, &serviceIndex)
 		default:
 			regs[polkavm.A0] = uint64(host_call.WHAT)
-			if gasCounter < AccumulateCost {
-				return 0, regs, mem, ctx, polkavm.ErrOutOfGas
-			}
 			gasCounter -= AccumulateCost
+		}
+		// otherwise if ϱ′ < 0
+		if gasCounter < 0 {
+			return 0, regs, mem, ctx, polkavm.ErrOutOfGas
 		}
 		return gasCounter, regs, mem, ctx, err
 	}
 
 	errPanic := &polkavm.ErrPanic{}
-	gasUsed, ret, newCtxPair, err := interpreter.InvokeWholeProgram(account.EncodedCodeAndMetadata(), 5, polkavm.Gas(gas), args, hostCallFunc, newCtxPair)
+	gasUsed, ret, newCtxPair, err := interpreter.InvokeWholeProgram(account.EncodedCodeAndMetadata(), 5, polkavm.UGas(gas), args, hostCallFunc, newCtxPair)
 	if err != nil && (errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic)) {
 		log.VM.Error().Err(err).Msgf("Program invocation failed")
 		return AccumulationOutput{

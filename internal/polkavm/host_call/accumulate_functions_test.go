@@ -520,40 +520,6 @@ func TestAccumulate(t *testing.T) {
 					},
 				},
 			},
-		},
-		{
-			name: "solicit_out_of_gas",
-			fn:   fnWithExtra[jamtime.Timeslot](Solicit),
-			alloc: alloc{
-				A0: hash2bytes(randomHash),
-			},
-			initialRegs: deltaRegs{
-				A1: 256, // z: preimage length
-			},
-			extraParam: jamtime.Timeslot(1000),
-			initialGas: 9, // Less than SolicitCost
-			X: AccumulateContext{
-				ServiceId: currentServiceID,
-				AccumulationState: state.AccumulationState{
-					ServiceState: service.ServiceState{
-						currentServiceID: {
-							Balance: 200,
-						},
-					},
-				},
-			},
-			expectedGas: 0,
-			expectedX: AccumulateContext{
-				ServiceId: currentServiceID,
-				AccumulationState: state.AccumulationState{
-					ServiceState: service.ServiceState{
-						currentServiceID: {
-							Balance: 200,
-						},
-					},
-				},
-			},
-			err: ErrOutOfGas,
 		}, {
 			name: "solicit_new_preimage",
 			fn:   fnWithExtra[jamtime.Timeslot](Solicit),

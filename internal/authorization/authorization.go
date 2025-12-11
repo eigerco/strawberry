@@ -65,7 +65,11 @@ func (a *Authorization) InvokePVM(
 			gasCounter -= isAuthorizedCost
 		}
 
-		return gasCounter, regs, mem, ctx, nil
+		// otherwise if ϱ′ < 0
+		if gasCounter < 0 {
+			return gasCounter, regs, mem, ctx, polkavm.ErrOutOfGas
+		}
+		return gasCounter, regs, mem, ctx, err
 	}
 
 	encodedCodeWithMeta, err := workPackage.GetAuthorizationCode(a.state.Services)
