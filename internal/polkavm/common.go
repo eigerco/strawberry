@@ -349,7 +349,7 @@ type AccumulateContext struct {
 	NewServiceId      block.ServiceId            // i
 	DeferredTransfers []service.DeferredTransfer // t
 	AccumulationHash  *crypto.Hash               // y
-	ProvidedPreimages []ProvidedPreimage         // p
+	ProvidedPreimages []block.Preimage           // p
 }
 
 func (s *AccumulateContext) Clone() AccumulateContext {
@@ -358,7 +358,7 @@ func (s *AccumulateContext) Clone() AccumulateContext {
 		AccumulationState: s.AccumulationState.Clone(),
 		NewServiceId:      s.NewServiceId,
 		DeferredTransfers: make([]service.DeferredTransfer, len(s.DeferredTransfers)),
-		ProvidedPreimages: make([]ProvidedPreimage, len(s.ProvidedPreimages)),
+		ProvidedPreimages: make([]block.Preimage, len(s.ProvidedPreimages)),
 	}
 	if s.AccumulationHash != nil {
 		cc.AccumulationHash = new(crypto.Hash)
@@ -375,17 +375,12 @@ func (s *AccumulateContext) Clone() AccumulateContext {
 	}
 
 	for i, p := range s.ProvidedPreimages {
-		cc.ProvidedPreimages[i] = ProvidedPreimage{
-			ServiceId: p.ServiceId,
-			Data:      bytes.Clone(p.Data),
+		cc.ProvidedPreimages[i] = block.Preimage{
+			ServiceIndex: p.ServiceIndex,
+			Data:         bytes.Clone(p.Data),
 		}
 	}
 	return cc
-}
-
-type ProvidedPreimage struct {
-	ServiceId block.ServiceId
-	Data      []byte
 }
 
 // ServiceAccount x_s

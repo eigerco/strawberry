@@ -366,8 +366,8 @@ type TicketProof struct {
 }
 
 type Preimage struct {
-	Requester uint32 `json:"requester"`
-	Blob      string `json:"blob"`
+	Requester block.ServiceId `json:"requester"`
+	Blob      string          `json:"blob"`
 }
 
 type Guarantee struct {

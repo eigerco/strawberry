@@ -29,8 +29,8 @@
             {
                 "id": 36,
                 "data": {
-                    "preimages": [],
-                    "lookup_meta": [
+                    "preimage_blobs": [],
+                    "preimage_requests": [
                         {
                             "key": {
                                 "hash": "0x08a3ce25231d42c7568035069afebbba261f03a6385eedcdae053786f170fcad",
@@ -58,8 +58,8 @@
             {
                 "id": 45,
                 "data": {
-                    "preimages": [],
-                    "lookup_meta": [
+                    "preimage_blobs": [],
+                    "preimage_requests": [
                         {
                             "key": {
                                 "hash": "0x08a3ce25231d42c7568035069afebbba261f03a6385eedcdae053786f170fcad",
@@ -95,7 +95,7 @@
             {
                 "id": 36,
                 "data": {
-                    "preimages": [
+                    "preimage_blobs": [
                         {
                             "hash": "0x08a3ce25231d42c7568035069afebbba261f03a6385eedcdae053786f170fcad",
                             "blob": "0x1ecde3797f16db94bf43546bd6c022ad0534d29ca8f696a43de5bdc95f3c80e5f18092b4bdc3e0ae426801db0331f60f26a8801d5226c5b05dec33729752"
@@ -109,7 +109,7 @@
                             "blob": "0xbc890746a85a8f8becb88c8cce9517de85e9054d5ab8329a915535c8782ed4f2a4b85accb44577024e652afc240951effe40ace3d31fd2"
                         }
                     ],
-                    "lookup_meta": [
+                    "preimage_requests": [
                         {
                             "key": {
                                 "hash": "0x08a3ce25231d42c7568035069afebbba261f03a6385eedcdae053786f170fcad",
@@ -143,7 +143,7 @@
             {
                 "id": 45,
                 "data": {
-                    "preimages": [
+                    "preimage_blobs": [
                         {
                             "hash": "0x08a3ce25231d42c7568035069afebbba261f03a6385eedcdae053786f170fcad",
                             "blob": "0x1ecde3797f16db94bf43546bd6c022ad0534d29ca8f696a43de5bdc95f3c80e5f18092b4bdc3e0ae426801db0331f60f26a8801d5226c5b05dec33729752"
@@ -153,7 +153,7 @@
                             "blob": "0x32c82fd887447c2af6cf43c6b2ff5686d00238bac1a3da0500a4cec53cc1255a84febbebbafa3da27e83e645065dbf68a2"
                         }
                     ],
-                    "lookup_meta": [
+                    "preimage_requests": [
                         {
                             "key": {
                                 "hash": "0x08a3ce25231d42c7568035069afebbba261f03a6385eedcdae053786f170fcad",

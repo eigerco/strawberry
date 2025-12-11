@@ -17,13 +17,13 @@
             {
                 "id": 3,
                 "data": {
-                    "preimages": [
+                    "preimage_blobs": [
                         {
                             "hash": "0x9e0e7d324d129dfbd86462546e6c3aaa533bb6f2079c639f85943c95a53a70a9",
                             "blob": "0x92cdf578c47085a5992256f0dcf97d0b19f1f1c9de4d5fe30c3ace6191b6e5dbcee1b3419782ad92ec2dffed6d3f"
                         }
                     ],
-                    "lookup_meta": [
+                    "preimage_requests": [
                         {
                             "key": {
                                 "hash": "0x9e0e7d324d129dfbd86462546e6c3aaa533bb6f2079c639f85943c95a53a70a9",
@@ -54,13 +54,13 @@
             {
                 "id": 3,
                 "data": {
-                    "preimages": [
+                    "preimage_blobs": [
                         {
                             "hash": "0x9e0e7d324d129dfbd86462546e6c3aaa533bb6f2079c639f85943c95a53a70a9",
                             "blob": "0x92cdf578c47085a5992256f0dcf97d0b19f1f1c9de4d5fe30c3ace6191b6e5dbcee1b3419782ad92ec2dffed6d3f"
                         }
                     ],
-                    "lookup_meta": [
+                    "preimage_requests": [
                         {
                             "key": {
                                 "hash": "0x9e0e7d324d129dfbd86462546e6c3aaa533bb6f2079c639f85943c95a53a70a9",
