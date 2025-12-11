@@ -43,7 +43,7 @@ func HistoricalLookup(
 
 	a, exists := serviceState[lookupID]
 	if !exists {
-		return gas, regs, mem, RefineContextPair{}, ErrAccountNotFound
+		return gas, withCode(regs, NONE), mem, RefineContextPair{}, nil
 	}
 
 	// let [h, o] = φ8..+2

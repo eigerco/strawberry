@@ -59,7 +59,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 
 	preimageExtrinsic := PreimageExtrinsic{
 		{
-			ServiceIndex: uint32(1),
+			ServiceIndex: 1,
 			Data:         []byte("preimage data"),
 		},
 	}

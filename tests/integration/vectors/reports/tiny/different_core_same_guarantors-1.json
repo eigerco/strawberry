@@ -72,7 +72,7 @@
                         "state_root": "0xd8c577816b629241676502d0461e4eae42a375461314d64484f35f4228da23d6",
                         "beefy_root": "0xf5df0c11416d43c55b43e096572d450b7780ed0fd7b540f26c8ded8e0d41e183",
                         "lookup_anchor": "0x16bda47e5a68daf53c39ddee8af4ecaced7e87f3f0ac9da5a6f4f9e41350d319",
-                        "lookup_anchor_slot": 10,
+                        "lookup_anchor_slot": 6,
                         "prerequisites": []
                     },
                     "core_index": 1,
@@ -103,15 +103,15 @@
                 "signatures": [
                     {
                         "validator_index": 1,
-                        "signature": "0x1b28d6bb7d7840be08cf54168a74857a837f91b686f17c87253bc74f3446fd754bf4d9df205376baf62022a8323f48dbbe37d08119a62c7a3dbe62f65bdc410e"
+                        "signature": "0x857275d44dcda5ca9e368e95ea5ee6ae7d78ce0d0d6ef5f268fb1679d1b8ca222c3164057ea91624ed954d0f3b3110637471afd8fb6129f657713df589e0db07"
                     },
                     {
                         "validator_index": 4,
-                        "signature": "0xda3225f0a3fe19a6a9b339fad7189f87cdbb2cd872af960766e07c1b13b7ca310df75405c556f7868d7ceb3587cdbaf47273096ccf71e63f773e8bd27fdcb109"
+                        "signature": "0x2cf359ab6364d89200e8bcffa75fee10ca81e08454066285a186cb75d832d74afa5841dcdc4470564ca7f0c663660d054383914a46022af8939d9fc60232f50c"
                     },
                     {
                         "validator_index": 5,
-                        "signature": "0x7f65e80d663a9bb312d10f3abe1400d75333bb86252765e00fda923b997d4209547240d8685a54016245ae87e81ab5b679e1487dc5137787904f68e106c4980b"
+                        "signature": "0xb3ea05e2cb6085bb1fb2606635f3be2778248dc10193328e8050fcb1aed846787b172b984a9291da23e2582e0c7a21644ee902a03849d8b8c6fa35a90638e406"
                     }
                 ]
             }
@@ -417,7 +417,7 @@
                         "state_root": "0xd8c577816b629241676502d0461e4eae42a375461314d64484f35f4228da23d6",
                         "beefy_root": "0xf5df0c11416d43c55b43e096572d450b7780ed0fd7b540f26c8ded8e0d41e183",
                         "lookup_anchor": "0x16bda47e5a68daf53c39ddee8af4ecaced7e87f3f0ac9da5a6f4f9e41350d319",
-                        "lookup_anchor_slot": 10,
+                        "lookup_anchor_slot": 6,
                         "prerequisites": []
                     },
                     "core_index": 1,

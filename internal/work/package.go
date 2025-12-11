@@ -9,14 +9,14 @@ import (
 	"github.com/eigerco/strawberry/internal/service"
 )
 
-// Package represents P (14.2 v0.5.4)
-// E(E4(ph), pu, pc, ↕pj, ↕pf , ↕pw)
+// Package represents P (14.2 v0.7.2)
+// E(E4(ph), pu, pc, ↕pj, ↕pf, ↕pw)
 type Package struct {
 	AuthorizerService  uint32                  // h ∈ N_S
 	AuthCodeHash       crypto.Hash             // u ∈ H
-	Context            block.RefinementContext // x ∈ X
+	Context            block.RefinementContext // c ∈ X
 	AuthorizationToken []byte                  // j ∈ B
-	Parameterization   []byte                  // p ∈ B
+	Parameterization   []byte                  // f ∈ B
 	WorkItems          []Item                  // w ∈ ⟦I⟧
 }
 

@@ -398,6 +398,9 @@ func anchorBlockInRecentBlocks(context block.RefinementContext, intermediateRece
 // WR ≡ 48 ⋅ 2 10 (eq. 11.9 v 0.7.0)
 func validateWorkReportProperties(ge block.GuaranteesExtrinsic) error {
 	for _, g := range ge.Guarantees {
+		if len(g.WorkReport.WorkDigests) == 0 {
+			return errors.New("missing work results")
+		}
 		if !g.WorkReport.DependenciesCountIsValid() {
 			return errors.New("too many dependencies")
 		}

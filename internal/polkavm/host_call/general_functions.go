@@ -135,18 +135,8 @@ func Fetch(
 	case 8:
 		// if p ≠ ∅ ∧ φ10 = 8
 		if workPackage != nil {
-			// E(pu, ↕pp)
-			out, err := jam.Marshal(struct {
-				AuthCodeHash     crypto.Hash
-				Parameterization []byte
-			}{
-				workPackage.AuthCodeHash,
-				workPackage.Parameterization,
-			})
-			if err != nil {
-				return gas, regs, mem, polkavm.ErrPanicf(err.Error())
-			}
-			v = out
+			//pf
+			v = workPackage.Parameterization
 		}
 	case 9:
 		// if p ≠ ∅ ∧ φ10 = 9
@@ -313,7 +303,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		var exists bool
 		a, exists = serviceState[ss]
 		if !exists {
-			return gas, regs, mem, polkavm.ErrAccountNotFound
+			return gas, withCode(regs, NONE), mem, nil
 		}
 	}
 
@@ -512,7 +502,7 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 	_, _ = fmt.Fprintf(fullMsg, " %s", msgBytes)
 
 	log.VM.Info().Str("msg", fullMsg.String()).Msg("Service log")
-	return gas, regs, mem, nil
+	return gas, withCode(regs, WHAT), mem, nil
 }
 
 // GetChainConstants

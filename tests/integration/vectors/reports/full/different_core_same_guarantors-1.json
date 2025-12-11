@@ -72,7 +72,7 @@
                         "state_root": "0xb5462111962e9000c3822eb631e619bb091b2b5dac73816874c0243f392065fb",
                         "beefy_root": "0xc006121a8035c0600469b1b708c1ad794ac74b3dbebd9c494d3ca2a1659df705",
                         "lookup_anchor": "0x0537b8b8fc9dd52c40d02f2c960c184ae45c4d8c92946d551662ab45374f883d",
-                        "lookup_anchor_slot": 607,
+                        "lookup_anchor_slot": 597,
                         "prerequisites": []
                     },
                     "core_index": 1,
@@ -103,15 +103,15 @@
                 "signatures": [
                     {
                         "validator_index": 16,
-                        "signature": "0xc03dafe32423be28a4d11d216b8cb85d451f1776ce773c171da1f7ff9cfe2cfedd3a2d57da3e845599471241cd3bfdd683e9612fb190e8458adb8e872b403d07"
+                        "signature": "0x705f6df7acbd754711f361471112ea4a94c95443daf716509b772710e2cbfeebb3de055e85dd8d26300c111ece2cc5e60e7c8a496475b234901454d15c6e8706"
                     },
                     {
                         "validator_index": 450,
-                        "signature": "0x1a7a276a58584f81e959def41fec8016661c7f7fe88ddf001d80cd1e5e5a30fecc4c6353e43a2116b2d6a00e716a1d1e9887a81300ea8150e78f14b43faf4001"
+                        "signature": "0x49004db1a937c50d43b87441069c74956d7696e65fe35764b61c1e8685aa30a5fb849ae5589ee5407f77bbce3b7f86abe0a46858159829981d01e9b753602f07"
                     },
                     {
                         "validator_index": 1014,
-                        "signature": "0x339f42960ba75fbfa461171f6db4e3f754f6150d8df9cd6981c8ded3b170c77a2d4d5ab21558915ec980be56f50840821767c7164ac29de84232b32759ff9b0b"
+                        "signature": "0x50002139a70c64fdb03ebb71b97659175f47197575d2affa617fd75bd8b9450e70ecbe54d9a90db085f2153a3693872151751fe913bfd107836136411fd94d04"
                     }
                 ]
             }
@@ -17334,7 +17334,7 @@
                         "state_root": "0xb5462111962e9000c3822eb631e619bb091b2b5dac73816874c0243f392065fb",
                         "beefy_root": "0xc006121a8035c0600469b1b708c1ad794ac74b3dbebd9c494d3ca2a1659df705",
                         "lookup_anchor": "0x0537b8b8fc9dd52c40d02f2c960c184ae45c4d8c92946d551662ab45374f883d",
-                        "lookup_anchor_slot": 607,
+                        "lookup_anchor_slot": 597,
                         "prerequisites": []
                     },
                     "core_index": 1,

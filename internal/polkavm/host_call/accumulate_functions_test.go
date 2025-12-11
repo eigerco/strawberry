@@ -43,7 +43,7 @@ func TestAccumulate(t *testing.T) {
 			ValidatorKeys: safrole.ValidatorsData(generate(t, testutils.RandomValidatorKey, common.NumberOfValidators)),
 		},
 		ServiceId:         123,
-		ProvidedPreimages: []ProvidedPreimage{},
+		ProvidedPreimages: []block.Preimage{},
 		DeferredTransfers: []service.DeferredTransfer{},
 	}
 	var currentServiceID block.ServiceId = 123123
@@ -999,8 +999,8 @@ func TestAccumulate(t *testing.T) {
 						2: serviceAccount(2, crypto.HashData(hash2bytes(randomHash)), 32, service.PreimageHistoricalTimeslots{}),
 					},
 				},
-				ProvidedPreimages: []ProvidedPreimage{
-					{ServiceId: 1, Data: hash2bytes(randomHash)},
+				ProvidedPreimages: []block.Preimage{
+					{ServiceIndex: 1, Data: hash2bytes(randomHash)},
 				},
 			},
 		},
@@ -1020,8 +1020,8 @@ func TestAccumulate(t *testing.T) {
 						2: serviceAccount(2, crypto.HashData(hash2bytes(randomHash)), 32, service.PreimageHistoricalTimeslots{}),
 					},
 				},
-				ProvidedPreimages: []ProvidedPreimage{
-					{ServiceId: 1, Data: hash2bytes(randomHash)},
+				ProvidedPreimages: []block.Preimage{
+					{ServiceIndex: 1, Data: hash2bytes(randomHash)},
 				},
 			},
 			expectedDeltaRegs: deltaRegs{
@@ -1035,8 +1035,8 @@ func TestAccumulate(t *testing.T) {
 						2: serviceAccount(2, crypto.HashData(hash2bytes(randomHash)), 32, service.PreimageHistoricalTimeslots{}),
 					},
 				},
-				ProvidedPreimages: []ProvidedPreimage{
-					{ServiceId: 1, Data: hash2bytes(randomHash)},
+				ProvidedPreimages: []block.Preimage{
+					{ServiceIndex: 1, Data: hash2bytes(randomHash)},
 				},
 			},
 		},
