@@ -60,7 +60,7 @@ test: build-bandersnatch build-erasurecoding
 
 .PHONY: integration-tiny
 ## integration: Runs integration tests with tiny configuration.
-integration: build-bandersnatch build-erasurecoding
+integration-tiny: build-bandersnatch build-erasurecoding
 	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=tiny,integration
 
 .PHONY: integration-full
