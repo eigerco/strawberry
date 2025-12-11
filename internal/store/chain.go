@@ -7,6 +7,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/db"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 )
@@ -24,6 +25,22 @@ type Chain struct {
 // NewChain creates a new chain store using KVStore
 func NewChain(db db.KVStore) *Chain {
 	return &Chain{KVStore: db}
+}
+
+// PutConformanceHeader stores a header with only timeslot information for conformance testing
+// TODO: Remove this method when/if conformance tests are updated to use full headers
+func (c *Chain) PutConformanceHeader(headerHash crypto.Hash, timeslot uint32) error {
+	h := block.Header{
+		TimeSlotIndex: jamtime.Timeslot(timeslot),
+	}
+	bytes, err := h.Bytes()
+	if err != nil {
+		return fmt.Errorf("marshal header: %w", err)
+	}
+	if err := c.Put(makeKey(prefixHeader, headerHash[:]), bytes); err != nil {
+		return fmt.Errorf("store conformance header: %w", err)
+	}
+	return nil
 }
 
 // PutHeader stores a header in the chain store
@@ -56,52 +73,40 @@ func (c *Chain) GetHeader(hash crypto.Hash) (block.Header, error) {
 }
 
 // FindHeader searches for a header that matches the given predicate function.
-// Returns the first matching header and nil error if found.
-// Returns zero header and nil error if no match is found.
-// Returns zero header and error if the chain is closed or if database operations fail.
-func (c *Chain) FindHeader(fn func(header block.Header) bool) (block.Header, error) {
-	// Create iterator for header prefix
+// Returns the first matching header, true and nil error if found.
+// Returns zero header, false and nil error if no match is found.
+// Returns zero header, false and error if the chain is closed or if database operations fail.
+func (c *Chain) FindHeader(fn func(header block.Header) bool) (result block.Header, found bool, err error) {
 	iter, err := c.NewIterator([]byte{prefixHeader}, []byte{prefixHeader + 1})
 	if err != nil {
-		return block.Header{}, fmt.Errorf("create iterator: %w", err)
+		return block.Header{}, false, fmt.Errorf("create iterator: %w", err)
 	}
 
-	// We'll track any error we might return, to also handle close errors.
-	var returnErr error
-	var result block.Header
+	defer func() {
+		if cerr := iter.Close(); cerr != nil {
+			err = errors.Join(err, fmt.Errorf("iterator close error: %w", cerr))
+		}
+	}()
 
-	// Iterate through headers
 	for iter.Next() {
 		headerBytes, err := iter.Value()
 		if err != nil {
-			returnErr = fmt.Errorf("get header value: %w", err)
-			break
+			return block.Header{}, false, fmt.Errorf("get header value: %w", err)
 		}
 
 		header, err := block.HeaderFromBytes(headerBytes)
 		if err != nil {
-			returnErr = fmt.Errorf("parse header from bytes: %w", err)
-			break
+			return block.Header{}, false, fmt.Errorf("parse header from bytes: %w", err)
 		}
 
 		if fn(header) {
-			result = header
-			break
+			// Found it: return.
+			return header, true, nil
 		}
 	}
 
-	// Close iterator explicitly
-	if cerr := iter.Close(); cerr != nil {
-		if returnErr == nil {
-			returnErr = fmt.Errorf("iterator close error: %w", cerr)
-		}
-	}
-
-	// If retErr is still nil, check if result was set
-	if returnErr != nil {
-		return block.Header{}, returnErr
-	}
-	return result, nil
+	// We finished the loop without errors and without finding a match.
+	return block.Header{}, false, nil
 }
 
 // PutBlock stores a block and its header atomically

@@ -182,6 +182,7 @@ func TestAccumulate(t *testing.T) {
 			}
 
 			var accStat statetransition.AccumulationStats
+			var accumulationOutputLog state.AccumulationOutputLog
 			header := &block.Header{TimeSlotIndex: tc.Input.Slot}
 			newState.TimeslotIndex = statetransition.CalculateNewTimeState(*header)
 			newState.AccumulationQueue,
@@ -190,14 +191,23 @@ func TestAccumulate(t *testing.T) {
 				newState.PrivilegedServices,
 				newState.ValidatorState.QueuedValidators,
 				newState.PendingAuthorizersQueues,
-				_, accStat = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports, preState.EntropyPool)
+				accumulationOutputLog, accStat = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports, preState.EntropyPool)
 			for id, stat := range accStat {
 				stateStat := newState.ActivityStatistics.Services[id]
 				stateStat.AccumulateCount = stat.AccumulateCount
 				stateStat.AccumulateGasUsed = stat.AccumulateGasUsed
 				newState.ActivityStatistics.Services[id] = stateStat
 			}
+
 			assert.EqualExportedValues(t, postState, newState)
+
+			actualAccumulationRoot, err := statetransition.ComputeAccumulationRoot(accumulationOutputLog)
+			require.NoError(t, err)
+
+			hashBytes, err := crypto.StringToHex(tc.Output.Ok)
+			require.NoError(t, err, "Failed to parse blob hex")
+
+			assert.Equal(t, crypto.Hash(hashBytes), actualAccumulationRoot)
 		})
 	}
 }
