@@ -74,7 +74,8 @@ func RandomServiceAccount(t *testing.T, svcID block.ServiceId) service.ServiceAc
 	originalStorageKey := []byte("storage key")
 	storageKey, err := statekey.NewStorage(svcID, originalStorageKey)
 	require.NoError(t, err)
-	sa.InsertStorage(storageKey, uint64(len(originalStorageKey)), []byte("storage value"))
+	err = sa.InsertStorage(storageKey, uint64(len(originalStorageKey)), []byte("storage value"))
+	require.NoError(t, err)
 
 	// Insert a preimage meta key.
 	preimageMetaKey, err := statekey.NewPreimageMeta(svcID, crypto.HashData(preimageData), uint32(len(preimageData)))

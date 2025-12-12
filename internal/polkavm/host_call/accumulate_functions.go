@@ -286,7 +286,10 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 	}
 
 	// b: a_t
-	account.Balance = account.ThresholdBalance()
+	account.Balance, err = account.ThresholdBalance()
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
 
 	// let s = x_s except s_b = (x_s)_b − a_t
 	// (▸, CASH, x_i, (x_e)_d) otherwise if s_b < (x_s)_t
@@ -294,8 +297,14 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 	// Check: (x_s)_b - a_t >= (x_s)_t
 	// Rearranged to avoid underflow: (x_s)_b >= a_t + (x_s)_t
 	xs := ctxPair.RegularCtx.ServiceAccount()
-	newAccountThreshold := account.ThresholdBalance()
-	creatorThreshold := xs.ThresholdBalance()
+	newAccountThreshold, err := account.ThresholdBalance()
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+	creatorThreshold, err := xs.ThresholdBalance()
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
 
 	// Check for addition overflow
 	requiredBalance := newAccountThreshold + creatorThreshold
@@ -404,7 +413,11 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	// let b = (xs)b − a
 	// if b < (xs)t
 	account := ctxPair.RegularCtx.ServiceAccount()
-	if amount > account.Balance || account.Balance-amount < account.ThresholdBalance() {
+	accountThresholdBalance, err := account.ThresholdBalance()
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+	if amount > account.Balance || account.Balance-amount < accountThresholdBalance {
 		return gas, withCode(regs, CASH), mem, ctxPair, nil
 	}
 	account.Balance = account.Balance - amount
@@ -578,7 +591,11 @@ func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	}
 
 	// if ab < at
-	if serviceAccount.Balance < serviceAccount.ThresholdBalance() {
+	serviceAccountThresholdBalance, err := serviceAccount.ThresholdBalance()
+	if err != nil {
+		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+	}
+	if serviceAccount.Balance < serviceAccountThresholdBalance {
 		return gas, withCode(regs, FULL), mem, ctxPair, nil
 	}
 
@@ -622,7 +639,10 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 
 		// except: K(al) = K((xs)l) ∖ {(h, z)}
 		// except: K(ap) = K((xs)p) ∖ {h}
-		serviceAccount.DeletePreimageMeta(key, preimageLength)
+		err := serviceAccount.DeletePreimageMeta(key, preimageLength)
+		if err != nil {
+			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+		}
 		delete(serviceAccount.PreimageLookup, preimageHash)
 
 		ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = serviceAccount
@@ -633,7 +653,10 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 
 			// except: K(al) = K((xs)l) ∖ {(h, z)}
 			// except: K(ap) = K((xs)p) ∖ {h}
-			serviceAccount.DeletePreimageMeta(key, preimageLength)
+			err := serviceAccount.DeletePreimageMeta(key, preimageLength)
+			if err != nil {
+				return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
+			}
 			delete(serviceAccount.PreimageLookup, preimageHash)
 
 			ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = serviceAccount
