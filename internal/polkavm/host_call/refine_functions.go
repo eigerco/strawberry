@@ -47,7 +47,7 @@ func HistoricalLookup(
 	addressToRead, addressToWrite := regs[A1], regs[A2]
 
 	hashData := make([]byte, 32)
-	if err := mem.Read(addressToRead, hashData); err != nil {
+	if err := mem.Read(uint32(addressToRead), hashData); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
@@ -85,7 +85,7 @@ func Export(
 	z := min(requestedLength, common.SizeOfSegment)
 
 	data := make([]byte, z)
-	if err := mem.Read(p, data); err != nil {
+	if err := mem.Read(uint32(p), data); err != nil {
 		// x = ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -126,7 +126,7 @@ func Machine(
 
 	// p = µ[po ... po+pz]
 	p := make([]byte, pz)
-	err := mem.Read(po, p)
+	err := mem.Read(uint32(po), p)
 	if err != nil {
 		// p = ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
@@ -172,13 +172,13 @@ func Peek(
 
 	// (m[n]u)[s...s+z]
 	s := make([]byte, z)
-	err := u.Ram.Read(sReg, s)
+	err := u.Ram.Read(uint32(sReg), s)
 	if err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
 	// (φ′7, µ′) = (OK, µ′o...o+z = s)
-	err = mem.Write(o, s)
+	err = mem.Write(uint32(o), s)
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -204,12 +204,12 @@ func Poke(
 	}
 
 	s := make([]byte, z)
-	err := mem.Read(sReg, s)
+	err := mem.Read(uint32(sReg), s)
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
-	err = innerPVM.Ram.Write(o, s)
+	err = innerPVM.Ram.Write(uint32(o), s)
 	if err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
@@ -246,7 +246,7 @@ func Pages(
 	// if r > 2 ∧ (uA)p⋅⋅⋅+c ∋ ∅
 	if r > 2 {
 		for pageIndex := p; pageIndex < p+c; pageIndex++ {
-			if u.Ram.GetAccess(pageIndex) == Inaccessible {
+			if u.Ram.GetAccess(uint32(pageIndex)) == Inaccessible {
 				return gas, withCode(regs, HUH), mem, ctxPair, nil
 			}
 		}
@@ -257,7 +257,7 @@ func Pages(
 		for pageIndex := p; pageIndex < p+c; pageIndex++ {
 			start := pageIndex * uint64(PageSize)
 			zeroBuf := make([]byte, PageSize)
-			if err := u.Ram.Write(start, zeroBuf); err != nil {
+			if err := u.Ram.Write(uint32(start), zeroBuf); err != nil {
 				return gas, regs, mem, ctxPair, err
 			}
 		}
@@ -280,7 +280,7 @@ func Pages(
 	}
 
 	for pageIndex := p; pageIndex < p+c; pageIndex++ {
-		if err := u.Ram.SetAccess(pageIndex, newAccess); err != nil {
+		if err := u.Ram.SetAccess(uint32(pageIndex), newAccess); err != nil {
 			return gas, regs, mem, ctxPair, err
 		}
 	}
@@ -340,7 +340,7 @@ func Invoke(
 	resultInstr, resultGas, resultRegs, resultMem := i.Results()
 	if bb, err := jam.Marshal([14]uint64(append([]uint64{uint64(resultGas)}, resultRegs[:]...))); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, φ8, μ, m)
-	} else if err := mem.Write(addr, bb); err != nil {
+	} else if err := mem.Write(uint32(addr), bb); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, φ8, μ, m)
 	}
 	if invokeErr != nil {

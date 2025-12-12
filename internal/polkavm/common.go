@@ -2,9 +2,9 @@ package polkavm
 
 import (
 	"bytes"
-
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/work"
@@ -26,43 +26,48 @@ type Memory struct {
 	rw                 memorySegment
 	stack              memorySegment
 	args               memorySegment
-	currentHeapPointer uint64
+	currentHeapPointer uint32
 }
 
 type memorySegment struct {
-	address uint64
+	address uint32
+	end     uint32
 	data    []byte
 	access  MemoryAccess
 }
 
 // Read reads from the set of readable indices (Vμ) (implements eq. A.8 v0.7.0)
-func (m *Memory) Read(address uint64, data []byte) error {
+func (m *Memory) Read(address uint32, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
 		return ErrPanicf("forbidden memory access")
 	}
+	end, ok := safemath.Add(address, uint32(len(data)))
+	if !ok {
+		return ErrPanicf("inaccessible memory; address overflow")
+	}
+
 	var memoryData []byte
 	access := Inaccessible
-	if address >= m.stack.address && address+uint64(len(data)) <= m.stack.address+uint64(len(m.stack.data)) {
-		memoryData = m.stack.data[address-m.stack.address : address-m.stack.address+uint64(len(data))]
+
+	if address >= m.stack.address && end <= m.stack.end {
+		memoryData = m.stack.data[address-m.stack.address : end-m.stack.address]
 		access = m.stack.access
-	} else if address >= m.rw.address && address+uint64(len(data)) <= m.rw.address+uint64(len(m.rw.data)) {
-		memoryData = m.rw.data[address-m.rw.address : address-m.rw.address+uint64(len(data))]
+	} else if address >= m.rw.address && end <= roundUpToZone(m.currentHeapPointer) {
+		memoryData = m.rw.data[address-m.rw.address : end-m.rw.address]
 		access = m.rw.access
-	} else if address >= m.ro.address && address+uint64(len(data)) <= m.ro.address+uint64(len(m.ro.data)) {
-		memoryData = m.ro.data[address-m.ro.address : address-m.ro.address+uint64(len(data))]
+	} else if address >= m.ro.address && end <= m.ro.end {
+		memoryData = m.ro.data[address-m.ro.address : end-m.ro.address]
 		access = m.ro.access
-	} else if address >= m.args.address && address+uint64(len(data)) <= m.args.address+uint64(len(m.args.data)) {
-		memoryData = m.args.data[address-m.args.address : address-m.args.address+uint64(len(data))]
+	} else if address >= m.args.address && end <= m.args.end {
+		memoryData = m.args.data[address-m.args.address : end-m.args.address]
 		access = m.args.access
-		logd := make([]byte, len(data))
-		copy(logd, memoryData)
 	}
 
 	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋ (eq. A.9 v0.7.0)
 	if access == Inaccessible {
 		// find the minimum page that is not readable
-		for i := address / PageSize; i <= (address+uint64(len(data)))/PageSize; i++ {
+		for i := address / PageSize; i <= end/PageSize; i++ {
 			access := m.GetAccess(i)
 			if access == Inaccessible {
 				return &ErrPageFault{Reason: "inaccessible memory", Address: i * PageSize}
@@ -75,32 +80,36 @@ func (m *Memory) Read(address uint64, data []byte) error {
 }
 
 // Write writes to the set of writeable indices (Vμ*) (implements eq. A.8 v0.7.0)
-func (m *Memory) Write(address uint64, data []byte) error {
+func (m *Memory) Write(address uint32, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
 		return ErrPanicf("forbidden memory access")
 	}
+	end, ok := safemath.Add(address, uint32(len(data)))
+	if !ok {
+		return ErrPanicf("inaccessible memory; address overflow")
+	}
 
 	var memoryData []byte
 	access := Inaccessible
-	if address >= m.stack.address && address+uint64(len(data)) <= m.stack.address+uint64(len(m.stack.data)) {
-		memoryData = m.stack.data[address-m.stack.address : address-m.stack.address+uint64(len(data))]
+	if address >= m.stack.address && end <= m.stack.end {
+		memoryData = m.stack.data[address-m.stack.address : end-m.stack.address]
 		access = m.stack.access
-	} else if address >= m.rw.address && address+uint64(len(data)) <= m.rw.address+uint64(len(m.rw.data)) {
-		memoryData = m.rw.data[address-m.rw.address : address-m.rw.address+uint64(len(data))]
+	} else if address >= m.rw.address && end <= roundUpToZone(m.currentHeapPointer) {
+		memoryData = m.rw.data[address-m.rw.address : end-m.rw.address]
 		access = m.rw.access
-	} else if address >= m.ro.address && address+uint64(len(data)) <= m.ro.address+uint64(len(m.ro.data)) {
-		memoryData = m.ro.data[address-m.ro.address : address-m.ro.address+uint64(len(data))]
+	} else if address >= m.ro.address && end <= m.ro.end {
+		memoryData = m.ro.data[address-m.ro.address : end-m.ro.address]
 		access = m.ro.access
-	} else if address >= m.args.address && address+uint64(len(data)) <= m.args.address+uint64(len(m.args.data)) {
-		memoryData = m.args.data[address-m.args.address : address-m.args.address+uint64(len(data))]
+	} else if address >= m.args.address && end <= m.args.end {
+		memoryData = m.args.data[address-m.args.address : end-m.args.address]
 		access = m.args.access
 	}
 
 	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋
 	if access != ReadWrite {
 		// find the minimum page that is not writeable
-		for i := address / PageSize; i <= (address+uint64(len(data)))/PageSize; i++ {
+		for i := address / PageSize; i <= end/PageSize; i++ {
 			access := m.GetAccess(i)
 			if access != ReadWrite { // return min(page) where the issue was found
 				return &ErrPageFault{Reason: "memory at address is not writeable", Address: i * PageSize}
@@ -112,18 +121,18 @@ func (m *Memory) Write(address uint64, data []byte) error {
 	return nil
 }
 
-func (m *Memory) Sbrk(size uint64) (uint64, error) {
+func (m *Memory) Sbrk(size uint32) (uint32, error) {
 	if size == 0 {
 		return m.currentHeapPointer, nil
 	}
 
 	result := m.currentHeapPointer
 
-	nextPageBoundary := alignToPage(m.currentHeapPointer)
+	nextPageBoundary := roundUpToPage(m.currentHeapPointer)
 	newHeapPointer := m.currentHeapPointer + size
 
 	if newHeapPointer > nextPageBoundary {
-		finalBoundary := alignToPage(newHeapPointer)
+		finalBoundary := roundUpToPage(newHeapPointer)
 		idxStart := nextPageBoundary / PageSize
 		idxEnd := finalBoundary / PageSize
 		pageCount := idxEnd - idxStart
@@ -136,9 +145,9 @@ func (m *Memory) Sbrk(size uint64) (uint64, error) {
 	return result, nil
 }
 
-func (m *Memory) allocatePages(startPage uint64, count uint64) {
+func (m *Memory) allocatePages(startPage uint32, count uint32) {
 	required := (startPage + count) * PageSize
-	if uint64(len(m.rw.data)) < required {
+	if uint32(len(m.rw.data)) < required {
 		// Grow rw_data to fit new allocation
 		newData := make([]byte, required)
 		copy(newData, m.rw.data)
@@ -147,19 +156,19 @@ func (m *Memory) allocatePages(startPage uint64, count uint64) {
 }
 
 // SetAccess updates the access mode
-func (m *Memory) SetAccess(pageIndex uint64, access MemoryAccess) error {
+func (m *Memory) SetAccess(pageIndex uint32, access MemoryAccess) error {
 	address := pageIndex * PageSize
 
-	if address >= m.stack.address && address < m.stack.address+uint64(len(m.stack.data)) {
+	if address >= m.stack.address && address < m.stack.address+uint32(len(m.stack.data)) {
 		m.stack.access = access
 		return nil
-	} else if address >= m.rw.address && address < m.rw.address+uint64(len(m.rw.data)) {
+	} else if address >= m.rw.address && address < m.rw.address+uint32(len(m.rw.data)) {
 		m.rw.access = access
 		return nil
-	} else if address >= m.ro.address && address < m.ro.address+uint64(len(m.ro.data)) {
+	} else if address >= m.ro.address && address < m.ro.address+uint32(len(m.ro.data)) {
 		m.ro.access = access
 		return nil
-	} else if address >= m.args.address && address < m.args.address+uint64(len(m.args.data)) {
+	} else if address >= m.args.address && address < m.args.address+uint32(len(m.args.data)) {
 		m.args.access = access
 		return nil
 	}
@@ -167,16 +176,16 @@ func (m *Memory) SetAccess(pageIndex uint64, access MemoryAccess) error {
 	return &ErrPageFault{Reason: "page out of valid range", Address: address}
 }
 
-func (m *Memory) GetAccess(pageIndex uint64) MemoryAccess {
+func (m *Memory) GetAccess(pageIndex uint32) MemoryAccess {
 	address := pageIndex * PageSize
 
-	if address >= m.stack.address && address < m.stack.address+uint64(len(m.stack.data)) {
+	if address >= m.stack.address && address < m.stack.address+uint32(len(m.stack.data)) {
 		return m.stack.access
-	} else if address >= m.rw.address && address < m.rw.address+uint64(len(m.rw.data)) {
+	} else if address >= m.rw.address && address < m.rw.address+uint32(len(m.rw.data)) {
 		return m.rw.access
-	} else if address >= m.ro.address && address < m.ro.address+uint64(len(m.ro.data)) {
+	} else if address >= m.ro.address && address < m.ro.address+uint32(len(m.ro.data)) {
 		return m.ro.access
-	} else if address >= m.args.address && address < m.args.address+uint64(len(m.args.data)) {
+	} else if address >= m.args.address && address < m.args.address+uint32(len(m.args.data)) {
 		return m.args.access
 	}
 
