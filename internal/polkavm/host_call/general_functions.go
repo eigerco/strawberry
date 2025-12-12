@@ -47,9 +47,6 @@ type WorkItemMetadata struct {
 
 // GasRemaining ΩG(ϱ, φ, ...)
 func GasRemaining(gas polkavm.Gas, regs polkavm.Registers) (polkavm.Gas, polkavm.Registers, error) {
-	if gas < GasRemainingCost {
-		return 0, regs, polkavm.ErrOutOfGas
-	}
 	gas -= GasRemainingCost
 
 	// Set the new ϱ' value into φ′7
@@ -71,9 +68,6 @@ func Fetch(
 	extrinsicPreimages [][]byte, // x
 	operand []*state.AccumulationInput, // o
 ) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
-	if gas < FetchCost {
-		return 0, regs, mem, polkavm.ErrOutOfGas
-	}
 	gas -= FetchCost
 
 	output := regs[polkavm.A0] // φ7
@@ -242,9 +236,6 @@ func Fetch(
 
 // Lookup ΩL(ϱ, φ, μ, s, s, d)
 func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
-	if gas < LookupCost {
-		return 0, regs, mem, polkavm.ErrOutOfGas
-	}
 	gas -= LookupCost
 
 	omega7 := regs[polkavm.A0]
@@ -286,9 +277,6 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 
 // Read ΩR(ϱ, φ, μ, s, s, d)
 func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
-	if gas < ReadCost {
-		return 0, regs, mem, polkavm.ErrOutOfGas
-	}
 	gas -= ReadCost
 
 	omega7 := regs[polkavm.A0]
@@ -339,9 +327,6 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 
 // Write ΩW(ϱ, φ, μ, s, s)
 func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-	if gas < WriteCost {
-		return 0, regs, mem, s, polkavm.ErrOutOfGas
-	}
 	gas -= WriteCost
 
 	ko := regs[polkavm.A0]
@@ -396,9 +381,6 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 
 // Info ΩI(ϱ, φ, μ, s, d)
 func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
-	if gas < InfoCost {
-		return 0, regs, mem, polkavm.ErrOutOfGas
-	}
 	gas -= InfoCost
 
 	omega7 := regs[polkavm.A0]
@@ -444,9 +426,6 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 
 // Log A host call for passing a debugging message from the service/authorizer to the hosting environment for logging to the node operator
 func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint16, serviceId *block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
-	if gas < LogCost {
-		return 0, regs, mem, polkavm.ErrOutOfGas
-	}
 	gas -= LogCost
 
 	fullMsg := &bytes.Buffer{}

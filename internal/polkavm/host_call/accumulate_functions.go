@@ -19,9 +19,6 @@ import (
 
 // Bless ΩB(ϱ, φ, μ, (x, y)) (v0.7.1)
 func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < BlessCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= BlessCost
 
 	// let [m, a, v, r, o, n] = φ7...13
@@ -94,9 +91,6 @@ func isServiceId(s uint64) bool {
 //	{ (▸, WHO, (xe)q[c], (xe)a[c])    otherwise if a ∉ NS
 //	{ (▸, OK, q, a)                   otherwise
 func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < AssignCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= AssignCost
 
 	// let [c, o, a] = φ7···+3
@@ -140,9 +134,6 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 
 // Designate ΩD (ϱ, φ, μ, (x, y))
 func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < DesignateCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= DesignateCost
 
 	const (
@@ -180,9 +171,6 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 
 // Checkpoint ΩC(ϱ, φ, μ, (x, y))
 func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < CheckpointCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= CheckpointCost
 
 	ctxPair.ExceptionalCtx = ctxPair.RegularCtx.Clone()
@@ -214,10 +202,6 @@ func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPa
 //
 // New ΩN(ϱ, φ, μ, (x, y), t) (v0.7.1)
 func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	// g = 10
-	if gas < NewCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= NewCost
 
 	// let [o, l, g, m, f, i] = φ7..+6
@@ -338,9 +322,6 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 
 // Upgrade ΩU(ϱ, φ, μ, (x, y))
 func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < UpgradeCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= UpgradeCost
 	// let [o, g, m] = φ7...10
 	addr, gasLimitAccumulator, gasLimitTransfer := regs[A0], regs[A1], regs[A2]
@@ -411,9 +392,6 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 
 // Eject ΩJ(ϱ, φ, μ, (x, y), t)
 func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < EjectCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= EjectCost
 
 	d, o := regs[A0], regs[A1]
@@ -480,9 +458,6 @@ func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, t
 
 // Query ΩQ(ϱ, φ, μ, (x, y))
 func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < QueryCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= QueryCost
 
 	addr, preimageMetaKeyLength := regs[A0], regs[A1]
@@ -529,9 +504,6 @@ func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 
 // Solicit ΩS(ϱ, φ, μ, (x, y), t)
 func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < SolicitCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= SolicitCost
 
 	// let [o, z] = φ7,8
@@ -584,9 +556,6 @@ func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 
 // Forget ΩF(ϱ, φ, μ, (x, y), t)
 func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < ForgetCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= ForgetCost
 
 	// let [o, z] = φ0,1
@@ -669,9 +638,6 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 
 // Yield Ω_Taurus(ϱ, φ, μ, (x, y))
 func Yield(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < YieldCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= YieldCost
 
 	addr := regs[A0]
@@ -692,9 +658,6 @@ func Yield(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 
 // Provide Ω_Aries(ϱ, φ, µ, (x,y), s)
 func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceId block.ServiceId) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < ProvideCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= ProvideCost
 
 	// let [o, z] = φ8,9

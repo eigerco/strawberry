@@ -122,17 +122,17 @@ func (r *Refine) InvokePVM(
 			gasCounter, regs, mem, ctxPair, err = host_call.Expunge(gasCounter, regs, mem, ctxPair)
 		default:
 			regs[polkavm.A0] = uint64(host_call.WHAT)
-			if gasCounter < RefineCost {
-				return 0, regs, mem, ctxPair, polkavm.ErrOutOfGas
-			}
 			gasCounter -= RefineCost
-
 		}
-		return gasCounter, regs, mem, ctxPair, nil
+		// otherwise if ϱ′ < 0
+		if gasCounter < 0 {
+			return gasCounter, regs, mem, ctxPair, polkavm.ErrOutOfGas
+		}
+		return gasCounter, regs, mem, ctxPair, err
 	}
 
 	// (g, r, (m, e)) = ΨM(Λ(δ[w_s], (p_x)t, w_c), 0, w_g, a, F, (∅, []))∶
-	remainingGas, result, ctxPair, err := interpreter.InvokeWholeProgram(pvmCode.Code, 0, polkavm.Gas(w.GasLimitRefine), args, hostCall, polkavm.RefineContextPair{
+	remainingGas, result, ctxPair, err := interpreter.InvokeWholeProgram(pvmCode.Code, 0, polkavm.UGas(w.GasLimitRefine), args, hostCall, polkavm.RefineContextPair{
 		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
 		Segments:         []work.Segment{},
 	})

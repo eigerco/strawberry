@@ -13,7 +13,7 @@ import (
 // - ErrOutOfGas (∞)
 // - ErrPanic (☇)
 // - ErrPageFault (F)
-func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.Gas, args []byte, hostFunc polkavm.HostCall[X], x X) (polkavm.Gas, []byte, X, error) {
+func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.UGas, args []byte, hostFunc polkavm.HostCall[X], x X) (polkavm.UGas, []byte, X, error) {
 	program, err := polkavm.ParseBlob(p)
 	if err != nil {
 		return 0, nil, x, polkavm.ErrPanicf(err.Error())
@@ -33,14 +33,14 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.G
 
 	_, gasRemaining, regs, memory1 := i.Results()
 	// u = ϱ − max(ϱ′, 0)
-	gasUsed := initialGas - polkavm.Gas(max(gasRemaining, 0))
+	gasUsed := initialGas - polkavm.UGas(max(gasRemaining, 0))
 
 	if errors.Is(err, polkavm.ErrHalt) {
 		result := make([]byte, regs[polkavm.A1])
 		if err := memory1.Read(regs[polkavm.A0], result); err != nil {
 			// Do not return anything if registers 7 and 8 are not pointing to a valid memory page
 			// (u, [], x′) if ε = ∎ ∧ Nφ′7...+φ′8 ⊄ Vμ′
-			return polkavm.Gas(gasUsed), []byte{}, x1, nil
+			return gasUsed, []byte{}, x1, nil
 		}
 
 		// Return the memory that registers 7 and 8 are pointing to, if it's a valid memory page
@@ -68,9 +68,7 @@ func InvokeHostCall[X any](
 		hostCallIndex, err := Invoke(i)
 		if err != nil {
 			if errors.Is(err, polkavm.ErrHostCall) {
-				var gasRemaining polkavm.Gas
-				gasRemaining, i.regs, i.memory, x, err = hostCall(hostCallIndex, polkavm.Gas(i.gasRemaining), i.regs, i.memory, x)
-				i.gasRemaining = int64(gasRemaining)
+				i.gasRemaining, i.regs, i.memory, x, err = hostCall(hostCallIndex, i.gasRemaining, i.regs, i.memory, x)
 				if err != nil {
 					return x, err
 				}
@@ -96,6 +94,6 @@ func Invoke(i *Instance) (uint64, error) {
 	}
 }
 
-func (i *Instance) Results() (uint64, int64, polkavm.Registers, polkavm.Memory) {
+func (i *Instance) Results() (uint64, polkavm.Gas, polkavm.Registers, polkavm.Memory) {
 	return i.instructionCounter, i.gasRemaining, i.regs, i.memory
 }
