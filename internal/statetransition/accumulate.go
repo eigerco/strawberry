@@ -11,6 +11,7 @@ import (
 	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/polkavm/host_call"
 	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
+	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/work"
@@ -46,15 +47,19 @@ type Accumulator struct {
 }
 
 // InvokePVM ΨA(U, N_T, N_S, N_G, ⟦I⟧) → O Equation (B.9)
-func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []*state.AccumulationInput) AccumulationOutput {
+func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtime.Timeslot, serviceIndex block.ServiceId, gas uint64, accOperand []*state.AccumulationInput) (AccumulationOutput, error) {
 	account := accState.ServiceState[serviceIndex]
 	// s = e except s_d[s]b = e_d[s]b + [∑ r∈x] r_a
-	stateWithBalance := addTransfersBalance(accState, serviceIndex, accOperand)
+	stateWithBalance, trErr := addTransfersBalance(accState, serviceIndex, accOperand)
+	if trErr != nil {
+		log.VM.Error().Err(trErr).Msgf("error adding transfers balance")
+		return AccumulationOutput{}, trErr
+	}
 
 	c := account.EncodedCodeAndMetadata()
 	// if c = ∅ ∨ ∣c∣ > WC
 	if c == nil || len(c) == work.MaxSizeServiceCode {
-		return AccumulationOutput{AccumulationState: stateWithBalance}
+		return AccumulationOutput{AccumulationState: stateWithBalance}, nil
 	}
 
 	// I(s, s)^2
@@ -65,12 +70,12 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	newCtxPair.RegularCtx, err = a.newCtx(stateWithBalance, serviceIndex)
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error creating context")
-		return AccumulationOutput{AccumulationState: accState.Clone()}
+		return AccumulationOutput{AccumulationState: accState.Clone()}, nil
 	}
 	newCtxPair.ExceptionalCtx, err = a.newCtx(stateWithBalance.Clone(), serviceIndex)
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error creating context")
-		return AccumulationOutput{AccumulationState: accState.Clone()}
+		return AccumulationOutput{AccumulationState: accState.Clone()}, nil
 	}
 
 	// E(t, s, ↕o)
@@ -85,7 +90,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	})
 	if err != nil {
 		log.VM.Error().Err(err).Msgf("error encoding arguments")
-		return AccumulationOutput{AccumulationState: accState.Clone()}
+		return AccumulationOutput{AccumulationState: accState.Clone()}, nil
 	}
 
 	// F (equation B.10)
@@ -164,7 +169,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 			DeferredTransfers: newCtxPair.ExceptionalCtx.DeferredTransfers,
 			ProvidedPreimages: newCtxPair.ExceptionalCtx.ProvidedPreimages,
 			Result:            newCtxPair.ExceptionalCtx.AccumulationHash,
-		}
+		}, nil
 	}
 
 	output := AccumulationOutput{
@@ -180,15 +185,15 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		h := crypto.Hash(ret)
 		output.Result = &h
 
-		return output
+		return output, nil
 	}
 
-	return output
+	return output, nil
 }
 
 // s = e except s_d[s]b = e_d[s]b + [∑ r∈x] r_a
 // x = [i S i <− i, i ∈ X] (part of eq. B.9 v0.7.1)
-func addTransfersBalance(accState state.AccumulationState, serviceId block.ServiceId, operands []*state.AccumulationInput) state.AccumulationState {
+func addTransfersBalance(accState state.AccumulationState, serviceId block.ServiceId, operands []*state.AccumulationInput) (state.AccumulationState, error) {
 	newAccState := accState.Clone()
 	for _, op := range operands {
 		_, val, err := op.IndexValue()
@@ -198,11 +203,16 @@ func addTransfersBalance(accState state.AccumulationState, serviceId block.Servi
 		dtransfer, isTransfer := val.(service.DeferredTransfer)
 		svc, serviceExists := newAccState.ServiceState[serviceId]
 		if isTransfer && serviceExists {
-			svc.Balance += dtransfer.Balance
+			var ok bool
+			svc.Balance, ok = safemath.Add(svc.Balance, dtransfer.Balance)
+			if !ok {
+				log.VM.Error().Msgf("Balance overflow when adding deferred transfer")
+				return state.AccumulationState{}, safemath.ErrOverflow
+			}
 			newAccState.ServiceState[serviceId] = svc
 		}
 	}
-	return newAccState
+	return newAccState, nil
 }
 
 // newCtx (B.9)

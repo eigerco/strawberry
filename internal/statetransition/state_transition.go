@@ -1486,7 +1486,7 @@ func (a *Accumulator) Delta1(
 	}
 
 	// InvokePVM VM for accumulation (ΨA)
-	return a.InvokePVM(accumulationState, a.newTimeslot, serviceIndex, gasLimit, operands), nil
+	return a.InvokePVM(accumulationState, a.newTimeslot, serviceIndex, gasLimit, operands)
 }
 
 // P(d ⟨NS → A⟩,p {(NS , B)}) → ⟨NS → A⟩ (eq. 12.21 v0.7.1)
