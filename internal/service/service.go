@@ -110,34 +110,83 @@ func (sa *ServiceAccount) SetTotalNumberOfOctets(n uint64) {
 }
 
 // InsertStorage adds a new storage entry and updates item and octet counters accordingly (9.8 v0.7.0)
-func (sa *ServiceAccount) InsertStorage(key statekey.StateKey, originalKeySize uint64, value []byte) {
+func (sa *ServiceAccount) InsertStorage(key statekey.StateKey, originalKeySize uint64, value []byte) error {
 	if sa.globalKV == nil {
 		sa.globalKV = make(map[statekey.StateKey][]byte)
 	}
 
+	var newTotalNumberOfItems uint32 = sa.totalNumberOfItems
+	var newTotalNumberOfOctets uint64 = sa.totalNumberOfOctets
+
 	if prevVal, ok := sa.GetStorage(key); !ok {
-		sa.totalNumberOfItems += 1
-		sa.totalNumberOfOctets += 34 + originalKeySize + uint64(len(value))
+		newTotalNumberOfItems, ok = safemath.Add(newTotalNumberOfItems, 1)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+
+		newTotalNumberOfOctets, ok = safemath.Add(newTotalNumberOfOctets, 34)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+		newTotalNumberOfOctets, ok = safemath.Add(newTotalNumberOfOctets, originalKeySize)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+		newTotalNumberOfOctets, ok = safemath.Add(newTotalNumberOfOctets, uint64(len(value)))
+		if !ok {
+			return safemath.ErrOverflow
+		}
 	} else {
-		sa.totalNumberOfOctets -= uint64(len(prevVal))
-		sa.totalNumberOfOctets += uint64(len(value))
+		newTotalNumberOfOctets, ok = safemath.Sub(newTotalNumberOfOctets, uint64(len(prevVal)))
+		if !ok {
+			return safemath.ErrOverflow
+		}
+
+		newTotalNumberOfOctets, ok = safemath.Add(newTotalNumberOfOctets, uint64(len(value)))
+		if !ok {
+			return safemath.ErrOverflow
+		}
 	}
 
 	sa.globalKV[key] = value
+
+	sa.totalNumberOfItems = newTotalNumberOfItems
+	sa.totalNumberOfOctets = newTotalNumberOfOctets
+
+	return nil
 }
 
 // DeleteStorage removes a storage entry and updates both the item and octet counters accordingly (9.8 v0.7.0)
-func (sa *ServiceAccount) DeleteStorage(key statekey.StateKey, keyLen uint64, valueLen uint64) {
+func (sa *ServiceAccount) DeleteStorage(key statekey.StateKey, keyLen uint64, valueLen uint64) error {
 	if _, ok := sa.GetStorage(key); ok {
+		var newTotalNumberOfItems uint32 = sa.totalNumberOfItems
+		var newTotalNumberOfOctets uint64 = sa.totalNumberOfOctets
+
+		newTotalNumberOfItems, ok = safemath.Sub(newTotalNumberOfItems, 1)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+
+		newTotalNumberOfOctets, ok = safemath.Sub(newTotalNumberOfOctets, 34)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+		newTotalNumberOfOctets, ok = safemath.Sub(newTotalNumberOfOctets, keyLen)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+		newTotalNumberOfOctets, ok = safemath.Sub(newTotalNumberOfOctets, valueLen)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+
 		delete(sa.globalKV, key)
-		if sa.totalNumberOfItems >= 1 {
-			sa.totalNumberOfItems -= 1
-		}
-		sizeToSubtract := 34 + keyLen + valueLen
-		if sa.totalNumberOfOctets >= sizeToSubtract {
-			sa.totalNumberOfOctets -= 34 + keyLen + valueLen
-		}
+
+		sa.totalNumberOfItems = newTotalNumberOfItems
+		sa.totalNumberOfOctets = newTotalNumberOfOctets
 	}
+
+	return nil
 }
 
 // GetPreimageMeta retrieves and unmarshals the preimage metadata (historical timeslots) associated with the given key
@@ -166,23 +215,29 @@ func (sa *ServiceAccount) InsertPreimageMeta(key statekey.StateKey, length uint6
 		sa.globalKV = make(map[statekey.StateKey][]byte)
 	}
 
+	var newTotalNumberOfItems uint32 = sa.totalNumberOfItems
+	var newTotalNumberOfOctets uint64 = sa.totalNumberOfOctets
+
 	if _, ok := sa.GetPreimageMeta(key); !ok {
 		// Update footprint
-		sa.totalNumberOfItems, ok = safemath.Add(sa.totalNumberOfItems, 2)
+		newTotalNumberOfItems, ok = safemath.Add(newTotalNumberOfItems, 2)
 		if !ok {
 			return safemath.ErrOverflow
 		}
-		sa.totalNumberOfOctets, ok = safemath.Add(sa.totalNumberOfOctets, 81)
+		newTotalNumberOfOctets, ok = safemath.Add(newTotalNumberOfOctets, 81)
 		if !ok {
 			return safemath.ErrOverflow
 		}
-		sa.totalNumberOfOctets, ok = safemath.Add(sa.totalNumberOfOctets, length)
+		newTotalNumberOfOctets, ok = safemath.Add(newTotalNumberOfOctets, length)
 		if !ok {
 			return safemath.ErrOverflow
 		}
 	}
 
 	sa.globalKV[key] = data
+
+	sa.totalNumberOfItems = newTotalNumberOfItems
+	sa.totalNumberOfOctets = newTotalNumberOfOctets
 
 	return nil
 }
@@ -207,17 +262,32 @@ func (sa *ServiceAccount) UpdatePreimageMeta(key statekey.StateKey, newValue Pre
 }
 
 // DeletePreimageMeta removes a preimage entry and updates both the item and octet counters accordingly (9.8 v0.7.0)
-func (sa *ServiceAccount) DeletePreimageMeta(key statekey.StateKey, length uint64) {
+func (sa *ServiceAccount) DeletePreimageMeta(key statekey.StateKey, length uint64) error {
 	if _, ok := sa.GetPreimageMeta(key); ok {
+		var newTotalNumberOfItems uint32 = sa.totalNumberOfItems
+		var newTotalNumberOfOctets uint64 = sa.totalNumberOfOctets
+
+		newTotalNumberOfItems, ok = safemath.Sub(newTotalNumberOfItems, 2)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+
+		newTotalNumberOfOctets, ok = safemath.Sub(newTotalNumberOfOctets, 81)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+		newTotalNumberOfOctets, ok = safemath.Sub(newTotalNumberOfOctets, length)
+		if !ok {
+			return safemath.ErrOverflow
+		}
+
 		delete(sa.globalKV, key)
-		if sa.totalNumberOfItems >= 2 {
-			sa.totalNumberOfItems -= 2
-		}
-		sizeToSubtract := 81 + length
-		if sa.totalNumberOfOctets >= sizeToSubtract {
-			sa.totalNumberOfOctets -= sizeToSubtract
-		}
+
+		sa.totalNumberOfItems = newTotalNumberOfItems
+		sa.totalNumberOfOctets = newTotalNumberOfOctets
 	}
+
+	return nil
 }
 
 type CodeWithMetadata struct {
@@ -234,21 +304,35 @@ func (sa *ServiceAccount) EncodedCodeAndMetadata() []byte {
 }
 
 // ThresholdBalance (9.8 v0.7.0) ∀a ∈ V(δ): at
-func (sa *ServiceAccount) ThresholdBalance() uint64 {
+func (sa *ServiceAccount) ThresholdBalance() (uint64, error) {
 	ai := uint64(sa.totalNumberOfItems)
 	ao := sa.totalNumberOfOctets
 
+	var sum uint64 = BasicMinimumBalance
 	// at ∈ NB ≡ max(0,BS + BI ⋅ ai + BL ⋅ ao − af )
-	sum := BasicMinimumBalance +
-		AdditionalMinimumBalancePerItem*ai +
-		AdditionalMinimumBalancePerOctet*ao
+	itemsMinBalance, ok := safemath.Mul(AdditionalMinimumBalancePerItem, ai)
+	if !ok {
+		return 0, safemath.ErrOverflow
+	}
+	octetsMinBalance, ok := safemath.Mul(AdditionalMinimumBalancePerOctet, ao)
+	if !ok {
+		return 0, safemath.ErrOverflow
+	}
+	sum, ok = safemath.Add(sum, itemsMinBalance)
+	if !ok {
+		return 0, safemath.ErrOverflow
+	}
+	sum, ok = safemath.Add(sum, octetsMinBalance)
+	if !ok {
+		return 0, safemath.ErrOverflow
+	}
 
 	// avoid underflow
 	if sum < sa.GratisStorageOffset {
-		return 0
+		return 0, nil
 	}
 
-	return sum - sa.GratisStorageOffset
+	return sum - sa.GratisStorageOffset, nil
 }
 
 // AddPreimage adds a preimage to the service account's preimage lookup and metadata

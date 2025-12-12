@@ -399,7 +399,8 @@ func TestRead(t *testing.T) {
 
 	sa := service.NewServiceAccount()
 
-	sa.InsertStorage(k, uint64(len(keyData)), value)
+	err = sa.InsertStorage(k, uint64(len(keyData)), value)
+	require.NoError(t, err)
 
 	serviceState := service.ServiceState{
 		serviceId: sa,
@@ -561,10 +562,12 @@ func TestInfo(t *testing.T) {
 	err = jam.Unmarshal(data, &receivedAccountInfo)
 	require.NoError(t, err)
 
+	thresholdBalance, err := sampleAccount.ThresholdBalance()
+	require.NoError(t, err)
 	expectedAccountInfo := host_call.AccountInfo{
 		CodeHash:                       crypto.Hash(sampleAccount.CodeHash[:]),
 		Balance:                        sampleAccount.Balance,
-		ThresholdBalance:               sampleAccount.ThresholdBalance(),
+		ThresholdBalance:               thresholdBalance,
 		GasLimitForAccumulator:         sampleAccount.GasLimitForAccumulator,
 		GasLimitOnTransfer:             sampleAccount.GasLimitOnTransfer,
 		TotalStorageSize:               sampleAccount.GetTotalNumberOfOctets(),
