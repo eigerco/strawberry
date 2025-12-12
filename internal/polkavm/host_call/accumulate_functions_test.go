@@ -1044,7 +1044,7 @@ func TestAccumulate(t *testing.T) {
 			rwAddress := RWAddressBase
 			for addrReg, v := range tc.alloc {
 				require.Greater(t, addrReg, S1)
-				err = mem.Write(rwAddress, v)
+				err = mem.Write(uint32(rwAddress), v)
 				require.NoError(t, err)
 
 				initialRegs[addrReg] = rwAddress

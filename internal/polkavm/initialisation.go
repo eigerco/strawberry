@@ -35,26 +35,26 @@ func InitializeStandardProgram(program *Program, argsData []byte) (Memory, Regis
 func InitializeMemory(roData, rwData, argsData []byte, stackSize uint32, initialPages uint16) (Memory, error) {
 	// 5Z_Z + Z(|o|) + Z(|w| + zZ_P) + Z(s) + Z_I ≤ 2^32 (eq. A.41 v0.7.0)
 	if 5*MemoryZoneSize+
-		int(alignToZone(uint64(len(rwData))+uint64(initialPages)*PageSize))+
-		int(alignToZone(uint64(stackSize)))+
+		int(roundUpToZone(uint32(len(rwData))+uint32(initialPages)*PageSize))+
+		int(roundUpToZone(stackSize))+
 		InputDataSize > AddressSpaceSize {
 		return Memory{}, ErrMemoryLayoutOverflowsAddressSpace
 	}
-	stackSizeAligned := alignToPage(uint64(stackSize)) // P(s)
+	stackSizeAligned := roundUpToPage(stackSize) // P(s)
 	mem := Memory{
 		// if Z_Z		≤ i < Z_Z + |o|
 		// if Z_Z + |o| ≤ i < Z_Z + P(|o|)
 		ro: memorySegment{
-			address: MemoryZoneSize,                                      // Z_Z
-			access:  ReadOnly,                                            // a: R
-			data:    copySized(roData, alignToPage(uint64(len(roData)))), // v: o_(i−Z_Z)
+			address: MemoryZoneSize,                                        // Z_Z
+			access:  ReadOnly,                                              // a: R
+			data:    copySized(roData, roundUpToPage(uint32(len(roData)))), // v: o_(i−Z_Z)
 		},
 		// if 2Z_Z + Z(|o|) 	  ≤ i < 2Z_Z + Z(|o|) + |w|
 		// if 2Z_Z + Z(|o|) + |w| ≤ i < 2Z_Z + Z(|o|) + P(|w|) + zZ_P
 		rw: memorySegment{
-			address: 2*MemoryZoneSize + alignToZone(uint64(len(roData))),                               // 2Z_Z + Z(|o|)
-			access:  ReadWrite,                                                                         // a: W
-			data:    copySized(rwData, alignToPage(uint64(len(rwData)))+uint64(initialPages)*PageSize), // v: w_(i−(2Z_Z +Z(|o|)))
+			address: 2*MemoryZoneSize + roundUpToZone(uint32(len(roData))),                               // 2Z_Z + Z(|o|)
+			access:  ReadWrite,                                                                           // a: W
+			data:    copySized(rwData, roundUpToPage(uint32(len(rwData)))+uint32(initialPages)*PageSize), // v: w_(i−(2Z_Z +Z(|o|)))
 		},
 		// if 2^32 − 2Z_Z − Z_I − P(s) ≤ i < 2^32 − 2Z_Z − Z_I
 		stack: memorySegment{
@@ -67,15 +67,19 @@ func InitializeMemory(roData, rwData, argsData []byte, stackSize uint32, initial
 		args: memorySegment{
 			address: ArgsAddressLow,
 			access:  ReadOnly,
-			data:    copySized(argsData, alignToPage(uint64(len(argsData)))),
+			data:    copySized(argsData, roundUpToPage(uint32(len(argsData)))),
 		},
 	}
-	mem.currentHeapPointer = mem.rw.address + alignToPage(uint64(len(rwData))) + uint64(initialPages)*PageSize
+	mem.ro.end = mem.ro.address + uint32(len(mem.ro.data))
+	mem.rw.end = mem.rw.address + uint32(len(mem.rw.data))
+	mem.stack.end = mem.stack.address + uint32(len(mem.stack.data))
+	mem.args.end = mem.args.address + uint32(len(mem.args.data))
+	mem.currentHeapPointer = mem.rw.end
 	return mem, nil
 }
 
-func InitializeCustomMemory(roAddr, rwAddr, stackAddr, argsAddr, roSize, rwSize, stackSize, argsSize uint64) Memory {
-	return Memory{
+func InitializeCustomMemory(roAddr, rwAddr, stackAddr, argsAddr, roSize, rwSize, stackSize, argsSize uint32) Memory {
+	mem := Memory{
 		ro: memorySegment{
 			address: roAddr,
 			access:  ReadOnly,
@@ -97,9 +101,15 @@ func InitializeCustomMemory(roAddr, rwAddr, stackAddr, argsAddr, roSize, rwSize,
 			data:    make([]byte, argsSize),
 		},
 	}
+	mem.ro.end = mem.ro.address + uint32(len(mem.ro.data))
+	mem.rw.end = mem.rw.address + uint32(len(mem.rw.data))
+	mem.stack.end = mem.stack.address + uint32(len(mem.stack.data))
+	mem.args.end = mem.args.address + uint32(len(mem.args.data))
+	mem.currentHeapPointer = mem.rw.end
+	return mem
 }
 
-// InitializeRegisters (eq. A.43 v0.7.0)
+// InitializeRegisters (eq. A.43 v0.7.2)
 func InitializeRegisters(argsLen int) Registers {
 	return Registers{
 		RA: AddressReturnToHost, // 2^32 − 2^16 		if i = 0
@@ -110,26 +120,18 @@ func InitializeRegisters(argsLen int) Registers {
 	}
 }
 
-func copySized(data []byte, size uint64) []byte {
+func copySized(data []byte, size uint32) []byte {
 	dst := make([]byte, size)
 	copy(dst, data)
 	return dst
 }
 
-// alignToPage let P(x ∈ N) ≡ Z_P⌈x/Z_P⌉ (eq. A.40 v0.7.0)
-func alignToPage(value uint64) uint64 {
-	if value&(PageSize-1) == 0 {
-		return value
-	}
-
-	return (value + PageSize) & ^(uint64(PageSize) - 1)
+// roundUpToPage let P(x ∈ N) ≡ Z_P⌈x/Z_P⌉ (eq. A.40 v0.7.2)
+func roundUpToPage(value uint32) uint32 {
+	return PageSize * ((value + PageSize - 1) / PageSize)
 }
 
-// alignToZone let Z(x ∈ N) ≡ Z_Z⌈x/Z_Z⌉ (eq. A.40 v0.7.0)
-func alignToZone(value uint64) uint64 {
-	if value&(MemoryZoneSize-1) == 0 {
-		return value
-	}
-
-	return (value + MemoryZoneSize) & ^(uint64(MemoryZoneSize) - 1)
+// roundUpToZone let Z(x ∈ N) ≡ Z_Z⌈x/Z_Z⌉ (eq. A.40 v0.7.2)
+func roundUpToZone(value uint32) uint32 {
+	return MemoryZoneSize * ((value + MemoryZoneSize - 1) / MemoryZoneSize)
 }

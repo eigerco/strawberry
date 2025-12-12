@@ -37,7 +37,7 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.U
 
 	if errors.Is(err, polkavm.ErrHalt) {
 		result := make([]byte, regs[polkavm.A1])
-		if err := memory1.Read(regs[polkavm.A0], result); err != nil {
+		if err := memory1.Read(uint32(regs[polkavm.A0]), result); err != nil {
 			// Do not return anything if registers 7 and 8 are not pointing to a valid memory page
 			// (u, [], x′) if ε = ∎ ∧ Nφ′7...+φ′8 ⊄ Vμ′
 			return gasUsed, []byte{}, x1, nil

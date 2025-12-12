@@ -59,7 +59,7 @@ func (i *Instance) deductGas(cost polkavm.Gas) error {
 // load E−1_n(μ↺_{a...+n}) where a is address and n is length
 func (i *Instance) load(address uint64, length int, v any) error {
 	slice := make([]byte, length)
-	if err := i.memory.Read(address, slice); err != nil {
+	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
 
@@ -75,7 +75,7 @@ func (i *Instance) store(address uint64, v any) error {
 	if err != nil {
 		return err
 	}
-	if err = i.memory.Write(address, data); err != nil {
+	if err = i.memory.Write(uint32(address), data); err != nil {
 		return err
 	}
 

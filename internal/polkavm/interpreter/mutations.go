@@ -61,7 +61,7 @@ func (i *Instance) LoadImm(dst polkavm.Reg, imm uint64) {
 // LoadU8 load_u8 φ′A = μ↺_νX
 func (i *Instance) LoadU8(dst polkavm.Reg, address uint64) error {
 	slice := make([]byte, 1)
-	if err := i.memory.Read(address, slice); err != nil {
+	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
 	i.setAndSkip(dst, uint64(slice[0]))
@@ -71,7 +71,7 @@ func (i *Instance) LoadU8(dst polkavm.Reg, address uint64) error {
 // LoadI8 load_i8 φ′A = X1(μ↺_νX)
 func (i *Instance) LoadI8(dst polkavm.Reg, address uint64) error {
 	slice := make([]byte, 1)
-	if err := i.memory.Read(address, slice); err != nil {
+	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
 	i.setAndSkip(dst, uint64(int8(slice[0])))
@@ -236,11 +236,11 @@ func (i *Instance) MoveReg(dst polkavm.Reg, s polkavm.Reg) {
 // The term h above refers to the beginning of the heap
 func (i *Instance) Sbrk(dst polkavm.Reg, sizeReg polkavm.Reg) error {
 	size := i.regs[sizeReg]
-	heapTop, err := i.memory.Sbrk(size)
+	heapTop, err := i.memory.Sbrk(uint32(size))
 	if err != nil {
 		return err
 	}
-	i.setAndSkip(dst, heapTop)
+	i.setAndSkip(dst, uint64(heapTop))
 	return nil
 }
 
@@ -317,7 +317,7 @@ func (i *Instance) StoreIndirectU64(src polkavm.Reg, base polkavm.Reg, offset ui
 // LoadIndirectU8 load_ind_u8 φ′A = μ↺_{φB+νX}
 func (i *Instance) LoadIndirectU8(dst polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	slice := make([]byte, 1)
-	if err := i.memory.Read(i.regs[base]+offset, slice); err != nil {
+	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
 	i.setAndSkip(dst, uint64(slice[0]))
@@ -327,7 +327,7 @@ func (i *Instance) LoadIndirectU8(dst polkavm.Reg, base polkavm.Reg, offset uint
 // LoadIndirectI8 load_ind_i8 φ′A = Z−1_8(Z1(μ↺_{φB+νX}))
 func (i *Instance) LoadIndirectI8(dst polkavm.Reg, base polkavm.Reg, offset uint64) error {
 	slice := make([]byte, 1)
-	if err := i.memory.Read(i.regs[base]+offset, slice); err != nil {
+	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
 	i.setAndSkip(dst, uint64(int8(slice[0])))
