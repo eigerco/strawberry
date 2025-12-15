@@ -22,7 +22,7 @@ var ErrOutOfGas = fmt.Errorf("out of gas")
 // ErrPageFault a page fault (attempt to data some address in RAM which is not accessible). This includes the address at fault. (F)
 type ErrPageFault struct {
 	Reason  string
-	Address uint64
+	Address uint32
 }
 
 func (e *ErrPageFault) Error() string {

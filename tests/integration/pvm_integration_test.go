@@ -38,13 +38,13 @@ type TestCase struct {
 }
 
 type Page struct {
-	Address    uint64 `json:"address"`
-	Length     uint64 `json:"length"`
+	Address    uint32 `json:"address"`
+	Length     uint32 `json:"length"`
 	IsWritable bool   `json:"is-writable"`
 }
 
 type MemoryChunk struct {
-	Address  uint64 `json:"address"`
+	Address  uint32 `json:"address"`
 	Contents []byte `json:"contents"`
 }
 
@@ -111,7 +111,7 @@ func Test_PVM_Vectors(t *testing.T) {
 }
 
 func getMemoryMap(pageMap []Page) polkavm.Memory {
-	var roAddr, rwAddr, stackAddr, roSize, rwSize, stackSize uint64
+	var roAddr, rwAddr, stackAddr, roSize, rwSize, stackSize uint32
 	for _, page := range pageMap {
 		if !page.IsWritable {
 			roAddr = page.Address

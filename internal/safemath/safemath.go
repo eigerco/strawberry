@@ -1,6 +1,8 @@
 package safemath
 
-import "errors"
+import (
+	"errors"
+)
 
 type Integer interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 |
