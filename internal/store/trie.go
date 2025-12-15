@@ -8,6 +8,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/merkle/trie"
+	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/pkg/db"
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 )
@@ -410,7 +411,10 @@ func (t *Trie) FetchStateTrieRange(rootHash crypto.Hash, startKey, endKey [31]by
 				// Check if we've exceeded max size
 				// Calculate total response size including boundary nodes
 				tempBoundaryNodes := extractBoundaryNodes(firstKeyPath, lastKeyPath, allNodes)
-				tempSize := calculateResponseSize(pairs, tempBoundaryNodes)
+				tempSize, err := calculateResponseSize(pairs, tempBoundaryNodes)
+				if err != nil {
+					return TrieRangeResult{}, err
+				}
 
 				// Check if adding this pair would exceed maxSize and we have more than one key
 				if tempSize > maxSize && len(pairs) > 1 {
@@ -548,24 +552,43 @@ func extractBoundaryNodes(firstKeyPath, lastKeyPath []crypto.Hash, allNodes map[
 }
 
 // calculateResponseSize calculates the total size of the response in bytes, including key/value pairs and boundary nodes
-func calculateResponseSize(pairs []KeyValuePair, nodes []trie.Node) uint32 {
-	var size uint32 = 0
+func calculateResponseSize(pairs []KeyValuePair, nodes []trie.Node) (uint32, error) {
+	var (
+		size uint32 = 0
+		ok   bool
+	)
 
 	// Size of the boundary nodes
 	// Add 4 bytes for the length prefix of the nodes array
 	size += 4 // Array length prefix
 	for _, node := range nodes {
-		size += uint32(len(node))
+		size, ok = safemath.Add(size, uint32(len(node)))
+		if !ok {
+			return 0, safemath.ErrOverflow
+		}
 	}
 
 	// Size of the key/value pairs
 	// Add 4 bytes for the length prefix of the key/value array
-	size += 4 // Array length prefix
-	for _, pair := range pairs {
-		size += 31                      // Key size
-		size += 4                       // Value length prefix
-		size += uint32(len(pair.Value)) // Value size
+	size, ok = safemath.Add(size, 4)
+	if !ok {
+		return 0, safemath.ErrOverflow
 	}
 
-	return size
+	for _, pair := range pairs {
+		size, ok = safemath.Add(size, 31) // Key size
+		if !ok {
+			return 0, safemath.ErrOverflow
+		}
+		size, ok = safemath.Add(size, 4) // Value length prefix
+		if !ok {
+			return 0, safemath.ErrOverflow
+		}
+		size, ok = safemath.Add(size, uint32(len(pair.Value))) // Value size
+		if !ok {
+			return 0, safemath.ErrOverflow
+		}
+	}
+
+	return size, nil
 }
