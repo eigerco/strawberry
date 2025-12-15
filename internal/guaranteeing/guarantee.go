@@ -179,11 +179,7 @@ func DetermineValidatorsAndDataForPermutation(
 		}
 	}
 
-	validators, nullifiedKeys := validator.NullifyOffenders(validators, offendingValidators)
-	// If a banned validator was found to have participated, return an error
-	if len(nullifiedKeys) > 0 {
-		return safrole.ValidatorsData{}, crypto.Hash{}, 0, errors.New("banned validator")
-	}
+	validators, _ = validator.NullifyOffenders(validators, offendingValidators)
 	return validators, entropy, timeslotForPermutation, nil
 }
 
@@ -253,7 +249,6 @@ func verifySignatures(ge block.GuaranteesExtrinsic, validatorState validator.Val
 			validatorState.ArchivedValidators,
 		)
 
-		// If a banned validator was found to have participated, return an error
 		if err != nil {
 			return reporters, err
 		}
@@ -271,11 +266,15 @@ func verifySignatures(ge block.GuaranteesExtrinsic, validatorState validator.Val
 		message := append([]byte(state.SignatureContextGuarantee), reportHash[:]...)
 
 		for _, c := range g.Credentials {
+			validatorKey := validators[c.ValidatorIndex].Ed25519
+			// If a banned validator was found to have participated, return an error
+			if ed25519.IsEmpty(validatorKey) {
+				return reporters, errors.New("banned validator")
+			}
 			if !isValidatorAssignedToCore(c.ValidatorIndex, g.WorkReport.CoreIndex, coreAssignments) {
 				log.Printf("Validator %d not assigned to core %d", c.ValidatorIndex, g.WorkReport.CoreIndex)
 				return reporters, errors.New("wrong assignment")
 			}
-			validatorKey := validators[c.ValidatorIndex].Ed25519
 			// Verify signature
 			sigValid := ed25519.Verify(validatorKey, message, c.Signature[:])
 			if !sigValid {
