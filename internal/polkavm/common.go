@@ -46,14 +46,17 @@ func (m *Memory) Read(address uint32, data []byte) error {
 	if !ok {
 		return ErrPanicf("inaccessible memory; address overflow")
 	}
-
+	heapPtrRounded2Page, err := roundUpToPage(m.currentHeapPointer)
+	if err != nil {
+		return ErrPanicf("heap pointer overflow: %s", err)
+	}
 	var memoryData []byte
 	access := Inaccessible
 
 	if address >= m.stack.address && end <= m.stack.end {
 		memoryData = m.stack.data[address-m.stack.address : end-m.stack.address]
 		access = m.stack.access
-	} else if address >= m.rw.address && end <= roundUpToZone(m.currentHeapPointer) {
+	} else if address >= m.rw.address && end <= heapPtrRounded2Page {
 		memoryData = m.rw.data[address-m.rw.address : end-m.rw.address]
 		access = m.rw.access
 	} else if address >= m.ro.address && end <= m.ro.end {
@@ -89,13 +92,16 @@ func (m *Memory) Write(address uint32, data []byte) error {
 	if !ok {
 		return ErrPanicf("inaccessible memory; address overflow")
 	}
-
+	heapPtrRounded2Page, err := roundUpToPage(m.currentHeapPointer)
+	if err != nil {
+		return ErrPanicf("heap pointer overflow: %s", err)
+	}
 	var memoryData []byte
 	access := Inaccessible
 	if address >= m.stack.address && end <= m.stack.end {
 		memoryData = m.stack.data[address-m.stack.address : end-m.stack.address]
 		access = m.stack.access
-	} else if address >= m.rw.address && end <= roundUpToZone(m.currentHeapPointer) {
+	} else if address >= m.rw.address && end <= heapPtrRounded2Page {
 		memoryData = m.rw.data[address-m.rw.address : end-m.rw.address]
 		access = m.rw.access
 	} else if address >= m.ro.address && end <= m.ro.end {
@@ -128,11 +134,17 @@ func (m *Memory) Sbrk(size uint32) (uint32, error) {
 
 	result := m.currentHeapPointer
 
-	nextPageBoundary := roundUpToPage(m.currentHeapPointer)
+	nextPageBoundary, err := roundUpToPage(m.currentHeapPointer)
+	if err != nil {
+		return 0, ErrPanicf("unable to find the next page boundary: %s", err)
+	}
 	newHeapPointer := m.currentHeapPointer + size
 
 	if newHeapPointer > nextPageBoundary {
-		finalBoundary := roundUpToPage(newHeapPointer)
+		finalBoundary, err := roundUpToPage(newHeapPointer)
+		if err != nil {
+			return 0, ErrPanicf("unable to find the next page boundary: %s", err)
+		}
 		idxStart := nextPageBoundary / PageSize
 		idxEnd := finalBoundary / PageSize
 		pageCount := idxEnd - idxStart
@@ -159,16 +171,16 @@ func (m *Memory) allocatePages(startPage uint32, count uint32) {
 func (m *Memory) SetAccess(pageIndex uint32, access MemoryAccess) error {
 	address := pageIndex * PageSize
 
-	if address >= m.stack.address && address < m.stack.address+uint32(len(m.stack.data)) {
+	if address >= m.stack.address && address < m.stack.end {
 		m.stack.access = access
 		return nil
-	} else if address >= m.rw.address && address < m.rw.address+uint32(len(m.rw.data)) {
+	} else if address >= m.rw.address && address < m.rw.end {
 		m.rw.access = access
 		return nil
-	} else if address >= m.ro.address && address < m.ro.address+uint32(len(m.ro.data)) {
+	} else if address >= m.ro.address && address < m.ro.end {
 		m.ro.access = access
 		return nil
-	} else if address >= m.args.address && address < m.args.address+uint32(len(m.args.data)) {
+	} else if address >= m.args.address && address < m.args.end {
 		m.args.access = access
 		return nil
 	}
@@ -179,13 +191,13 @@ func (m *Memory) SetAccess(pageIndex uint32, access MemoryAccess) error {
 func (m *Memory) GetAccess(pageIndex uint32) MemoryAccess {
 	address := pageIndex * PageSize
 
-	if address >= m.stack.address && address < m.stack.address+uint32(len(m.stack.data)) {
+	if address >= m.stack.address && address < m.stack.end {
 		return m.stack.access
-	} else if address >= m.rw.address && address < m.rw.address+uint32(len(m.rw.data)) {
+	} else if address >= m.rw.address && address < m.rw.end {
 		return m.rw.access
-	} else if address >= m.ro.address && address < m.ro.address+uint32(len(m.ro.data)) {
+	} else if address >= m.ro.address && address < m.ro.end {
 		return m.ro.access
-	} else if address >= m.args.address && address < m.args.address+uint32(len(m.args.data)) {
+	} else if address >= m.args.address && address < m.args.end {
 		return m.args.access
 	}
 

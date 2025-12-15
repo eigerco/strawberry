@@ -102,7 +102,11 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 	var queue [state.PendingAuthorizersQueueSize]crypto.Hash
 	for i := range state.PendingAuthorizersQueueSize {
 		bytes := make([]byte, 32)
-		if err := mem.Read(uint32(addr)+uint32(32*i), bytes); err != nil {
+		queueAddr, ok := safemath.Add(uint32(addr), uint32(32*i))
+		if !ok {
+			return gas, regs, mem, ctxPair, ErrPanicf("address overflow")
+		}
+		if err := mem.Read(queueAddr, bytes); err != nil {
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
 		queue[i] = crypto.Hash(bytes)
@@ -147,7 +151,11 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 	addr := regs[A0]
 	for i := 0; i < common.NumberOfValidators; i++ {
 		bytes := make([]byte, 336)
-		if err := mem.Read(uint32(addr)+uint32(336*i), bytes); err != nil {
+		valAddr, ok := safemath.Add(uint32(addr), uint32(336*i))
+		if !ok {
+			return gas, regs, mem, ctxPair, ErrPanicf("address overflow")
+		}
+		if err := mem.Read(valAddr, bytes); err != nil {
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
 
