@@ -7,9 +7,9 @@ import (
 
 const (
 	AddressSpaceSize               = 1 << 32
-	DynamicAddressAlignment        = 2                           // Z_A = 2: The pvm dynamic address alignment factor (eq. A.18 v0.7.0)
-	InputDataSize                  = 1 << 24                     // Z_I: The standard pvm program initialization input data size (eq. A.39 v0.7.0)
-	MemoryZoneSize                 = 1 << 16                     // Z_Z: The standard pvm program initialization zone size (eq. A.39 v0.7.0)
+	DynamicAddressAlignment        = 2                           // Z_A = 2: The pvm dynamic address alignment factor (eq. A.18 v0.7.2)
+	InputDataSize                  = 1 << 24                     // Z_I: The standard pvm program initialization input data size (eq. A.39 v0.7.2)
+	MemoryZoneSize                 = 1 << 16                     // Z_Z: The standard pvm program initialization zone size (eq. A.39 v0.7.2)
 	PageSize                       = 1 << 12                     // Z_P: The pvm memory page size (eq. 4.25)
 	MaxPageIndex                   = AddressSpaceSize / PageSize // p = 2^32 / Z_P = 1 << 20
 	AddressReturnToHost            = AddressSpaceSize - MemoryZoneSize
@@ -22,7 +22,7 @@ var (
 	ErrMemoryLayoutOverflowsAddressSpace = errors.New("memory layout overflows address space")
 )
 
-// InitializeStandardProgram (eq. A.37 v0.7.0)
+// InitializeStandardProgram (eq. A.37 v0.7.2)
 func InitializeStandardProgram(program *Program, argsData []byte) (Memory, Registers, error) {
 	ram, err := InitializeMemory(program.ROData, program.RWData, argsData, program.ProgramMemorySizes.StackSize, program.ProgramMemorySizes.InitialHeapPages)
 	if err != nil {
@@ -32,13 +32,13 @@ func InitializeStandardProgram(program *Program, argsData []byte) (Memory, Regis
 	return ram, regs, nil
 }
 
-// InitializeMemory (eq. A.42 v0.7.0)
+// InitializeMemory (eq. A.42 v0.7.2)
 func InitializeMemory(roData, rwData, argsData []byte, stackSize uint32, initialPages uint16) (Memory, error) {
 	stackSizeRounded2Page, err := roundUpToPage(stackSize) // P(s)
 	if err != nil {
 		return Memory{}, err
 	}
-	stackSizeRounded2Zone, err := roundUpToZone(stackSize) // P(s)
+	stackSizeRounded2Zone, err := roundUpToZone(stackSize) // Z(s)
 	if err != nil {
 		return Memory{}, err
 	}

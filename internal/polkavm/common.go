@@ -18,7 +18,7 @@ const (
 	ReadWrite                        // W (Read-Write)
 )
 
-// Memory M ≡ (v ∈ B_(2^32), a ∈ ⟦{W, R, ∅}⟧p) (eq. 4.24 v0.7.0)
+// Memory M ≡ (v ∈ B_(2^32), a ∈ ⟦{W, R, ∅}⟧p) (eq. 4.24 v0.7.2)
 // for practical reasons we define each memory segment separately
 // so we don't have to allocate [2^32]byte unnecessarily
 type Memory struct {
@@ -36,7 +36,7 @@ type memorySegment struct {
 	access  MemoryAccess
 }
 
-// Read reads from the set of readable indices (Vμ) (implements eq. A.8 v0.7.0)
+// Read reads from the set of readable indices (Vμ) (implements eq. A.7 v0.7.2)
 func (m *Memory) Read(address uint32, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
@@ -67,7 +67,7 @@ func (m *Memory) Read(address uint32, data []byte) error {
 		access = m.args.access
 	}
 
-	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋ (eq. A.9 v0.7.0)
+	// F × ZP ⌊ min(x) mod 2^32 ÷ ZP ⌋ (eq. A.8 v0.7.2)
 	if access == Inaccessible {
 		// find the minimum page that is not readable
 		for i := address / PageSize; i <= end/PageSize; i++ {
@@ -82,7 +82,7 @@ func (m *Memory) Read(address uint32, data []byte) error {
 	return nil
 }
 
-// Write writes to the set of writeable indices (Vμ*) (implements eq. A.8 v0.7.0)
+// Write writes to the set of writeable indices (Vμ*) (implements eq. A.7 v0.7.2)
 func (m *Memory) Write(address uint32, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
