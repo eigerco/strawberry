@@ -3,6 +3,7 @@ package polkavm
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -91,11 +92,9 @@ func Deblob(bytecode []byte) ([]byte, jam.BitSequence, []uint64, error) {
 
 	var bitmask = jam.BitSequence{}
 	// E(k)
-	if err := dec.DecodeFixedLength(&bitmask, uint(buff.Len())); err != nil {
+	if err := dec.DecodeFixedLength(&bitmask, sizes.CodeLength); err != nil {
 		return nil, nil, nil, err
 	}
-
-	bitmask = bitmask[:sizes.CodeLength] // |k| = |c|
 
 	return code, bitmask, jumpTable, nil
 }
