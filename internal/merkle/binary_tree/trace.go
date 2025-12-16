@@ -35,5 +35,5 @@ func computePi(blobs [][]byte, index int) int {
 }
 
 func getMid(blobs [][]byte) int {
-	return (len(blobs) + 1) / 2 // Round up for odd lengths
+	return len(blobs) - len(blobs)/2 // Round up for odd lengths
 }
