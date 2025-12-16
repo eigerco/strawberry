@@ -2,6 +2,7 @@ package interpreter
 
 import (
 	"errors"
+	"math"
 
 	"github.com/eigerco/strawberry/internal/polkavm"
 )
@@ -36,8 +37,12 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.U
 	gasUsed := initialGas - polkavm.UGas(max(gasRemaining, 0))
 
 	if errors.Is(err, polkavm.ErrHalt) {
+		maybeAddr := regs[polkavm.A0]
 		result := make([]byte, regs[polkavm.A1])
-		if err := memory1.Read(uint32(regs[polkavm.A0]), result); err != nil {
+		if maybeAddr > math.MaxUint32 {
+			return gasUsed, []byte{}, x1, nil
+		}
+		if err := memory1.Read(uint32(maybeAddr), result); err != nil {
 			// Do not return anything if registers 7 and 8 are not pointing to a valid memory page
 			// (u, [], x′) if ε = ∎ ∧ Nφ′7...+φ′8 ⊄ Vμ′
 			return gasUsed, []byte{}, x1, nil

@@ -47,6 +47,9 @@ func HistoricalLookup(
 	addressToRead, addressToWrite := regs[A1], regs[A2]
 
 	hashData := make([]byte, 32)
+	if addressToRead > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
 	if err := mem.Read(uint32(addressToRead), hashData); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -85,6 +88,9 @@ func Export(
 	z := min(requestedLength, common.SizeOfSegment)
 
 	data := make([]byte, z)
+	if p > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
 	if err := mem.Read(uint32(p), data); err != nil {
 		// x = ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
@@ -126,6 +132,9 @@ func Machine(
 
 	// p = µ[po ... po+pz]
 	p := make([]byte, pz)
+	if po > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
 	err := mem.Read(uint32(po), p)
 	if err != nil {
 		// p = ∇
@@ -172,12 +181,18 @@ func Peek(
 
 	// (m[n]u)[s...s+z]
 	s := make([]byte, z)
+	if sReg > math.MaxUint32 {
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
 	err := u.Ram.Read(uint32(sReg), s)
 	if err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
 	}
 
 	// (φ′7, µ′) = (OK, µ′o...o+z = s)
+	if o > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
 	err = mem.Write(uint32(o), s)
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
@@ -204,11 +219,17 @@ func Poke(
 	}
 
 	s := make([]byte, z)
+	if sReg > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
 	err := mem.Read(uint32(sReg), s)
 	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
+	if o > math.MaxUint32 {
+		return gas, withCode(regs, OOB), mem, ctxPair, nil
+	}
 	err = innerPVM.Ram.Write(uint32(o), s)
 	if err != nil {
 		return gas, withCode(regs, OOB), mem, ctxPair, nil
@@ -257,6 +278,9 @@ func Pages(
 		for pageIndex := p; pageIndex < p+c; pageIndex++ {
 			start := pageIndex * uint64(PageSize)
 			zeroBuf := make([]byte, PageSize)
+			if start > math.MaxUint32 {
+				return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+			}
 			if err := u.Ram.Write(uint32(start), zeroBuf); err != nil {
 				return gas, regs, mem, ctxPair, err
 			}
@@ -338,9 +362,14 @@ func Invoke(
 	}
 	hostCall, invokeErr := interpreter.Invoke(i)
 	resultInstr, resultGas, resultRegs, resultMem := i.Results()
-	if bb, err := jam.Marshal([14]uint64(append([]uint64{uint64(resultGas)}, resultRegs[:]...))); err != nil {
+	bb, err := jam.Marshal([14]uint64(append([]uint64{uint64(resultGas)}, resultRegs[:]...)))
+	if err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, φ8, μ, m)
-	} else if err := mem.Write(uint32(addr), bb); err != nil {
+	}
+	if addr > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Write(uint32(addr), bb); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error()) // (panic, φ8, μ, m)
 	}
 	if invokeErr != nil {
