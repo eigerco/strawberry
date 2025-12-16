@@ -5,22 +5,28 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-// step Ψ1(B, B, ⟦NR⟧, NR, NG, ⟦NR⟧13, M) → ({☇, ∎, ▸} ∪ {F,-h} × NR, NR, ZG, ⟦NR⟧13, M) (A.6 v0.7.0)
+// step Ψ1(B, B, ⟦NR⟧, NR, NG, ⟦NR⟧13, M) → ({☇, ∎, ▸} ∪ {F,-h} × NR, NR, ZG, ⟦NR⟧13, M) (A.6 v0.7.2)
 func (i *Instance) step() (uint64, error) {
 	codeLength := uint64(len(i.code))
-	// ℓ ≡ skip(ı) (eq. A.20 v0.7.0)
+	// ℓ ≡ skip(ı) (eq. A.20 v0.7.2)
 	skip := polkavm.Skip(i.instructionCounter, i.bitmask)
 
-	// ζ ≡ c ⌢ [0, 0, ... ] (eq. A.4 v0.7.0)
+	// ζ ≡ c ⌢ [0, 0, ... ] (eq. A.4 v0.7.2)
 	// We cannot add infinite items to a slice, but we simulate this by defaulting to trap opcode
 	opcode := polkavm.Trap
 
 	if i.instructionCounter < codeLength {
-		// c_n (eq. A.19 v0.7.0)
+		// Eq. A.19 v0.7.2
+		// ⎧ c_n if kn = 1 ∧ cn ∈ U
+		// ⎨
+		// ⎩ 0 otherwise
 		opcode = polkavm.Opcode(i.code[i.instructionCounter])
+		if _, ok := polkavm.InstructionForType[opcode]; !i.bitmask[i.instructionCounter] || !ok {
+			opcode = polkavm.Trap
+		}
 	}
 
-	// ϱ′ = ϱ − ϱ∆ (eq. A.7 v0.7.0)
+	// ϱ′ = ϱ − ϱ∆ (eq. A.9 v0.7.2)
 	if err := i.deductGas(polkavm.GasCosts[opcode]); err != nil {
 		return 0, err
 	}
@@ -35,7 +41,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrImm: // (eq. A.21 v0.7.0)
+	case polkavm.InstrImm: // (eq. A.21 v0.7.2)
 		// let lX = min(4, ℓ)
 		lenX := min(4, skip)
 		if codeLength < i.instructionCounter+1+lenX {
@@ -56,7 +62,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrRegImmExt: // (eq. A.22 v0.7.0)
+	case polkavm.InstrRegImmExt: // (eq. A.22 v0.7.2)
 		if codeLength < i.instructionCounter+10 {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
@@ -73,7 +79,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrImm2: // (eq. A.23 v0.7.0)
+	case polkavm.InstrImm2: // (eq. A.23 v0.7.2)
 		if codeLength < i.instructionCounter+2 {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
@@ -112,7 +118,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrOffset: // (eq. A.24 v0.7.0)
+	case polkavm.InstrOffset: // (eq. A.24 v0.7.2)
 		// let lX = min(4, ℓ)
 		lenX := min(4, skip)
 		if codeLength < i.instructionCounter+1+lenX {
@@ -132,7 +138,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrRegImm: // (eq. A.25 v0.7.0)
+	case polkavm.InstrRegImm: // (eq. A.25 v0.7.2)
 		// let lX = min(4, max(0, ℓ − 1))
 		lenX := uint64(min(4, max(0, int(skip)-1)))
 		if codeLength < i.instructionCounter+2+lenX {
@@ -178,7 +184,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrRegImm2: // (eq. A.26 v0.7.0)
+	case polkavm.InstrRegImm2: // (eq. A.26 v0.7.2)
 		if codeLength < i.instructionCounter+2 {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
@@ -221,7 +227,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrRegImmOffset: // (eq. A.27 v0.7.0)
+	case polkavm.InstrRegImmOffset: // (eq. A.27 v0.7.2)
 		if codeLength < i.instructionCounter+2 {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
@@ -275,7 +281,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrRegReg: // (eq. A.28 v0.7.0)
+	case polkavm.InstrRegReg: // (eq. A.28 v0.7.2)
 		if codeLength < i.instructionCounter+1 {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
@@ -314,7 +320,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrReg2Imm: // (eq. A.29 v0.7.0)
+	case polkavm.InstrReg2Imm: // (eq. A.29 v0.7.2)
 		// let lX = min(4, max(0, ℓ − 1))
 		lenX := uint64(min(4, max(0, int(skip)-1)))
 		if codeLength < i.instructionCounter+2+lenX {
@@ -420,7 +426,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrReg2Offset: // (eq. A.30 v0.7.0)
+	case polkavm.InstrReg2Offset: // (eq. A.30 v0.7.2)
 		// let lX = min(4, max(0, ℓ − 1))
 		lenX := uint64(min(4, max(0, int(skip)-1)))
 		if codeLength < i.instructionCounter+2+lenX {
@@ -454,7 +460,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrReg2Imm2: // (eq. A.31 v0.7.0)
+	case polkavm.InstrReg2Imm2: // (eq. A.31 v0.7.2)
 		if codeLength < i.instructionCounter+3 {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
@@ -489,7 +495,7 @@ func (i *Instance) step() (uint64, error) {
 		default:
 			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
 		}
-	case polkavm.InstrReg3: // (eq. A.32 v0.7.0)
+	case polkavm.InstrReg3: // (eq. A.32 v0.7.2)
 		if codeLength < i.instructionCounter+2 {
 			return 0, polkavm.ErrPanicf("out of bound code access")
 		}
@@ -593,7 +599,7 @@ func (i *Instance) step() (uint64, error) {
 	return 0, nil
 }
 
-// Zn∈N∶ N28n → Z_−2^8n−1...2^8n−1 (eq. A.10 v0.7.0)
+// Zn∈N∶ N28n → Z_−2^8n−1...2^8n−1 (eq. A.10 v0.7.2)
 func signed(value uint64, length uint64) int64 {
 	switch length {
 	case 0:
@@ -613,7 +619,7 @@ func signed(value uint64, length uint64) int64 {
 	}
 }
 
-// Xn∈{0,1,2,3,4,8}∶ N^28n → N_R (eq. A.16 v0.7.0)
+// Xn∈{0,1,2,3,4,8}∶ N^28n → N_R (eq. A.16 v0.7.2)
 func sext(value uint64, length uint64) uint64 {
 	if length == 0 {
 		return 0

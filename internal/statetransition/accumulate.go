@@ -51,7 +51,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	// s = e except s_d[s]b = e_d[s]b + [∑ r∈x] r_a
 	stateWithBalance := addTransfersBalance(accState, serviceIndex, accOperand)
 
-	c := account.EncodedCodeAndMetadata()
+	_, c := account.EncodedCodeAndMetadata()
 	// if c = ∅ ∨ ∣c∣ > WC
 	if c == nil || len(c) == work.MaxSizeServiceCode {
 		return AccumulationOutput{AccumulationState: stateWithBalance}
@@ -156,7 +156,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	}
 
 	errPanic := &polkavm.ErrPanic{}
-	gasUsed, ret, newCtxPair, err := interpreter.InvokeWholeProgram(account.EncodedCodeAndMetadata(), 5, polkavm.UGas(gas), args, hostCallFunc, newCtxPair)
+	gasUsed, ret, newCtxPair, err := interpreter.InvokeWholeProgram(c, 5, polkavm.UGas(gas), args, hostCallFunc, newCtxPair)
 	if err != nil && (errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic)) {
 		log.VM.Error().Err(err).Msgf("Program invocation failed")
 		return AccumulationOutput{
