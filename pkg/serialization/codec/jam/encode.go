@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+	"github.com/eigerco/strawberry/internal/safemath"
 
 	"fmt"
 	"io"
@@ -317,24 +318,28 @@ func (bw *byteWriter) encodeBytes(b []byte) error {
 }
 
 func (bw *byteWriter) encodeBits(bitSequence BitSequence) error {
-	length := len(bitSequence) / 8
-	if len(bitSequence) > 0 && length%8 == 0 {
-		length += 1
-	}
-	err := bw.encodeLength(length)
-	if err != nil {
+	// Encode the bit length, not the byte length
+	if err := bw.encodeLength(len(bitSequence)); err != nil {
 		return err
 	}
 
-	bb := make([]byte, length)
+	numerator, ok := safemath.Add(len(bitSequence), 7)
+	if !ok {
+		return safemath.ErrOverflow
+	}
+	byteLen := numerator / 8
+	bb := make([]byte, byteLen)
 	for i, b := range bitSequence {
+		// if b is false then it's zero so we only need to handle the true (one) case
 		if b {
-			pow2 := byte(1 << (i % 8)) // powers of 2
-			bb[i/8] |= pow2            // identify the bit
+			// bb[i/8]    → byte containing bit i (bits 0-7 in byte 0, bits 8-15 in byte 1, ...)
+			// i%8        → bit position within that byte (0=LSB, 7=MSB)
+			// 1<<(i%8)   → bitmask: 1,2,4,8,16,32,64,128 for positions 0-7
+			// |=         → set that bit without disturbing others
+			bb[i/8] |= 1 << (i % 8)
 		}
 	}
-
-	_, err = bw.Write(bb)
+	_, err := bw.Write(bb)
 	return err
 }
 

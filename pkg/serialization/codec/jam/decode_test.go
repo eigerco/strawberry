@@ -46,7 +46,7 @@ func TestDecodeBits(t *testing.T) {
 			d := NewDecoder(buff)
 
 			actual := BitSequence{}
-			err := d.DecodeFixedLength(&actual, uint(len(tc.input)))
+			err := d.DecodeFixedLength(&actual, uint(len(tc.input)*8))
 			if tc.err != nil {
 				assert.Equal(t, tc.err, err)
 			}

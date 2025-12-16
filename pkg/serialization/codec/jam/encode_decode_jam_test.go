@@ -51,6 +51,7 @@ func TestMarshalUnmarshal(t *testing.T) {
 			true, true, false, false, false, false, false, false,
 			true, false, false, false, false, false, false, false,
 			false, false, false, false, false, false, false, false,
+			true,
 		},
 	}
 
