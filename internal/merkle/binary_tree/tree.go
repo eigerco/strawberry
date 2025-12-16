@@ -1,9 +1,10 @@
 package binary_tree
 
 import (
-	"github.com/eigerco/strawberry/internal/crypto"
-	"math"
 	"math/bits"
+
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/safemath"
 )
 
 // ComputeWellBalancedRoot computes the root hash of a well-balanced Binary Merkle tree.
@@ -35,62 +36,121 @@ func ComputeConstantDepthRoot(blobs [][]byte, hashFunc func([]byte) crypto.Hash)
 	return crypto.Hash(ComputeNode(preprocessed, hashFunc))
 }
 
-// GeneratePageProof implements Jx (Merkle path to a single page). Graypaper 0.5.4
+// GeneratePageProof implements Jx (equation E.5, Graypaper v0.7.2):
+//
+//	Jx: {⟦B⟧, N|v|, B → H} → ⟦H⟧
+//	(v, i, H) ↦ T(C(v, H), 2^x·i, H)[... max(0, ⌈log₂(max(1,|v|))⌉ - x)]
+//
+// Parameters map to spec as: blobs=v, pageIndex=i, hashFunc=H, x=x
 func GeneratePageProof(blobs [][]byte, pageIndex, x int, hashFunc func([]byte) crypto.Hash) []crypto.Hash {
-	if len(blobs) == 0 {
+	// Guard: empty v produces empty result
+	// Guard: x must be valid for shift operations
+	// Guard: i (pageIndex) must be non-negative per N|v| domain
+	if len(blobs) == 0 || x < 0 || x >= bits.UintSize-1 || pageIndex < 0 {
 		return []crypto.Hash{}
 	}
 
-	// T(C(v,H), 2^x*i, H)...max(0,⌊log₂(max(1,|v|))⌋-x)
-	preprocessed := preprocessForConstantDepth(blobs, hashFunc)
-	fullTrace := ComputeTrace(preprocessed, (1<<x)*pageIndex, hashFunc)
+	// 2^x
+	pageSize := 1 << x
 
-	// Apply length limiting to trace
-	maxLen := max(0, int(math.Floor(math.Log2(math.Max(1, float64(len(blobs))))))-x)
+	// 2^x · i
+	traceIndex, ok := safemath.Mul(pageSize, pageIndex)
+	if !ok {
+		return []crypto.Hash{}
+	}
+
+	// C(v, H)
+	preprocessed := preprocessForConstantDepth(blobs, hashFunc)
+
+	// T(C(v, H), 2^x·i, H)
+	fullTrace := ComputeTrace(preprocessed, traceIndex, hashFunc)
+
+	// ⌈log₂(max(1,|v|))⌉ using integer arithmetic
+	// For n >= 1: ⌈log₂(n)⌉ = bits.Len(n - 1)
+	logLen := bits.Len(uint(len(blobs) - 1))
+
+	// max(0, ⌈log₂(max(1,|v|))⌉ - x)
+	maxLen := max(0, logLen-x)
+
 	if maxLen == 0 {
 		return []crypto.Hash{}
 	}
 
+	// T(...)[... max(0, ⌈log₂(max(1,|v|))⌉ - x)]
+	// Clamp to actual trace length to prevent slice bounds panic
+	maxLen = min(maxLen, len(fullTrace))
+
 	return convertBlobsToHashes(fullTrace[:maxLen])
 }
 
-// GetLeafPage implements Lx (retrieves a single page of hashed leaves). Graypaper 0.5.4
+// GetLeafPage implements Lx (equation E.6 v0.7.2):
+//
+//	Lx: {⟦B⟧, N|v|, B → H} → ⟦H⟧
+//	(v, i, H) ↦ [H($leaf ⌢ l) | l ←< v[2^x·i ... min(2^x·i + 2^x, |v|)]]
+//
+// Parameters map to spec as: blobs=v, pageIndex=i, x=x, hashFunc=H
 func GetLeafPage(blobs [][]byte, pageIndex, x int, hashFunc func([]byte) crypto.Hash) []crypto.Hash {
-	if len(blobs) == 0 || x >= bits.UintSize {
+	// Guard: empty v produces empty result
+	// Guard: x must be valid for shift operations
+	// Guard: i (pageIndex) must be non-negative per N|v| domain
+	if len(blobs) == 0 || x < 0 || x >= bits.UintSize-1 || pageIndex < 0 {
 		return []crypto.Hash{}
 	}
 
-	// Calculate range bounds for leaf page
-	pageStart := (1 << x) * pageIndex          // 2^x * i
-	pageEnd := min(pageStart+1<<x, len(blobs)) // min(2^x * i + 2^x, |v|)
+	// 2^x
+	pageSize := 1 << x
 
-	// Select and hash leaves from the range with "leaf" prefix
+	// 2^x · i
+	pageStart, ok := safemath.Mul(pageSize, pageIndex)
+	if !ok || pageStart >= len(blobs) {
+		return []crypto.Hash{}
+	}
+
+	// min(2^x·i + 2^x, |v|)
+	// Overflow in addition means page extends beyond data; clamp to |v|
+	pageEnd, ok := safemath.Add(pageStart, pageSize)
+	if !ok || pageEnd > len(blobs) {
+		pageEnd = len(blobs)
+	}
+
+	// [H($leaf ⌢ l) | l ←< v[2^x·i ... min(2^x·i + 2^x, |v|)]]
 	leaveHashes := make([]crypto.Hash, 0, pageEnd-pageStart)
 	for j := pageStart; j < pageEnd; j++ {
+		// H($leaf ⌢ l) where $leaf = "leaf" prefix
 		prefixedLeaf := append([]byte("leaf"), blobs[j]...)
 		leaveHashes = append(leaveHashes, hashFunc(prefixedLeaf))
 	}
-
 	return leaveHashes
 }
 
-// preprocessForConstantDepth implements the preprocessing function C from equation (326)
+// preprocessForConstantDepth implements the preprocessing function C from equation (E7) v0.7.2
 func preprocessForConstantDepth(blobs [][]byte, hashFunc func([]byte) crypto.Hash) [][]byte {
 	if len(blobs) == 0 {
 		return [][]byte{}
 	}
 
 	// Calculate target length: |v'| = 2^⌈log₂(max(1,|v|))⌉
-	targetLen := 1 << uint(math.Ceil(math.Log2(math.Max(1, float64(len(blobs))))))
+	targetLen := 1
+	if len(blobs) > 1 {
+		targetLen = 1 << bits.Len(uint(len(blobs)-1))
+	}
 
-	// Create result slice with target length.
 	result := make([][]byte, targetLen)
 
-	// Process each input: H($leaf ~ vi) for i < |v|
-	for i := 0; i < len(blobs); i++ {
-		combined := append([]byte("leaf"), blobs[i]...)
+	// H($leaf ⌢ vᵢ) for i < |v|
+	prefix := []byte("leaf")
+	for i, blob := range blobs {
+		combined := make([]byte, len(prefix)+len(blob))
+		copy(combined, prefix)
+		copy(combined[len(prefix):], blob)
 		result[i] = convertHashToBlob(hashFunc(combined))
-	} // positions ≥ len(blobs) are already zero hashes, so no action needed
+	}
+
+	// H₀ for positions ≥ |v|
+	zeroHash := convertHashToBlob(crypto.Hash{})
+	for i := len(blobs); i < targetLen; i++ {
+		result[i] = zeroHash
+	}
 
 	return result
 }
