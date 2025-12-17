@@ -21,7 +21,7 @@ func (i *Instance) step() (uint64, error) {
 	}
 
 	// ϱ′ = ϱ − ϱ∆ (eq. A.7 v0.7.0)
-	if err := i.deductGas(polkavm.GasCosts[opcode]); err != nil {
+	if err := i.deductGas(polkavm.GasCostsLookup[opcode]); err != nil {
 		return 0, err
 	}
 

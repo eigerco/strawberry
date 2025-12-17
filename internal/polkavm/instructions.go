@@ -145,6 +145,8 @@ var GasCosts = map[Opcode]Gas{
 	MinU:                            1,
 }
 
+var GasCostsLookup [256]Gas
+
 type Reg uint
 
 func (r Reg) String() string {
@@ -265,7 +267,7 @@ var (
 
 type InstructionType byte
 
-var InstructionForType = map[Opcode]InstructionType{}
+var InstructionForType [256]InstructionType
 
 const (
 	InstrNone = iota
@@ -284,6 +286,10 @@ const (
 )
 
 func init() {
+	for opcode, cost := range GasCosts {
+		GasCostsLookup[opcode] = cost
+	}
+
 	for _, code := range instrNone {
 		InstructionForType[code] = InstrNone
 	}
