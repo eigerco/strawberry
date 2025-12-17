@@ -92,3 +92,14 @@ build-conformance: build-bandersnatch build-erasurecoding
 ## run-target: Runs the conformance target with socket /tmp/jam_target.sock
 run-target:
 	./pkg/conformance/bin/strawberry --socket /tmp/jam_target.sock
+
+.PHONY: bench
+## bench: Runs a specific benchmark test. 
+## Usage: make bench NAME=<BenchTestName> eg.NAME=BenchmarkTraceFallback
+## Designed to run for one set of traces, eg fallback, safrole, not mixed together. (or single traces)
+bench: build-bandersnatch build-erasurecoding
+  ifndef NAME
+	  $(error NAME is required. Usage: make bench NAME=<BenchTestName>)
+  endif
+	go test -bench=^$(NAME)$$ ./tests/integration --tags=traces,tiny | tee benchmark_results.txt
+	python3 bench-stats.py benchmark_results.txt
