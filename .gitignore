@@ -17,3 +17,4 @@ tests/simulation/output
 /strawberry
 internal/crypto/bandersnatch/lib
 internal/erasurecoding/reedsolomon/lib
+benchmark_results.txt
