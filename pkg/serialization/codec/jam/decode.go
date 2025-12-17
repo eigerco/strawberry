@@ -584,37 +584,21 @@ func (br *byteReader) decodeFixedWidth(dstv reflect.Value, length uint) error {
 
 	switch typ.Kind() {
 	case reflect.Uint8:
-		var temp uint8
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(temp).Convert(typ))
+		dstv.Set(reflect.ValueOf(DecodeUint8(buf)).Convert(typ))
 	case reflect.Uint16:
-		var temp uint16
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(temp).Convert(typ))
+		dstv.Set(reflect.ValueOf(DecodeUint16(buf)).Convert(typ))
 	case reflect.Uint32:
-		var temp uint32
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(temp).Convert(typ))
+		dstv.Set(reflect.ValueOf(DecodeUint32(buf)).Convert(typ))
 	case reflect.Uint64:
-		var temp uint64
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(temp).Convert(typ))
+		dstv.Set(reflect.ValueOf(DecodeUint64(buf)).Convert(typ))
 	case reflect.Int8:
-		var temp uint8
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(int8(temp)).Convert(typ))
+		dstv.Set(reflect.ValueOf(int8(DecodeUint8(buf))).Convert(typ))
 	case reflect.Int16:
-		var temp uint16
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(int16(temp)).Convert(typ))
+		dstv.Set(reflect.ValueOf(int16(DecodeUint16(buf))).Convert(typ))
 	case reflect.Int32:
-		var temp uint32
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(int32(temp)).Convert(typ))
+		dstv.Set(reflect.ValueOf(int32(DecodeUint32(buf))).Convert(typ))
 	case reflect.Int64:
-		var temp uint64
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(int64(temp)).Convert(typ))
+		dstv.Set(reflect.ValueOf(int64(DecodeUint64(buf))).Convert(typ))
 	default:
 		return fmt.Errorf(ErrUnsupportedType, typ)
 	}
