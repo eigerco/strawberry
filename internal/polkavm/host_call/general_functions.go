@@ -256,6 +256,9 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 	h, o := regs[polkavm.A1], regs[polkavm.A2]
 
 	key := make([]byte, 32)
+	if h > math.MaxUint32 {
+		return gas, regs, mem, polkavm.ErrPanicf("inaccessible memory, address out of range")
+	}
 	if err := mem.Read(uint32(h), key); err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
@@ -300,6 +303,9 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 
 	// read key data from memory at ko..ko+kz
 	keyData := make([]byte, kz)
+	if ko > math.MaxUint32 {
+		return gas, regs, mem, polkavm.ErrPanicf("inaccessible memory, address out of range")
+	}
 	err := mem.Read(uint32(ko), keyData)
 	if err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
@@ -336,6 +342,9 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 
 	//µko⋅⋅⋅+kz
 	keyData := make([]byte, kz)
+	if ko > math.MaxUint32 {
+		return gas, regs, mem, s, polkavm.ErrPanicf("inaccessible memory, address out of range")
+	}
 	err := mem.Read(uint32(ko), keyData)
 	if err != nil {
 		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
@@ -353,6 +362,9 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 		}
 	} else {
 		valueData := make([]byte, vz)
+		if vo > math.MaxUint32 {
+			return gas, regs, mem, s, polkavm.ErrPanicf("inaccessible memory, address out of range")
+		}
 		err = mem.Read(uint32(vo), valueData)
 		if err != nil {
 			return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
@@ -463,6 +475,9 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 	// Write target
 	if to != 0 && tz != 0 {
 		targetBytes := make([]byte, tz)
+		if to > math.MaxUint32 {
+			return gas, regs, mem, polkavm.ErrPanicf("inaccessible memory, address out of range")
+		}
 		err := mem.Read(uint32(to), targetBytes)
 		if err != nil {
 			log.VM.Error().Msgf("unable to access memory for target: address %d length %d", to, tz)
@@ -472,6 +487,9 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 	}
 
 	msgBytes := make([]byte, xz)
+	if xo > math.MaxUint32 {
+		return gas, regs, mem, polkavm.ErrPanicf("inaccessible memory, address out of range")
+	}
 	err := mem.Read(uint32(xo), msgBytes)
 	if err != nil {
 		log.VM.Error().Msgf("unable to access memory for target: address %d length %d", to, tz)

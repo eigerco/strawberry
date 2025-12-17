@@ -127,6 +127,9 @@ func (r Code) String() string {
 
 func readNumber[U interface{ ~uint32 | ~uint64 | ~int64 }](mem Memory, addr uint64, length int) (u U, err error) {
 	b := make([]byte, length)
+	if addr > math.MaxUint32 {
+		return 0, ErrPanicf("inaccessible memory, address out of range")
+	}
 	if err = mem.Read(uint32(addr), b); err != nil {
 		return
 	}
@@ -154,6 +157,9 @@ func writeFromOffset(
 
 	if l > 0 {
 		sliceToWrite := data[f : f+l]
+		if addressToWrite > math.MaxUint32 {
+			return ErrPanicf("inaccessible memory, address out of range")
+		}
 		if err := mem.Write(uint32(addressToWrite), sliceToWrite); err != nil {
 			return ErrPanicf("out-of-bounds write at address %d", addressToWrite)
 		}
