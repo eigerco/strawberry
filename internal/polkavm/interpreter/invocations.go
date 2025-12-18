@@ -91,7 +91,12 @@ func InvokeHostCall[X any](
 }
 
 // Invoke basic definition (Ψ eq. A.1 v0.7.2)
-func Invoke(i *Instance) (uint64, error) {
+func Invoke(i *Instance) (hostCall uint64, err error) {
+	defer func() {
+		if recoveredErr := recover(); recoveredErr != nil {
+			err = polkavm.ErrPanicf("unexpected program termination: %v", recoveredErr)
+		}
+	}()
 	for {
 		if hostCall, err := i.step(); err != nil {
 			return hostCall, err

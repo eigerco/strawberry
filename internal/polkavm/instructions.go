@@ -145,7 +145,7 @@ var GasCosts = map[Opcode]Gas{
 	MinU:                            1,
 }
 
-type Reg uint
+type Reg byte
 
 func (r Reg) String() string {
 	switch r {
@@ -195,135 +195,6 @@ const (
 	A4 Reg = 11
 	A5 Reg = 12
 )
-
-var (
-	// Instructions without Arguments
-	instrNone = []Opcode{Trap, Fallthrough}
-	// Instructions with Arguments of One Immediate.
-	instrImm = []Opcode{Ecalli}
-	// Instructions with Arguments of One Register and One Extended Width Immediate.
-	instrRegImmExt = []Opcode{LoadImm64}
-	// Instructions with Arguments of Two Immediates.
-	instrImm2 = []Opcode{StoreImmU8, StoreImmU16, StoreImmU32, StoreImmU64}
-	// Instructions with Arguments of One Offset.
-	instrOffset = []Opcode{Jump}
-	// Instructions with Arguments of One Register & One Immediate.
-	instrRegImm = []Opcode{
-		JumpIndirect, LoadImm, LoadU8, LoadI8, LoadU16, LoadI16, LoadU32, LoadI32, LoadU64,
-		StoreU8, StoreU16, StoreU32, StoreU64,
-	}
-	// Instructions with Arguments of One Register & Two Immediates.
-	instrRegImm2 = []Opcode{StoreImmIndirectU8, StoreImmIndirectU16, StoreImmIndirectU32, StoreImmIndirectU64}
-	// Instructions with Arguments of One Register, One Immediate and One Offset.
-	instrRegImmOffset = []Opcode{
-		LoadImmAndJump, BranchEqImm, BranchNotEqImm, BranchLessUnsignedImm, BranchLessOrEqualUnsignedImm,
-		BranchGreaterOrEqualUnsignedImm, BranchGreaterUnsignedImm, BranchLessSignedImm,
-		BranchLessOrEqualSignedImm, BranchGreaterOrEqualSignedImm, BranchGreaterSignedImm,
-	}
-	// Instructions with Arguments of Two Registers.
-	instrRegReg = []Opcode{
-		MoveReg, Sbrk,
-		CountSetBits64, CountSetBits32, LeadingZeroBits64,
-		LeadingZeroBits32, TrailingZeroBits64, TrailingZeroBits32,
-		SignExtend8, SignExtend16, ZeroExtend16, ReverseBytes,
-	}
-	// Instructions with Arguments of Two Registers & One Immediate.
-	instrReg2Imm = []Opcode{
-		StoreIndirectU8, StoreIndirectU16, StoreIndirectU32, StoreIndirectU64,
-		LoadIndirectU8, LoadIndirectI8, LoadIndirectU16, LoadIndirectI16,
-		LoadIndirectU32, LoadIndirectI32, LoadIndirectU64,
-		AddImm32, AndImm, XorImm, OrImm, MulImm32,
-		SetLessThanUnsignedImm, SetLessThanSignedImm,
-		ShiftLogicalLeftImm32, ShiftLogicalRightImm32, ShiftArithmeticRightImm32,
-		NegateAndAddImm32, SetGreaterThanUnsignedImm, SetGreaterThanSignedImm,
-		ShiftLogicalRightImmAlt32, ShiftArithmeticRightImmAlt32, ShiftLogicalLeftImmAlt32,
-		CmovIfZeroImm, CmovIfNotZeroImm,
-		AddImm64, MulImm64,
-		ShiftLogicalLeftImm64, ShiftLogicalRightImm64, ShiftArithmeticRightImm64,
-		NegateAndAddImm64,
-		ShiftLogicalLeftImmAlt64, ShiftLogicalRightImmAlt64, ShiftArithmeticRightImmAlt64,
-		RotR64Imm, RotR64ImmAlt, RotR32Imm, RotR32ImmAlt,
-	}
-	// Instructions with Arguments of Two Registers & One Offset.
-	instrReg2Offset = []Opcode{
-		BranchEq, BranchNotEq, BranchLessUnsigned, BranchLessSigned,
-		BranchGreaterOrEqualUnsigned, BranchGreaterOrEqualSigned,
-	}
-	// Instruction with Arguments of Two Registers and Two Immediates.
-	instrReg2Imm2 = []Opcode{LoadImmAndJumpIndirect}
-	// Instructions with Arguments of Three Registers.
-	instrReg3 = []Opcode{
-		Add32, Sub32, Mul32, DivUnsigned32, DivSigned32, RemUnsigned32, RemSigned32,
-		ShiftLogicalLeft32, ShiftLogicalRight32, ShiftArithmeticRight32,
-		Add64, Sub64, Mul64, DivUnsigned64, DivSigned64, RemUnsigned64, RemSigned64,
-		ShiftLogicalLeft64, ShiftLogicalRight64, ShiftArithmeticRight64,
-		And, Xor, Or, MulUpperSignedSigned, MulUpperUnsignedUnsigned, MulUpperSignedUnsigned,
-		SetLessThanUnsigned, SetLessThanSigned, CmovIfZero, CmovIfNotZero,
-		RotL64, RotL32, RotR64, RotR32, AndInv, OrInv, Xnor, Max, MaxU, Min, MinU,
-	}
-)
-
-type InstructionType byte
-
-var InstructionForType = map[Opcode]InstructionType{}
-
-const (
-	InstrNone = iota
-	InstrImm
-	InstrRegImmExt
-	InstrImm2
-	InstrOffset
-	InstrRegImm
-	InstrRegImm2
-	InstrRegImmOffset
-	InstrRegReg
-	InstrReg2Imm
-	InstrReg2Offset
-	InstrReg2Imm2
-	InstrReg3
-)
-
-func init() {
-	for _, code := range instrNone {
-		InstructionForType[code] = InstrNone
-	}
-	for _, code := range instrRegImm {
-		InstructionForType[code] = InstrRegImm
-	}
-	for _, code := range instrRegImmOffset {
-		InstructionForType[code] = InstrRegImmOffset
-	}
-	for _, code := range instrRegImm2 {
-		InstructionForType[code] = InstrRegImm2
-	}
-	for _, code := range instrReg2Imm {
-		InstructionForType[code] = InstrReg2Imm
-	}
-	for _, code := range instrReg2Offset {
-		InstructionForType[code] = InstrReg2Offset
-	}
-	for _, code := range instrReg3 {
-		InstructionForType[code] = InstrReg3
-	}
-	for _, code := range instrOffset {
-		InstructionForType[code] = InstrOffset
-	}
-	for _, code := range instrImm {
-		InstructionForType[code] = InstrImm
-	}
-	for _, code := range instrImm2 {
-		InstructionForType[code] = InstrImm2
-	}
-	for _, code := range instrRegReg {
-		InstructionForType[code] = InstrRegReg
-	}
-	for _, code := range instrReg2Imm2 {
-		InstructionForType[code] = InstrReg2Imm2
-	}
-	for _, code := range instrRegImmExt {
-		InstructionForType[code] = InstrRegImmExt
-	}
-}
 
 // IsBasicBlockTermination (eq A.3)
 func (o Opcode) IsBasicBlockTermination() bool {

@@ -41,11 +41,13 @@ type Instance struct {
 	jumpTable              []uint64            // j
 	bitmask                jam.BitSequence     // k
 	basicBlockInstructions map[uint64]struct{} // ϖ
+
+	skipLen uint64
 }
 
 // skip ı′ = ı + 1 + skip(ı) (eq. A.9 v0.7.2)
 func (i *Instance) skip() {
-	i.instructionCounter += 1 + polkavm.Skip(i.instructionCounter, i.bitmask)
+	i.instructionCounter += 1 + i.skipLen
 }
 
 func (i *Instance) deductGas(cost polkavm.Gas) error {

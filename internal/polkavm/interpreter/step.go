@@ -9,21 +9,14 @@ import (
 func (i *Instance) step() (uint64, error) {
 	codeLength := uint64(len(i.code))
 	// ℓ ≡ skip(ı) (eq. A.20 v0.7.2)
-	skip := polkavm.Skip(i.instructionCounter, i.bitmask)
+	i.skipLen = polkavm.Skip(i.instructionCounter, i.bitmask)
 
 	// ζ ≡ c ⌢ [0, 0, ... ] (eq. A.4 v0.7.2)
 	// We cannot add infinite items to a slice, but we simulate this by defaulting to trap opcode
 	opcode := polkavm.Trap
 
 	if i.instructionCounter < codeLength {
-		// Eq. A.19 v0.7.2
-		// ⎧ c_n if kn = 1 ∧ cn ∈ U
-		// ⎨
-		// ⎩ 0 otherwise
 		opcode = polkavm.Opcode(i.code[i.instructionCounter])
-		if _, ok := polkavm.InstructionForType[opcode]; !i.bitmask[i.instructionCounter] || !ok {
-			opcode = polkavm.Trap
-		}
 	}
 
 	// ϱ′ = ϱ − ϱ∆ (eq. A.9 v0.7.2)
@@ -31,515 +24,313 @@ func (i *Instance) step() (uint64, error) {
 		return 0, err
 	}
 
-	switch polkavm.InstructionForType[opcode] {
-	case polkavm.InstrNone:
-		switch opcode {
-		case polkavm.Trap:
-			return 0, i.Trap()
-		case polkavm.Fallthrough:
-			i.Fallthrough()
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrImm: // (eq. A.21 v0.7.2)
-		// let lX = min(4, ℓ)
-		lenX := min(4, skip)
-		if codeLength < i.instructionCounter+1+lenX {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
+	switch opcode {
+	case polkavm.Trap:
+		return 0, i.Trap()
+	case polkavm.Fallthrough:
+		i.Fallthrough()
 
-		// νX ≡ X_lX(E−1lX (ζı+1⋅⋅⋅+lX))
-		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX]), lenX)
-		switch opcode {
-		case polkavm.Ecalli:
-			// ε = ħ × νX
-			return valueX, polkavm.ErrHostCall
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrRegImmExt: // (eq. A.22 v0.7.2)
-		if codeLength < i.instructionCounter+10 {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-		// let rA = min(12, ζı+1 mod 16), φ′A ≡ φ′rA
-		regA := min(12, i.code[i.instructionCounter+1]%16)
-		// νX ≡ E−1_8(ζı+2⋅⋅⋅+8)
-		valueX := jam.DecodeUint64(i.code[i.instructionCounter+2 : i.instructionCounter+10])
-		switch opcode {
-		case polkavm.LoadImm64:
-			i.LoadImm64(polkavm.Reg(regA), valueX)
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrImm2: // (eq. A.23 v0.7.2)
-		if codeLength < i.instructionCounter+2 {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-		// let lX = min(4, ζı+1 mod 8)
-		lenX := uint64(min(4, i.code[i.instructionCounter+1]%8))
+	// (eq. A.21 v0.7.0)
+	case polkavm.Ecalli:
+		// ε = ħ × νX
+		return i.decodeArgsImm(), polkavm.ErrHostCall
 
-		// let lY = min(4, max(0, ℓ − lX − 1))
-		lenY := uint64(min(4, max(0, int(skip)-int(lenX)-1)))
+	// (eq. A.22 v0.7.0)
+	case polkavm.LoadImm64:
+		i.LoadImm64(i.decodeArgsRegImmExt())
 
-		if codeLength < i.instructionCounter+2+lenX+lenY {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
+	// (eq. A.23 v0.7.0)
+	case polkavm.StoreImmU8:
+		return 0, i.StoreImmU8(i.decodeArgsImm2())
+	case polkavm.StoreImmU16:
+		return 0, i.StoreImmU16(i.decodeArgsImm2())
+	case polkavm.StoreImmU32:
+		return 0, i.StoreImmU32(i.decodeArgsImm2())
+	case polkavm.StoreImmU64:
+		return 0, i.StoreImmU64(i.decodeArgsImm2())
 
-		// νX ≡ X_lX (E−1lX (ζı+2⋅⋅⋅+lX))
-		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
+	// (eq. A.24 v0.7.0)
+	case polkavm.Jump:
+		return 0, i.Jump(i.decodeArgsOffset())
 
-		// νY ≡ XlY (E−1lY (ζı+2+lX ⋅⋅⋅+lY))
-		valueY := sext(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY)
-		switch opcode {
-		case polkavm.StoreImmU8:
-			return 0, i.StoreImmU8(valueX, valueY)
-		case polkavm.StoreImmU16:
-			return 0, i.StoreImmU16(valueX, valueY)
-		case polkavm.StoreImmU32:
-			return 0, i.StoreImmU32(valueX, valueY)
-		case polkavm.StoreImmU64:
-			return 0, i.StoreImmU64(valueX, valueY)
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrOffset: // (eq. A.24 v0.7.2)
-		// let lX = min(4, ℓ)
-		lenX := min(4, skip)
-		if codeLength < i.instructionCounter+1+lenX {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
+	// (eq. A.25 v0.7.0)
+	case polkavm.JumpIndirect:
+		return 0, i.JumpIndirect(i.decodeArgsRegImm())
+	case polkavm.LoadImm:
+		i.LoadImm(i.decodeArgsRegImm())
+	case polkavm.LoadU8:
+		return 0, i.LoadU8(i.decodeArgsRegImm())
+	case polkavm.LoadI8:
+		return 0, i.LoadI8(i.decodeArgsRegImm())
+	case polkavm.LoadU16:
+		return 0, i.LoadU16(i.decodeArgsRegImm())
+	case polkavm.LoadI16:
+		return 0, i.LoadI16(i.decodeArgsRegImm())
+	case polkavm.LoadU32:
+		return 0, i.LoadU32(i.decodeArgsRegImm())
+	case polkavm.LoadI32:
+		return 0, i.LoadI32(i.decodeArgsRegImm())
+	case polkavm.LoadU64:
+		return 0, i.LoadU64(i.decodeArgsRegImm())
+	case polkavm.StoreU8:
+		return 0, i.StoreU8(i.decodeArgsRegImm())
+	case polkavm.StoreU16:
+		return 0, i.StoreU16(i.decodeArgsRegImm())
+	case polkavm.StoreU32:
+		return 0, i.StoreU32(i.decodeArgsRegImm())
+	case polkavm.StoreU64:
+		return 0, i.StoreU64(i.decodeArgsRegImm())
 
-		// νX ≡ ı + Z_lX (E−1_lX(ζı+1⋅⋅⋅+lX))
-		valueX := uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX]), lenX))
+	// (eq. A.26 v0.7.0)
+	case polkavm.StoreImmIndirectU8:
+		return 0, i.StoreImmIndirectU8(i.decodeArgsRegImm2())
+	case polkavm.StoreImmIndirectU16:
+		return 0, i.StoreImmIndirectU16(i.decodeArgsRegImm2())
+	case polkavm.StoreImmIndirectU32:
+		return 0, i.StoreImmIndirectU32(i.decodeArgsRegImm2())
+	case polkavm.StoreImmIndirectU64:
+		return 0, i.StoreImmIndirectU64(i.decodeArgsRegImm2())
 
-		switch opcode {
-		case polkavm.Jump:
-			return 0, i.Jump(valueX)
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrRegImm: // (eq. A.25 v0.7.2)
-		// let lX = min(4, max(0, ℓ − 1))
-		lenX := uint64(min(4, max(0, int(skip)-1)))
-		if codeLength < i.instructionCounter+2+lenX {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-		// let rA = min(12, ζı+1 mod 16), φ′A ≡ φ′rA
-		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
+	// (eq. A.27 v0.7.0)
+	case polkavm.LoadImmAndJump:
+		return 0, i.LoadImmAndJump(i.decodeArgsRegImmOffset())
+	case polkavm.BranchEqImm:
+		return 0, i.BranchEqImm(i.decodeArgsRegImmOffset())
+	case polkavm.BranchNotEqImm:
+		return 0, i.BranchNotEqImm(i.decodeArgsRegImmOffset())
+	case polkavm.BranchLessUnsignedImm:
+		return 0, i.BranchLessUnsignedImm(i.decodeArgsRegImmOffset())
+	case polkavm.BranchLessOrEqualUnsignedImm:
+		return 0, i.BranchLessOrEqualUnsignedImm(i.decodeArgsRegImmOffset())
+	case polkavm.BranchGreaterOrEqualUnsignedImm:
+		return 0, i.BranchGreaterOrEqualUnsignedImm(i.decodeArgsRegImmOffset())
+	case polkavm.BranchGreaterUnsignedImm:
+		return 0, i.BranchGreaterUnsignedImm(i.decodeArgsRegImmOffset())
+	case polkavm.BranchLessSignedImm:
+		return 0, i.BranchLessSignedImm(i.decodeArgsRegImmOffset())
+	case polkavm.BranchLessOrEqualSignedImm:
+		return 0, i.BranchLessOrEqualSignedImm(i.decodeArgsRegImmOffset())
+	case polkavm.BranchGreaterOrEqualSignedImm:
+		return 0, i.BranchGreaterOrEqualSignedImm(i.decodeArgsRegImmOffset())
+	case polkavm.BranchGreaterSignedImm:
+		return 0, i.BranchGreaterSignedImm(i.decodeArgsRegImmOffset())
 
-		// νX ≡ X_lX(E−1_lX(ζı+2...+lX))
-		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
+	// (eq. A.28 v0.7.0)
+	case polkavm.MoveReg:
+		i.MoveReg(i.decodeArgsReg2())
+	case polkavm.Sbrk:
+		return 0, i.Sbrk(i.decodeArgsReg2())
+	case polkavm.CountSetBits64:
+		i.CountSetBits64(i.decodeArgsReg2())
+	case polkavm.CountSetBits32:
+		i.CountSetBits32(i.decodeArgsReg2())
+	case polkavm.LeadingZeroBits64:
+		i.LeadingZeroBits64(i.decodeArgsReg2())
+	case polkavm.LeadingZeroBits32:
+		i.LeadingZeroBits32(i.decodeArgsReg2())
+	case polkavm.TrailingZeroBits64:
+		i.TrailingZeroBits64(i.decodeArgsReg2())
+	case polkavm.TrailingZeroBits32:
+		i.TrailingZeroBits32(i.decodeArgsReg2())
+	case polkavm.SignExtend8:
+		i.SignExtend8(i.decodeArgsReg2())
+	case polkavm.SignExtend16:
+		i.SignExtend16(i.decodeArgsReg2())
+	case polkavm.ZeroExtend16:
+		i.ZeroExtend16(i.decodeArgsReg2())
+	case polkavm.ReverseBytes:
+		i.ReverseBytes(i.decodeArgsReg2())
 
-		switch opcode {
-		case polkavm.JumpIndirect:
-			return 0, i.JumpIndirect(regA, valueX)
-		case polkavm.LoadImm:
-			i.LoadImm(regA, valueX)
-		case polkavm.LoadU8:
-			return 0, i.LoadU8(regA, valueX)
-		case polkavm.LoadI8:
-			return 0, i.LoadI8(regA, valueX)
-		case polkavm.LoadU16:
-			return 0, i.LoadU16(regA, valueX)
-		case polkavm.LoadI16:
-			return 0, i.LoadI16(regA, valueX)
-		case polkavm.LoadU32:
-			return 0, i.LoadU32(regA, valueX)
-		case polkavm.LoadI32:
-			return 0, i.LoadI32(regA, valueX)
-		case polkavm.LoadU64:
-			return 0, i.LoadU64(regA, valueX)
-		case polkavm.StoreU8:
-			return 0, i.StoreU8(regA, valueX)
-		case polkavm.StoreU16:
-			return 0, i.StoreU16(regA, valueX)
-		case polkavm.StoreU32:
-			return 0, i.StoreU32(regA, valueX)
-		case polkavm.StoreU64:
-			return 0, i.StoreU64(regA, valueX)
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrRegImm2: // (eq. A.26 v0.7.2)
-		if codeLength < i.instructionCounter+2 {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
+	// (eq. A.29 v0.7.0)
+	case polkavm.StoreIndirectU8:
+		return 0, i.StoreIndirectU8(i.decodeArgsReg2Imm())
+	case polkavm.StoreIndirectU16:
+		return 0, i.StoreIndirectU16(i.decodeArgsReg2Imm())
+	case polkavm.StoreIndirectU32:
+		return 0, i.StoreIndirectU32(i.decodeArgsReg2Imm())
+	case polkavm.StoreIndirectU64:
+		return 0, i.StoreIndirectU64(i.decodeArgsReg2Imm())
+	case polkavm.LoadIndirectU8:
+		return 0, i.LoadIndirectU8(i.decodeArgsReg2Imm())
+	case polkavm.LoadIndirectI8:
+		return 0, i.LoadIndirectI8(i.decodeArgsReg2Imm())
+	case polkavm.LoadIndirectU16:
+		return 0, i.LoadIndirectU16(i.decodeArgsReg2Imm())
+	case polkavm.LoadIndirectI16:
+		return 0, i.LoadIndirectI16(i.decodeArgsReg2Imm())
+	case polkavm.LoadIndirectU32:
+		return 0, i.LoadIndirectU32(i.decodeArgsReg2Imm())
+	case polkavm.LoadIndirectI32:
+		return 0, i.LoadIndirectI32(i.decodeArgsReg2Imm())
+	case polkavm.LoadIndirectU64:
+		return 0, i.LoadIndirectU64(i.decodeArgsReg2Imm())
+	case polkavm.AddImm32:
+		i.AddImm32(i.decodeArgsReg2Imm())
+	case polkavm.AndImm:
+		i.AndImm(i.decodeArgsReg2Imm())
+	case polkavm.XorImm:
+		i.XorImm(i.decodeArgsReg2Imm())
+	case polkavm.OrImm:
+		i.OrImm(i.decodeArgsReg2Imm())
+	case polkavm.MulImm32:
+		i.MulImm32(i.decodeArgsReg2Imm())
+	case polkavm.SetLessThanUnsignedImm:
+		i.SetLessThanUnsignedImm(i.decodeArgsReg2Imm())
+	case polkavm.SetLessThanSignedImm:
+		i.SetLessThanSignedImm(i.decodeArgsReg2Imm())
+	case polkavm.ShiftLogicalLeftImm32:
+		i.ShiftLogicalLeftImm32(i.decodeArgsReg2Imm())
+	case polkavm.ShiftLogicalRightImm32:
+		i.ShiftLogicalRightImm32(i.decodeArgsReg2Imm())
+	case polkavm.ShiftArithmeticRightImm32:
+		i.ShiftArithmeticRightImm32(i.decodeArgsReg2Imm())
+	case polkavm.NegateAndAddImm32:
+		i.NegateAndAddImm32(i.decodeArgsReg2Imm())
+	case polkavm.SetGreaterThanUnsignedImm:
+		i.SetGreaterThanUnsignedImm(i.decodeArgsReg2Imm())
+	case polkavm.SetGreaterThanSignedImm:
+		i.SetGreaterThanSignedImm(i.decodeArgsReg2Imm())
+	case polkavm.ShiftLogicalLeftImmAlt32:
+		i.ShiftLogicalLeftImmAlt32(i.decodeArgsReg2Imm())
+	case polkavm.ShiftArithmeticRightImmAlt32:
+		i.ShiftLogicalRightImmAlt32(i.decodeArgsReg2Imm())
+	case polkavm.ShiftLogicalRightImmAlt32:
+		i.ShiftArithmeticRightImmAlt32(i.decodeArgsReg2Imm())
+	case polkavm.CmovIfZeroImm:
+		i.CmovIfZeroImm(i.decodeArgsReg2Imm())
+	case polkavm.CmovIfNotZeroImm:
+		i.CmovIfNotZeroImm(i.decodeArgsReg2Imm())
+	case polkavm.AddImm64:
+		i.AddImm64(i.decodeArgsReg2Imm())
+	case polkavm.MulImm64:
+		i.MulImm64(i.decodeArgsReg2Imm())
+	case polkavm.ShiftLogicalLeftImm64:
+		i.ShiftLogicalLeftImm64(i.decodeArgsReg2Imm())
+	case polkavm.ShiftLogicalRightImm64:
+		i.ShiftLogicalRightImm64(i.decodeArgsReg2Imm())
+	case polkavm.ShiftArithmeticRightImm64:
+		i.ShiftArithmeticRightImm64(i.decodeArgsReg2Imm())
+	case polkavm.NegateAndAddImm64:
+		i.NegateAndAddImm64(i.decodeArgsReg2Imm())
+	case polkavm.ShiftLogicalLeftImmAlt64:
+		i.ShiftLogicalLeftImmAlt64(i.decodeArgsReg2Imm())
+	case polkavm.ShiftLogicalRightImmAlt64:
+		i.ShiftLogicalRightImmAlt64(i.decodeArgsReg2Imm())
+	case polkavm.ShiftArithmeticRightImmAlt64:
+		i.ShiftArithmeticRightImmAlt64(i.decodeArgsReg2Imm())
+	case polkavm.RotR64Imm:
+		i.RotateRight64Imm(i.decodeArgsReg2Imm())
+	case polkavm.RotR64ImmAlt:
+		i.RotateRight64ImmAlt(i.decodeArgsReg2Imm())
+	case polkavm.RotR32Imm:
+		i.RotateRight32Imm(i.decodeArgsReg2Imm())
+	case polkavm.RotR32ImmAlt:
+		i.RotateRight32ImmAlt(i.decodeArgsReg2Imm())
 
-		// let rA = min(12, ζı+1 mod 16), φA ≡ φrA, φ′A ≡ φ′rA
-		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-		// let lX = min(4, ⌊ ζı+1 / 16 ⌋ mod 8)
-		lenX := uint64(min(4, (i.code[i.instructionCounter+1]/16)%8))
+	// (eq. A.30 v0.7.0)
+	case polkavm.BranchEq:
+		return 0, i.BranchEq(i.decodeArgsReg2Offset())
+	case polkavm.BranchNotEq:
+		return 0, i.BranchNotEq(i.decodeArgsReg2Offset())
+	case polkavm.BranchLessUnsigned:
+		return 0, i.BranchLessUnsigned(i.decodeArgsReg2Offset())
+	case polkavm.BranchLessSigned:
+		return 0, i.BranchLessSigned(i.decodeArgsReg2Offset())
+	case polkavm.BranchGreaterOrEqualUnsigned:
+		return 0, i.BranchGreaterOrEqualUnsigned(i.decodeArgsReg2Offset())
+	case polkavm.BranchGreaterOrEqualSigned:
+		return 0, i.BranchGreaterOrEqualSigned(i.decodeArgsReg2Offset())
 
-		// let lY = min(4, max(0, ℓ − lX − 1))
-		lenY := uint64(min(4, max(0, int(skip)-int(lenX)-1)))
+	// (eq. A.31 v0.7.0)
+	case polkavm.LoadImmAndJumpIndirect:
+		return 0, i.LoadImmAndJumpIndirect(i.decodeArgsReg2Imm2())
 
-		if codeLength < i.instructionCounter+2+lenX+lenY {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-
-		// νX = X_lX (E−1lX (ζı+2⋅⋅⋅+lX))
-		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
-
-		// νY = X_lY(E−1lY (ζı+2+lX ⋅⋅⋅+lY))
-		valueY := sext(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY)
-
-		switch opcode {
-		case polkavm.StoreImmIndirectU8:
-			return 0, i.StoreImmIndirectU8(regA, valueX, valueY)
-		case polkavm.StoreImmIndirectU16:
-			return 0, i.StoreImmIndirectU16(regA, valueX, valueY)
-		case polkavm.StoreImmIndirectU32:
-			return 0, i.StoreImmIndirectU32(regA, valueX, valueY)
-		case polkavm.StoreImmIndirectU64:
-			return 0, i.StoreImmIndirectU64(regA, valueX, valueY)
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrRegImmOffset: // (eq. A.27 v0.7.2)
-		if codeLength < i.instructionCounter+2 {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-		// let rA = min(12, ζı+1 mod 16), φA ≡ φrA, φ′A ≡ φ′rA
-		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-		// let lX = min(4, ⌊ ζı+1 / 16 ⌋ mod 8)
-		lenX := uint64(min(4, (i.code[i.instructionCounter+1]/16)%8))
-		// let lY = min(4, max(0, ℓ − lX − 1))
-		lenY := uint64(min(4, max(0, int(skip)-int(lenX)-1)))
-
-		if codeLength < i.instructionCounter+2+lenX+lenY {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-
-		// νX = X_lX(E−1lX (ζı+2...+lX))
-		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
-		// νY = ı + ZlY(E−1lY (ζı+2+lX⋅⋅⋅+lY))
-		valueY := uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY))
-
-		switch opcode {
-		case polkavm.LoadImmAndJump:
-			return 0, i.LoadImmAndJump(regA, valueX, valueY)
-		case polkavm.BranchEqImm:
-			return 0, i.BranchEqImm(regA, valueX, valueY)
-		case polkavm.BranchNotEqImm:
-			return 0, i.BranchNotEqImm(regA, valueX, valueY)
-		case polkavm.BranchLessUnsignedImm:
-			return 0, i.BranchLessUnsignedImm(regA, valueX, valueY)
-		case polkavm.BranchLessOrEqualUnsignedImm:
-			return 0, i.BranchLessOrEqualUnsignedImm(regA, valueX, valueY)
-		case polkavm.BranchGreaterOrEqualUnsignedImm:
-			return 0, i.BranchGreaterOrEqualUnsignedImm(regA, valueX, valueY)
-		case polkavm.BranchGreaterUnsignedImm:
-			return 0, i.BranchGreaterUnsignedImm(regA, valueX, valueY)
-		case polkavm.BranchLessSignedImm:
-			return 0, i.BranchLessSignedImm(regA, valueX, valueY)
-		case polkavm.BranchLessOrEqualSignedImm:
-			return 0, i.BranchLessOrEqualSignedImm(regA, valueX, valueY)
-		case polkavm.BranchGreaterOrEqualSignedImm:
-			return 0, i.BranchGreaterOrEqualSignedImm(regA, valueX, valueY)
-		case polkavm.BranchGreaterSignedImm:
-			return 0, i.BranchGreaterSignedImm(regA, valueX, valueY)
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrRegReg: // (eq. A.28 v0.7.2)
-		if codeLength < i.instructionCounter+1 {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-
-		// let rD = min(12, (ζı+1) mod 16) , φD ≡ φrD , φ′D ≡ φ′rD
-		regDst := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-
-		// let rA = min(12, ⌊ ζı+1 / 16 ⌋) , φA ≡ φrA , φ′A ≡ φ′rA
-		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
-
-		switch opcode {
-		case polkavm.MoveReg:
-			i.MoveReg(regDst, regA)
-		case polkavm.Sbrk:
-			return 0, i.Sbrk(regDst, regA)
-		case polkavm.CountSetBits64:
-			i.CountSetBits64(regDst, regA)
-		case polkavm.CountSetBits32:
-			i.CountSetBits32(regDst, regA)
-		case polkavm.LeadingZeroBits64:
-			i.LeadingZeroBits64(regDst, regA)
-		case polkavm.LeadingZeroBits32:
-			i.LeadingZeroBits32(regDst, regA)
-		case polkavm.TrailingZeroBits64:
-			i.TrailingZeroBits64(regDst, regA)
-		case polkavm.TrailingZeroBits32:
-			i.TrailingZeroBits32(regDst, regA)
-		case polkavm.SignExtend8:
-			i.SignExtend8(regDst, regA)
-		case polkavm.SignExtend16:
-			i.SignExtend16(regDst, regA)
-		case polkavm.ZeroExtend16:
-			i.ZeroExtend16(regDst, regA)
-		case polkavm.ReverseBytes:
-			i.ReverseBytes(regDst, regA)
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrReg2Imm: // (eq. A.29 v0.7.2)
-		// let lX = min(4, max(0, ℓ − 1))
-		lenX := uint64(min(4, max(0, int(skip)-1)))
-		if codeLength < i.instructionCounter+2+lenX {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-		// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
-		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
-		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
-
-		// νX ≡ X_lX(E−1lX(ζı+2...+lX))
-		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
-
-		switch opcode {
-		case polkavm.StoreIndirectU8:
-			return 0, i.StoreIndirectU8(regA, regB, valueX)
-		case polkavm.StoreIndirectU16:
-			return 0, i.StoreIndirectU16(regA, regB, valueX)
-		case polkavm.StoreIndirectU32:
-			return 0, i.StoreIndirectU32(regA, regB, valueX)
-		case polkavm.StoreIndirectU64:
-			return 0, i.StoreIndirectU64(regA, regB, valueX)
-		case polkavm.LoadIndirectU8:
-			return 0, i.LoadIndirectU8(regA, regB, valueX)
-		case polkavm.LoadIndirectI8:
-			return 0, i.LoadIndirectI8(regA, regB, valueX)
-		case polkavm.LoadIndirectU16:
-			return 0, i.LoadIndirectU16(regA, regB, valueX)
-		case polkavm.LoadIndirectI16:
-			return 0, i.LoadIndirectI16(regA, regB, valueX)
-		case polkavm.LoadIndirectU32:
-			return 0, i.LoadIndirectU32(regA, regB, valueX)
-		case polkavm.LoadIndirectI32:
-			return 0, i.LoadIndirectI32(regA, regB, valueX)
-		case polkavm.LoadIndirectU64:
-			return 0, i.LoadIndirectU64(regA, regB, valueX)
-		case polkavm.AddImm32:
-			i.AddImm32(regA, regB, valueX)
-		case polkavm.AndImm:
-			i.AndImm(regA, regB, valueX)
-		case polkavm.XorImm:
-			i.XorImm(regA, regB, valueX)
-		case polkavm.OrImm:
-			i.OrImm(regA, regB, valueX)
-		case polkavm.MulImm32:
-			i.MulImm32(regA, regB, valueX)
-		case polkavm.SetLessThanUnsignedImm:
-			i.SetLessThanUnsignedImm(regA, regB, valueX)
-		case polkavm.SetLessThanSignedImm:
-			i.SetLessThanSignedImm(regA, regB, valueX)
-		case polkavm.ShiftLogicalLeftImm32:
-			i.ShiftLogicalLeftImm32(regA, regB, valueX)
-		case polkavm.ShiftLogicalRightImm32:
-			i.ShiftLogicalRightImm32(regA, regB, valueX)
-		case polkavm.ShiftArithmeticRightImm32:
-			i.ShiftArithmeticRightImm32(regA, regB, valueX)
-		case polkavm.NegateAndAddImm32:
-			i.NegateAndAddImm32(regA, regB, valueX)
-		case polkavm.SetGreaterThanUnsignedImm:
-			i.SetGreaterThanUnsignedImm(regA, regB, valueX)
-		case polkavm.SetGreaterThanSignedImm:
-			i.SetGreaterThanSignedImm(regA, regB, valueX)
-		case polkavm.ShiftLogicalLeftImmAlt32:
-			i.ShiftLogicalLeftImmAlt32(regA, regB, valueX)
-		case polkavm.ShiftArithmeticRightImmAlt32:
-			i.ShiftLogicalRightImmAlt32(regA, regB, valueX)
-		case polkavm.ShiftLogicalRightImmAlt32:
-			i.ShiftArithmeticRightImmAlt32(regA, regB, valueX)
-		case polkavm.CmovIfZeroImm:
-			i.CmovIfZeroImm(regA, regB, valueX)
-		case polkavm.CmovIfNotZeroImm:
-			i.CmovIfNotZeroImm(regA, regB, valueX)
-		case polkavm.AddImm64:
-			i.AddImm64(regA, regB, valueX)
-		case polkavm.MulImm64:
-			i.MulImm64(regA, regB, valueX)
-		case polkavm.ShiftLogicalLeftImm64:
-			i.ShiftLogicalLeftImm64(regA, regB, valueX)
-		case polkavm.ShiftLogicalRightImm64:
-			i.ShiftLogicalRightImm64(regA, regB, valueX)
-		case polkavm.ShiftArithmeticRightImm64:
-			i.ShiftArithmeticRightImm64(regA, regB, valueX)
-		case polkavm.NegateAndAddImm64:
-			i.NegateAndAddImm64(regA, regB, valueX)
-		case polkavm.ShiftLogicalLeftImmAlt64:
-			i.ShiftLogicalLeftImmAlt64(regA, regB, valueX)
-		case polkavm.ShiftLogicalRightImmAlt64:
-			i.ShiftLogicalRightImmAlt64(regA, regB, valueX)
-		case polkavm.ShiftArithmeticRightImmAlt64:
-			i.ShiftArithmeticRightImmAlt64(regA, regB, valueX)
-		case polkavm.RotR64Imm:
-			i.RotateRight64Imm(regA, regB, valueX)
-		case polkavm.RotR64ImmAlt:
-			i.RotateRight64ImmAlt(regA, regB, valueX)
-		case polkavm.RotR32Imm:
-			i.RotateRight32Imm(regA, regB, valueX)
-		case polkavm.RotR32ImmAlt:
-			i.RotateRight32ImmAlt(regA, regB, valueX)
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrReg2Offset: // (eq. A.30 v0.7.2)
-		// let lX = min(4, max(0, ℓ − 1))
-		lenX := uint64(min(4, max(0, int(skip)-1)))
-		if codeLength < i.instructionCounter+2+lenX {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-		// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
-		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
-		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
-
-		// νX ≡ ı + Z_lX(E−1lX(ζı+2...+lX))
-		valueX := uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX))
-
-		switch opcode {
-		case polkavm.BranchEq:
-			return 0, i.BranchEq(regA, regB, valueX)
-		case polkavm.BranchNotEq:
-			return 0, i.BranchNotEq(regA, regB, valueX)
-		case polkavm.BranchLessUnsigned:
-			return 0, i.BranchLessUnsigned(regA, regB, valueX)
-		case polkavm.BranchLessSigned:
-			return 0, i.BranchLessSigned(regA, regB, valueX)
-		case polkavm.BranchGreaterOrEqualUnsigned:
-			return 0, i.BranchGreaterOrEqualUnsigned(regA, regB, valueX)
-		case polkavm.BranchGreaterOrEqualSigned:
-			return 0, i.BranchGreaterOrEqualSigned(regA, regB, valueX)
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrReg2Imm2: // (eq. A.31 v0.7.2)
-		if codeLength < i.instructionCounter+3 {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-		// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
-		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
-		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
-		// let lX = min(4, ζı+2 mod 8)
-		lenX := uint64(min(4, i.code[i.instructionCounter+2]%8))
-		// let lY = min(4, max(0, ℓ − lX − 2))
-		lenY := uint64(min(4, max(0, int(skip)-int(lenX)-2)))
-
-		if codeLength < i.instructionCounter+3+lenX+lenY {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-
-		// νX = X_lX(E−1lX (ζı+3⋅⋅⋅+lX))
-		valueX := jam.DecodeUint64(i.code[i.instructionCounter+3 : i.instructionCounter+3+lenX])
-		// vY = X_lY(E−1lY (ζı+3+lX ⋅⋅⋅+lY))
-		valueY := sext(jam.DecodeUint64(i.code[i.instructionCounter+3+lenX:i.instructionCounter+3+lenX+lenY]), lenY)
-
-		switch opcode {
-		case polkavm.LoadImmAndJumpIndirect:
-			return 0, i.LoadImmAndJumpIndirect(regA, regB, valueX, valueY)
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
-	case polkavm.InstrReg3: // (eq. A.32 v0.7.2)
-		if codeLength < i.instructionCounter+2 {
-			return 0, polkavm.ErrPanicf("out of bound code access")
-		}
-
-		// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
-		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
-		// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
-		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
-		// let rD = min(12, ζı+2), φD ≡ φrD, φ′D ≡ φ′rD
-		regDst := polkavm.Reg(min(12, i.code[i.instructionCounter+2]))
-
-		switch opcode {
-		case polkavm.Add32:
-			i.Add32(regDst, regA, regB)
-		case polkavm.Sub32:
-			i.Sub32(regDst, regA, regB)
-		case polkavm.Mul32:
-			i.Mul32(regDst, regA, regB)
-		case polkavm.DivUnsigned32:
-			i.DivUnsigned32(regDst, regA, regB)
-		case polkavm.DivSigned32:
-			i.DivSigned32(regDst, regA, regB)
-		case polkavm.RemUnsigned32:
-			i.RemUnsigned32(regDst, regA, regB)
-		case polkavm.RemSigned32:
-			i.RemSigned32(regDst, regA, regB)
-		case polkavm.ShiftLogicalLeft32:
-			i.ShiftLogicalLeft32(regDst, regA, regB)
-		case polkavm.ShiftLogicalRight32:
-			i.ShiftLogicalRight32(regDst, regA, regB)
-		case polkavm.ShiftArithmeticRight32:
-			i.ShiftArithmeticRight32(regDst, regA, regB)
-		case polkavm.Add64:
-			i.Add64(regDst, regA, regB)
-		case polkavm.Sub64:
-			i.Sub64(regDst, regA, regB)
-		case polkavm.Mul64:
-			i.Mul64(regDst, regA, regB)
-		case polkavm.DivUnsigned64:
-			i.DivUnsigned64(regDst, regA, regB)
-		case polkavm.DivSigned64:
-			i.DivSigned64(regDst, regA, regB)
-		case polkavm.RemUnsigned64:
-			i.RemUnsigned64(regDst, regA, regB)
-		case polkavm.RemSigned64:
-			i.RemSigned64(regDst, regA, regB)
-		case polkavm.ShiftLogicalLeft64:
-			i.ShiftLogicalLeft64(regDst, regA, regB)
-		case polkavm.ShiftLogicalRight64:
-			i.ShiftLogicalRight64(regDst, regA, regB)
-		case polkavm.ShiftArithmeticRight64:
-			i.ShiftArithmeticRight64(regDst, regA, regB)
-		case polkavm.And:
-			i.And(regDst, regA, regB)
-		case polkavm.Xor:
-			i.Xor(regDst, regA, regB)
-		case polkavm.Or:
-			i.Or(regDst, regA, regB)
-		case polkavm.MulUpperSignedSigned:
-			i.MulUpperSignedSigned(regDst, regA, regB)
-		case polkavm.MulUpperUnsignedUnsigned:
-			i.MulUpperUnsignedUnsigned(regDst, regA, regB)
-		case polkavm.MulUpperSignedUnsigned:
-			i.MulUpperSignedUnsigned(regDst, regA, regB)
-		case polkavm.SetLessThanUnsigned:
-			i.SetLessThanUnsigned(regDst, regA, regB)
-		case polkavm.SetLessThanSigned:
-			i.SetLessThanSigned(regDst, regA, regB)
-		case polkavm.CmovIfZero:
-			i.CmovIfZero(regDst, regA, regB)
-		case polkavm.CmovIfNotZero:
-			i.CmovIfNotZero(regDst, regA, regB)
-		case polkavm.RotL64:
-			i.RotateLeft64(regDst, regA, regB)
-		case polkavm.RotL32:
-			i.RotateLeft32(regDst, regA, regB)
-		case polkavm.RotR64:
-			i.RotateRight64(regDst, regA, regB)
-		case polkavm.RotR32:
-			i.RotateRight32(regDst, regA, regB)
-		case polkavm.AndInv:
-			i.AndInverted(regDst, regA, regB)
-		case polkavm.OrInv:
-			i.OrInverted(regDst, regA, regB)
-		case polkavm.Xnor:
-			i.Xnor(regDst, regA, regB)
-		case polkavm.Max:
-			i.Max(regDst, regA, regB)
-		case polkavm.MaxU:
-			i.MaxUnsigned(regDst, regA, regB)
-		case polkavm.Min:
-			i.Min(regDst, regA, regB)
-		case polkavm.MinU:
-			i.MinUnsigned(regDst, regA, regB)
-		default:
-			return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
-		}
+	// (eq. A.32 v0.7.0)
+	case polkavm.Add32:
+		i.Add32(i.decodeArgsReg3())
+	case polkavm.Sub32:
+		i.Sub32(i.decodeArgsReg3())
+	case polkavm.Mul32:
+		i.Mul32(i.decodeArgsReg3())
+	case polkavm.DivUnsigned32:
+		i.DivUnsigned32(i.decodeArgsReg3())
+	case polkavm.DivSigned32:
+		i.DivSigned32(i.decodeArgsReg3())
+	case polkavm.RemUnsigned32:
+		i.RemUnsigned32(i.decodeArgsReg3())
+	case polkavm.RemSigned32:
+		i.RemSigned32(i.decodeArgsReg3())
+	case polkavm.ShiftLogicalLeft32:
+		i.ShiftLogicalLeft32(i.decodeArgsReg3())
+	case polkavm.ShiftLogicalRight32:
+		i.ShiftLogicalRight32(i.decodeArgsReg3())
+	case polkavm.ShiftArithmeticRight32:
+		i.ShiftArithmeticRight32(i.decodeArgsReg3())
+	case polkavm.Add64:
+		i.Add64(i.decodeArgsReg3())
+	case polkavm.Sub64:
+		i.Sub64(i.decodeArgsReg3())
+	case polkavm.Mul64:
+		i.Mul64(i.decodeArgsReg3())
+	case polkavm.DivUnsigned64:
+		i.DivUnsigned64(i.decodeArgsReg3())
+	case polkavm.DivSigned64:
+		i.DivSigned64(i.decodeArgsReg3())
+	case polkavm.RemUnsigned64:
+		i.RemUnsigned64(i.decodeArgsReg3())
+	case polkavm.RemSigned64:
+		i.RemSigned64(i.decodeArgsReg3())
+	case polkavm.ShiftLogicalLeft64:
+		i.ShiftLogicalLeft64(i.decodeArgsReg3())
+	case polkavm.ShiftLogicalRight64:
+		i.ShiftLogicalRight64(i.decodeArgsReg3())
+	case polkavm.ShiftArithmeticRight64:
+		i.ShiftArithmeticRight64(i.decodeArgsReg3())
+	case polkavm.And:
+		i.And(i.decodeArgsReg3())
+	case polkavm.Xor:
+		i.Xor(i.decodeArgsReg3())
+	case polkavm.Or:
+		i.Or(i.decodeArgsReg3())
+	case polkavm.MulUpperSignedSigned:
+		i.MulUpperSignedSigned(i.decodeArgsReg3())
+	case polkavm.MulUpperUnsignedUnsigned:
+		i.MulUpperUnsignedUnsigned(i.decodeArgsReg3())
+	case polkavm.MulUpperSignedUnsigned:
+		i.MulUpperSignedUnsigned(i.decodeArgsReg3())
+	case polkavm.SetLessThanUnsigned:
+		i.SetLessThanUnsigned(i.decodeArgsReg3())
+	case polkavm.SetLessThanSigned:
+		i.SetLessThanSigned(i.decodeArgsReg3())
+	case polkavm.CmovIfZero:
+		i.CmovIfZero(i.decodeArgsReg3())
+	case polkavm.CmovIfNotZero:
+		i.CmovIfNotZero(i.decodeArgsReg3())
+	case polkavm.RotL64:
+		i.RotateLeft64(i.decodeArgsReg3())
+	case polkavm.RotL32:
+		i.RotateLeft32(i.decodeArgsReg3())
+	case polkavm.RotR64:
+		i.RotateRight64(i.decodeArgsReg3())
+	case polkavm.RotR32:
+		i.RotateRight32(i.decodeArgsReg3())
+	case polkavm.AndInv:
+		i.AndInverted(i.decodeArgsReg3())
+	case polkavm.OrInv:
+		i.OrInverted(i.decodeArgsReg3())
+	case polkavm.Xnor:
+		i.Xnor(i.decodeArgsReg3())
+	case polkavm.Max:
+		i.Max(i.decodeArgsReg3())
+	case polkavm.MaxU:
+		i.MaxUnsigned(i.decodeArgsReg3())
+	case polkavm.Min:
+		i.Min(i.decodeArgsReg3())
+	case polkavm.MinU:
+		i.MinUnsigned(i.decodeArgsReg3())
 	default:
-		return 0, polkavm.ErrPanicf("unexpected opcode %v", opcode)
+		// c_n if kn = 1 ∧ cn ∈ U otherwise 0 (eq. A.19 v0.7.2)
+		return 0, i.Trap()
 	}
 	return 0, nil
 }
@@ -589,4 +380,158 @@ func sext(value uint64, length uint64) uint64 {
 	} else {
 		return relevantValue
 	}
+}
+
+func (i *Instance) decodeArgsImm() (valueX uint64) {
+	// let lX = min(4, ℓ)
+	lenX := min(4, i.skipLen)
+
+	// νX ≡ X_lX(E−1lX (ζı+1⋅⋅⋅+lX))
+	return sext(jam.DecodeUint64(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX]), lenX)
+}
+
+func (i *Instance) decodeArgsRegImmExt() (regA polkavm.Reg, valueX uint64) {
+	// let rA = min(12, ζı+1 mod 16), φ′A ≡ φ′rA
+	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
+	// νX ≡ E−1_8(ζı+2⋅⋅⋅+8)
+	valueX = jam.DecodeUint64(i.code[i.instructionCounter+2 : i.instructionCounter+10])
+	return regA, valueX
+}
+
+func (i *Instance) decodeArgsImm2() (valueX, valueY uint64) {
+	// let lX = min(4, ζı+1 mod 8)
+	lenX := uint64(min(4, i.code[i.instructionCounter+1]%8))
+
+	// let lY = min(4, max(0, ℓ − lX − 1))
+	lenY := uint64(min(4, max(0, int(i.skipLen)-int(lenX)-1)))
+
+	// νX ≡ X_lX (E−1lX (ζı+2⋅⋅⋅+lX))
+	valueX = sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
+
+	// νY ≡ XlY (E−1lY (ζı+2+lX ⋅⋅⋅+lY))
+	valueY = sext(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY)
+	return valueX, valueY
+}
+
+func (i *Instance) decodeArgsOffset() (valueX uint64) {
+	// let lX = min(4, ℓ)
+	lenX := min(4, i.skipLen)
+
+	// νX ≡ ı + Z_lX (E−1_lX(ζı+1⋅⋅⋅+lX))
+	valueX = uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX]), lenX))
+
+	return valueX
+}
+
+func (i *Instance) decodeArgsRegImm() (regA polkavm.Reg, valueX uint64) {
+	// let lX = min(4, max(0, ℓ − 1))
+	lenX := uint64(min(4, max(0, int(i.skipLen)-1)))
+	// let rA = min(12, ζı+1 mod 16), φ′A ≡ φ′rA
+	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
+
+	// νX ≡ X_lX(E−1_lX(ζı+2...+lX))
+	valueX = sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
+
+	return regA, valueX
+}
+
+func (i *Instance) decodeArgsRegImm2() (regA polkavm.Reg, valueX, valueY uint64) {
+	// let rA = min(12, ζı+1 mod 16), φA ≡ φrA, φ′A ≡ φ′rA
+	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
+	// let lX = min(4, ⌊ ζı+1 / 16 ⌋ mod 8)
+	lenX := uint64(min(4, (i.code[i.instructionCounter+1]/16)%8))
+
+	// let lY = min(4, max(0, ℓ − lX − 1))
+	lenY := uint64(min(4, max(0, int(i.skipLen)-int(lenX)-1)))
+
+	// νX = X_lX (E−1lX (ζı+2⋅⋅⋅+lX))
+	valueX = sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
+
+	// νY = X_lY(E−1lY (ζı+2+lX ⋅⋅⋅+lY))
+	valueY = sext(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY)
+
+	return regA, valueX, valueY
+}
+
+func (i *Instance) decodeArgsRegImmOffset() (regA polkavm.Reg, valueX, valueY uint64) {
+	// let rA = min(12, ζı+1 mod 16), φA ≡ φrA, φ′A ≡ φ′rA
+	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
+	// let lX = min(4, ⌊ ζı+1 / 16 ⌋ mod 8)
+	lenX := uint64(min(4, (i.code[i.instructionCounter+1]/16)%8))
+	// let lY = min(4, max(0, ℓ − lX − 1))
+	lenY := uint64(min(4, max(0, int(i.skipLen)-int(lenX)-1)))
+
+	// νX = X_lX(E−1lX (ζı+2...+lX))
+	valueX = sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
+	// νY = ı + ZlY(E−1lY (ζı+2+lX⋅⋅⋅+lY))
+	valueY = uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY))
+
+	return regA, valueX, valueY
+}
+
+func (i *Instance) decodeArgsReg2() (regDst, regA polkavm.Reg) {
+	// let rD = min(12, (ζı+1) mod 16) , φD ≡ φrD , φ′D ≡ φ′rD
+	regDst = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
+
+	// let rA = min(12, ⌊ ζı+1 / 16 ⌋) , φA ≡ φrA , φ′A ≡ φ′rA
+	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
+
+	return regDst, regA
+}
+
+func (i *Instance) decodeArgsReg2Imm() (regA, regB polkavm.Reg, valueX uint64) {
+	// let lX = min(4, max(0, ℓ − 1))
+	lenX := uint64(min(4, max(0, int(i.skipLen)-1)))
+	// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
+	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
+	// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
+	regB = polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
+
+	// νX ≡ X_lX(E−1lX(ζı+2...+lX))
+	valueX = sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
+
+	return regA, regB, valueX
+}
+
+func (i *Instance) decodeArgsReg2Offset() (regA, regB polkavm.Reg, valueX uint64) {
+	// let lX = min(4, max(0, ℓ − 1))
+	lenX := uint64(min(4, max(0, int(i.skipLen)-1)))
+	// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
+	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
+	// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
+	regB = polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
+
+	// νX ≡ ı + Z_lX(E−1lX(ζı+2...+lX))
+	valueX = uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX))
+
+	return regA, regB, valueX
+}
+
+func (i *Instance) decodeArgsReg2Imm2() (regA, regB polkavm.Reg, valueX, valueY uint64) {
+	// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
+	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
+	// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
+	regB = polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
+	// let lX = min(4, ζı+2 mod 8)
+	lenX := uint64(min(4, i.code[i.instructionCounter+2]%8))
+	// let lY = min(4, max(0, ℓ − lX − 2))
+	lenY := uint64(min(4, max(0, int(i.skipLen)-int(lenX)-2)))
+
+	// νX = X_lX(E−1lX (ζı+3⋅⋅⋅+lX))
+	valueX = jam.DecodeUint64(i.code[i.instructionCounter+3 : i.instructionCounter+3+lenX])
+	// vY = X_lY(E−1lY (ζı+3+lX ⋅⋅⋅+lY))
+	valueY = sext(jam.DecodeUint64(i.code[i.instructionCounter+3+lenX:i.instructionCounter+3+lenX+lenY]), lenY)
+
+	return regA, regB, valueX, valueY
+}
+
+func (i *Instance) decodeArgsReg3() (regDst, regA, regB polkavm.Reg) {
+	// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
+	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
+	// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
+	regB = polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
+	// let rD = min(12, ζı+2), φD ≡ φrD, φ′D ≡ φ′rD
+	regDst = polkavm.Reg(min(12, i.code[i.instructionCounter+2]))
+
+	return regDst, regA, regB
 }
