@@ -50,7 +50,7 @@ func (i *Instance) Jump(target uint64) error {
 
 // JumpIndirect jump_ind djump((φA + νX) mod 2^32)
 func (i *Instance) JumpIndirect(base polkavm.Reg, offset uint64) error {
-	return i.djump(i.regs[base] + offset)
+	return i.djump(uint32(i.regs[base] + offset))
 }
 
 // LoadImm load_imm φ′A = νX
@@ -580,7 +580,7 @@ func (i *Instance) BranchGreaterOrEqualSigned(regA polkavm.Reg, regB polkavm.Reg
 func (i *Instance) LoadImmAndJumpIndirect(regA polkavm.Reg, base polkavm.Reg, value, offset uint64) error {
 	target := i.regs[base] + offset
 	i.regs[regA] = value
-	return i.djump(target)
+	return i.djump(uint32(target))
 }
 
 // Add32 add_32 φ′D = X4((φA + φB) mod 2^32)

@@ -29,6 +29,7 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.UGas
 		jumpTable:              jumpTable,
 		bitmask:                append(bitmask, true), // k ⌢ [1, 1, ... ]
 		basicBlockInstructions: basicBlockInstructions,
+		instructionsCache:      make(map[uint64]instructionCache),
 	}, nil
 }
 
@@ -42,7 +43,12 @@ type Instance struct {
 	bitmask                jam.BitSequence     // k
 	basicBlockInstructions map[uint64]struct{} // ϖ
 
-	skipLen uint64
+	skipLen           uint64
+	instructionsCache map[uint64]instructionCache
+}
+type instructionCache struct {
+	reg [3]polkavm.Reg
+	val [2]uint64
 }
 
 // skip ı′ = ı + 1 + skip(ı) (eq. A.9 v0.7.2)
@@ -145,8 +151,7 @@ func (i *Instance) branch(condition bool, target uint64) error {
 }
 
 // djump (a) =⇒ (ε, ı′) (eq. A.18 v0.7.2)
-func (i *Instance) djump(address0 uint64) error {
-	address := uint32(address0)
+func (i *Instance) djump(address uint32) error {
 	// (∎, ı) if a = 2^32 − 2^16
 	if address == polkavm.AddressReturnToHost {
 		return polkavm.ErrHalt

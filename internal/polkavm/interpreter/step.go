@@ -383,22 +383,34 @@ func sext(value uint64, length uint64) uint64 {
 }
 
 func (i *Instance) decodeArgsImm() (valueX uint64) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.val[0]
+	}
 	// let lX = min(4, ℓ)
 	lenX := min(4, i.skipLen)
 
 	// νX ≡ X_lX(E−1lX (ζı+1⋅⋅⋅+lX))
-	return sext(jam.DecodeUint64(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX]), lenX)
+	valueX = sext(jam.DecodeUint64(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX]), lenX)
+	i.instructionsCache[i.instructionCounter] = instructionCache{val: [2]uint64{valueX}}
+	return valueX
 }
 
 func (i *Instance) decodeArgsRegImmExt() (regA polkavm.Reg, valueX uint64) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.reg[0], instr.val[0]
+	}
 	// let rA = min(12, ζı+1 mod 16), φ′A ≡ φ′rA
 	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 	// νX ≡ E−1_8(ζı+2⋅⋅⋅+8)
 	valueX = jam.DecodeUint64(i.code[i.instructionCounter+2 : i.instructionCounter+10])
+	i.instructionsCache[i.instructionCounter] = instructionCache{reg: [3]polkavm.Reg{regA}, val: [2]uint64{valueX}}
 	return regA, valueX
 }
 
 func (i *Instance) decodeArgsImm2() (valueX, valueY uint64) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.val[0], instr.val[1]
+	}
 	// let lX = min(4, ζı+1 mod 8)
 	lenX := uint64(min(4, i.code[i.instructionCounter+1]%8))
 
@@ -410,20 +422,27 @@ func (i *Instance) decodeArgsImm2() (valueX, valueY uint64) {
 
 	// νY ≡ XlY (E−1lY (ζı+2+lX ⋅⋅⋅+lY))
 	valueY = sext(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY)
+	i.instructionsCache[i.instructionCounter] = instructionCache{val: [2]uint64{valueX, valueY}}
 	return valueX, valueY
 }
 
 func (i *Instance) decodeArgsOffset() (valueX uint64) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.val[0]
+	}
 	// let lX = min(4, ℓ)
 	lenX := min(4, i.skipLen)
 
 	// νX ≡ ı + Z_lX (E−1_lX(ζı+1⋅⋅⋅+lX))
 	valueX = uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX]), lenX))
-
+	i.instructionsCache[i.instructionCounter] = instructionCache{val: [2]uint64{valueX}}
 	return valueX
 }
 
 func (i *Instance) decodeArgsRegImm() (regA polkavm.Reg, valueX uint64) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.reg[0], instr.val[0]
+	}
 	// let lX = min(4, max(0, ℓ − 1))
 	lenX := uint64(min(4, max(0, int(i.skipLen)-1)))
 	// let rA = min(12, ζı+1 mod 16), φ′A ≡ φ′rA
@@ -431,11 +450,14 @@ func (i *Instance) decodeArgsRegImm() (regA polkavm.Reg, valueX uint64) {
 
 	// νX ≡ X_lX(E−1_lX(ζı+2...+lX))
 	valueX = sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
-
+	i.instructionsCache[i.instructionCounter] = instructionCache{reg: [3]polkavm.Reg{regA}, val: [2]uint64{valueX}}
 	return regA, valueX
 }
 
 func (i *Instance) decodeArgsRegImm2() (regA polkavm.Reg, valueX, valueY uint64) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.reg[0], instr.val[0], instr.val[1]
+	}
 	// let rA = min(12, ζı+1 mod 16), φA ≡ φrA, φ′A ≡ φ′rA
 	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 	// let lX = min(4, ⌊ ζı+1 / 16 ⌋ mod 8)
@@ -449,11 +471,14 @@ func (i *Instance) decodeArgsRegImm2() (regA polkavm.Reg, valueX, valueY uint64)
 
 	// νY = X_lY(E−1lY (ζı+2+lX ⋅⋅⋅+lY))
 	valueY = sext(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY)
-
+	i.instructionsCache[i.instructionCounter] = instructionCache{reg: [3]polkavm.Reg{regA}, val: [2]uint64{valueX, valueY}}
 	return regA, valueX, valueY
 }
 
 func (i *Instance) decodeArgsRegImmOffset() (regA polkavm.Reg, valueX, valueY uint64) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.reg[0], instr.val[0], instr.val[1]
+	}
 	// let rA = min(12, ζı+1 mod 16), φA ≡ φrA, φ′A ≡ φ′rA
 	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 	// let lX = min(4, ⌊ ζı+1 / 16 ⌋ mod 8)
@@ -465,21 +490,27 @@ func (i *Instance) decodeArgsRegImmOffset() (regA polkavm.Reg, valueX, valueY ui
 	valueX = sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
 	// νY = ı + ZlY(E−1lY (ζı+2+lX⋅⋅⋅+lY))
 	valueY = uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY))
-
+	i.instructionsCache[i.instructionCounter] = instructionCache{reg: [3]polkavm.Reg{regA}, val: [2]uint64{valueX, valueY}}
 	return regA, valueX, valueY
 }
 
 func (i *Instance) decodeArgsReg2() (regDst, regA polkavm.Reg) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.reg[0], instr.reg[1]
+	}
 	// let rD = min(12, (ζı+1) mod 16) , φD ≡ φrD , φ′D ≡ φ′rD
 	regDst = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 
 	// let rA = min(12, ⌊ ζı+1 / 16 ⌋) , φA ≡ φrA , φ′A ≡ φ′rA
 	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
-
+	i.instructionsCache[i.instructionCounter] = instructionCache{reg: [3]polkavm.Reg{regDst, regA}}
 	return regDst, regA
 }
 
 func (i *Instance) decodeArgsReg2Imm() (regA, regB polkavm.Reg, valueX uint64) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.reg[0], instr.reg[1], instr.val[0]
+	}
 	// let lX = min(4, max(0, ℓ − 1))
 	lenX := uint64(min(4, max(0, int(i.skipLen)-1)))
 	// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
@@ -489,11 +520,14 @@ func (i *Instance) decodeArgsReg2Imm() (regA, regB polkavm.Reg, valueX uint64) {
 
 	// νX ≡ X_lX(E−1lX(ζı+2...+lX))
 	valueX = sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
-
+	i.instructionsCache[i.instructionCounter] = instructionCache{reg: [3]polkavm.Reg{regA, regB}, val: [2]uint64{valueX}}
 	return regA, regB, valueX
 }
 
 func (i *Instance) decodeArgsReg2Offset() (regA, regB polkavm.Reg, valueX uint64) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.reg[0], instr.reg[1], instr.val[0]
+	}
 	// let lX = min(4, max(0, ℓ − 1))
 	lenX := uint64(min(4, max(0, int(i.skipLen)-1)))
 	// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
@@ -503,11 +537,14 @@ func (i *Instance) decodeArgsReg2Offset() (regA, regB polkavm.Reg, valueX uint64
 
 	// νX ≡ ı + Z_lX(E−1lX(ζı+2...+lX))
 	valueX = uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX))
-
+	i.instructionsCache[i.instructionCounter] = instructionCache{reg: [3]polkavm.Reg{regA, regB}, val: [2]uint64{valueX}}
 	return regA, regB, valueX
 }
 
 func (i *Instance) decodeArgsReg2Imm2() (regA, regB polkavm.Reg, valueX, valueY uint64) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.reg[0], instr.reg[1], instr.val[0], instr.val[1]
+	}
 	// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
 	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 	// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
@@ -522,10 +559,14 @@ func (i *Instance) decodeArgsReg2Imm2() (regA, regB polkavm.Reg, valueX, valueY 
 	// vY = X_lY(E−1lY (ζı+3+lX ⋅⋅⋅+lY))
 	valueY = sext(jam.DecodeUint64(i.code[i.instructionCounter+3+lenX:i.instructionCounter+3+lenX+lenY]), lenY)
 
+	i.instructionsCache[i.instructionCounter] = instructionCache{reg: [3]polkavm.Reg{regA, regB}, val: [2]uint64{valueX, valueY}}
 	return regA, regB, valueX, valueY
 }
 
 func (i *Instance) decodeArgsReg3() (regDst, regA, regB polkavm.Reg) {
+	if instr, ok := i.instructionsCache[i.instructionCounter]; ok {
+		return instr.reg[0], instr.reg[1], instr.reg[2]
+	}
 	// let rA = min(12, (ζı+1) mod 16), φA ≡ φrA, φ′A ≡ φ′rA
 	regA = polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 	// let rB = min(12, ⌊ ζı+1 / 16 ⌋), φB ≡ φrB, φ′B ≡ φ′rB
@@ -533,5 +574,6 @@ func (i *Instance) decodeArgsReg3() (regDst, regA, regB polkavm.Reg) {
 	// let rD = min(12, ζı+2), φD ≡ φrD, φ′D ≡ φ′rD
 	regDst = polkavm.Reg(min(12, i.code[i.instructionCounter+2]))
 
+	i.instructionsCache[i.instructionCounter] = instructionCache{reg: [3]polkavm.Reg{regDst, regA, regB}}
 	return regDst, regA, regB
 }
