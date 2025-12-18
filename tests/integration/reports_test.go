@@ -583,6 +583,7 @@ func TestReports(t *testing.T) {
 						&preState,
 						newBlock.Header.TimeSlotIndex,
 						availableWorkReports,
+						preState.EntropyPool,
 					)
 					require.NoError(t, err)
 

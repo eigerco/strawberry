@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/eigerco/strawberry/pkg/log"
 	"maps"
 	"slices"
 	"sort"
@@ -19,7 +20,6 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
 	"github.com/eigerco/strawberry/internal/merkle/mountain_ranges"
-	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
@@ -107,6 +107,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		s,
 		newTimeSlot,
 		availableWorkReports,
+		newEntropyPool,
 	)
 	if err != nil {
 		return err
@@ -152,24 +153,24 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 // Intermediate State Calculation Functions
 
 // preimageHasBeenSolicited checks if a preimage has been solicited but not yet provided
-// Y(d, s, h, l) ⇔ h ∉ d[s]p ∧ d[s]l[(h, l)] = [] (eq. 12.35 v0.7.1)
-func preimageHasBeenSolicited(serviceState service.ServiceState, serviceIndex block.ServiceId, preimageHash crypto.Hash, preimageLength service.PreimageLength) bool {
+// Y(d, s, h, l) ⇔ d[s]l[(h, l)] = [] (eq. 12.22 v0.7.2)
+func preimageHasBeenSolicited(serviceState service.ServiceState, serviceIndex block.ServiceId, preimageBlob []byte) bool {
+	preimageHash := crypto.HashData(preimageBlob)
 	account, ok := serviceState[serviceIndex]
 	if !ok {
 		return false
 	}
-	_, preimageLookupExists := account.PreimageLookup[preimageHash]
 
-	k, err := statekey.NewPreimageMeta(serviceIndex, preimageHash, uint32(preimageLength))
+	k, err := statekey.NewPreimageMeta(serviceIndex, preimageHash, uint32(len(preimageBlob)))
 	if err != nil {
 		return false
 	}
 	meta, metaExists := account.GetPreimageMeta(k)
 
-	return !preimageLookupExists && (metaExists && len(meta) == 0)
+	return metaExists && len(meta) == 0
 }
 
-// EP = [i ∈ EP || i] (eq. 12.39)
+// EP = [i ∈ EP || i] (eq. 12.36 v0.7.2)
 func isPreimagesSortedUnique(preimages block.PreimageExtrinsic) bool {
 	if len(preimages) <= 1 {
 		return true
@@ -194,19 +195,15 @@ func isPreimagesSortedUnique(preimages block.PreimageExtrinsic) bool {
 // ValidatePreimages implements equations 12.39 and 12.40 v0.7.0
 // checks that the preimages are ordered, unique and solicited by a service
 func ValidatePreimages(preimages block.PreimageExtrinsic, serviceState service.ServiceState) error {
-
-	for _, preimage := range preimages {
-		serviceId := block.ServiceId(preimage.ServiceIndex)
-		preimageHash := crypto.HashData(preimage.Data)
-		preimageLength := service.PreimageLength(len(preimage.Data))
-
-		// ∀(s, p) ∈ E_P∶ R(δ, s, H(p), |p|) (eq. 12.35 v0.7.1)
-		if !preimageHasBeenSolicited(serviceState, serviceId, preimageHash, preimageLength) {
-			return errors.New("preimage unneeded")
-		}
-	}
 	if !isPreimagesSortedUnique(preimages) {
 		return errors.New("preimages not sorted unique")
+	}
+
+	for _, preimage := range preimages {
+		// ∀(s, p) ∈ E_P∶ R(δ, s, H(p), |p|) (eq. 12.35 v0.7.1)
+		if !preimageHasBeenSolicited(serviceState, block.ServiceId(preimage.ServiceIndex), preimage.Data) {
+			return errors.New("preimage unneeded")
+		}
 	}
 
 	return nil
@@ -229,47 +226,7 @@ func CalculateNewServiceStateWithPreimages(
 	postAccumulationServiceState service.ServiceState,
 	newTimeslot jamtime.Timeslot,
 ) (service.ServiceState, error) {
-
-	newServiceState := postAccumulationServiceState.Clone()
-
-	for _, preimage := range preimages {
-		serviceId := block.ServiceId(preimage.ServiceIndex)
-		preimageHash := crypto.HashData(preimage.Data)
-		preimageLength := service.PreimageLength(len(preimage.Data))
-
-		// let p = { (s, d) | (s, d) ∈ EP, Y(δ‡, s, H(d), |d|) } (eq. 12.35 v0.7.1)
-		if !preimageHasBeenSolicited(postAccumulationServiceState, serviceId, preimageHash, preimageLength) {
-			continue
-		}
-
-		// Eq. 12.36 v0.7.1
-		//							⎧ δ′[s]p[H(d)] = d
-		// δ′ = δ‡ ex. ∀(s, d) ∈ p∶ ⎨
-		// 							⎩ δ′[s]l[H(d), |d|] = [τ′]
-		account, ok := postAccumulationServiceState[serviceId]
-		if !ok {
-			continue
-		}
-		// If checks pass, add the new preimage
-		if account.PreimageLookup == nil {
-			account.PreimageLookup = make(map[crypto.Hash][]byte)
-		}
-		account.PreimageLookup[preimageHash] = preimage.Data
-
-		k, err := statekey.NewPreimageMeta(serviceId, preimageHash, uint32(preimageLength))
-		if err != nil {
-			return nil, err
-		}
-
-		err = account.InsertPreimageMeta(k, uint64(preimageLength), service.PreimageHistoricalTimeslots{newTimeslot})
-		if err != nil {
-			return nil, err
-		}
-
-		newServiceState[serviceId] = account
-	}
-
-	return newServiceState, nil
+	return preimageIntegration(newTimeslot, postAccumulationServiceState, preimages)
 }
 
 // Final State Calculation Functions
@@ -505,7 +462,7 @@ func addUniqueEdPubKey(slice []ed25519.PublicKey, key ed25519.PublicKey) []ed255
 // CalculateWorkReportsAndAccumulate implements equations. We pass W instead of W* because we also need WQ for
 // updating the state queue.
 // (ω′, ξ′, δ‡, χ′, ι′, ϕ′, θ′, S) ≺ (R, ω, ξ, δ, χ, ι, ϕ, τ, τ′) (eq. 4.16)
-func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state.State, newTimeslot jamtime.Timeslot, workReports []block.WorkReport) (
+func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state.State, newTimeslot jamtime.Timeslot, workReports []block.WorkReport, newEntropyPool state.EntropyPool) (
 	newAccumulationQueue state.AccumulationQueue,
 	newAccumulationHistory state.AccumulationHistory,
 	postAccumulationServiceState service.ServiceState,
@@ -568,7 +525,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	}
 	gasLimit := max(common.TotalGasAccumulation, gasSum)
 
-	accumulator := NewAccumulator(currentState, header, newTimeslot)
+	accumulator := NewAccumulator(newEntropyPool, header, newTimeslot)
 	// e = (d: δ, i: ι, q: ϕ, m: χ_M, a: χ_A, v: χ_V, r: χ_R, z: χ_Z) (eq. 12.24 v0.7.1)
 	// (n, e′, t, θ′, u) ≡ ∆+(g, R*, e, χ_Z) (eq. 12.25 v0.7.1)
 	accumulatedCount, newAccumulationState, serviceHashPairs, gasPairs, err := accumulator.
@@ -1330,7 +1287,7 @@ func (a *Accumulator) ParallelDelta(
 	accumHashPairs := ServiceHashPairSet{}
 	accumGasPairs := make(ServiceGasPairs, 0)
 
-	var allPreimageProvisions []polkavm.ProvidedPreimage
+	var allPreimageProvisions []block.Preimage
 
 	allAddedServices := service.ServiceState{}
 	allRemovedIndices := map[block.ServiceId]struct{}{}
@@ -1390,12 +1347,18 @@ func (a *Accumulator) ParallelDelta(
 		newAssignedServiceIds[core] = replaceIfChanged(initState.AssignedServiceIds[core], managerState.AssignedServiceIds[core], delta[initState.AssignedServiceIds[core]].AccumulationState.AssignedServiceIds[core])
 	}
 
+	allPreimageProvisions = dedupePreimages(allPreimageProvisions)
 	newServiceState := initState.ServiceState.Clone()
 	newServiceState.Merge(allAddedServices)
 	newServiceState.Delete(slices.Collect(maps.Keys(allRemovedIndices))...)
+	newServiceState, err := preimageIntegration(a.newTimeslot, newServiceState, allPreimageProvisions)
+	if err != nil {
+		log.StateTransition.Error().Err(err).Msg("preimage integration failed")
+	}
+
 	return state.AccumulationState{
 		// d′ = P((d ∪ n) ∖ m, ⋃ s∈s ∆(s)p))
-		ServiceState: a.preimageIntegration(newServiceState, allPreimageProvisions),
+		ServiceState: newServiceState,
 		// i′ = (∆(v)e)i
 		ValidatorKeys: delta[initState.DesignateServiceId].AccumulationState.ValidatorKeys,
 		// (m′, z′) = e*_(m,z)
@@ -1489,37 +1452,58 @@ func (a *Accumulator) Delta1(
 	return a.InvokePVM(accumulationState, a.newTimeslot, serviceIndex, gasLimit, operands)
 }
 
-// P(d ⟨NS → A⟩,p {(NS , B)}) → ⟨NS → A⟩ (eq. 12.21 v0.7.1)
-func (a *Accumulator) preimageIntegration(services service.ServiceState, preimages []polkavm.ProvidedPreimage) service.ServiceState {
+// deduplicate preimages, for the lack of set primitive in golang we use a slice and then deduplicate items
+func dedupePreimages(preimages []block.Preimage) (newPreimages []block.Preimage) {
+	type key struct {
+		id   block.ServiceId
+		data string
+	}
+
+	seen := make(map[key]struct{})
+	for _, p := range preimages {
+		k := key{id: p.ServiceIndex, data: string(p.Data)}
+		if _, ok := seen[k]; ok {
+			continue
+		}
+
+		seen[k] = struct{}{}
+		newPreimages = append(newPreimages, p)
+	}
+
+	return newPreimages
+}
+
+// I(d ⟨NS → A⟩,p {(NS , B)}) → ⟨NS → A⟩ (eq. 12.21 v0.7.2)
+func preimageIntegration(newTimeslot jamtime.Timeslot, services service.ServiceState, preimages []block.Preimage) (service.ServiceState, error) {
 	servicesWithPreimages := services.Clone()
 
-	// ∀(s, i) ∈ p, s ∈ K(d), d[s]l[H(i), |i|] = []∶
+	// ∀(s, i) ∈ p, Y(d, s, i)∶
 	for _, preimage := range preimages {
 		preimageHash := crypto.HashData(preimage.Data)
-		if srv, ok := services[preimage.ServiceId]; ok {
-			k, err := statekey.NewPreimageMeta(preimage.ServiceId, preimageHash, uint32(len(preimage.Data)))
+		if preimageHasBeenSolicited(services, preimage.ServiceIndex, preimage.Data) {
+			k, err := statekey.NewPreimageMeta(preimage.ServiceIndex, preimageHash, uint32(len(preimage.Data)))
 			if err != nil {
-				panic("failed to create state key")
+				return nil, fmt.Errorf("failed to create state key")
 			}
 
-			timeslots, exists := srv.GetPreimageMeta(k)
+			// d′ where d′ = d except:
+			// d′[s]l[(H(i), |i|)] = [τ ′]
+			// d′[s]p[H(i)] = i
+			serviceWithPreimage := servicesWithPreimages[preimage.ServiceIndex]
 
-			if exists && len(timeslots) == 0 {
-				// d′ where d′ = d except:
-				// d′[s]l[H(i), |i|] = [τ′]
-				// d′[s]p[H(i)] = i
-				serviceWithPreimage := servicesWithPreimages[preimage.ServiceId]
-
-				err = serviceWithPreimage.InsertPreimageMeta(k, uint64(len(preimage.Data)), service.PreimageHistoricalTimeslots{a.newTimeslot})
-				if err != nil {
-					panic("failed to insert preimage meta")
-				}
-
-				serviceWithPreimage.PreimageLookup[preimageHash] = preimage.Data
+			err = serviceWithPreimage.InsertPreimageMeta(k, uint64(len(preimage.Data)), service.PreimageHistoricalTimeslots{newTimeslot})
+			if err != nil {
+				return nil, fmt.Errorf("failed to insert preimage meta")
 			}
+
+			if serviceWithPreimage.PreimageLookup == nil {
+				serviceWithPreimage.PreimageLookup = make(map[crypto.Hash][]byte)
+			}
+			serviceWithPreimage.PreimageLookup[preimageHash] = preimage.Data
+			servicesWithPreimages[preimage.ServiceIndex] = serviceWithPreimage
 		}
 	}
-	return servicesWithPreimages
+	return servicesWithPreimages, nil
 }
 
 func mod(a, b int) int {

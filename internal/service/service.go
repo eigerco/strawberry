@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"fmt"
 	"maps"
 	"slices"
@@ -295,12 +296,19 @@ type CodeWithMetadata struct {
 	Code     []byte // a_c
 }
 
-// EncodedCodeAndMetadata encoded code and metadata as per Equation (9.4 v0.6.3)
-func (sa *ServiceAccount) EncodedCodeAndMetadata() []byte {
-	if code, exists := sa.PreimageLookup[sa.CodeHash]; exists {
-		return code
+// EncodedCodeAndMetadata encoded code and metadata as per Equation (9.4 v0.7.2)
+func (sa *ServiceAccount) EncodedCodeAndMetadata() (metadata, code []byte) {
+	code, exists := sa.PreimageLookup[sa.CodeHash]
+	if !exists {
+		return nil, nil
 	}
-	return nil
+
+	buff := bytes.NewBuffer(code)
+	dec := jam.NewDecoder(buff)
+	if err := dec.Decode(&metadata); err != nil {
+		return nil, nil
+	}
+	return metadata, buff.Bytes()
 }
 
 // ThresholdBalance (9.8 v0.7.0) ∀a ∈ V(δ): at

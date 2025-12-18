@@ -47,9 +47,6 @@ type WorkItemMetadata struct {
 
 // GasRemaining ΩG(ϱ, φ, ...)
 func GasRemaining(gas polkavm.Gas, regs polkavm.Registers) (polkavm.Gas, polkavm.Registers, error) {
-	if gas < GasRemainingCost {
-		return 0, regs, polkavm.ErrOutOfGas
-	}
 	gas -= GasRemainingCost
 
 	// Set the new ϱ' value into φ′7
@@ -71,9 +68,6 @@ func Fetch(
 	extrinsicPreimages [][]byte, // x
 	operand []*state.AccumulationInput, // o
 ) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
-	if gas < FetchCost {
-		return 0, regs, mem, polkavm.ErrOutOfGas
-	}
 	gas -= FetchCost
 
 	output := regs[polkavm.A0] // φ7
@@ -135,18 +129,8 @@ func Fetch(
 	case 8:
 		// if p ≠ ∅ ∧ φ10 = 8
 		if workPackage != nil {
-			// E(pu, ↕pp)
-			out, err := jam.Marshal(struct {
-				AuthCodeHash     crypto.Hash
-				Parameterization []byte
-			}{
-				workPackage.AuthCodeHash,
-				workPackage.Parameterization,
-			})
-			if err != nil {
-				return gas, regs, mem, polkavm.ErrPanicf(err.Error())
-			}
-			v = out
+			//pf
+			v = workPackage.Parameterization
 		}
 	case 9:
 		// if p ≠ ∅ ∧ φ10 = 9
@@ -252,9 +236,6 @@ func Fetch(
 
 // Lookup ΩL(ϱ, φ, μ, s, s, d)
 func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
-	if gas < LookupCost {
-		return 0, regs, mem, polkavm.ErrOutOfGas
-	}
 	gas -= LookupCost
 
 	omega7 := regs[polkavm.A0]
@@ -275,7 +256,10 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 	h, o := regs[polkavm.A1], regs[polkavm.A2]
 
 	key := make([]byte, 32)
-	if err := mem.Read(h, key); err != nil {
+	if h > math.MaxUint32 {
+		return gas, regs, mem, polkavm.ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Read(uint32(h), key); err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
 
@@ -296,9 +280,6 @@ func Lookup(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servi
 
 // Read ΩR(ϱ, φ, μ, s, s, d)
 func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
-	if gas < ReadCost {
-		return 0, regs, mem, polkavm.ErrOutOfGas
-	}
 	gas -= ReadCost
 
 	omega7 := regs[polkavm.A0]
@@ -313,7 +294,7 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 		var exists bool
 		a, exists = serviceState[ss]
 		if !exists {
-			return gas, regs, mem, polkavm.ErrAccountNotFound
+			return gas, withCode(regs, NONE), mem, nil
 		}
 	}
 
@@ -322,7 +303,10 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 
 	// read key data from memory at ko..ko+kz
 	keyData := make([]byte, kz)
-	err := mem.Read(ko, keyData)
+	if ko > math.MaxUint32 {
+		return gas, regs, mem, polkavm.ErrPanicf("inaccessible memory, address out of range")
+	}
+	err := mem.Read(uint32(ko), keyData)
 	if err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
@@ -349,9 +333,6 @@ func Read(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service
 
 // Write ΩW(ϱ, φ, μ, s, s)
 func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s service.ServiceAccount, serviceId block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory, service.ServiceAccount, error) {
-	if gas < WriteCost {
-		return 0, regs, mem, s, polkavm.ErrOutOfGas
-	}
 	gas -= WriteCost
 
 	ko := regs[polkavm.A0]
@@ -361,7 +342,10 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 
 	//µko⋅⋅⋅+kz
 	keyData := make([]byte, kz)
-	err := mem.Read(ko, keyData)
+	if ko > math.MaxUint32 {
+		return gas, regs, mem, s, polkavm.ErrPanicf("inaccessible memory, address out of range")
+	}
+	err := mem.Read(uint32(ko), keyData)
 	if err != nil {
 		return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 	}
@@ -381,7 +365,10 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 		}
 	} else {
 		valueData := make([]byte, vz)
-		err = mem.Read(vo, valueData)
+		if vo > math.MaxUint32 {
+			return gas, regs, mem, s, polkavm.ErrPanicf("inaccessible memory, address out of range")
+		}
+		err = mem.Read(uint32(vo), valueData)
 		if err != nil {
 			return gas, regs, mem, s, polkavm.ErrPanicf(err.Error())
 		}
@@ -416,9 +403,6 @@ func Write(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, s servic
 
 // Info ΩI(ϱ, φ, μ, s, d)
 func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId block.ServiceId, serviceState service.ServiceState) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
-	if gas < InfoCost {
-		return 0, regs, mem, polkavm.ErrOutOfGas
-	}
 	gas -= InfoCost
 
 	omega7 := regs[polkavm.A0]
@@ -468,9 +452,6 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 
 // Log A host call for passing a debugging message from the service/authorizer to the hosting environment for logging to the node operator
 func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint16, serviceId *block.ServiceId) (polkavm.Gas, polkavm.Registers, polkavm.Memory, error) {
-	if gas < LogCost {
-		return 0, regs, mem, polkavm.ErrOutOfGas
-	}
 	gas -= LogCost
 
 	fullMsg := &bytes.Buffer{}
@@ -508,7 +489,10 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 	// Write target
 	if to != 0 && tz != 0 {
 		targetBytes := make([]byte, tz)
-		err := mem.Read(to, targetBytes)
+		if to > math.MaxUint32 {
+			return gas, regs, mem, polkavm.ErrPanicf("inaccessible memory, address out of range")
+		}
+		err := mem.Read(uint32(to), targetBytes)
 		if err != nil {
 			log.VM.Error().Msgf("unable to access memory for target: address %d length %d", to, tz)
 		}
@@ -517,7 +501,10 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 	}
 
 	msgBytes := make([]byte, xz)
-	err := mem.Read(xo, msgBytes)
+	if xo > math.MaxUint32 {
+		return gas, regs, mem, polkavm.ErrPanicf("inaccessible memory, address out of range")
+	}
+	err := mem.Read(uint32(xo), msgBytes)
 	if err != nil {
 		log.VM.Error().Msgf("unable to access memory for target: address %d length %d", to, tz)
 	}
@@ -526,7 +513,7 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 	_, _ = fmt.Fprintf(fullMsg, " %s", msgBytes)
 
 	log.VM.Info().Str("msg", fullMsg.String()).Msg("Service log")
-	return gas, regs, mem, nil
+	return gas, withCode(regs, WHAT), mem, nil
 }
 
 // GetChainConstants

@@ -68,9 +68,9 @@ integration-tiny: build-bandersnatch build-erasurecoding
 integration-full: build-bandersnatch build-erasurecoding
 	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=full,integration
 
-.PHONY: traces
+.PHONY: traces-tiny
 ## traces: Runs traces tests.
-traces: build-bandersnatch build-erasurecoding
+traces-tiny: build-bandersnatch build-erasurecoding
 	go test ./tests/... $(DARWIN_TEST_GOFLAGS) --tags=tiny,traces
 
 ## install-hooks: Install git-hooks from .githooks directory.

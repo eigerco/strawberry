@@ -62,8 +62,8 @@ type Ticket struct {
 	Signature string `json:"signature"`
 }
 type Preimage struct {
-	Requester uint32 `json:"requester"`
-	Blob      string `json:"blob"`
+	Requester block.ServiceId `json:"requester"`
+	Blob      string          `json:"blob"`
 }
 
 func ReadStatisticsJSONFile(filename string) (*StatisticsJSONData, error) {

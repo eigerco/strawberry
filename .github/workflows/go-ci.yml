@@ -86,5 +86,5 @@ jobs:
       - name: execute integration-full tests
         run: make integration-full
 
-      - name: execute
-        run: make traces
+      - name: execute traces-tiny tests
+        run: make traces-tiny

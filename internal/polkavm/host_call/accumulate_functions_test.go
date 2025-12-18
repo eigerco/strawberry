@@ -43,7 +43,7 @@ func TestAccumulate(t *testing.T) {
 			ValidatorKeys: safrole.ValidatorsData(generate(t, testutils.RandomValidatorKey, common.NumberOfValidators)),
 		},
 		ServiceId:         123,
-		ProvidedPreimages: []ProvidedPreimage{},
+		ProvidedPreimages: []block.Preimage{},
 		DeferredTransfers: []service.DeferredTransfer{},
 	}
 	var currentServiceID block.ServiceId = 123123
@@ -520,40 +520,6 @@ func TestAccumulate(t *testing.T) {
 					},
 				},
 			},
-		},
-		{
-			name: "solicit_out_of_gas",
-			fn:   fnWithExtra[jamtime.Timeslot](Solicit),
-			alloc: alloc{
-				A0: hash2bytes(randomHash),
-			},
-			initialRegs: deltaRegs{
-				A1: 256, // z: preimage length
-			},
-			extraParam: jamtime.Timeslot(1000),
-			initialGas: 9, // Less than SolicitCost
-			X: AccumulateContext{
-				ServiceId: currentServiceID,
-				AccumulationState: state.AccumulationState{
-					ServiceState: service.ServiceState{
-						currentServiceID: {
-							Balance: 200,
-						},
-					},
-				},
-			},
-			expectedGas: 0,
-			expectedX: AccumulateContext{
-				ServiceId: currentServiceID,
-				AccumulationState: state.AccumulationState{
-					ServiceState: service.ServiceState{
-						currentServiceID: {
-							Balance: 200,
-						},
-					},
-				},
-			},
-			err: ErrOutOfGas,
 		}, {
 			name: "solicit_new_preimage",
 			fn:   fnWithExtra[jamtime.Timeslot](Solicit),
@@ -999,8 +965,8 @@ func TestAccumulate(t *testing.T) {
 						2: serviceAccount(2, crypto.HashData(hash2bytes(randomHash)), 32, service.PreimageHistoricalTimeslots{}),
 					},
 				},
-				ProvidedPreimages: []ProvidedPreimage{
-					{ServiceId: 1, Data: hash2bytes(randomHash)},
+				ProvidedPreimages: []block.Preimage{
+					{ServiceIndex: 1, Data: hash2bytes(randomHash)},
 				},
 			},
 		},
@@ -1020,8 +986,8 @@ func TestAccumulate(t *testing.T) {
 						2: serviceAccount(2, crypto.HashData(hash2bytes(randomHash)), 32, service.PreimageHistoricalTimeslots{}),
 					},
 				},
-				ProvidedPreimages: []ProvidedPreimage{
-					{ServiceId: 1, Data: hash2bytes(randomHash)},
+				ProvidedPreimages: []block.Preimage{
+					{ServiceIndex: 1, Data: hash2bytes(randomHash)},
 				},
 			},
 			expectedDeltaRegs: deltaRegs{
@@ -1035,8 +1001,8 @@ func TestAccumulate(t *testing.T) {
 						2: serviceAccount(2, crypto.HashData(hash2bytes(randomHash)), 32, service.PreimageHistoricalTimeslots{}),
 					},
 				},
-				ProvidedPreimages: []ProvidedPreimage{
-					{ServiceId: 1, Data: hash2bytes(randomHash)},
+				ProvidedPreimages: []block.Preimage{
+					{ServiceIndex: 1, Data: hash2bytes(randomHash)},
 				},
 			},
 		},
@@ -1078,7 +1044,7 @@ func TestAccumulate(t *testing.T) {
 			rwAddress := RWAddressBase
 			for addrReg, v := range tc.alloc {
 				require.Greater(t, addrReg, S1)
-				err = mem.Write(rwAddress, v)
+				err = mem.Write(uint32(rwAddress), v)
 				require.NoError(t, err)
 
 				initialRegs[addrReg] = rwAddress

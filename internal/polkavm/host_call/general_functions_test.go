@@ -181,11 +181,7 @@ func TestFetch(t *testing.T) {
 			name:   "dataID 8 (AuthCodeHash + Parameterization)",
 			dataID: 8,
 			expect: func() []byte {
-				out, _ := jam.Marshal(struct {
-					AuthCodeHash     crypto.Hash
-					Parameterization []byte
-				}{workPackage.AuthCodeHash, workPackage.Parameterization})
-				return out
+				return workPackage.Parameterization
 			},
 		},
 		{
@@ -310,7 +306,7 @@ func TestFetch(t *testing.T) {
 			require.NoError(t, err)
 
 			actual := make([]byte, len(expect))
-			err = memOut.Read(ho, actual)
+			err = memOut.Read(uint32(ho), actual)
 			require.NoError(t, err)
 			require.Equal(t, expect, actual)
 			require.Equal(t, uint64(len(expect)), regsOut[polkavm.A0])
@@ -348,7 +344,7 @@ func TestLookup(t *testing.T) {
 		dataToHash := make([]byte, 32)
 		copy(dataToHash, "hash")
 
-		err = mem.Write(ho, dataToHash)
+		err = mem.Write(uint32(ho), dataToHash)
 		require.NoError(t, err)
 
 		initialRegs[polkavm.A0] = uint64(serviceId)
@@ -369,7 +365,7 @@ func TestLookup(t *testing.T) {
 		require.NoError(t, err)
 
 		actualValue := make([]byte, len(val))
-		err = mem.Read(bo, actualValue)
+		err = mem.Read(uint32(bo), actualValue)
 		require.NoError(t, err)
 
 		assert.Equal(t, val, actualValue)
@@ -418,13 +414,13 @@ func TestRead(t *testing.T) {
 	initialRegs[polkavm.A4] = 0    // f = offset (starting at 0)
 	initialRegs[polkavm.A5] = vLen // l = length (32 bytes)
 
-	err = mem.Write(ko, keyData)
+	err = mem.Write(uint32(ko), keyData)
 	require.NoError(t, err)
 
 	gasRemaining, regs, mem, err := host_call.Read(initialGas, initialRegs, mem, sa, serviceId, serviceState)
 	require.NoError(t, err)
 	actualValue := make([]byte, len(value))
-	err = mem.Read(bo, actualValue)
+	err = mem.Read(uint32(bo), actualValue)
 	require.NoError(t, err)
 
 	assert.Equal(t, value, actualValue)
@@ -465,21 +461,21 @@ func TestWrite(t *testing.T) {
 	initialRegs[polkavm.A1] = uint64(kz)
 	initialRegs[polkavm.A2] = uint64(vo)
 	initialRegs[polkavm.A3] = uint64(vz)
-	err = mem.Write(ko, keyData)
+	err = mem.Write(uint32(ko), keyData)
 	require.NoError(t, err)
-	err = mem.Write(vo, value)
+	err = mem.Write(uint32(vo), value)
 	require.NoError(t, err)
 
 	gasRemaining, regs, mem, updatedSa, err := host_call.Write(initialGas, initialRegs, mem, sa, serviceId)
 	require.NoError(t, err)
 
 	actualValue := make([]byte, len(value))
-	err = mem.Read(vo, actualValue)
+	err = mem.Read(uint32(vo), actualValue)
 	require.NoError(t, err)
 	require.Equal(t, value, actualValue)
 
 	actualKey := make([]byte, len(keyData))
-	err = mem.Read(ko, actualKey)
+	err = mem.Read(uint32(ko), actualKey)
 	require.NoError(t, err)
 	require.Equal(t, keyData, actualKey)
 
@@ -555,7 +551,7 @@ func TestInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	data := make([]byte, len(m))
-	err = mem.Read(omega1, data)
+	err = mem.Read(uint32(omega1), data)
 	require.NoError(t, err)
 
 	var receivedAccountInfo host_call.AccountInfo

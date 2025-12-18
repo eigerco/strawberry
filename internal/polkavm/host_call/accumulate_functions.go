@@ -19,9 +19,6 @@ import (
 
 // Bless ΩB(ϱ, φ, μ, (x, y)) (v0.7.1)
 func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < BlessCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= BlessCost
 
 	// let [m, a, v, r, o, n] = φ7...13
@@ -46,7 +43,10 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 
 	// Na⋅⋅⋅+4C ⊆ Vµ
 	assignersBytes := make([]byte, 4*common.TotalNumberOfCores)
-	if err := mem.Read(assignServiceAddr, assignersBytes); err != nil {
+	if assignServiceAddr > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Read(uint32(assignServiceAddr), assignersBytes); err != nil {
 		// (ℓ, φ_7, (x_e)_(m,a,v,r,z)) if {z, a} ∋ ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -94,9 +94,6 @@ func isServiceId(s uint64) bool {
 //	{ (▸, WHO, (xe)q[c], (xe)a[c])    otherwise if a ∉ NS
 //	{ (▸, OK, q, a)                   otherwise
 func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < AssignCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= AssignCost
 
 	// let [c, o, a] = φ7···+3
@@ -108,7 +105,14 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 	var queue [state.PendingAuthorizersQueueSize]crypto.Hash
 	for i := range state.PendingAuthorizersQueueSize {
 		bytes := make([]byte, 32)
-		if err := mem.Read(addr+uint64(32*i), bytes); err != nil {
+		queueAddr, ok := safemath.Add(addr, 32*uint64(i))
+		if !ok {
+			return gas, regs, mem, ctxPair, ErrPanicf("address overflow")
+		}
+		if queueAddr > math.MaxUint32 {
+			return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+		}
+		if err := mem.Read(uint32(queueAddr), bytes); err != nil {
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
 		queue[i] = crypto.Hash(bytes)
@@ -140,9 +144,6 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 
 // Designate ΩD (ϱ, φ, μ, (x, y))
 func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < DesignateCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= DesignateCost
 
 	const (
@@ -156,7 +157,14 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 	addr := regs[A0]
 	for i := 0; i < common.NumberOfValidators; i++ {
 		bytes := make([]byte, 336)
-		if err := mem.Read(addr+uint64(336*i), bytes); err != nil {
+		valAddr, ok := safemath.Add(addr, 336*uint64(i))
+		if !ok {
+			return gas, regs, mem, ctxPair, ErrPanicf("address overflow")
+		}
+		if valAddr > math.MaxUint32 {
+			return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+		}
+		if err := mem.Read(uint32(valAddr), bytes); err != nil {
 			return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 		}
 
@@ -180,9 +188,6 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 
 // Checkpoint ΩC(ϱ, φ, μ, (x, y))
 func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < CheckpointCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= CheckpointCost
 
 	ctxPair.ExceptionalCtx = ctxPair.RegularCtx.Clone()
@@ -214,10 +219,6 @@ func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPa
 //
 // New ΩN(ϱ, φ, μ, (x, y), t) (v0.7.1)
 func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	// g = 10
-	if gas < NewCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= NewCost
 
 	// let [o, l, g, m, f, i] = φ7..+6
@@ -241,7 +242,10 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 	}
 
 	codeHashBytes := make([]byte, 32)
-	if err := mem.Read(addr, codeHashBytes); err != nil {
+	if addr > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Read(uint32(addr), codeHashBytes); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
@@ -347,16 +351,16 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 
 // Upgrade ΩU(ϱ, φ, μ, (x, y))
 func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < UpgradeCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= UpgradeCost
 	// let [o, g, m] = φ7...10
 	addr, gasLimitAccumulator, gasLimitTransfer := regs[A0], regs[A1], regs[A2]
 
 	// c = μo⋅⋅⋅+32 if No⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	codeHash := make([]byte, 32)
-	if err := mem.Read(addr, codeHash); err != nil {
+	if addr > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Read(uint32(addr), codeHash); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
@@ -374,16 +378,14 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	// let (d, a, l, o) = φ7..11
 	receiverId, amount, gasLimit, o := regs[A0], regs[A1], regs[A2], regs[A3]
 
-	// g = 10 + φ9
-	transferCost := TransferBaseCost + Gas(gasLimit)
-	if gas < transferCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
-	gas -= transferCost
+	gas -= TransferBaseCost
 
 	// m = μo⋅⋅⋅+M if No⋅⋅⋅+WT ⊂ Vμ otherwise ∇
 	m := make([]byte, service.TransferMemoSizeBytes)
-	if err := mem.Read(o, m); err != nil {
+	if o > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Read(uint32(o), m); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
@@ -400,7 +402,7 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	allServices := ctxPair.RegularCtx.AccumulationState.ServiceState
 
 	receiverService, ok := allServices[block.ServiceId(receiverId)]
-	// if d !∈ K(δ ∪ xn)
+	// if d !∈ K(d)
 	if !ok {
 		return gas, withCode(regs, WHO), mem, ctxPair, nil
 	}
@@ -423,21 +425,22 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	account.Balance = account.Balance - amount
 	ctxPair.RegularCtx.AccumulationState.ServiceState[ctxPair.RegularCtx.ServiceId] = account
 	ctxPair.RegularCtx.DeferredTransfers = append(ctxPair.RegularCtx.DeferredTransfers, deferredTransfer)
+	gas -= Gas(gasLimit)
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
 // Eject ΩJ(ϱ, φ, μ, (x, y), t)
 func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < EjectCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= EjectCost
 
 	d, o := regs[A0], regs[A1]
 
 	// let h = μo..o+32 if Zo..o+32 ⊂ Vμ
 	h := make([]byte, 32)
-	if err := mem.Read(o, h); err != nil {
+	if o > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Read(uint32(o), h); err != nil {
 		// otherwise ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -497,16 +500,16 @@ func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, t
 
 // Query ΩQ(ϱ, φ, μ, (x, y))
 func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < QueryCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= QueryCost
 
 	addr, preimageMetaKeyLength := regs[A0], regs[A1]
 
 	// let h = μo..o+32 if Zo..o+32 ⊂ Vμ
 	h := make([]byte, 32)
-	if err := mem.Read(addr, h); err != nil {
+	if addr > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Read(uint32(addr), h); err != nil {
 		// otherwise ∇ => panic
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -546,16 +549,16 @@ func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 
 // Solicit ΩS(ϱ, φ, μ, (x, y), t)
 func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < SolicitCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= SolicitCost
 
 	// let [o, z] = φ7,8
 	addr, preimageLength := regs[A0], regs[A1]
 	// let h = μo⋅⋅⋅+32 if Zo⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	preimageHashBytes := make([]byte, 32)
-	if err := mem.Read(addr, preimageHashBytes); err != nil {
+	if addr > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Read(uint32(addr), preimageHashBytes); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
@@ -605,9 +608,6 @@ func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 
 // Forget ΩF(ϱ, φ, μ, (x, y), t)
 func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < ForgetCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= ForgetCost
 
 	// let [o, z] = φ0,1
@@ -615,7 +615,10 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 
 	// let h = μo⋅⋅⋅+32 if Zo⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	preimageHashBytes := make([]byte, 32)
-	if err := mem.Read(addr, preimageHashBytes); err != nil {
+	if addr > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Read(uint32(addr), preimageHashBytes); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
@@ -696,16 +699,16 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 
 // Yield Ω_Taurus(ϱ, φ, μ, (x, y))
 func Yield(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < YieldCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= YieldCost
 
 	addr := regs[A0]
 
 	// let h = μo..o+32 if Zo..o+32 ⊂ Vμ otherwise ∇
 	hBytes := make([]byte, 32)
-	if err := mem.Read(addr, hBytes); err != nil {
+	if addr > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Read(uint32(addr), hBytes); err != nil {
 		// (ε', φ′7, x′_y) = (panic, φ7, x_y) if h = ∇
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
@@ -719,9 +722,6 @@ func Yield(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 
 // Provide Ω_Aries(ϱ, φ, µ, (x,y), s)
 func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, serviceId block.ServiceId) (Gas, Registers, Memory, AccumulateContextPair, error) {
-	if gas < ProvideCost {
-		return 0, regs, mem, ctxPair, ErrOutOfGas
-	}
 	gas -= ProvideCost
 
 	// let [o, z] = φ8,9
@@ -739,7 +739,10 @@ func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 
 	// i = µ[o..o+z]
 	i := make([]byte, z)
-	if err := mem.Read(o, i); err != nil {
+	if o > math.MaxUint32 {
+		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
+	}
+	if err := mem.Read(uint32(o), i); err != nil {
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
@@ -765,16 +768,16 @@ func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	}
 
 	for _, p := range ctxPair.RegularCtx.ProvidedPreimages {
-		if p.ServiceId == ss && bytes.Equal(p.Data, i) {
+		if p.ServiceIndex == ss && bytes.Equal(p.Data, i) {
 			// if (s*,i) ∈ xp
 			return gas, withCode(regs, HUH), mem, ctxPair, nil
 		}
 	}
 
 	// x′p = xp ∪ {(s*, i)}
-	ctxPair.RegularCtx.ProvidedPreimages = append(ctxPair.RegularCtx.ProvidedPreimages, ProvidedPreimage{
-		ServiceId: ss,
-		Data:      i,
+	ctxPair.RegularCtx.ProvidedPreimages = append(ctxPair.RegularCtx.ProvidedPreimages, block.Preimage{
+		ServiceIndex: ss,
+		Data:         i,
 	})
 
 	return gas, withCode(regs, OK), mem, ctxPair, nil

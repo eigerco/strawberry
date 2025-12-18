@@ -60,8 +60,8 @@ type InputData struct {
 
 // PreimageItem represents a preimage in the input
 type PreimageItem struct {
-	Requester uint32 `json:"requester"`
-	Blob      string `json:"blob"`
+	Requester block.ServiceId `json:"requester"`
+	Blob      string          `json:"blob"`
 }
 
 // PreimageState represents the state in the test vector

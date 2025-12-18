@@ -80,7 +80,7 @@ func TestHistoricalLookup(t *testing.T) {
 	initialRegs[polkavm.A3] = offset
 	initialRegs[polkavm.A4] = length
 
-	err = mem.Write(ho, hashKey[:])
+	err = mem.Write(uint32(ho), hashKey[:])
 	require.NoError(t, err)
 
 	ctxPair := polkavm.RefineContextPair{
@@ -100,7 +100,7 @@ func TestHistoricalLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	actualValue := make([]byte, len(preimage))
-	err = memOut.Read(bo, actualValue)
+	err = memOut.Read(uint32(bo), actualValue)
 	require.NoError(t, err)
 
 	assert.Equal(t, preimage, actualValue)
@@ -124,7 +124,7 @@ func TestExport(t *testing.T) {
 	dataToExport := []byte("export_data")
 	p := polkavm.RWAddressBase
 
-	err = mem.Write(p, dataToExport)
+	err = mem.Write(uint32(p), dataToExport)
 	require.NoError(t, err)
 
 	exportOffset := uint64(10)
@@ -173,7 +173,7 @@ func TestMachine(t *testing.T) {
 	pz := len(p)
 	i := uint64(42)
 
-	err = mem.Write(po, p)
+	err = mem.Write(uint32(po), p)
 	require.NoError(t, err)
 
 	initialRegs[polkavm.A0] = uint64(po)
@@ -226,7 +226,7 @@ func TestPeek(t *testing.T) {
 	uDataBase := polkavm.RWAddressBase
 	require.True(t, uDataBase+uint64(len(uData)) < math.MaxUint32)
 
-	err = mem.Write(uDataBase, uData)
+	err = mem.Write(uint32(uDataBase), uData)
 	require.NoError(t, err)
 
 	s := uint64(uDataBase) + 10
@@ -260,7 +260,7 @@ func TestPeek(t *testing.T) {
 	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
 
 	actualValue := make([]byte, z)
-	err = memOut.Read(o, actualValue)
+	err = memOut.Read(uint32(o), actualValue)
 	require.NoError(t, err)
 
 	startOffset := s - uint64(uDataBase)
@@ -290,7 +290,7 @@ func TestPoke(t *testing.T) {
 
 	sourceData := []byte("data_for_poke")
 
-	err = mem.Write(s, sourceData)
+	err = mem.Write(uint32(s), sourceData)
 	require.NoError(t, err)
 
 	u := polkavm.IntegratedPVM{
@@ -323,7 +323,7 @@ func TestPoke(t *testing.T) {
 
 	actual := make([]byte, z)
 	vm := ctxPair.IntegratedPVMMap[n]
-	err = (&vm.Ram).Read(o, actual)
+	err = (&vm.Ram).Read(uint32(o), actual)
 	require.NoError(t, err)
 	expected := sourceData[:z]
 	assert.Equal(t, expected, actual)
@@ -394,7 +394,7 @@ func TestPages_Modes(t *testing.T) {
 				for i := range buf {
 					buf[i] = 0xAB
 				}
-				err := innerMem.Write(start, buf)
+				err := innerMem.Write(uint32(start), buf)
 				require.NoError(t, err)
 			}
 
@@ -419,7 +419,7 @@ func TestPages_Modes(t *testing.T) {
 
 			innerPVMRam := ctxPair.IntegratedPVMMap[n].Ram
 			for pageIndex := p; pageIndex < p+c; pageIndex++ {
-				access := innerPVMRam.GetAccess(pageIndex)
+				access := innerPVMRam.GetAccess(uint32(pageIndex))
 				assert.Equal(t, tc.wantAccess, access)
 			}
 
@@ -459,7 +459,7 @@ func TestInvoke(t *testing.T) {
 	require.NoError(t, err)
 
 	addr := polkavm.RWAddressBase
-	if err := mem.Write(addr, bb); err != nil {
+	if err := mem.Write(uint32(addr), bb); err != nil {
 		t.Fatal(err)
 	}
 
@@ -483,7 +483,7 @@ func TestInvoke(t *testing.T) {
 	assert.Equal(t, polkavm.Gas(90), gasRemaining)
 
 	invokeResult := make([]byte, 112)
-	err = mem.Read(addr, invokeResult)
+	err = mem.Read(uint32(addr), invokeResult)
 	require.NoError(t, err)
 
 	invokeGasAndRegs := [14]uint64{}

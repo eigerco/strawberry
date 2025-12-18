@@ -16,22 +16,19 @@ type ProgramMemorySizes struct {
 	StackSize        uint32 `jam:"length=3"`
 }
 
+// Program let E3(|o|) ⌢ E3(|w|) ⌢ E2(z) ⌢ E3(s) ⌢ o ⌢ w ⌢ E4(|c|) ⌢ c = p (eq. A.38 v0.7.2)
 type Program struct {
 	ProgramMemorySizes ProgramMemorySizes
 	ROData             []byte
 	RWData             []byte
 	CodeAndJumpTable   []byte
-	Metadata           []byte
 }
 
-// ParseBlob let E3(|o|) ⌢ E3(|w|) ⌢ E2(z) ⌢ E3(s) ⌢ o ⌢ w ⌢ E4(|c|) ⌢ c = p (eq. A.38 v0.7.0)
+// ParseBlob let E3(|o|) ⌢ E3(|w|) ⌢ E2(z) ⌢ E3(s) ⌢ o ⌢ w ⌢ E4(|c|) ⌢ c = p (eq. A.38 v0.7.2)
 func ParseBlob(data []byte) (program *Program, err error) {
 	program = &Program{ProgramMemorySizes: ProgramMemorySizes{}}
 	buff := bytes.NewBuffer(data)
 	dec := jam.NewDecoder(buff)
-	if err := dec.Decode(&program.Metadata); err != nil {
-		return nil, err
-	}
 	if err := dec.Decode(&program.ProgramMemorySizes); err != nil {
 		return nil, err
 	}
@@ -66,7 +63,7 @@ type CodeAndJumpTableLengths struct {
 	CodeLength          uint
 }
 
-// Deblob deblob(p B) → (B, b, ⟦NR⟧) ∪ ∇ ↦ p = Ε(|j|) ⌢ E1(z) ⌢ E(|c|) ⌢ E_z(j) ⌢ E(c) ⌢ E(k), |k| = |c| (eq. A.2 v0.7.0)
+// Deblob deblob(p B) → (B, b, ⟦NR⟧) ∪ ∇ ↦ p = Ε(|j|) ⌢ E1(z) ⌢ E(|c|) ⌢ E_z(j) ⌢ E(c) ⌢ E(k), |k| = |c| (eq. A.2 v0.7.2)
 func Deblob(bytecode []byte) ([]byte, jam.BitSequence, []uint64, error) {
 	sizes := &CodeAndJumpTableLengths{}
 
@@ -99,7 +96,7 @@ func Deblob(bytecode []byte) ([]byte, jam.BitSequence, []uint64, error) {
 	return code, bitmask, jumpTable, nil
 }
 
-// Skip skip(i N) → N (eq. A.3 v0.7.0)
+// Skip skip(i N) → N (eq. A.3 v0.7.2)
 func Skip(instructionOffset uint64, bitmask []bool) uint64 {
 	for i, b := range bitmask[instructionOffset+1:] {
 		if i > BitmaskMax {

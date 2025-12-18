@@ -122,11 +122,14 @@ type AccumulateServiceAccount struct {
 		Preimages []struct {
 			Hash string `json:"hash"`
 			Blob string `json:"blob"`
-		} `json:"preimages_blob"`
-		PreimagesStatus []struct {
-			Hash   string `json:"hash"`
-			Status []int  `json:"status"`
-		} `json:"preimages_status"`
+		} `json:"preimage_blobs"`
+		PreimagesRequests []struct {
+			Key struct {
+				Hash   string `json:"hash"`
+				Length int    `json:"length"`
+			} `json:"key"`
+			Value []int `json:"value"`
+		} `json:"preimage_requests"`
 
 		Storage []struct {
 			Key   string `json:"key"`
@@ -188,7 +191,7 @@ func TestAccumulate(t *testing.T) {
 				newState.PrivilegedServices,
 				newState.ValidatorState.QueuedValidators,
 				newState.PendingAuthorizersQueues,
-				accumulationOutputLog, accStat, err = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports)
+				accumulationOutputLog, accStat, err = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports, preState.EntropyPool)
 			require.NoError(t, err)
 			for id, stat := range accStat {
 				stateStat := newState.ActivityStatistics.Services[id]
@@ -345,15 +348,14 @@ func mapAccumulateServices(t *testing.T, accounts []AccumulateServiceAccount) se
 		for _, preimage := range account.Data.Preimages {
 			sa.PreimageLookup[mapHash(preimage.Hash)] = mustStringToHex(preimage.Blob)
 		}
-		for _, preimageStatus := range account.Data.PreimagesStatus {
-			blob := sa.PreimageLookup[mapHash(preimageStatus.Hash)]
-			k, err := statekey.NewPreimageMeta(account.Id, mapHash(preimageStatus.Hash), uint32(len(blob)))
+		for _, preimageStatus := range account.Data.PreimagesRequests {
+			k, err := statekey.NewPreimageMeta(account.Id, mapHash(preimageStatus.Key.Hash), uint32(preimageStatus.Key.Length))
 			require.NoError(t, err)
 			tt := service.PreimageHistoricalTimeslots{}
-			for _, ps := range preimageStatus.Status {
+			for _, ps := range preimageStatus.Value {
 				tt = append(tt, jamtime.Timeslot(ps))
 			}
-			err = sa.InsertPreimageMeta(k, uint64(len(blob)), tt)
+			err = sa.InsertPreimageMeta(k, uint64(preimageStatus.Key.Length), tt)
 			require.NoError(t, err)
 		}
 		for _, storage := range account.Data.Storage {
