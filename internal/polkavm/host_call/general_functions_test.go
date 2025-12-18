@@ -1,6 +1,7 @@
 package host_call_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -120,10 +121,7 @@ func TestFetch(t *testing.T) {
 			name:   "dataID 0 (constants)",
 			dataID: 0,
 			expect: func() []byte {
-				out, err := host_call.GetChainConstants()
-				require.NoError(t, err)
-
-				return out
+				return host_call.GetChainConstants()
 			},
 		},
 		{
@@ -546,33 +544,25 @@ func TestInfo(t *testing.T) {
 
 	require.Equal(t, expectedByteLength, regs[polkavm.A0])
 
-	var accountInfo host_call.AccountInfo
-	m, err := jam.Marshal(accountInfo)
-	require.NoError(t, err)
-
-	data := make([]byte, len(m))
-	err = mem.Read(uint32(omega1), data)
-	require.NoError(t, err)
-
-	var receivedAccountInfo host_call.AccountInfo
-	err = jam.Unmarshal(data, &receivedAccountInfo)
+	receivedAccountInfo := make([]byte, 32+6*8+4*4)
+	err = mem.Read(uint32(omega1), receivedAccountInfo)
 	require.NoError(t, err)
 
 	thresholdBalance, err := sampleAccount.ThresholdBalance()
 	require.NoError(t, err)
-	expectedAccountInfo := host_call.AccountInfo{
-		CodeHash:                       crypto.Hash(sampleAccount.CodeHash[:]),
-		Balance:                        sampleAccount.Balance,
-		ThresholdBalance:               thresholdBalance,
-		GasLimitForAccumulator:         sampleAccount.GasLimitForAccumulator,
-		GasLimitOnTransfer:             sampleAccount.GasLimitOnTransfer,
-		TotalStorageSize:               sampleAccount.GetTotalNumberOfOctets(),
-		TotalItems:                     sampleAccount.GetTotalNumberOfItems(),
-		GratisStorageOffset:            sampleAccount.GratisStorageOffset,
-		CreationTimeslot:               sampleAccount.CreationTimeslot,
-		MostRecentAccumulationTimeslot: sampleAccount.MostRecentAccumulationTimeslot,
-		ParentService:                  sampleAccount.ParentService,
-	}
+	expectedAccountInfo := slices.Concat(
+		sampleAccount.CodeHash[:],
+		jam.EncodeUint64(sampleAccount.Balance),
+		jam.EncodeUint64(thresholdBalance),
+		jam.EncodeUint64(sampleAccount.GasLimitForAccumulator),
+		jam.EncodeUint64(sampleAccount.GasLimitOnTransfer),
+		jam.EncodeUint64(sampleAccount.GetTotalNumberOfOctets()),
+		jam.EncodeUint32(sampleAccount.GetTotalNumberOfItems()),
+		jam.EncodeUint64(sampleAccount.GratisStorageOffset),
+		jam.EncodeUint32(uint32(sampleAccount.CreationTimeslot)),
+		jam.EncodeUint32(uint32(sampleAccount.MostRecentAccumulationTimeslot)),
+		jam.EncodeUint32(uint32(sampleAccount.ParentService)),
+	)
 
 	require.Equal(t, expectedAccountInfo, receivedAccountInfo)
 

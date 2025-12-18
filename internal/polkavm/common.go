@@ -10,6 +10,8 @@ import (
 	"github.com/eigerco/strawberry/internal/work"
 )
 
+var ErrForbiddenMemoryAccess = ErrPanicf("forbidden memory access")
+
 type MemoryAccess int
 
 const (
@@ -40,7 +42,7 @@ type memorySegment struct {
 func (m *Memory) Read(address uint32, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
-		return ErrPanicf("forbidden memory access")
+		return ErrForbiddenMemoryAccess
 	}
 	end, ok := safemath.Add(address, uint32(len(data)))
 	if !ok {
@@ -82,7 +84,7 @@ func (m *Memory) Read(address uint32, data []byte) error {
 func (m *Memory) Write(address uint32, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
-		return ErrPanicf("forbidden memory access")
+		return ErrForbiddenMemoryAccess
 	}
 	end, ok := safemath.Add(address, uint32(len(data)))
 	if !ok {

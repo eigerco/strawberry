@@ -29,7 +29,7 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.UGas
 		jumpTable:              jumpTable,
 		bitmask:                append(bitmask, true), // k ⌢ [1, 1, ... ]
 		basicBlockInstructions: basicBlockInstructions,
-		instructionsCache:      make([]instructionCache, len(code)),
+		instructionsCache:      make([]*instructionCache, len(code)),
 	}, nil
 }
 
@@ -44,13 +44,12 @@ type Instance struct {
 	basicBlockInstructions map[uint64]struct{} // ϖ
 
 	skipLen           uint64
-	instructionsCache []instructionCache
+	instructionsCache []*instructionCache
 }
 
 type instructionCache struct {
-	reg    [3]polkavm.Reg
-	val    [2]uint64
-	cached bool
+	reg [3]polkavm.Reg
+	val [2]uint64
 }
 
 // skip ı′ = ı + 1 + skip(ı) (eq. A.9 v0.7.2)

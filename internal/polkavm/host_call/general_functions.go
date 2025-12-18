@@ -3,12 +3,13 @@ package host_call
 import (
 	"bytes"
 	"fmt"
+	"github.com/eigerco/strawberry/internal/common"
 	"math"
+	"slices"
 
 	"github.com/eigerco/strawberry/pkg/log"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/polkavm"
@@ -18,20 +19,6 @@ import (
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
-
-type AccountInfo struct {
-	CodeHash                       crypto.Hash      // ac
-	Balance                        uint64           // ab
-	ThresholdBalance               uint64           // at
-	GasLimitForAccumulator         uint64           // ag
-	GasLimitOnTransfer             uint64           // am
-	TotalStorageSize               uint64           // ao
-	TotalItems                     uint32           // ai
-	GratisStorageOffset            uint64           // af
-	CreationTimeslot               jamtime.Timeslot // ar
-	MostRecentAccumulationTimeslot jamtime.Timeslot // aa
-	ParentService                  block.ServiceId  // ap
-}
 
 // WorkItemMetadata is used for custom serialization of a work item in the fetch host call, following the S(w) format
 type WorkItemMetadata struct {
@@ -82,11 +69,7 @@ func Fetch(
 	switch dataID {
 	case 0:
 		// if φ10 = 0
-		out, err := GetChainConstants()
-		if err != nil {
-			return gas, regs, mem, polkavm.ErrPanicf(err.Error())
-		}
-		v = out
+		v = GetChainConstants()
 	case 1:
 		// if n ≠ ∅ ∧ φ10 = 1
 		if entropy != nil {
@@ -153,21 +136,17 @@ func Fetch(
 			var sw [][]byte
 			for _, item := range workPackage.WorkItems {
 				// S(w) ≡ E(E4(ws), wh, E8(wg, wa), E2(we, ∣wi∣, ∣wx∣), E4(∣wy∣))
-				metadata := WorkItemMetadata{
-					item.ServiceId,
-					item.CodeHash,
-					item.GasLimitRefine,
-					item.GasLimitAccumulate,
-					item.ExportedSegments,
-					uint16(len(item.ImportedSegments)),
-					uint16(len(item.Extrinsics)),
-					uint32(len(item.Payload)),
-				}
-				bytes, err := jam.Marshal(metadata)
-				if err != nil {
-					return gas, regs, mem, polkavm.ErrPanicf(err.Error())
-				}
-				sw = append(sw, bytes)
+				metadata := slices.Concat(
+					jam.EncodeUint32(uint32(item.ServiceId)),
+					item.CodeHash[:],
+					jam.EncodeUint64(item.GasLimitRefine),
+					jam.EncodeUint64(item.GasLimitAccumulate),
+					jam.EncodeUint16(item.ExportedSegments),
+					jam.EncodeUint16(uint16(len(item.ImportedSegments))),
+					jam.EncodeUint16(uint16(len(item.Extrinsics))),
+					jam.EncodeUint32(uint32(len(item.Payload))),
+				)
+				sw = append(sw, metadata)
 			}
 			out, err := jam.Marshal(sw)
 			if err != nil {
@@ -420,25 +399,21 @@ func Info(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, serviceId
 	if err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
 	}
-	accountInfo := AccountInfo{
-		CodeHash:                       account.CodeHash,
-		Balance:                        account.Balance,
-		ThresholdBalance:               thresholdBalance,
-		GasLimitForAccumulator:         account.GasLimitForAccumulator,
-		GasLimitOnTransfer:             account.GasLimitOnTransfer,
-		TotalStorageSize:               account.GetTotalNumberOfOctets(),
-		TotalItems:                     account.GetTotalNumberOfItems(),
-		GratisStorageOffset:            account.GratisStorageOffset,
-		CreationTimeslot:               account.CreationTimeslot,
-		MostRecentAccumulationTimeslot: account.MostRecentAccumulationTimeslot,
-		ParentService:                  account.ParentService,
-	}
 
 	// E(ac, E8(ab, at, ag, am, ao), E4(ai), E8(af), E4(ar, aa, ap))
-	v, err := jam.Marshal(accountInfo)
-	if err != nil {
-		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
-	}
+	v := slices.Concat(
+		account.CodeHash[:],
+		jam.EncodeUint64(account.Balance),
+		jam.EncodeUint64(thresholdBalance),
+		jam.EncodeUint64(account.GasLimitForAccumulator),
+		jam.EncodeUint64(account.GasLimitOnTransfer),
+		jam.EncodeUint64(account.GetTotalNumberOfOctets()),
+		jam.EncodeUint32(account.GetTotalNumberOfItems()),
+		jam.EncodeUint64(account.GratisStorageOffset),
+		jam.EncodeUint32(uint32(account.CreationTimeslot)),
+		jam.EncodeUint32(uint32(account.MostRecentAccumulationTimeslot)),
+		jam.EncodeUint32(uint32(account.ParentService)),
+	)
 
 	if err = writeFromOffset(&mem, o, v, regs[polkavm.A2], regs[polkavm.A3]); err != nil {
 		return gas, regs, mem, polkavm.ErrPanicf(err.Error())
@@ -527,74 +502,43 @@ func Log(gas polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, core *uint
 // E4(WR), E4(WT), E4(WX), E4(Y)
 //
 // )
-func GetChainConstants() ([]byte, error) {
-	return jam.Marshal(struct {
-		AdditionalMinimumBalancePerItem     uint64 // BI
-		AdditionalMinimumBalancePerOctet    uint64 // BL
-		BasicMinimumBalance                 uint64 // BS
-		TotalNumberOfCores                  uint16 // C
-		PreimageExpulsionPeriod             uint32 // D
-		TimeslotsPerEpoch                   uint32 // E
-		MaxAllocatedGasAccumulation         uint64 // GA
-		MaxAllocatedGasIsAuthorized         uint64 // GI
-		MaxAllocatedGasRefine               uint64 // GR
-		TotalGasAccumulation                uint64 // GT
-		MaxRecentBlocks                     uint16 // H
-		MaxNumberOfItems                    uint16 // I
-		MaxNumberOfDependencyItems          uint16 // J
-		MaxTicketsPerBlock                  uint16 // K
-		MaxTimeslotsForPreimage             uint32 // L
-		MaxTicketAttemptsPerValidator       uint16 // N
-		MaxAuthorizersPerCore               uint16 // O
-		SlotPeriodInSeconds                 uint16 // P
-		PendingAuthorizersQueueSize         uint16 // Q
-		ValidatorRotationPeriod             uint16 // R
-		MaxNumberOfExtrinsics               uint16 // T
-		WorkReportTimeoutPeriod             uint16 // U
-		NumberOfValidators                  uint16 // V
-		MaximumSizeIsAuthorizedCode         uint32 // W_A
-		MaxWorkPackageSize                  uint32 // W_B
-		MaxSizeServiceCode                  uint32 // W_C
-		ErasureCodingChunkSize              uint32 // W_E
-		MaxNumberOfImportsExports           uint32 // W_M
-		NumberOfErasureCodecPiecesInSegment uint32 // W_P
-		MaxWorkPackageSizeBytes             uint32 // W_R
-		TransferMemoSizeBytes               uint32 // W_T
-		MaxNumberOfExports                  uint32 // W_X
-		TicketSubmissionTimeSlots           uint32 // Y
-	}{
-		service.AdditionalMinimumBalancePerItem,
-		service.AdditionalMinimumBalancePerOctet,
-		service.BasicMinimumBalance,
-		common.TotalNumberOfCores,
-		jamtime.PreimageExpulsionPeriod,
-		jamtime.TimeslotsPerEpoch,
-		common.MaxAllocatedGasAccumulation,
-		common.MaxAllocatedGasIsAuthorized,
-		common.MaxAllocatedGasRefine,
-		common.TotalGasAccumulation,
-		state.MaxRecentBlocks,
-		work.MaxNumberOfItems,
-		work.MaxNumberOfDependencyItems,
-		block.MaxTicketsPerBlock,
-		state.MaxTimeslotsForLookupAnchor,
-		common.MaxTicketAttemptsPerValidator,
-		state.MaxAuthorizersPerCore,
-		jamtime.SlotPeriodInSeconds,
-		state.PendingAuthorizersQueueSize,
-		uint16(jamtime.ValidatorRotationPeriod),
-		work.MaxNumberOfExtrinsics,
-		uint16(common.WorkReportTimeoutPeriod),
-		common.NumberOfValidators,
-		state.MaximumSizeIsAuthorizedCode,
-		common.MaxWorkPackageSize,
-		work.MaxSizeServiceCode,
-		common.ErasureCodingChunkSize,
-		work.MaxNumberOfImports,
-		common.NumberOfErasureCodecPiecesInSegment,
-		common.MaxWorkPackageSizeBytes,
-		service.TransferMemoSizeBytes,
-		work.MaxNumberOfExports,
-		jamtime.TicketSubmissionTimeSlots,
-	})
+
+var encodedChainConstants = slices.Concat(
+	jam.EncodeUint64(service.AdditionalMinimumBalancePerItem),    // BI
+	jam.EncodeUint64(service.AdditionalMinimumBalancePerOctet),   // BL
+	jam.EncodeUint64(service.BasicMinimumBalance),                // BS
+	jam.EncodeUint16(common.TotalNumberOfCores),                  // C
+	jam.EncodeUint32(jamtime.PreimageExpulsionPeriod),            // D
+	jam.EncodeUint32(jamtime.TimeslotsPerEpoch),                  // E
+	jam.EncodeUint64(common.MaxAllocatedGasAccumulation),         // GA
+	jam.EncodeUint64(common.MaxAllocatedGasIsAuthorized),         // GI
+	jam.EncodeUint64(common.MaxAllocatedGasRefine),               // GR
+	jam.EncodeUint64(common.TotalGasAccumulation),                // GT
+	jam.EncodeUint16(state.MaxRecentBlocks),                      // H
+	jam.EncodeUint16(work.MaxNumberOfItems),                      // I
+	jam.EncodeUint16(work.MaxNumberOfDependencyItems),            // J
+	jam.EncodeUint16(block.MaxTicketsPerBlock),                   // K
+	jam.EncodeUint32(state.MaxTimeslotsForLookupAnchor),          // L
+	jam.EncodeUint16(common.MaxTicketAttemptsPerValidator),       // N
+	jam.EncodeUint16(state.MaxAuthorizersPerCore),                // O
+	jam.EncodeUint16(jamtime.SlotPeriodInSeconds),                // P
+	jam.EncodeUint16(state.PendingAuthorizersQueueSize),          // Q
+	jam.EncodeUint16(uint16(jamtime.ValidatorRotationPeriod)),    // R
+	jam.EncodeUint16(work.MaxNumberOfExtrinsics),                 // T
+	jam.EncodeUint16(uint16(common.WorkReportTimeoutPeriod)),     // U
+	jam.EncodeUint16(common.NumberOfValidators),                  // V
+	jam.EncodeUint32(state.MaximumSizeIsAuthorizedCode),          // W_A
+	jam.EncodeUint32(common.MaxWorkPackageSize),                  // W_B
+	jam.EncodeUint32(work.MaxSizeServiceCode),                    // W_C
+	jam.EncodeUint32(common.ErasureCodingChunkSize),              // W_E
+	jam.EncodeUint32(work.MaxNumberOfImports),                    // W_M
+	jam.EncodeUint32(common.NumberOfErasureCodecPiecesInSegment), // W_P
+	jam.EncodeUint32(common.MaxWorkPackageSizeBytes),             // W_R
+	jam.EncodeUint32(service.TransferMemoSizeBytes),              // W_T
+	jam.EncodeUint32(work.MaxNumberOfExports),                    // W_X
+	jam.EncodeUint32(jamtime.TicketSubmissionTimeSlots),          // Y
+)
+
+func GetChainConstants() []byte {
+	return encodedChainConstants
 }
