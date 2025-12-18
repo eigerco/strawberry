@@ -10,6 +10,8 @@ import (
 	"github.com/eigerco/strawberry/internal/work"
 )
 
+var ErrForbiddenMemoryAccess = ErrPanicf("forbidden memory access")
+
 type MemoryAccess int
 
 const (
@@ -40,15 +42,11 @@ type memorySegment struct {
 func (m *Memory) Read(address uint32, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
-		return ErrPanicf("forbidden memory access")
+		return ErrForbiddenMemoryAccess
 	}
 	end, ok := safemath.Add(address, uint32(len(data)))
 	if !ok {
 		return ErrPanicf("inaccessible memory; address overflow")
-	}
-	heapPtrRounded2Page, err := roundUpToPage(m.currentHeapPointer)
-	if err != nil {
-		return ErrPanicf("heap pointer overflow: %s", err)
 	}
 	var memoryData []byte
 	access := Inaccessible
@@ -56,7 +54,7 @@ func (m *Memory) Read(address uint32, data []byte) error {
 	if address >= m.stack.address && end <= m.stack.end {
 		memoryData = m.stack.data[address-m.stack.address : end-m.stack.address]
 		access = m.stack.access
-	} else if address >= m.rw.address && end <= heapPtrRounded2Page {
+	} else if address >= m.rw.address && end <= m.currentHeapPointer {
 		memoryData = m.rw.data[address-m.rw.address : end-m.rw.address]
 		access = m.rw.access
 	} else if address >= m.ro.address && end <= m.ro.end {
@@ -86,22 +84,18 @@ func (m *Memory) Read(address uint32, data []byte) error {
 func (m *Memory) Write(address uint32, data []byte) error {
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
-		return ErrPanicf("forbidden memory access")
+		return ErrForbiddenMemoryAccess
 	}
 	end, ok := safemath.Add(address, uint32(len(data)))
 	if !ok {
 		return ErrPanicf("inaccessible memory; address overflow")
-	}
-	heapPtrRounded2Page, err := roundUpToPage(m.currentHeapPointer)
-	if err != nil {
-		return ErrPanicf("heap pointer overflow: %s", err)
 	}
 	var memoryData []byte
 	access := Inaccessible
 	if address >= m.stack.address && end <= m.stack.end {
 		memoryData = m.stack.data[address-m.stack.address : end-m.stack.address]
 		access = m.stack.access
-	} else if address >= m.rw.address && end <= heapPtrRounded2Page {
+	} else if address >= m.rw.address && end <= m.currentHeapPointer {
 		memoryData = m.rw.data[address-m.rw.address : end-m.rw.address]
 		access = m.rw.access
 	} else if address >= m.ro.address && end <= m.ro.end {
