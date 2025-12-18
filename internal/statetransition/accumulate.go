@@ -8,9 +8,8 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
-	"github.com/eigerco/strawberry/internal/polkavm"
-	"github.com/eigerco/strawberry/internal/polkavm/host_call"
-	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
+	"github.com/eigerco/strawberry/internal/pvm"
+	"github.com/eigerco/strawberry/internal/pvm/host_call"
 	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
@@ -64,7 +63,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 
 	// I(s, s)^2
 	var (
-		newCtxPair polkavm.AccumulateContextPair
+		newCtxPair pvm.AccumulateContextPair
 		err        error
 	)
 	newCtxPair.RegularCtx, err = a.newCtx(stateWithBalance, serviceIndex)
@@ -94,7 +93,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 	}
 
 	// F (equation B.10)
-	hostCallFunc := func(hostCall uint64, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctx polkavm.AccumulateContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.AccumulateContextPair, error) {
+	hostCallFunc := func(hostCall uint64, gasCounter pvm.Gas, regs pvm.Registers, mem pvm.Memory, ctx pvm.AccumulateContextPair) (pvm.Gas, pvm.Registers, pvm.Memory, pvm.AccumulateContextPair, error) {
 		// s = (xu)d[xs]
 		currentService := ctx.RegularCtx.AccumulationState.ServiceState[serviceIndex]
 
@@ -150,19 +149,19 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		case host_call.LogID:
 			gasCounter, regs, mem, err = host_call.Log(gasCounter, regs, mem, nil, &serviceIndex)
 		default:
-			regs[polkavm.A0] = uint64(host_call.WHAT)
+			regs[pvm.A0] = uint64(host_call.WHAT)
 			gasCounter -= AccumulateCost
 		}
 		// otherwise if ϱ′ < 0
 		if gasCounter < 0 {
-			return 0, regs, mem, ctx, polkavm.ErrOutOfGas
+			return 0, regs, mem, ctx, pvm.ErrOutOfGas
 		}
 		return gasCounter, regs, mem, ctx, err
 	}
 
-	errPanic := &polkavm.ErrPanic{}
-	gasUsed, ret, newCtxPair, err := interpreter.InvokeWholeProgram(c, 5, polkavm.UGas(gas), args, hostCallFunc, newCtxPair)
-	if err != nil && (errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &errPanic)) {
+	errPanic := &pvm.ErrPanic{}
+	gasUsed, ret, newCtxPair, err := pvm.InvokeWholeProgram(c, 5, pvm.UGas(gas), args, hostCallFunc, newCtxPair)
+	if err != nil && (errors.Is(err, pvm.ErrOutOfGas) || errors.As(err, &errPanic)) {
 		log.VM.Error().Err(err).Msgf("Program invocation failed")
 		return AccumulationOutput{
 			GasUsed:           uint64(gasUsed),
@@ -217,8 +216,8 @@ func addTransfersBalance(accState state.AccumulationState, serviceId block.Servi
 }
 
 // newCtx (B.9)
-func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.ServiceId) (polkavm.AccumulateContext, error) {
-	ctx := polkavm.AccumulateContext{
+func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.ServiceId) (pvm.AccumulateContext, error) {
+	ctx := pvm.AccumulateContext{
 		ServiceId:         serviceIndex,
 		AccumulationState: u,
 		DeferredTransfers: []service.DeferredTransfer{},
@@ -227,7 +226,7 @@ func (a *Accumulator) newCtx(u state.AccumulationState, serviceIndex block.Servi
 
 	newServiceID, err := a.newServiceID(serviceIndex)
 	if err != nil {
-		return polkavm.AccumulateContext{}, err
+		return pvm.AccumulateContext{}, err
 	}
 	ctx.NewServiceId = service.DeriveIndex(newServiceID, u.ServiceState)
 	return ctx, nil
