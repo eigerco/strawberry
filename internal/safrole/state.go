@@ -2,6 +2,7 @@ package safrole
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
@@ -9,6 +10,14 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+)
+
+// ringCommitmentCache caches computed ring commitments keyed by validator set hash.
+// This avoids redundant expensive KZG commitment computations when the same
+// validator set appears across multiple epochs.
+var (
+	ringCommitmentCache   = make(map[crypto.Hash]crypto.RingCommitment)
+	ringCommitmentCacheMu sync.RWMutex
 )
 
 // State relevant to Safrole protocol
@@ -32,13 +41,48 @@ func (vsd ValidatorsData) RingVerifier() (*bandersnatch.RingVrfVerifier, error) 
 }
 
 // Returns the RingCommitment for this validator set.
+// Results are cached by validator set hash to avoid redundant expensive
+// KZG commitment computations.
 func (vsd ValidatorsData) RingCommitment() (crypto.RingCommitment, error) {
+	// Compute cache key from validator bandersnatch keys
+	cacheKey := vsd.hash()
+
+	// Check cache first (read lock for concurrent access)
+	ringCommitmentCacheMu.RLock()
+	if cached, ok := ringCommitmentCache[cacheKey]; ok {
+		ringCommitmentCacheMu.RUnlock()
+		return cached, nil
+	}
+	ringCommitmentCacheMu.RUnlock()
+
+	// Cache miss - compute the expensive commitment
 	ringVerifier, err := vsd.RingVerifier()
-	defer ringVerifier.Free()
 	if err != nil {
 		return crypto.RingCommitment{}, err
 	}
-	return ringVerifier.Commitment()
+	defer ringVerifier.Free()
+
+	commitment, err := ringVerifier.Commitment()
+	if err != nil {
+		return crypto.RingCommitment{}, err
+	}
+
+	// Store in cache for future use
+	ringCommitmentCacheMu.Lock()
+	ringCommitmentCache[cacheKey] = commitment
+	ringCommitmentCacheMu.Unlock()
+
+	return commitment, nil
+}
+
+// hash computes a hash of all validator bandersnatch public keys for cache lookup.
+func (vsd ValidatorsData) hash() crypto.Hash {
+	// Each BandersnatchPublicKey is 32 bytes, total = 32 * NumberOfValidators
+	buf := make([]byte, 0, len(vsd)*len(crypto.BandersnatchPublicKey{}))
+	for _, v := range vsd {
+		buf = append(buf, v.Bandersnatch[:]...)
+	}
+	return crypto.HashData(buf)
 }
 
 // Takes a private bandersnatch key and returns a new RingVrfProver for this validator set.
