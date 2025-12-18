@@ -63,7 +63,7 @@ type ServiceActivityRecord struct {
 
 type ServiceStatistics map[block.ServiceId]ServiceActivityRecord
 
-// Implements equation 6.14 from the graypaper, i.e Φ(k). If any of the queued
+// NullifyOffenders implements equation 6.14 from the graypaper, i.e Φ(k). If any of the queued
 // validator data matches the offenders list (ψ′_o), all the keys for that
 // validator are zero'd out. v0.7.0
 func NullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed25519.PublicKey) (safrole.ValidatorsData, []ed25519.PublicKey) {
@@ -75,9 +75,8 @@ func NullifyOffenders(queuedValidators safrole.ValidatorsData, offenders []ed255
 	for i, validator := range queuedValidators {
 		if offenderMap.Has(validator.Ed25519) {
 			queuedValidators[i] = crypto.ValidatorKey{
-				// Ensure these 32 bytes are zero'd out, and not just nil.  TODO
-				// - maybe use a custom wrapper type for [32]byte ?
-				Ed25519: make([]byte, 32),
+				// Ensure these 32 bytes are zero'd out, and not just nil.
+				Ed25519: ed25519.ZeroPublicKey,
 			} // Nullify the validator.
 			nullifiedKeys = append(nullifiedKeys, validator.Ed25519)
 		}

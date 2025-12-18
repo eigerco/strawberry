@@ -457,7 +457,8 @@ func TestCE129GetKeyValueRange(t *testing.T) {
 			}
 
 			// Calculate the total size of the response
-			totalSize := calculateResponseSize(result.Pairs, result.BoundaryNodes)
+			totalSize, err := calculateResponseSize(result.Pairs, result.BoundaryNodes)
+			require.NoError(t, err)
 
 			if testing.Verbose() {
 				t.Logf("Response size: %d bytes (limit: %d)", totalSize, tc.maxSize)

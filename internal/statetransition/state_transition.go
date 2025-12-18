@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/eigerco/strawberry/pkg/log"
 	"maps"
-	"math"
 	"slices"
 	"sort"
 	"sync"
@@ -21,6 +20,7 @@ import (
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
 	"github.com/eigerco/strawberry/internal/merkle/mountain_ranges"
+	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
@@ -28,6 +28,7 @@ import (
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"golang.org/x/sync/errgroup"
 )
 
 // UpdateState updates the state
@@ -101,20 +102,27 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		newPrivilegedServices,
 		newQueuedValidators,
 		newPendingCoreAuthorizations,
-		accumulationOutputLog, accumulationStats := CalculateWorkReportsAndAccumulate(
+		accumulationOutputLog, accumulationStats, err := CalculateWorkReportsAndAccumulate(
 		&newBlock.Header,
 		s,
 		newTimeSlot,
 		availableWorkReports,
 		newEntropyPool,
 	)
+	if err != nil {
+		return err
+	}
+
 	finalServicesState, err := CalculateNewServiceStateWithPreimages(newBlock.Extrinsic.EP, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
 	if err != nil {
 		return err
 	}
 
-	newValidatorStatistics := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators,
+	newValidatorStatistics, err := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators,
 		availableWorkReports, accumulationStats)
+	if err != nil {
+		return err
+	}
 
 	newRecentHistory, err := CalculateNewRecentHistory(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentHistory, accumulationOutputLog)
 	if err != nil {
@@ -463,6 +471,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	newPendingAuthorizersQueues state.PendingAuthorizersQueues,
 	accumulationOutputLog state.AccumulationOutputLog,
 	accumulationStats AccumulationStats,
+	err error,
 ) {
 	// R! ≡ [r | r <− R, |(r_c)p| = 0 ∧ r_l = {}] (eq. 12.4 v0.7.1)
 	var immediatelyAccWorkReports []block.WorkReport
@@ -496,15 +505,30 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 
 	privSvcGas := uint64(0)
 	for _, gas := range currentState.PrivilegedServices.AmountOfGasPerServiceId {
-		privSvcGas += gas
+		var ok bool
+		privSvcGas, ok = safemath.Add(privSvcGas, gas)
+		if !ok {
+			err = fmt.Errorf("privileged service gas overflow")
+			return
+		}
 	}
 	// let g = max(GT, GA ⋅ C + [∑x∈V(χ_Z)](x)) (eq. 12.24 v0.7.1)
-	gasLimit := max(common.TotalGasAccumulation, common.MaxAllocatedGasAccumulation*uint64(common.TotalNumberOfCores)+privSvcGas)
+	gasCores, ok := safemath.Mul(common.MaxAllocatedGasAccumulation, uint64(common.TotalNumberOfCores))
+	if !ok {
+		err = fmt.Errorf("gas limit multiplication overflow")
+		return
+	}
+	gasSum, ok := safemath.Add(gasCores, privSvcGas)
+	if !ok {
+		err = fmt.Errorf("gas limit addition overflow")
+		return
+	}
+	gasLimit := max(common.TotalGasAccumulation, gasSum)
 
 	accumulator := NewAccumulator(newEntropyPool, header, newTimeslot)
 	// e = (d: δ, i: ι, q: ϕ, m: χ_M, a: χ_A, v: χ_V, r: χ_R, z: χ_Z) (eq. 12.24 v0.7.1)
 	// (n, e′, t, θ′, u) ≡ ∆+(g, R*, e, χ_Z) (eq. 12.25 v0.7.1)
-	accumulatedCount, newAccumulationState, serviceHashPairs, gasPairs := accumulator.
+	accumulatedCount, newAccumulationState, serviceHashPairs, gasPairs, err := accumulator.
 		SequentialDelta(gasLimit, []service.DeferredTransfer{}, accumulatableWorkReports, state.AccumulationState{
 			ServiceState:             currentState.Services,
 			ValidatorKeys:            currentState.ValidatorState.QueuedValidators,
@@ -515,7 +539,9 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 			CreateProtectedServiceId: currentState.PrivilegedServices.CreateProtectedServiceId,
 			AmountOfGasPerServiceId:  currentState.PrivilegedServices.AmountOfGasPerServiceId,
 		}, currentState.PrivilegedServices.AmountOfGasPerServiceId)
-
+	if err != nil {
+		return
+	}
 	accumulationOutputLog = slices.Collect(maps.Keys(serviceHashPairs))
 
 	// Sort accumulation output log by service ID and Hash for deterministic ordering
@@ -544,7 +570,11 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	accumulateCountBySvc := map[block.ServiceId]uint32{}
 	for _, workReport := range accumulatableWorkReports[:accumulatedCount] {
 		for _, result := range workReport.WorkDigests {
-			accumulateCountBySvc[result.ServiceId]++
+			accumulateCountBySvc[result.ServiceId], ok = safemath.Add(accumulateCountBySvc[result.ServiceId], 1)
+			if !ok {
+				err = fmt.Errorf("accumulateCountBySvc overflow")
+				return
+			}
 		}
 	}
 
@@ -553,11 +583,20 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	accumulationStats = AccumulationStats{}
 	for _, gp := range gasPairs {
 		totalGas := accumulationStats[gp.ServiceId].AccumulateGasUsed
-		totalGas += gp.Gas
+		totalGas, ok = safemath.Add(totalGas, gp.Gas)
+		if !ok {
+			err = fmt.Errorf("accumulation gas overflow")
+			return
+		}
 
 		accumulateCount := accumulateCountBySvc[gp.ServiceId]
 		// G(s) + N(s) ≠ 0
-		if totalGas+uint64(accumulateCount) == 0 {
+		gasCountSum, ok := safemath.Add(totalGas, uint64(accumulateCount))
+		if !ok {
+			err = fmt.Errorf("gas count sum overflow")
+			return
+		}
+		if gasCountSum == 0 {
 			continue
 		}
 
@@ -693,15 +732,25 @@ func CalculateNewActivityStatistics(
 	currValidators safrole.ValidatorsData,
 	availableWorkReports []block.WorkReport,
 	accumulationStats AccumulationStats,
-) validator.ActivityStatisticsState {
-	current, last := CalculateNewValidatorStatistics(blk, prevTimeslot, activityStatistics.ValidatorsCurrent, activityStatistics.ValidatorsLast, reporters, currValidators)
-
+) (validator.ActivityStatisticsState, error) {
+	current, last, err := CalculateNewValidatorStatistics(blk, prevTimeslot, activityStatistics.ValidatorsCurrent, activityStatistics.ValidatorsLast, reporters, currValidators)
+	if err != nil {
+		return validator.ActivityStatisticsState{}, err
+	}
+	coreStats, err := CalculateNewCoreStatistics(blk, activityStatistics.Cores, availableWorkReports)
+	if err != nil {
+		return validator.ActivityStatisticsState{}, err
+	}
+	serviceStats, err := CalculateNewServiceStatistics(blk, accumulationStats)
+	if err != nil {
+		return validator.ActivityStatisticsState{}, err
+	}
 	return validator.ActivityStatisticsState{
 		ValidatorsCurrent: current,
 		ValidatorsLast:    last,
-		Cores:             CalculateNewCoreStatistics(blk, activityStatistics.Cores, availableWorkReports),
-		Services:          CalculateNewServiceStatistics(blk, accumulationStats),
-	}
+		Cores:             coreStats,
+		Services:          serviceStats,
+	}, nil
 }
 
 // CalculateNewValidatorStatistics updates validator statistics.
@@ -712,7 +761,7 @@ func CalculateNewValidatorStatistics(
 	validatorStatsCurrent, validatorStatsLast [common.NumberOfValidators]validator.ValidatorStatistics,
 	reporters crypto.ED25519PublicKeySet,
 	currValidators safrole.ValidatorsData,
-) ([common.NumberOfValidators]validator.ValidatorStatistics, [common.NumberOfValidators]validator.ValidatorStatistics) { // (current, last)
+) ([common.NumberOfValidators]validator.ValidatorStatistics, [common.NumberOfValidators]validator.ValidatorStatistics, error) { // (current, last)
 	// Implements equations 13.3 - 13.4:
 	// let e = ⌊τ/E⌋, e′ = ⌊τ′/E⌋
 	// (a, π′₁) ≡ { (π₀, π₁) if e′ = e
@@ -727,20 +776,33 @@ func CalculateNewValidatorStatistics(
 	for v := uint16(0); v < uint16(len(validatorStatsCurrent)); v++ {
 		// π′₀[v]b ≡ a[v]b + (v = Hi)
 		if v == blk.Header.BlockAuthorIndex {
-			validatorStatsCurrent[v].NumOfBlocks++
+			var ok bool
+			validatorStatsCurrent[v].NumOfBlocks, ok = safemath.Add(validatorStatsCurrent[v].NumOfBlocks, 1)
+			if !ok {
+				return validatorStatsCurrent, validatorStatsLast, fmt.Errorf("NumOfBlocks overflow")
+			}
 
 			// π′₀[v]t ≡ a[v]t + {|ET| if v = Hi
 			//                     0 otherwise
-			validatorStatsCurrent[v].NumOfTickets += uint32(len(blk.Extrinsic.ET.TicketProofs))
+			validatorStatsCurrent[v].NumOfTickets, ok = safemath.Add(validatorStatsCurrent[v].NumOfTickets, uint32(len(blk.Extrinsic.ET.TicketProofs)))
+			if !ok {
+				return validatorStatsCurrent, validatorStatsLast, fmt.Errorf("NumOfTickets overflow")
+			}
 
 			// π′₀[v]p ≡ a[v]p + {|EP| if v = Hi
 			//                     0 otherwise
-			validatorStatsCurrent[v].NumOfPreimages += uint32(len(blk.Extrinsic.EP))
+			validatorStatsCurrent[v].NumOfPreimages, ok = safemath.Add(validatorStatsCurrent[v].NumOfPreimages, uint32(len(blk.Extrinsic.EP)))
+			if !ok {
+				return validatorStatsCurrent, validatorStatsLast, fmt.Errorf("NumOfPreimages overflow")
+			}
 
 			// π′₀[v]d ≡ a[v]d + {Σd∈EP|d| if v = Hi
 			//                     0 otherwise
 			for _, preimage := range blk.Extrinsic.EP {
-				validatorStatsCurrent[v].NumOfBytesAllPreimages += uint32(len(preimage.Data))
+				validatorStatsCurrent[v].NumOfBytesAllPreimages, ok = safemath.Add(validatorStatsCurrent[v].NumOfBytesAllPreimages, uint32(len(preimage.Data)))
+				if !ok {
+					return validatorStatsCurrent, validatorStatsLast, fmt.Errorf("NumOfBytesAllPreimages overflow")
+				}
 			}
 		}
 
@@ -748,67 +810,156 @@ func CalculateNewValidatorStatistics(
 		// Where R is the set of reporter keys defined in 11.26 0.6.5
 		for reporter := range reporters {
 			if !currValidators[v].IsEmpty() && slices.Equal(currValidators[v].Ed25519, reporter[:]) {
-				validatorStatsCurrent[v].NumOfGuaranteedReports++
+				var ok bool
+				validatorStatsCurrent[v].NumOfGuaranteedReports, ok = safemath.Add(validatorStatsCurrent[v].NumOfGuaranteedReports, 1)
+				if !ok {
+					return validatorStatsCurrent, validatorStatsLast, fmt.Errorf("NumOfGuaranteedReports overflow")
+				}
 			}
 		}
 
 		// π′₀[v]a ≡ a[v]a + (∃a ∈ EA : av = v)
 		for _, assurance := range blk.Extrinsic.EA {
 			if assurance.ValidatorIndex == v {
-				validatorStatsCurrent[v].NumOfAvailabilityAssurances++
+				var ok bool
+				validatorStatsCurrent[v].NumOfAvailabilityAssurances, ok = safemath.Add(validatorStatsCurrent[v].NumOfAvailabilityAssurances, 1)
+				if !ok {
+					return validatorStatsCurrent, validatorStatsLast, fmt.Errorf("NumOfAvailabilityAssurances overflow")
+				}
 			}
 		}
 	}
 
-	return validatorStatsCurrent, validatorStatsLast
+	return validatorStatsCurrent, validatorStatsLast, nil
 }
 
 // CalculateNewCoreStatistics updates core statistics.
-// It implements equations 13.8 - 13.10.
+// It implements equations 13.8 - 13.11 (GP v0.7.1).
+//
+// Equation 13.8 defines the core statistics tuple:
+//
+//	∀c ∈ NC : π'C[c] ≡ (i, x, z, e, u, l, d, p)
+//
+// Where:
+//
+//	i = imports, x = extrinsic count, z = extrinsic size, e = exports,
+//	u = gas used, l = bundle size, d = DA load, p = popularity
 func CalculateNewCoreStatistics(
 	blk block.Block,
 	coreStats [common.TotalNumberOfCores]validator.CoreStatistics,
-	availableReports []block.WorkReport, // W
-) [common.TotalNumberOfCores]validator.CoreStatistics {
+	availableReports []block.WorkReport,
+) ([common.TotalNumberOfCores]validator.CoreStatistics, error) {
 	newCoreStats := [common.TotalNumberOfCores]validator.CoreStatistics{}
+	var ok bool
 
-	// Equation 13.9
-	// ∑ r ∈wr,w ∈w, wc=c (ri, rx, rz , re, ru, b: (ws)l)
+	// Equations 13.9 and 13.10: Statistics from incoming work reports (I)
+	//
+	// 13.9: R(c ∈ NC) ≡ ∑_{d∈rd, r∈I, rc=c} (di, dx, dz, de, du)
+	//   Accumulates per-work-digest stats: imports (i), extrinsic count (x),
+	//   extrinsic size (z), exports (e), gas used (u)
+	//
+	// 13.10: L(c ∈ NC) ≡ ∑_{r∈I, rc=c} (rs)l
+	//   Accumulates bundle size (l) from availability specification
 	for _, guarantee := range blk.Extrinsic.EG.Guarantees {
 		workReport := guarantee.WorkReport
 		coreIndex := workReport.CoreIndex
-		newCoreStats[coreIndex].BundleSize += workReport.AvailabilitySpecification.AuditableWorkBundleLength
-		for _, workResult := range workReport.WorkDigests {
-			newCoreStats[coreIndex].Imports += workResult.SegmentsImportedCount
-			newCoreStats[coreIndex].Exports += workResult.SegmentsExportedCount
-			newCoreStats[coreIndex].ExtrinsicCount += workResult.ExtrinsicCount
-			newCoreStats[coreIndex].ExtrinsicSize += workResult.ExtrinsicSize
-			newCoreStats[coreIndex].GasUsed += workResult.GasUsed
+
+		// 13.10: (rs)l - auditable work bundle length
+		newCoreStats[coreIndex].BundleSize, ok = safemath.Add(newCoreStats[coreIndex].BundleSize, workReport.AvailabilitySpecification.AuditableWorkBundleLength)
+		if !ok {
+			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+		}
+
+		// 13.9: Sum over work digests d ∈ rd
+		for _, workDigest := range workReport.WorkDigests {
+			newCoreStats[coreIndex].Imports, ok = safemath.Add(newCoreStats[coreIndex].Imports, workDigest.SegmentsImportedCount) // di
+			if !ok {
+				return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+			}
+			newCoreStats[coreIndex].Exports, ok = safemath.Add(newCoreStats[coreIndex].Exports, workDigest.SegmentsExportedCount) // de
+			if !ok {
+				return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+			}
+			newCoreStats[coreIndex].ExtrinsicCount, ok = safemath.Add(newCoreStats[coreIndex].ExtrinsicCount, workDigest.ExtrinsicCount) // dx
+			if !ok {
+				return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+			}
+			newCoreStats[coreIndex].ExtrinsicSize, ok = safemath.Add(newCoreStats[coreIndex].ExtrinsicSize, workDigest.ExtrinsicSize) // dz
+			if !ok {
+				return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+			}
+			newCoreStats[coreIndex].GasUsed, ok = safemath.Add(newCoreStats[coreIndex].GasUsed, workDigest.GasUsed) // du
+			if !ok {
+				return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+			}
 		}
 	}
 
-	// Equation 13.10
-	// ∑ w ∈W, wc=c (ws)_l + W_G⌈(ws)_n65/64⌉
-	// 65/64 likely adds overhead for proofs which require one segment for every 64 segments.
+	// Equation 13.11: DA load from available work reports (R)
+	//
+	// D(c ∈ NC) ≡ ∑_{r∈R, rc=c} (rs)l + WG⌈(rs)n × 65/64⌉
+	//
+	// Where:
+	//   R = set of newly available work reports
+	//   (rs)l = auditable work bundle length
+	//   (rs)n = segment count
+	//   WG = segment size in octets (common.SizeOfSegment = 4104)
+	//
+	// The 65/64 factor accounts for paged-proof overhead: for every 64 exported
+	// segments, 1 additional segment is needed for Merkle proofs (see section 14.4.1).
 	for _, workReport := range availableReports {
 		coreIndex := workReport.CoreIndex
 
+		// (rs)l
 		l := workReport.AvailabilitySpecification.AuditableWorkBundleLength
+		// (rs)n
 		n := workReport.AvailabilitySpecification.SegmentCount
-		var daLoad uint32 = l + (common.SizeOfSegment * uint32(math.Ceil(float64(n)*65/64)))
 
-		newCoreStats[coreIndex].DALoad += daLoad
-	}
+		// Compute ⌈(rs)n × 65/64⌉ using integer ceiling division: ⌈a/b⌉ = (a + b - 1) / b
+		nTimes65, ok := safemath.Mul(uint32(n), 65)
+		if !ok {
+			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+		}
+		nCeil, ok := safemath.Add(nTimes65, 63)
+		if !ok {
+			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+		}
+		nCeil /= 64
 
-	// Equation 13.8
-	// ∑ a ∈EA a_f[c]
-	for _, assurance := range blk.Extrinsic.EA {
-		for _, coreIndex := range assurance.SetCoreIndexes() {
-			newCoreStats[coreIndex].Popularity++
+		// WG⌈(rs)n × 65/64⌉
+		segmentLoad, ok := safemath.Mul(common.SizeOfSegment, nCeil)
+		if !ok {
+			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+		}
+
+		// (rs)l + WG⌈(rs)n × 65/64⌉
+		daLoad, ok := safemath.Add(l, segmentLoad)
+		if !ok {
+			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+		}
+
+		// ∑_{r∈R, rc=c} - accumulate for this core
+		newCoreStats[coreIndex].DALoad, ok = safemath.Add(newCoreStats[coreIndex].DALoad, daLoad)
+		if !ok {
+			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 		}
 	}
 
-	return newCoreStats
+	// Equation 13.8 (popularity component): p ≡ ∑_{a∈EA} af[c]
+	//
+	// Counts the number of availability assurances that include each core.
+	// af is a bitfield where af[c] = 1 if validator assures availability for core c.
+	for _, assurance := range blk.Extrinsic.EA {
+		for _, coreIndex := range assurance.SetCoreIndexes() {
+			var ok bool
+			newCoreStats[coreIndex].Popularity, ok = safemath.Add(newCoreStats[coreIndex].Popularity, 1)
+			if !ok {
+				return [common.TotalNumberOfCores]validator.CoreStatistics{}, fmt.Errorf("popularity overflow")
+			}
+		}
+	}
+
+	return newCoreStats, nil
 }
 
 // CalculateNewServiceStatistics updates service statistics.
@@ -816,7 +967,7 @@ func CalculateNewCoreStatistics(
 func CalculateNewServiceStatistics(
 	blk block.Block,
 	accumulationStats AccumulationStats,
-) validator.ServiceStatistics {
+) (validator.ServiceStatistics, error) {
 	newServiceStats := validator.ServiceStatistics{}
 
 	// Equation 13.11
@@ -825,8 +976,15 @@ func CalculateNewServiceStatistics(
 		record := newServiceStats[serviceID]
 
 		// p: ∑ (s,p) ∈EP (1, |p|)
-		record.ProvidedCount++
-		record.ProvidedSize += uint32(len(preimage.Data))
+		var ok bool
+		record.ProvidedCount, ok = safemath.Add(record.ProvidedCount, 1)
+		if !ok {
+			return nil, fmt.Errorf("ProvidedCount overflow")
+		}
+		record.ProvidedSize, ok = safemath.Add(record.ProvidedSize, uint32(len(preimage.Data)))
+		if !ok {
+			return nil, fmt.Errorf("ProvidedSize overflow")
+		}
 
 		newServiceStats[serviceID] = record
 	}
@@ -839,12 +997,31 @@ func CalculateNewServiceStatistics(
 			serviceID := block.ServiceId(workResult.ServiceId)
 			record := newServiceStats[serviceID]
 
-			record.Imports += uint32(workResult.SegmentsImportedCount)
-			record.Exports += uint32(workResult.SegmentsExportedCount)
-			record.ExtrinsicCount += uint32(workResult.ExtrinsicCount)
-			record.ExtrinsicSize += uint32(workResult.ExtrinsicSize)
-			record.RefinementCount += 1
-			record.RefinementGasUsed += workResult.GasUsed
+			var ok bool
+			record.Imports, ok = safemath.Add(record.Imports, uint32(workResult.SegmentsImportedCount))
+			if !ok {
+				return nil, fmt.Errorf("imports overflow")
+			}
+			record.Exports, ok = safemath.Add(record.Exports, uint32(workResult.SegmentsExportedCount))
+			if !ok {
+				return nil, fmt.Errorf("exports overflow")
+			}
+			record.ExtrinsicCount, ok = safemath.Add(record.ExtrinsicCount, uint32(workResult.ExtrinsicCount))
+			if !ok {
+				return nil, fmt.Errorf("extrinsicCount overflow")
+			}
+			record.ExtrinsicSize, ok = safemath.Add(record.ExtrinsicSize, uint32(workResult.ExtrinsicSize))
+			if !ok {
+				return nil, fmt.Errorf("extrinsicSize overflow")
+			}
+			record.RefinementCount, ok = safemath.Add(record.RefinementCount, 1)
+			if !ok {
+				return nil, fmt.Errorf("refinementCount overflow")
+			}
+			record.RefinementGasUsed, ok = safemath.Add(record.RefinementGasUsed, workResult.GasUsed)
+			if !ok {
+				return nil, fmt.Errorf("refinementGasUsed overflow")
+			}
 
 			newServiceStats[serviceID] = record
 		}
@@ -855,13 +1032,20 @@ func CalculateNewServiceStatistics(
 	for serviceID, stat := range accumulationStats {
 		record := newServiceStats[serviceID]
 
-		record.AccumulateCount += stat.AccumulateCount
-		record.AccumulateGasUsed += stat.AccumulateGasUsed
+		var ok bool
+		record.AccumulateCount, ok = safemath.Add(record.AccumulateCount, stat.AccumulateCount)
+		if !ok {
+			return nil, fmt.Errorf("AccumulateCount overflow")
+		}
+		record.AccumulateGasUsed, ok = safemath.Add(record.AccumulateGasUsed, stat.AccumulateGasUsed)
+		if !ok {
+			return nil, fmt.Errorf("AccumulateGasUsed overflow")
+		}
 
 		newServiceStats[serviceID] = record
 	}
 
-	return newServiceStats
+	return newServiceStats, nil
 }
 
 // ServiceHashPairSet B ≡ {(NS , H)} (eq. 12.17 v0.7.1)
@@ -900,6 +1084,7 @@ func (a *Accumulator) SequentialDelta(
 	state.AccumulationState,
 	ServiceHashPairSet,
 	ServiceGasPairs,
+	error,
 ) {
 	// Calculate i = max(N|w|+1) : ∑w∈w...i∑r∈wd(rg) ≤ g
 	maxReports := 0
@@ -909,67 +1094,107 @@ func (a *Accumulator) SequentialDelta(
 	for i, report := range workReports {
 		reportGas := uint64(0)
 		for _, result := range report.WorkDigests {
-			reportGas += result.GasLimit
+			var ok bool
+			reportGas, ok = safemath.Add(reportGas, result.GasLimit)
+			if !ok {
+				return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, fmt.Errorf("reportGas overflow")
+			}
 		}
 
-		if totalGas+reportGas > gasLimit {
+		gasSum, ok := safemath.Add(totalGas, reportGas)
+		if !ok {
+			return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, fmt.Errorf("totalGas overflow")
+		}
+		if gasSum > gasLimit {
 			break
 		}
 
-		totalGas += reportGas
-		maxReports = i + 1
+		totalGas = gasSum
+		maxReports, ok = safemath.Add(i, 1)
+		if !ok {
+			return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, fmt.Errorf("maxReports overflow")
+		}
 	}
 
 	// n = |t| + i + |f|
-	maxReportsAndTransfers := len(transfers) + maxReports + len(alwaysAccumulate)
+	maxReportsAndTransfers, ok := safemath.Add(len(transfers), maxReports)
+	if !ok {
+		return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, fmt.Errorf("maxReportsAndTransfers overflow")
+	}
+	maxReportsAndTransfers, ok = safemath.Add(maxReportsAndTransfers, len(alwaysAccumulate))
+	if !ok {
+		return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, fmt.Errorf("maxReportsAndTransfers overflow")
+	}
 
 	// If no reports can be processed, return early
 	if maxReportsAndTransfers == 0 {
-		return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}
+		return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, nil
 	}
 
 	// Process maxReports using ParallelDelta (∆*)
-	newCtx, newTransfers, hashPairs, gasPairs := a.ParallelDelta(
+	newCtx, newTransfers, hashPairs, gasPairs, err := a.ParallelDelta(
 		ctx,
 		transfers,
 		workReports[:maxReports],
 		alwaysAccumulate,
 	)
+	if err != nil {
+		return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, err
+	}
 
+	// Calculate new gas limit g*
 	// g* = g + [∑ t∈t](t_g)
 	newGasLimit := gasLimit
 	for _, transfer := range transfers {
-		newGasLimit += transfer.GasLimit
+		var ok bool
+		newGasLimit, ok = safemath.Add(newGasLimit, transfer.GasLimit)
+		if !ok {
+			return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, fmt.Errorf("newGasLimit overflow")
+		}
 	}
 
 	// [∑ (s,u) ∈ u∗] u
 	var gasUsed uint64
 	for _, pair := range gasPairs {
-		gasUsed += pair.Gas
+		var ok bool
+		gasUsed, ok = safemath.Add(gasUsed, pair.Gas)
+		if !ok {
+			return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, fmt.Errorf("gasUsed overflow")
+		}
 	}
 
 	// If we have remaining reports and gas, process recursively (∆+)
 	// g* − [∑ (s,u)∈u*] (u)
-	remainingGas := newGasLimit - gasUsed
+	remainingGas, ok := safemath.Sub(newGasLimit, gasUsed)
+	if !ok {
+		return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, fmt.Errorf("remainingGas underflow")
+	}
 	if remainingGas > 0 {
-		moreItems, finalCtx, moreHashPairs, moreGasPairs := a.SequentialDelta(
+		moreItems, finalCtx, moreHashPairs, moreGasPairs, err := a.SequentialDelta(
 			remainingGas,
 			newTransfers,
 			workReports[maxReports:],
 			newCtx,
 			alwaysAccumulate,
 		)
-
+		if err != nil {
+			return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, err
+		}
 		// merge moreHashPairs into hashPairs and keep uniqueness by ServiceId by keeping the last occurrence
 		maps.Copy(hashPairs, moreHashPairs)
 
-		return uint32(maxReports) + moreItems,
+		totalItems, ok := safemath.Add(uint32(maxReports), moreItems)
+		if !ok {
+			return 0, ctx, ServiceHashPairSet{}, ServiceGasPairs{}, fmt.Errorf("totalItems overflow")
+		}
+		return totalItems,
 			finalCtx,
 			hashPairs,
-			append(gasPairs, moreGasPairs...)
+			append(gasPairs, moreGasPairs...),
+			nil
 	}
 
-	return uint32(maxReports), newCtx, hashPairs, gasPairs
+	return uint32(maxReports), newCtx, hashPairs, gasPairs, nil
 }
 
 // replaceIfChanged R(o, a, b) ≡ { b if a = o otherwise a (eq. 12.20 v0.7.1)
@@ -992,6 +1217,7 @@ func (a *Accumulator) ParallelDelta(
 	[]service.DeferredTransfer, // all transfers
 	ServiceHashPairSet, // accumulation outputs
 	ServiceGasPairs, // accumulation gas
+	error,
 ) {
 
 	// Get all unique service indices involved (s)
@@ -1029,20 +1255,32 @@ func (a *Accumulator) ParallelDelta(
 
 	// execute all the services in parallel
 	mu := sync.Mutex{}
-	wg := sync.WaitGroup{}
 	delta := map[block.ServiceId]AccumulationOutput{}
+	var g errgroup.Group
 
-	wg.Add(len(execSvcIds))
 	for serviceId := range execSvcIds {
-		go func(serviceId block.ServiceId) {
-			defer wg.Done()
-			output := a.Delta1(initState, transfers, workReports, alwaysAccumulate, serviceId)
+		g.Go(func() error {
+			// Delta1 can return an error in two cases:
+			// 1. Gas limit overflow: when summing gas from deferred transfers and work reports
+			//    for a service, the total gas limit exceeds uint64 max value.
+			// 2. Unsupported operand type: AccumulationInput only accepts DeferredTransfer or
+			//    AccumulationOperand;
+			output, err := a.Delta1(initState, transfers, workReports, alwaysAccumulate, serviceId)
+			if err != nil {
+				return err
+			}
+
 			mu.Lock()
 			delta[serviceId] = output
 			mu.Unlock()
-		}(serviceId)
+
+			return nil
+		})
 	}
-	wg.Wait()
+
+	if err := g.Wait(); err != nil {
+		return state.AccumulationState{}, nil, nil, nil, err
+	}
 
 	var allTransfers []service.DeferredTransfer
 	// u = [(s, ∆(s)u) | s <− s]
@@ -1133,7 +1371,7 @@ func (a *Accumulator) ParallelDelta(
 
 		PendingAuthorizersQueues: newPendingAuthorizersQueues,
 		AssignedServiceIds:       newAssignedServiceIds,
-	}, allTransfers, accumHashPairs, accumGasPairs
+	}, allTransfers, accumHashPairs, accumGasPairs, nil
 }
 
 func mapKeys[K comparable, V any](m map[K]V) map[K]struct{} {
@@ -1157,7 +1395,7 @@ func (a *Accumulator) Delta1(
 	workReports []block.WorkReport,
 	alwaysAccumulate map[block.ServiceId]uint64, // D⟨NS → NG⟩
 	serviceIndex block.ServiceId, // NS
-) AccumulationOutput {
+) (AccumulationOutput, error) {
 	// Calculate gas limit (g)
 	gasLimit := uint64(0)
 	if gas, exists := alwaysAccumulate[serviceIndex]; exists {
@@ -1168,11 +1406,16 @@ func (a *Accumulator) Delta1(
 	var operands []*state.AccumulationInput
 	for _, transfer := range transfers {
 		if transfer.ReceiverServiceIndex == serviceIndex {
-			gasLimit += transfer.GasLimit
+			var ok bool
+			gasLimit, ok = safemath.Add(gasLimit, transfer.GasLimit)
+			if !ok {
+				return AccumulationOutput{}, fmt.Errorf("gasLimit overflow in deferred transfer")
+			}
 			operand := &state.AccumulationInput{}
+			// SetValue only fails if passed an unsupported type; transfer is always DeferredTransfer.
 			err := operand.SetValue(transfer)
 			if err != nil {
-				panic(err) // if we get an error here it means this function is implemented wrong so we should panic
+				return AccumulationOutput{}, fmt.Errorf("failed to set value for transfer: %w", err)
 			}
 			operands = append(operands, operand)
 		}
@@ -1182,7 +1425,11 @@ func (a *Accumulator) Delta1(
 	for _, report := range workReports {
 		for _, result := range report.WorkDigests {
 			if result.ServiceId == serviceIndex {
-				gasLimit += result.GasLimit
+				var ok bool
+				gasLimit, ok = safemath.Add(gasLimit, result.GasLimit)
+				if !ok {
+					return AccumulationOutput{}, fmt.Errorf("gasLimit overflow in work report")
+				}
 				operand := &state.AccumulationInput{}
 				err := operand.SetValue(state.AccumulationOperand{
 					WorkPackageHash:   report.AvailabilitySpecification.WorkPackageHash,
@@ -1194,7 +1441,7 @@ func (a *Accumulator) Delta1(
 					OutputOrError:     result.Output,
 				})
 				if err != nil {
-					panic(err) // if we get an error here it means this function is implemented wrong so we should panic
+					return AccumulationOutput{}, fmt.Errorf("failed to set value for work report operand: %w", err)
 				}
 				operands = append(operands, operand)
 			}

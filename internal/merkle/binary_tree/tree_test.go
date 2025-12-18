@@ -411,4 +411,17 @@ func TestPreprocessForConstantDepth(t *testing.T) {
 				"Incorrect padded length for %d blobs", tc.numBlobs)
 		}
 	})
+	t.Run("padding_uses_zero_hash", func(t *testing.T) {
+		// 3 blobs -> pads to 4, so index 3 should be H₀
+		blobs := [][]byte{{0x01}, {0x02}, {0x03}}
+		preprocessed := preprocessForConstantDepth(blobs, testutils.MockHashData)
+
+		zeroHash := make([]byte, 32) // H₀ = [0]₃₂
+
+		// Verify padding positions contain H₀, not nil
+		assert.Equal(t, 4, len(preprocessed))
+		assert.NotNil(t, preprocessed[3], "Padding should not be nil")
+		assert.Equal(t, 32, len(preprocessed[3]), "Padding should be 32 bytes")
+		assert.Equal(t, zeroHash, preprocessed[3], "Padding should be zero hash H₀")
+	})
 }

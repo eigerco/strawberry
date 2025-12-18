@@ -191,7 +191,8 @@ func TestAccumulate(t *testing.T) {
 				newState.PrivilegedServices,
 				newState.ValidatorState.QueuedValidators,
 				newState.PendingAuthorizersQueues,
-				accumulationOutputLog, accStat = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports, preState.EntropyPool)
+				accumulationOutputLog, accStat, err = statetransition.CalculateWorkReportsAndAccumulate(header, preState, newState.TimeslotIndex, workReports, preState.EntropyPool)
+			require.NoError(t, err)
 			for id, stat := range accStat {
 				stateStat := newState.ActivityStatistics.Services[id]
 				stateStat.AccumulateCount = stat.AccumulateCount

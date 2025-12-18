@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+	"github.com/eigerco/strawberry/internal/safemath"
 
 	"fmt"
 	"io"
@@ -505,7 +506,7 @@ func (br *byteReader) decodeBytesFixedLength(dstv reflect.Value, length uint) er
 	return nil
 }
 
-// decodeBytes is used to decode with a destination of []byte
+// decodeBits is used to decode with a destination of BitSequence
 func (br *byteReader) decodeBits(dstv reflect.Value) error {
 	length, err := br.decodeLength()
 	if err != nil {
@@ -521,23 +522,33 @@ func (br *byteReader) decodeBits(dstv reflect.Value) error {
 	return nil
 }
 
-func (br *byteReader) decodeBitsFixedLength(v *BitSequence, bytesLength uint) (err error) {
-	if bytesLength > math.MaxUint32 {
-		return ErrExceedingByteArrayLimit
-	}
-	bb := make([]byte, bytesLength)
-	if _, err = br.Reader.Read(bb); err != nil {
-		return err
-	}
-	if bytesLength == 0 {
+func (br *byteReader) decodeBitsFixedLength(v *BitSequence, bitLength uint) error {
+	if bitLength == 0 {
 		return nil
 	}
-	*v = make(BitSequence, bytesLength*8)
+
+	numerator, ok := safemath.Add(bitLength, 7)
+	if !ok {
+		return safemath.ErrOverflow
+	}
+	byteLength := numerator / 8
+	if byteLength > math.MaxUint32 {
+		return ErrExceedingByteArrayLimit
+	}
+
+	bb := make([]byte, byteLength)
+	if _, err := io.ReadFull(br.Reader, bb); err != nil {
+		return err
+	}
+
+	*v = make(BitSequence, bitLength)
 	for i := range *v {
-		mod := i % 8
-		b := bb[i/8]
-		pow2 := byte(1 << mod)   // powers of 2
-		(*v)[i] = b&pow2 == pow2 // identify the bit
+		// bb[i/8]     → byte containing bit i (bits 0-7 in byte 0, bits 8-15 in byte 1, ...)
+		// i%8         → bit position within that byte (0=LSB, 7=MSB)
+		// 1<<(i%8)    → bitmask: 1,2,4,8,16,32,64,128 for positions 0-7
+		// &           → isolate that single bit
+		// != 0        → convert to bool
+		(*v)[i] = bb[i/8]&(1<<(i%8)) != 0
 	}
 	return nil
 }
@@ -573,37 +584,21 @@ func (br *byteReader) decodeFixedWidth(dstv reflect.Value, length uint) error {
 
 	switch typ.Kind() {
 	case reflect.Uint8:
-		var temp uint8
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(temp).Convert(typ))
+		dstv.Set(reflect.ValueOf(DecodeUint8(buf)).Convert(typ))
 	case reflect.Uint16:
-		var temp uint16
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(temp).Convert(typ))
+		dstv.Set(reflect.ValueOf(DecodeUint16(buf)).Convert(typ))
 	case reflect.Uint32:
-		var temp uint32
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(temp).Convert(typ))
+		dstv.Set(reflect.ValueOf(DecodeUint32(buf)).Convert(typ))
 	case reflect.Uint64:
-		var temp uint64
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(temp).Convert(typ))
+		dstv.Set(reflect.ValueOf(DecodeUint64(buf)).Convert(typ))
 	case reflect.Int8:
-		var temp uint8
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(int8(temp)).Convert(typ))
+		dstv.Set(reflect.ValueOf(int8(DecodeUint8(buf))).Convert(typ))
 	case reflect.Int16:
-		var temp uint16
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(int16(temp)).Convert(typ))
+		dstv.Set(reflect.ValueOf(int16(DecodeUint16(buf))).Convert(typ))
 	case reflect.Int32:
-		var temp uint32
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(int32(temp)).Convert(typ))
+		dstv.Set(reflect.ValueOf(int32(DecodeUint32(buf))).Convert(typ))
 	case reflect.Int64:
-		var temp uint64
-		deserializeTrivialNatural(buf, &temp)
-		dstv.Set(reflect.ValueOf(int64(temp)).Convert(typ))
+		dstv.Set(reflect.ValueOf(int64(DecodeUint64(buf))).Convert(typ))
 	default:
 		return fmt.Errorf(ErrUnsupportedType, typ)
 	}

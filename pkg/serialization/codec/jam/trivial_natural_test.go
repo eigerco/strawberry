@@ -62,20 +62,16 @@ func TestSerializationTrivialNatural(t *testing.T) {
 
 			switch v := tc.x.(type) {
 			case uint8:
-				var deserialized uint8
-				deserializeTrivialNatural(serialized, &deserialized)
+				deserialized := DecodeUint8(serialized)
 				assert.Equal(t, v, deserialized, "deserialized value mismatch")
 			case uint16:
-				var deserialized uint16
-				deserializeTrivialNatural(serialized, &deserialized)
+				deserialized := DecodeUint16(serialized)
 				assert.Equal(t, v, deserialized, "deserialized value mismatch")
 			case uint32:
-				var deserialized uint32
-				deserializeTrivialNatural(serialized, &deserialized)
+				deserialized := DecodeUint32(serialized)
 				assert.Equal(t, v, deserialized, "deserialized value mismatch")
 			case uint64:
-				var deserialized uint64
-				deserializeTrivialNatural(serialized, &deserialized)
+				deserialized := DecodeUint64(serialized)
 				assert.Equal(t, v, deserialized, "deserialized value mismatch")
 			}
 		})

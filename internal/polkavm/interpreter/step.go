@@ -49,12 +49,7 @@ func (i *Instance) step() (uint64, error) {
 		}
 
 		// νX ≡ X_lX(E−1lX (ζı+1⋅⋅⋅+lX))
-		var valueX uint64
-		err := jam.Unmarshal(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX], &valueX)
-		if err != nil {
-			return 0, err
-		}
-		valueX = sext(valueX, lenX)
+		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX]), lenX)
 		switch opcode {
 		case polkavm.Ecalli:
 			// ε = ħ × νX
@@ -69,10 +64,7 @@ func (i *Instance) step() (uint64, error) {
 		// let rA = min(12, ζı+1 mod 16), φ′A ≡ φ′rA
 		regA := min(12, i.code[i.instructionCounter+1]%16)
 		// νX ≡ E−1_8(ζı+2⋅⋅⋅+8)
-		valueX := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+10], &valueX); err != nil {
-			return 0, err
-		}
+		valueX := jam.DecodeUint64(i.code[i.instructionCounter+2 : i.instructionCounter+10])
 		switch opcode {
 		case polkavm.LoadImm64:
 			i.LoadImm64(polkavm.Reg(regA), valueX)
@@ -94,18 +86,10 @@ func (i *Instance) step() (uint64, error) {
 		}
 
 		// νX ≡ X_lX (E−1lX (ζı+2⋅⋅⋅+lX))
-		valueX := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX], &valueX); err != nil {
-			return 0, err
-		}
-		valueX = sext(valueX, lenX)
+		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
 
 		// νY ≡ XlY (E−1lY (ζı+2+lX ⋅⋅⋅+lY))
-		valueY := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY], &valueY); err != nil {
-			return 0, err
-		}
-		valueY = sext(valueY, lenY)
+		valueY := sext(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY)
 		switch opcode {
 		case polkavm.StoreImmU8:
 			return 0, i.StoreImmU8(valueX, valueY)
@@ -126,11 +110,7 @@ func (i *Instance) step() (uint64, error) {
 		}
 
 		// νX ≡ ı + Z_lX (E−1_lX(ζı+1⋅⋅⋅+lX))
-		valueX := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX], &valueX); err != nil {
-			return 0, err
-		}
-		valueX = uint64(int64(i.instructionCounter) + signed(valueX, lenX))
+		valueX := uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+1:i.instructionCounter+1+lenX]), lenX))
 
 		switch opcode {
 		case polkavm.Jump:
@@ -148,11 +128,7 @@ func (i *Instance) step() (uint64, error) {
 		regA := polkavm.Reg(min(12, i.code[i.instructionCounter+1]%16))
 
 		// νX ≡ X_lX(E−1_lX(ζı+2...+lX))
-		valueX := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX], &valueX); err != nil {
-			return 0, err
-		}
-		valueX = sext(valueX, lenX)
+		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
 
 		switch opcode {
 		case polkavm.JumpIndirect:
@@ -202,18 +178,10 @@ func (i *Instance) step() (uint64, error) {
 		}
 
 		// νX = X_lX (E−1lX (ζı+2⋅⋅⋅+lX))
-		valueX := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX], &valueX); err != nil {
-			return 0, err
-		}
-		valueX = sext(valueX, lenX)
+		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
 
 		// νY = X_lY(E−1lY (ζı+2+lX ⋅⋅⋅+lY))
-		valueY := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY], &valueY); err != nil {
-			return 0, err
-		}
-		valueY = sext(valueY, lenY)
+		valueY := sext(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY)
 
 		switch opcode {
 		case polkavm.StoreImmIndirectU8:
@@ -243,17 +211,9 @@ func (i *Instance) step() (uint64, error) {
 		}
 
 		// νX = X_lX(E−1lX (ζı+2...+lX))
-		valueX := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX], &valueX); err != nil {
-			return 0, err
-		}
-		valueX = sext(valueX, lenX)
+		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
 		// νY = ı + ZlY(E−1lY (ζı+2+lX⋅⋅⋅+lY))
-		valueY := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY], &valueY); err != nil {
-			return 0, err
-		}
-		valueY = uint64(int64(i.instructionCounter) + signed(valueY, lenY))
+		valueY := uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+2+lenX:i.instructionCounter+2+lenX+lenY]), lenY))
 
 		switch opcode {
 		case polkavm.LoadImmAndJump:
@@ -332,11 +292,7 @@ func (i *Instance) step() (uint64, error) {
 		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
 
 		// νX ≡ X_lX(E−1lX(ζı+2...+lX))
-		valueX := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX], &valueX); err != nil {
-			return 0, err
-		}
-		valueX = sext(valueX, lenX)
+		valueX := sext(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX)
 
 		switch opcode {
 		case polkavm.StoreIndirectU8:
@@ -438,11 +394,7 @@ func (i *Instance) step() (uint64, error) {
 		regB := polkavm.Reg(min(12, i.code[i.instructionCounter+1]/16))
 
 		// νX ≡ ı + Z_lX(E−1lX(ζı+2...+lX))
-		valueX := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX], &valueX); err != nil {
-			return 0, err
-		}
-		valueX = uint64(int64(i.instructionCounter) + signed(valueX, lenX))
+		valueX := uint64(int64(i.instructionCounter) + signed(jam.DecodeUint64(i.code[i.instructionCounter+2:i.instructionCounter+2+lenX]), lenX))
 
 		switch opcode {
 		case polkavm.BranchEq:
@@ -478,16 +430,9 @@ func (i *Instance) step() (uint64, error) {
 		}
 
 		// νX = X_lX(E−1lX (ζı+3⋅⋅⋅+lX))
-		valueX := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+3:i.instructionCounter+3+lenX], &valueX); err != nil {
-			return 0, err
-		}
+		valueX := jam.DecodeUint64(i.code[i.instructionCounter+3 : i.instructionCounter+3+lenX])
 		// vY = X_lY(E−1lY (ζı+3+lX ⋅⋅⋅+lY))
-		valueY := uint64(0)
-		if err := jam.Unmarshal(i.code[i.instructionCounter+3+lenX:i.instructionCounter+3+lenX+lenY], &valueY); err != nil {
-			return 0, err
-		}
-		valueY = sext(valueY, lenY)
+		valueY := sext(jam.DecodeUint64(i.code[i.instructionCounter+3+lenX:i.instructionCounter+3+lenX+lenY]), lenY)
 
 		switch opcode {
 		case polkavm.LoadImmAndJumpIndirect:

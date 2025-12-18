@@ -144,12 +144,12 @@ func TestPreimage(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			newServiceStats := statetransition.CalculateNewServiceStatistics(block.Block{
+			newServiceStats, err := statetransition.CalculateNewServiceStatistics(block.Block{
 				Extrinsic: block.Extrinsic{
 					EP: preimages,
 				},
 			}, statetransition.AccumulationStats{})
-
+			require.NoError(t, err)
 			expectedPostServiceState := mapServiceState(t, data.PostState)
 
 			require.Equal(t, expectedPostServiceState, newServiceState, "State after transition does not match expected state")

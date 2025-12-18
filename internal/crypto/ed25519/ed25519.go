@@ -3,6 +3,7 @@
 package ed25519
 
 import (
+	"bytes"
 	"io"
 
 	"crypto/ed25519"
@@ -41,4 +42,12 @@ func Sign(privateKey PrivateKey, message []byte) []byte {
 // ZIP-215 compliant verification.
 func Verify(publicKey PublicKey, message, sig []byte) bool {
 	return ed25519consensus.Verify(publicKey, message, sig)
+}
+
+// ZeroPublicKey is pre-allocated to avoid allocations in IsEmpty.
+var ZeroPublicKey = make([]byte, PublicKeySize)
+
+// IsEmpty checks if the given public key is empty or all zeros.
+func IsEmpty(pk PublicKey) bool {
+	return len(pk) == 0 || bytes.Equal(pk, ZeroPublicKey)
 }

@@ -578,15 +578,17 @@ func TestReports(t *testing.T) {
 					// Only proceed if no error in guaranteeing
 					newCoreAssignments = guaranteeing.CalculatePosteriorCoreAssignments(newBlock.Extrinsic.EG, intermediateCoreAssignments, newTimeState)
 					preState.CoreAssignments = newCoreAssignments
-					_, _, _, _, _, _, _, accumulationStats := statetransition.CalculateWorkReportsAndAccumulate(
+					_, _, _, _, _, _, _, accumulationStats, err := statetransition.CalculateWorkReportsAndAccumulate(
 						&newBlock.Header,
 						&preState,
 						newBlock.Header.TimeSlotIndex,
 						availableWorkReports,
 						preState.EntropyPool,
 					)
+					require.NoError(t, err)
 
-					newValidatorStatistics = statetransition.CalculateNewActivityStatistics(
+					// Update validator statistics
+					newValidatorStatistics, err = statetransition.CalculateNewActivityStatistics(
 						newBlock,
 						preState.TimeslotIndex,
 						preState.ActivityStatistics,
@@ -595,6 +597,7 @@ func TestReports(t *testing.T) {
 						[]block.WorkReport{},
 						accumulationStats,
 					)
+					require.NoError(t, err)
 					preState.ActivityStatistics = newValidatorStatistics
 				}
 			}

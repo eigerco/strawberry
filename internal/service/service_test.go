@@ -50,7 +50,8 @@ func TestServiceStateClone(t *testing.T) {
 		},
 	}
 
-	sa.InsertStorage(storageKey, 1, []byte("storage"))
+	err := sa.InsertStorage(storageKey, 1, []byte("storage"))
+	require.NoError(t, err)
 
 	// Original with reference types
 	original := service.ServiceState{
@@ -90,7 +91,8 @@ func TestThresholdBalanceStorage(t *testing.T) {
 
 	value := []byte("barValue")
 
-	sa.InsertStorage(key, uint64(len(originalKey)), value)
+	err = sa.InsertStorage(key, uint64(len(originalKey)), value)
+	require.NoError(t, err)
 
 	ai := uint64(1)
 	ao := uint64(34 + len(originalKey) + len(value))
@@ -98,15 +100,23 @@ func TestThresholdBalanceStorage(t *testing.T) {
 		service.AdditionalMinimumBalancePerItem*ai +
 		service.AdditionalMinimumBalancePerOctet*ao
 
-	require.Equal(t, expected, sa.ThresholdBalance())
+	thresholdBalance, err := sa.ThresholdBalance()
+	require.NoError(t, err)
+	require.Equal(t, expected, thresholdBalance)
 
 	// re‐insert - assert that neither ai nor ao changes the second time
-	sa.InsertStorage(key, uint64(len(originalKey)), []byte("fooValue"))
-	require.Equal(t, expected, sa.ThresholdBalance())
+	err = sa.InsertStorage(key, uint64(len(originalKey)), []byte("fooValue"))
+	require.NoError(t, err)
+	thresholdBalance, err = sa.ThresholdBalance()
+	require.NoError(t, err)
+	require.Equal(t, expected, thresholdBalance)
 
 	// delete
-	sa.DeleteStorage(key, uint64(len(originalKey)), uint64(len(value)))
-	require.Equal(t, uint64(service.BasicMinimumBalance), sa.ThresholdBalance())
+	err = sa.DeleteStorage(key, uint64(len(originalKey)), uint64(len(value)))
+	require.NoError(t, err)
+	thresholdBalance, err = sa.ThresholdBalance()
+	require.NoError(t, err)
+	require.Equal(t, uint64(service.BasicMinimumBalance), thresholdBalance)
 }
 
 func TestThresholdBalancePreimage(t *testing.T) {
@@ -128,17 +138,24 @@ func TestThresholdBalancePreimage(t *testing.T) {
 		service.AdditionalMinimumBalancePerItem*ai +
 		service.AdditionalMinimumBalancePerOctet*ao
 
-	require.Equal(t, expected, sa.ThresholdBalance())
+	thresholdBalance, err := sa.ThresholdBalance()
+	require.NoError(t, err)
+	require.Equal(t, expected, thresholdBalance)
 
 	// update
 	err = sa.UpdatePreimageMeta(k, service.PreimageHistoricalTimeslots{jamtime.Timeslot(100)})
 	require.NoError(t, err)
 	// threshold balance remains unchanged
-	require.Equal(t, expected, sa.ThresholdBalance())
+	thresholdBalance, err = sa.ThresholdBalance()
+	require.NoError(t, err)
+	require.Equal(t, expected, thresholdBalance)
 
 	// delete
-	sa.DeletePreimageMeta(k, uint64(len(preimage)))
-	require.Equal(t, uint64(service.BasicMinimumBalance), sa.ThresholdBalance())
+	err = sa.DeletePreimageMeta(k, uint64(len(preimage)))
+	require.NoError(t, err)
+	thresholdBalance, err = sa.ThresholdBalance()
+	require.NoError(t, err)
+	require.Equal(t, uint64(service.BasicMinimumBalance), thresholdBalance)
 }
 
 func TestThresholdBalanceCombinedInserts(t *testing.T) {
@@ -150,7 +167,8 @@ func TestThresholdBalanceCombinedInserts(t *testing.T) {
 	key, err := statekey.NewStorage(serviceID, originalKey)
 	require.NoError(t, err)
 	value := []byte("v")
-	sa.InsertStorage(key, uint64(len(originalKey)), value)
+	err = sa.InsertStorage(key, uint64(len(originalKey)), value)
+	require.NoError(t, err)
 
 	preimage := []byte("preimage")
 	h := crypto.HashData(preimage)
@@ -170,9 +188,13 @@ func TestThresholdBalanceCombinedInserts(t *testing.T) {
 		service.AdditionalMinimumBalancePerOctet*(uint64(34+1+1)+uint64(81+len(preimage))) -
 		sa.GratisStorageOffset
 
-	require.Equal(t, expected, sa.ThresholdBalance())
+	thresholdBalance, err := sa.ThresholdBalance()
+	require.NoError(t, err)
+	require.Equal(t, expected, thresholdBalance)
 
 	// test with a large gratis storage
 	sa.GratisStorageOffset = 100000000
-	require.Equal(t, uint64(0), sa.ThresholdBalance())
+	thresholdBalance, err = sa.ThresholdBalance()
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), thresholdBalance)
 }

@@ -191,8 +191,9 @@ func TestStatistics(t *testing.T) {
 				}
 			}
 
-			preState.ActivityStatistics = statetransition.CalculateNewActivityStatistics(newBlock, preState.TimeslotIndex, preState.ActivityStatistics, reporters, preState.ValidatorState.CurrentValidators,
+			preState.ActivityStatistics, err = statetransition.CalculateNewActivityStatistics(newBlock, preState.TimeslotIndex, preState.ActivityStatistics, reporters, preState.ValidatorState.CurrentValidators,
 				[]block.WorkReport{}, statetransition.AccumulationStats{})
+			require.NoError(t, err)
 
 			postState := mapStatisticsState(tc.PostState)
 

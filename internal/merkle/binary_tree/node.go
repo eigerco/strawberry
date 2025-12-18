@@ -17,7 +17,7 @@ func ComputeNode(blobs [][]byte, hashFunc func([]byte) crypto.Hash) []byte {
 	}
 
 	// Otherwise, compute the recursive hash combination
-	mid := (len(blobs) + 1) / 2 // ⌈|v|/2⌉ (ceiling division)
+	mid := len(blobs) - len(blobs)/2 // ⌈|v|/2⌉ (ceiling division)
 	left := ComputeNode(blobs[:mid], hashFunc)
 	right := ComputeNode(blobs[mid:], hashFunc)
 

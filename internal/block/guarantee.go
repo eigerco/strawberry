@@ -7,6 +7,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -205,10 +206,18 @@ func (w WorkReport) OutputSizeIsValid() bool {
 	totalOutputSize := 0
 	for _, result := range w.WorkDigests {
 		if result.IsSuccessful() {
-			totalOutputSize += len(result.Output.Inner.([]byte))
+			sum, ok := safemath.Add(totalOutputSize, len(result.Output.Inner.([]byte)))
+			if !ok {
+				return false
+			}
+			totalOutputSize = sum
 		}
 	}
-	totalOutputSize += len(w.AuthorizerTrace)
+	sum, ok := safemath.Add(totalOutputSize, len(w.AuthorizerTrace))
+	if !ok {
+		return false
+	}
+	totalOutputSize = sum
 
 	return totalOutputSize <= common.MaxWorkPackageSizeBytes
 }

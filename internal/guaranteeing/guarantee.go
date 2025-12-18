@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"maps"
-	"math"
 	"slices"
 
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
@@ -14,6 +13,7 @@ import (
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
+	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
@@ -159,10 +159,14 @@ func DetermineValidatorsAndDataForPermutation(
 		validators = currentValidators
 	} else { // ⌊τ'/R⌋ ≠ ⌊t/R⌋ → use M*
 		// Eq. 11.22: M* ≡ (P(e, τ' - R), Φ(k))
-		timeslotForPermutation = newTimeslot - jamtime.ValidatorRotationPeriod
+		var ok bool
+		timeslotForPermutation, ok = safemath.Sub(newTimeslot, jamtime.ValidatorRotationPeriod)
+		if !ok {
+			return safrole.ValidatorsData{}, crypto.Hash{}, 0, errors.New("timeslot underflow")
+		}
 
 		currentEpochIndex := newTimeslot / jamtime.TimeslotsPerEpoch
-		previousRotationEpochIndex := (newTimeslot - jamtime.ValidatorRotationPeriod) / jamtime.TimeslotsPerEpoch
+		previousRotationEpochIndex := timeslotForPermutation / jamtime.TimeslotsPerEpoch
 
 		if currentEpochIndex == previousRotationEpochIndex { // ⌊(τ'-R)/E⌋ = ⌊τ'/E⌋
 			// (e,k) = (η₂', κ')
@@ -175,11 +179,7 @@ func DetermineValidatorsAndDataForPermutation(
 		}
 	}
 
-	validators, nullifiedKeys := validator.NullifyOffenders(validators, offendingValidators)
-	// If a banned validator was found to have participated, return an error
-	if len(nullifiedKeys) > 0 {
-		return safrole.ValidatorsData{}, crypto.Hash{}, 0, errors.New("banned validator")
-	}
+	validators, _ = validator.NullifyOffenders(validators, offendingValidators)
 	return validators, entropy, timeslotForPermutation, nil
 }
 
@@ -249,7 +249,6 @@ func verifySignatures(ge block.GuaranteesExtrinsic, validatorState validator.Val
 			validatorState.ArchivedValidators,
 		)
 
-		// If a banned validator was found to have participated, return an error
 		if err != nil {
 			return reporters, err
 		}
@@ -267,11 +266,15 @@ func verifySignatures(ge block.GuaranteesExtrinsic, validatorState validator.Val
 		message := append([]byte(state.SignatureContextGuarantee), reportHash[:]...)
 
 		for _, c := range g.Credentials {
+			validatorKey := validators[c.ValidatorIndex].Ed25519
+			// If a banned validator was found to have participated, return an error
+			if ed25519.IsEmpty(validatorKey) {
+				return reporters, errors.New("banned validator")
+			}
 			if !isValidatorAssignedToCore(c.ValidatorIndex, g.WorkReport.CoreIndex, coreAssignments) {
 				log.Printf("Validator %d not assigned to core %d", c.ValidatorIndex, g.WorkReport.CoreIndex)
 				return reporters, errors.New("wrong assignment")
 			}
-			validatorKey := validators[c.ValidatorIndex].Ed25519
 			// Verify signature
 			sigValid := ed25519.Verify(validatorKey, message, c.Signature[:])
 			if !sigValid {
@@ -326,19 +329,20 @@ func verifyAuth(ge block.GuaranteesExtrinsic, cap state.CoreAuthorizersPool) err
 func validateGasLimits(ge block.GuaranteesExtrinsic, services service.ServiceState) error {
 	for i, g := range ge.Guarantees {
 		totalGas := uint64(0)
-		for _, r := range g.WorkReport.WorkDigests {
+		for j, r := range g.WorkReport.WorkDigests {
 			service, exists := services[r.ServiceId]
 			if !exists {
 				return errors.New("bad service id")
-			}
-			if totalGas > math.MaxUint64-r.GasLimit {
-				return fmt.Errorf("guarantee %d: gas overflow detected", i)
 			}
 			// Check minimum gas requirement: rg ≥ δ[rs]g
 			if r.GasLimit < service.GasLimitForAccumulator {
 				return fmt.Errorf("service item gas too low")
 			}
-			totalGas += r.GasLimit
+			var ok bool
+			totalGas, ok = safemath.Add(totalGas, r.GasLimit)
+			if !ok {
+				return fmt.Errorf("guarantee %d, work digest %d: gas overflow detected", i, j)
+			}
 		}
 
 		// Check total gas limit: ∑(r∈wr) rg ≤ GA

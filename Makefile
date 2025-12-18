@@ -60,7 +60,7 @@ test: build-bandersnatch build-erasurecoding
 
 .PHONY: integration-tiny
 ## integration: Runs integration tests with tiny configuration.
-integration: build-bandersnatch build-erasurecoding
+integration-tiny: build-bandersnatch build-erasurecoding
 	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=tiny,integration
 
 .PHONY: integration-full
@@ -68,9 +68,9 @@ integration: build-bandersnatch build-erasurecoding
 integration-full: build-bandersnatch build-erasurecoding
 	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=full,integration
 
-.PHONY: traces
+.PHONY: traces-tiny
 ## traces: Runs traces tests.
-traces: build-bandersnatch build-erasurecoding
+traces-tiny: build-bandersnatch build-erasurecoding
 	go test ./tests/... $(DARWIN_TEST_GOFLAGS) --tags=tiny,traces
 
 ## install-hooks: Install git-hooks from .githooks directory.
@@ -92,3 +92,14 @@ build-conformance: build-bandersnatch build-erasurecoding
 ## run-target: Runs the conformance target with socket /tmp/jam_target.sock
 run-target:
 	./pkg/conformance/bin/strawberry --socket /tmp/jam_target.sock
+
+.PHONY: bench
+## bench: Runs a specific benchmark test. 
+## Usage: make bench NAME=<BenchTestName> eg.NAME=BenchmarkTraceFallback
+## Designed to run for one set of traces, eg fallback, safrole, not mixed together. (or single traces)
+bench: build-bandersnatch build-erasurecoding
+  ifndef NAME
+	  $(error NAME is required. Usage: make bench NAME=<BenchTestName>)
+  endif
+	go test -bench=^$(NAME)$$ ./tests/integration --tags=traces,tiny | tee benchmark_results.txt
+	python3 bench-stats.py benchmark_results.txt
