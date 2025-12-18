@@ -1,12 +1,11 @@
-package interpreter
+package pvm
 
 import (
-	"github.com/eigerco/strawberry/internal/polkavm"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.UGas, regs polkavm.Registers, memory polkavm.Memory) (*Instance, error) {
-	code, bitmask, jumpTable, err := polkavm.Deblob(program)
+func Instantiate(program []byte, instructionOffset uint64, gasLimit UGas, regs Registers, memory Memory) (*Instance, error) {
+	code, bitmask, jumpTable, err := Deblob(program)
 	if err != nil {
 		return nil, err
 	}
@@ -15,8 +14,8 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.UGas
 	basicBlockInstructions := map[uint64]struct{}{0: {}}
 
 	for i, b := range bitmask {
-		if b && polkavm.Opcode(code[i]).IsBasicBlockTermination() {
-			basicBlockInstructions[uint64(i)+1+polkavm.Skip(uint64(i), bitmask)] = struct{}{}
+		if b && Opcode(code[i]).IsBasicBlockTermination() {
+			basicBlockInstructions[uint64(i)+1+Skip(uint64(i), bitmask)] = struct{}{}
 		}
 	}
 
@@ -24,7 +23,7 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.UGas
 		memory:                 memory,
 		regs:                   regs,
 		instructionCounter:     instructionOffset,
-		gasRemaining:           polkavm.Gas(gasLimit),
+		gasRemaining:           Gas(gasLimit),
 		code:                   code,
 		jumpTable:              jumpTable,
 		bitmask:                append(bitmask, true), // k ⌢ [1, 1, ... ]
@@ -34,10 +33,10 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit polkavm.UGas
 }
 
 type Instance struct {
-	memory                 polkavm.Memory      // The memory sequence; a member of the set M (μ)
-	regs                   polkavm.Registers   // The registers (φ)
+	memory                 Memory              // The memory sequence; a member of the set M (μ)
+	regs                   Registers           // The registers (φ)
 	instructionCounter     uint64              // The instruction counter (ı)
-	gasRemaining           polkavm.Gas         // The gas counter (ϱ). For single step and basic invocation use Z_G (int64) according to GP the gas result can be negative
+	gasRemaining           Gas                 // The gas counter (ϱ). For single step and basic invocation use Z_G (int64) according to GP the gas result can be negative
 	code                   []byte              // ζ
 	jumpTable              []uint64            // j
 	bitmask                jam.BitSequence     // k
@@ -48,7 +47,7 @@ type Instance struct {
 }
 
 type instructionCache struct {
-	reg [3]polkavm.Reg
+	reg [3]Reg
 	val [2]uint64
 }
 
@@ -57,9 +56,9 @@ func (i *Instance) skip() {
 	i.instructionCounter += 1 + i.skipLen
 }
 
-func (i *Instance) deductGas(cost polkavm.Gas) error {
+func (i *Instance) deductGas(cost Gas) error {
 	if i.gasRemaining < cost {
-		return polkavm.ErrOutOfGas
+		return ErrOutOfGas
 	}
 	i.gasRemaining -= cost
 	return nil
@@ -130,7 +129,7 @@ func (i *Instance) store(address uint64, v any) error {
 	return nil
 }
 
-func (i *Instance) setAndSkip(dst polkavm.Reg, value uint64) {
+func (i *Instance) setAndSkip(dst Reg, value uint64) {
 	i.regs[dst] = value
 	i.skip()
 }
@@ -140,7 +139,7 @@ func (i *Instance) branch(condition bool, target uint64) error {
 	if condition {
 		// (☇, ı) if b ∉ ϖ
 		if _, ok := i.basicBlockInstructions[target]; !ok {
-			return polkavm.ErrPanicf("indirect jump to non-block-termination instruction target=%d opcode=%d", target, i.code[target])
+			return ErrPanicf("indirect jump to non-block-termination instruction target=%d opcode=%d", target, i.code[target])
 		}
 		// (▸, b) otherwise
 		i.instructionCounter = target
@@ -154,19 +153,19 @@ func (i *Instance) branch(condition bool, target uint64) error {
 // djump (a) =⇒ (ε, ı′) (eq. A.18 v0.7.2)
 func (i *Instance) djump(address uint32) error {
 	// (∎, ı) if a = 2^32 − 2^16
-	if address == polkavm.AddressReturnToHost {
-		return polkavm.ErrHalt
+	if address == AddressReturnToHost {
+		return ErrHalt
 	}
 
 	// (☇, ı) if a = 0 ∨ a > |j| ⋅ ZA ∨ a mod ZA ≠ 0
-	if address == 0 || int(address) > len(i.jumpTable)*polkavm.DynamicAddressAlignment || address%polkavm.DynamicAddressAlignment != 0 {
-		return polkavm.ErrPanicf("indirect jump to address %v invalid", address)
+	if address == 0 || int(address) > len(i.jumpTable)*DynamicAddressAlignment || address%DynamicAddressAlignment != 0 {
+		return ErrPanicf("indirect jump to address %v invalid", address)
 	}
 
 	// (☇, ı) if j_(a/ZA)−1 j+(a/ZA)−1 ∉ ϖ
-	instructionOffset := i.jumpTable[(address/polkavm.DynamicAddressAlignment)-1]
+	instructionOffset := i.jumpTable[(address/DynamicAddressAlignment)-1]
 	if _, ok := i.basicBlockInstructions[instructionOffset]; !ok {
-		return polkavm.ErrPanicf("indirect jump to address %v is non block-termination instruction", address)
+		return ErrPanicf("indirect jump to address %v is non block-termination instruction", address)
 	}
 
 	// (▸, j_(a/ZA)−1) otherwise

@@ -3,7 +3,7 @@ package host_call
 import (
 	"math"
 
-	. "github.com/eigerco/strawberry/internal/polkavm"
+	. "github.com/eigerco/strawberry/internal/pvm"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 

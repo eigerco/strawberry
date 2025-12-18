@@ -12,8 +12,8 @@ import (
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
-	"github.com/eigerco/strawberry/internal/polkavm"
-	"github.com/eigerco/strawberry/internal/polkavm/host_call"
+	"github.com/eigerco/strawberry/internal/pvm"
+	"github.com/eigerco/strawberry/internal/pvm/host_call"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/work"
@@ -35,15 +35,15 @@ func (m *MockPreimageFetcher) FetchPreimage(hash crypto.Hash) ([]byte, error) {
 const initialGas = 100
 
 func TestHistoricalLookup(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
 	}
 
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	serviceId := block.ServiceId(1)
@@ -69,22 +69,22 @@ func TestHistoricalLookup(t *testing.T) {
 		serviceId: sa,
 	}
 
-	ho := polkavm.RWAddressBase
-	bo := polkavm.RWAddressBase + 100
+	ho := pvm.RWAddressBase
+	bo := pvm.RWAddressBase + 100
 	offset := uint64(0)
 	length := uint64(len(preimage))
 
-	initialRegs[polkavm.A0] = uint64(serviceId)
-	initialRegs[polkavm.A1] = uint64(ho)
-	initialRegs[polkavm.A2] = uint64(bo)
-	initialRegs[polkavm.A3] = offset
-	initialRegs[polkavm.A4] = length
+	initialRegs[pvm.A0] = uint64(serviceId)
+	initialRegs[pvm.A1] = uint64(ho)
+	initialRegs[pvm.A2] = uint64(bo)
+	initialRegs[pvm.A3] = offset
+	initialRegs[pvm.A4] = length
 
 	err = mem.Write(uint32(ho), hashKey[:])
 	require.NoError(t, err)
 
-	ctxPair := polkavm.RefineContextPair{
-		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
+	ctxPair := pvm.RefineContextPair{
+		IntegratedPVMMap: make(map[uint64]pvm.IntegratedPVM),
 		Segments:         []work.Segment{},
 	}
 
@@ -104,35 +104,35 @@ func TestHistoricalLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, preimage, actualValue)
-	assert.Equal(t, uint64(len(preimage)), regsOut[polkavm.A0])
+	assert.Equal(t, uint64(len(preimage)), regsOut[pvm.A0])
 
-	assert.Equal(t, polkavm.Gas(90), gasRemaining)
+	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }
 
 func TestExport(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
 	}
 
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	dataToExport := []byte("export_data")
-	p := polkavm.RWAddressBase
+	p := pvm.RWAddressBase
 
 	err = mem.Write(uint32(p), dataToExport)
 	require.NoError(t, err)
 
 	exportOffset := uint64(10)
 
-	initialRegs[polkavm.A0] = uint64(p)
-	initialRegs[polkavm.A1] = uint64(len(dataToExport))
+	initialRegs[pvm.A0] = uint64(p)
+	initialRegs[pvm.A1] = uint64(len(dataToExport))
 
-	ctxPair := polkavm.RefineContextPair{
+	ctxPair := pvm.RefineContextPair{
 		Segments: []work.Segment{},
 	}
 
@@ -145,7 +145,7 @@ func TestExport(t *testing.T) {
 	)
 	require.NoError(t, err)
 	// We expect φ7 = ς + |e| = 10 + 1 = 11
-	assert.Equal(t, exportOffset+1, regsOut[polkavm.A0])
+	assert.Equal(t, exportOffset+1, regsOut[pvm.A0])
 
 	require.Len(t, ctxPair.Segments, 1)
 	seg := ctxPair.Segments[0]
@@ -153,35 +153,35 @@ func TestExport(t *testing.T) {
 	copy(expectedSegment, dataToExport)
 	assert.Equal(t, expectedSegment, seg[:])
 
-	assert.Equal(t, polkavm.Gas(90), gasRemaining)
+	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }
 
 func TestMachine(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
 	}
 
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	p := []byte{0, 0, 3, 8, 135, 9, 1}
-	po := polkavm.RWAddressBase
+	po := pvm.RWAddressBase
 	pz := len(p)
 	i := uint64(42)
 
 	err = mem.Write(uint32(po), p)
 	require.NoError(t, err)
 
-	initialRegs[polkavm.A0] = uint64(po)
-	initialRegs[polkavm.A1] = uint64(pz)
-	initialRegs[polkavm.A2] = i
+	initialRegs[pvm.A0] = uint64(po)
+	initialRegs[pvm.A1] = uint64(pz)
+	initialRegs[pvm.A2] = i
 
-	ctxPair := polkavm.RefineContextPair{
-		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
+	ctxPair := pvm.RefineContextPair{
+		IntegratedPVMMap: make(map[uint64]pvm.IntegratedPVM),
 		Segments:         []work.Segment{},
 	}
 
@@ -193,7 +193,7 @@ func TestMachine(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(0), regsOut[polkavm.A0])
+	assert.Equal(t, uint64(0), regsOut[pvm.A0])
 
 	require.Len(t, ctxPair.IntegratedPVMMap, 1)
 	vm, exists := ctxPair.IntegratedPVMMap[0]
@@ -202,28 +202,28 @@ func TestMachine(t *testing.T) {
 	assert.Equal(t, p, vm.Code)
 	assert.Equal(t, uint64(i), vm.InstructionCounter)
 
-	assert.Equal(t, polkavm.Gas(90), gasRemaining)
+	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }
 
 func TestPeek(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
 	}
 
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	n := uint64(0)
-	o := polkavm.RWAddressBase + 100
+	o := pvm.RWAddressBase + 100
 	z := uint64(1)
 
 	uData := []byte("data_for_peek")
 
-	uDataBase := polkavm.RWAddressBase
+	uDataBase := pvm.RWAddressBase
 	require.True(t, uDataBase+uint64(len(uData)) < math.MaxUint32)
 
 	err = mem.Write(uint32(uDataBase), uData)
@@ -231,23 +231,23 @@ func TestPeek(t *testing.T) {
 
 	s := uint64(uDataBase) + 10
 
-	u := polkavm.IntegratedPVM{
+	u := pvm.IntegratedPVM{
 		Code:               nil,
 		Ram:                mem,
 		InstructionCounter: 0,
 	}
 
-	ctxPair := polkavm.RefineContextPair{
-		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{
+	ctxPair := pvm.RefineContextPair{
+		IntegratedPVMMap: map[uint64]pvm.IntegratedPVM{
 			n: u,
 		},
 		Segments: []work.Segment{},
 	}
 
-	initialRegs[polkavm.A0] = n
-	initialRegs[polkavm.A1] = uint64(o)
-	initialRegs[polkavm.A2] = s
-	initialRegs[polkavm.A3] = z
+	initialRegs[pvm.A0] = n
+	initialRegs[pvm.A1] = uint64(o)
+	initialRegs[pvm.A2] = s
+	initialRegs[pvm.A3] = z
 
 	gasRemaining, regsOut, memOut, _, err := host_call.Peek(
 		initialGas,
@@ -257,7 +257,7 @@ func TestPeek(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
+	assert.Equal(t, uint64(host_call.OK), regsOut[pvm.A0])
 
 	actualValue := make([]byte, z)
 	err = memOut.Read(uint32(o), actualValue)
@@ -268,24 +268,24 @@ func TestPeek(t *testing.T) {
 	expectedValue := uData[startOffset:endOffset]
 	assert.Equal(t, expectedValue, actualValue)
 
-	assert.Equal(t, polkavm.Gas(90), gasRemaining)
+	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }
 
 func TestPoke(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
 	}
 
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	n := uint64(0)
-	s := uint64(polkavm.RWAddressBase) + 100
-	o := uint64(polkavm.RWAddressBase) + 200
+	s := uint64(pvm.RWAddressBase) + 100
+	o := uint64(pvm.RWAddressBase) + 200
 	z := uint64(4)
 
 	sourceData := []byte("data_for_poke")
@@ -293,23 +293,23 @@ func TestPoke(t *testing.T) {
 	err = mem.Write(uint32(s), sourceData)
 	require.NoError(t, err)
 
-	u := polkavm.IntegratedPVM{
+	u := pvm.IntegratedPVM{
 		Code:               nil,
 		Ram:                mem,
 		InstructionCounter: 0,
 	}
 
-	ctxPair := polkavm.RefineContextPair{
-		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{
+	ctxPair := pvm.RefineContextPair{
+		IntegratedPVMMap: map[uint64]pvm.IntegratedPVM{
 			n: u,
 		},
 		Segments: []work.Segment{},
 	}
 
-	initialRegs[polkavm.A0] = n
-	initialRegs[polkavm.A1] = s
-	initialRegs[polkavm.A2] = o
-	initialRegs[polkavm.A3] = z
+	initialRegs[pvm.A0] = n
+	initialRegs[pvm.A1] = s
+	initialRegs[pvm.A2] = o
+	initialRegs[pvm.A3] = z
 
 	gasRemaining, regsOut, _, _, err := host_call.Poke(
 		initialGas,
@@ -319,7 +319,7 @@ func TestPoke(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
+	assert.Equal(t, uint64(host_call.OK), regsOut[pvm.A0])
 
 	actual := make([]byte, z)
 	vm := ctxPair.IntegratedPVMMap[n]
@@ -328,12 +328,12 @@ func TestPoke(t *testing.T) {
 	expected := sourceData[:z]
 	assert.Equal(t, expected, actual)
 
-	assert.Equal(t, polkavm.Gas(90), gasRemaining)
+	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }
 
 func TestPages_Modes(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 100,
@@ -343,45 +343,45 @@ func TestPages_Modes(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		mode       uint64
-		wantAccess polkavm.MemoryAccess
+		wantAccess pvm.MemoryAccess
 		wantZeroed bool
 	}{
 		{
 			name:       "mode_0", // Inaccessible
 			mode:       0,
-			wantAccess: polkavm.Inaccessible,
+			wantAccess: pvm.Inaccessible,
 			wantZeroed: true,
 		},
 		{
 			name:       "mode_1", // ReadOnly
 			mode:       1,
-			wantAccess: polkavm.ReadOnly,
+			wantAccess: pvm.ReadOnly,
 			wantZeroed: true,
 		},
 		{
 			name:       "mode_2", // ReadWrite
 			mode:       2,
-			wantAccess: polkavm.ReadWrite,
+			wantAccess: pvm.ReadWrite,
 			wantZeroed: true,
 		},
 		{
 			name:       "mode_3", // ReadOnly
 			mode:       3,
-			wantAccess: polkavm.ReadOnly,
+			wantAccess: pvm.ReadOnly,
 			wantZeroed: false,
 		},
 		{
 			name:       "mode_4", // ReadWrite
 			mode:       4,
-			wantAccess: polkavm.ReadWrite,
+			wantAccess: pvm.ReadWrite,
 			wantZeroed: false,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+			mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 			require.NoError(t, err)
 
-			innerMem, _, err := polkavm.InitializeStandardProgram(pp, nil)
+			innerMem, _, err := pvm.InitializeStandardProgram(pp, nil)
 			require.NoError(t, err)
 
 			p := uint64(32)
@@ -389,8 +389,8 @@ func TestPages_Modes(t *testing.T) {
 
 			// Pre-fill target pages with known values for zeroing check
 			for pageIndex := p; pageIndex < p+c; pageIndex++ {
-				start := pageIndex * uint64(polkavm.PageSize)
-				buf := make([]byte, polkavm.PageSize)
+				start := pageIndex * uint64(pvm.PageSize)
+				buf := make([]byte, pvm.PageSize)
 				for i := range buf {
 					buf[i] = 0xAB
 				}
@@ -399,14 +399,14 @@ func TestPages_Modes(t *testing.T) {
 			}
 
 			n := uint64(0)
-			ctxPair := polkavm.RefineContextPair{
-				IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{n: {Ram: innerMem}},
+			ctxPair := pvm.RefineContextPair{
+				IntegratedPVMMap: map[uint64]pvm.IntegratedPVM{n: {Ram: innerMem}},
 			}
 
-			initialRegs[polkavm.A0] = n
-			initialRegs[polkavm.A1] = p
-			initialRegs[polkavm.A2] = c
-			initialRegs[polkavm.A3] = tc.mode
+			initialRegs[pvm.A0] = n
+			initialRegs[pvm.A1] = p
+			initialRegs[pvm.A2] = c
+			initialRegs[pvm.A3] = tc.mode
 
 			gasRemaining, regsOut, _, _, err := host_call.Pages(
 				initialGas,
@@ -415,7 +415,7 @@ func TestPages_Modes(t *testing.T) {
 				ctxPair,
 			)
 			require.NoError(t, err)
-			require.Equal(t, uint64(host_call.OK), regsOut[polkavm.A0])
+			require.Equal(t, uint64(host_call.OK), regsOut[pvm.A0])
 
 			innerPVMRam := ctxPair.IntegratedPVMMap[n].Ram
 			for pageIndex := p; pageIndex < p+c; pageIndex++ {
@@ -423,21 +423,21 @@ func TestPages_Modes(t *testing.T) {
 				assert.Equal(t, tc.wantAccess, access)
 			}
 
-			assert.Equal(t, polkavm.Gas(90), gasRemaining)
+			assert.Equal(t, pvm.Gas(90), gasRemaining)
 		})
 	}
 }
 
 func TestInvoke(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
 	}
 
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	bb, err := jam.Marshal([14]uint64{
@@ -458,29 +458,29 @@ func TestInvoke(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	addr := polkavm.RWAddressBase
+	addr := pvm.RWAddressBase
 	if err := mem.Write(uint32(addr), bb); err != nil {
 		t.Fatal(err)
 	}
 
 	pvmKey := uint64(0)
 
-	ctxPair := polkavm.RefineContextPair{
-		IntegratedPVMMap: map[uint64]polkavm.IntegratedPVM{pvmKey: {
+	ctxPair := pvm.RefineContextPair{
+		IntegratedPVMMap: map[uint64]pvm.IntegratedPVM{pvmKey: {
 			Code:               addInstrProgram,
-			Ram:                polkavm.Memory{}, // we don't use memory in tests yet
+			Ram:                pvm.Memory{}, // we don't use memory in tests yet
 			InstructionCounter: 0,
 		}},
 	}
 
-	initialRegs[polkavm.A0] = pvmKey
-	initialRegs[polkavm.A1] = uint64(addr)
+	initialRegs[pvm.A0] = pvmKey
+	initialRegs[pvm.A1] = uint64(addr)
 
 	gasRemaining, regsOut, _, _, err := host_call.Invoke(initialGas, initialRegs, mem, ctxPair)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(host_call.PANIC), regsOut[polkavm.A0])
+	assert.Equal(t, uint64(host_call.PANIC), regsOut[pvm.A0])
 
-	assert.Equal(t, polkavm.Gas(90), gasRemaining)
+	assert.Equal(t, pvm.Gas(90), gasRemaining)
 
 	invokeResult := make([]byte, 112)
 	err = mem.Read(uint32(addr), invokeResult)
@@ -498,29 +498,29 @@ func TestInvoke(t *testing.T) {
 var addInstrProgram = []byte{0, 0, 3, 190, 135, 9, 1} // copied from the future testvectors :P
 
 func TestExpunge(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
 	}
 
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	n, ic := uint64(7), uint64(42)
 
-	ctxPair := polkavm.RefineContextPair{
-		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
+	ctxPair := pvm.RefineContextPair{
+		IntegratedPVMMap: make(map[uint64]pvm.IntegratedPVM),
 	}
 
-	ctxPair.IntegratedPVMMap[n] = polkavm.IntegratedPVM{
+	ctxPair.IntegratedPVMMap[n] = pvm.IntegratedPVM{
 		Ram:                mem,
 		InstructionCounter: ic,
 	}
 
-	initialRegs[polkavm.A0] = n
+	initialRegs[pvm.A0] = n
 
 	gasRemaining, regsOut, _, _, err := host_call.Expunge(
 		initialGas,
@@ -529,7 +529,7 @@ func TestExpunge(t *testing.T) {
 		ctxPair,
 	)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(ic), regsOut[polkavm.A0])
+	assert.Equal(t, uint64(ic), regsOut[pvm.A0])
 
-	assert.Equal(t, polkavm.Gas(90), gasRemaining)
+	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }

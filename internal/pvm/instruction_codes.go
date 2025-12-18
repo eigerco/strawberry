@@ -1,4 +1,4 @@
-package polkavm
+package pvm
 
 // A.5.1. Instructions without Arguments
 const (

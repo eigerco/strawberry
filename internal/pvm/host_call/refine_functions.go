@@ -8,8 +8,7 @@ import (
 	"github.com/eigerco/strawberry/internal/common"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
-	. "github.com/eigerco/strawberry/internal/polkavm"
-	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
+	. "github.com/eigerco/strawberry/internal/pvm"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -356,11 +355,11 @@ func Invoke(
 		ctxPair.IntegratedPVMMap[pvmKey] = pvm
 	}
 
-	i, err := interpreter.Instantiate(pvm.Code, pvm.InstructionCounter, invokeGas, invokeRegs, pvm.Ram)
+	i, err := Instantiate(pvm.Code, pvm.InstructionCounter, invokeGas, invokeRegs, pvm.Ram)
 	if err != nil {
 		return gas, withCode(regs, PANIC), mem, ctxPair, nil
 	}
-	hostCall, invokeErr := interpreter.Invoke(i)
+	hostCall, invokeErr := InvokeBasic(i)
 	resultInstr, resultGas, resultRegs, resultMem := i.Results()
 	bb, err := jam.Marshal([14]uint64(append([]uint64{uint64(resultGas)}, resultRegs[:]...)))
 	if err != nil {

@@ -1,4 +1,4 @@
-package polkavm
+package pvm
 
 import (
 	"errors"
