@@ -44,6 +44,7 @@ type Instance struct {
 
 	skipLen           uint64
 	instructionsCache []*instructionCache
+	loadBuf           [8]byte // reusable buffer for load operations
 }
 
 type instructionCache struct {
@@ -66,7 +67,7 @@ func (i *Instance) deductGas(cost Gas) error {
 
 // load E−1_n(μ↺_{a...+n}) where a is address and n is length
 func (i *Instance) load(address uint64, length int, v any) error {
-	slice := make([]byte, length)
+	slice := i.loadBuf[:length]
 	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
