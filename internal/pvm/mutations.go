@@ -58,7 +58,7 @@ func (i *Instance) LoadImm(dst Reg, imm uint64) {
 
 // LoadU8 load_u8 φ′A = μ↺_νX
 func (i *Instance) LoadU8(dst Reg, address uint64) error {
-	slice := make([]byte, 1)
+	slice := i.loadBuf[:1]
 	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func (i *Instance) LoadU8(dst Reg, address uint64) error {
 
 // LoadI8 load_i8 φ′A = X1(μ↺_νX)
 func (i *Instance) LoadI8(dst Reg, address uint64) error {
-	slice := make([]byte, 1)
+	slice := i.loadBuf[:1]
 	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
@@ -314,7 +314,7 @@ func (i *Instance) StoreIndirectU64(src Reg, base Reg, offset uint64) error {
 
 // LoadIndirectU8 load_ind_u8 φ′A = μ↺_{φB+νX}
 func (i *Instance) LoadIndirectU8(dst Reg, base Reg, offset uint64) error {
-	slice := make([]byte, 1)
+	slice := i.loadBuf[:1]
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
@@ -324,7 +324,7 @@ func (i *Instance) LoadIndirectU8(dst Reg, base Reg, offset uint64) error {
 
 // LoadIndirectI8 load_ind_i8 φ′A = Z−1_8(Z1(μ↺_{φB+νX}))
 func (i *Instance) LoadIndirectI8(dst Reg, base Reg, offset uint64) error {
-	slice := make([]byte, 1)
+	slice := i.loadBuf[:1]
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
