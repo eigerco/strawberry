@@ -80,9 +80,11 @@ func runTraceBenchmark(b *testing.B, conn net.Conn, filename string) {
 		Block: trace.Block,
 	}))
 	require.NoError(b, err)
+
+	b.ResetTimer() // Wipes the "setup" time and allocations.
+	b.StopTimer()
 	for i := 0; i < b.N; i++ {
 		// Create the Initialize message (Prestate)
-
 		// Send the Initialize message
 		err = handlers.WriteMessageWithContext(ctx, conn, initMsgBytes)
 		require.NoError(b, err)
@@ -159,7 +161,7 @@ func runTracesBenchmark(b *testing.B, directory string) {
 	}
 	initMsg := conformance.NewMessage(initMessage)
 	initMsgBytes, err := jam.Marshal(initMsg)
-
+	require.NoError(b, err)
 	// Send the Initialize genesis message
 	err = handlers.WriteMessageWithContext(ctx, conn, initMsgBytes)
 	require.NoError(b, err)
@@ -167,7 +169,6 @@ func runTracesBenchmark(b *testing.B, directory string) {
 	initResponse, err := handlers.ReadMessageWithContext(ctx, conn)
 	require.NoError(b, err)
 	require.NotEmpty(b, initResponse)
-	require.NoError(b, err)
 
 	for _, file := range files {
 		if filepath.Base(file) == "genesis.bin" {
