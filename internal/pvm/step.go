@@ -8,7 +8,12 @@ import (
 func (i *Instance) step() (uint64, error) {
 	codeLength := uint64(len(i.code))
 	// ℓ ≡ skip(ı) (eq. A.20 v0.7.2)
-	i.skipLen = Skip(i.instructionCounter, i.bitmask)
+	// precomputed skip length
+	if i.instructionCounter < uint64(len(i.skipLengths)) {
+		i.skipLen = uint64(i.skipLengths[i.instructionCounter])
+	} else {
+		i.skipLen = 0
+	}
 
 	// ζ ≡ c ⌢ [0, 0, ... ] (eq. A.4 v0.7.2)
 	// We cannot add infinite items to a slice, but we simulate this by defaulting to trap opcode
