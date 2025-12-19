@@ -5,9 +5,8 @@ import (
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/polkavm"
-	"github.com/eigerco/strawberry/internal/polkavm/host_call"
-	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
+	"github.com/eigerco/strawberry/internal/pvm"
+	"github.com/eigerco/strawberry/internal/pvm/host_call"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/work"
@@ -96,7 +95,7 @@ func (r *Refine) InvokePVM(
 	}
 
 	// F ∈ Ω⟨(D⟨N → M⟩, ⟦G⟧)⟩∶ (n, ϱ, φ, μ, (m, e))
-	hostCall := func(hostCall uint64, gasCounter polkavm.Gas, regs polkavm.Registers, mem polkavm.Memory, ctxPair polkavm.RefineContextPair) (polkavm.Gas, polkavm.Registers, polkavm.Memory, polkavm.RefineContextPair, error) {
+	hostCall := func(hostCall uint64, gasCounter pvm.Gas, regs pvm.Registers, mem pvm.Memory, ctxPair pvm.RefineContextPair) (pvm.Gas, pvm.Registers, pvm.Memory, pvm.RefineContextPair, error) {
 		switch hostCall {
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
@@ -121,26 +120,26 @@ func (r *Refine) InvokePVM(
 		case host_call.ExpungeID:
 			gasCounter, regs, mem, ctxPair, err = host_call.Expunge(gasCounter, regs, mem, ctxPair)
 		default:
-			regs[polkavm.A0] = uint64(host_call.WHAT)
+			regs[pvm.A0] = uint64(host_call.WHAT)
 			gasCounter -= RefineCost
 		}
 		// otherwise if ϱ′ < 0
 		if gasCounter < 0 {
-			return gasCounter, regs, mem, ctxPair, polkavm.ErrOutOfGas
+			return gasCounter, regs, mem, ctxPair, pvm.ErrOutOfGas
 		}
 		return gasCounter, regs, mem, ctxPair, err
 	}
 
 	// (g, r, (m, e)) = ΨM(Λ(δ[w_s], (p_x)t, w_c), 0, w_g, a, F, (∅, []))∶
-	remainingGas, result, ctxPair, err := interpreter.InvokeWholeProgram(pvmCode.Code, 0, polkavm.UGas(w.GasLimitRefine), args, hostCall, polkavm.RefineContextPair{
-		IntegratedPVMMap: make(map[uint64]polkavm.IntegratedPVM),
+	remainingGas, result, ctxPair, err := pvm.InvokeWholeProgram(pvmCode.Code, 0, pvm.UGas(w.GasLimitRefine), args, hostCall, pvm.RefineContextPair{
+		IntegratedPVMMap: make(map[uint64]pvm.IntegratedPVM),
 		Segments:         []work.Segment{},
 	})
 
 	// if r ∈ {∞, ☇} then (r, [])
 	if err != nil {
-		panicErr := &polkavm.ErrPanic{}
-		if errors.Is(err, polkavm.ErrOutOfGas) || errors.As(err, &panicErr) {
+		panicErr := &pvm.ErrPanic{}
+		if errors.Is(err, pvm.ErrOutOfGas) || errors.As(err, &panicErr) {
 			return nil, nil, 0, err
 		}
 	}

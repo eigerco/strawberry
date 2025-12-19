@@ -1,10 +1,8 @@
-package interpreter
+package pvm
 
 import (
 	"errors"
 	"math"
-
-	"github.com/eigerco/strawberry/internal/polkavm"
 )
 
 // InvokeWholeProgram the marshalling whole-program pvm machine state-transition function: (ΨM eq. A.44 v0.7.2)
@@ -14,31 +12,31 @@ import (
 // - ErrOutOfGas (∞)
 // - ErrPanic (☇)
 // - ErrPageFault (F)
-func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.UGas, args []byte, hostFunc polkavm.HostCall[X], x X) (polkavm.UGas, []byte, X, error) {
-	program, err := polkavm.ParseBlob(p)
+func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas UGas, args []byte, hostFunc HostCall[X], x X) (UGas, []byte, X, error) {
+	program, err := ParseBlob(p)
 	if err != nil {
-		return 0, nil, x, polkavm.ErrPanicf(err.Error())
+		return 0, nil, x, ErrPanicf(err.Error())
 	}
-	ram, regs, err := polkavm.InitializeStandardProgram(program, args)
+	ram, regs, err := InitializeStandardProgram(program, args)
 	if err != nil {
-		return 0, nil, x, polkavm.ErrPanicf(err.Error())
+		return 0, nil, x, ErrPanicf(err.Error())
 	}
 	i, err := Instantiate(program.CodeAndJumpTable, entryPoint, initialGas, regs, ram)
 	if err != nil {
-		return 0, nil, x, polkavm.ErrPanicf(err.Error())
+		return 0, nil, x, ErrPanicf(err.Error())
 	}
 	x1, err := InvokeHostCall(i, hostFunc, x)
 	if err == nil {
-		return 0, nil, x1, polkavm.ErrPanicf("abnormal program termination, program should finish with one of: halt, out-of-gas, panic or page-fault")
+		return 0, nil, x1, ErrPanicf("abnormal program termination, program should finish with one of: halt, out-of-gas, panic or page-fault")
 	}
 
 	_, gasRemaining, regs, memory1 := i.Results()
 	// u = ϱ − max(ϱ′, 0)
-	gasUsed := initialGas - polkavm.UGas(max(gasRemaining, 0))
+	gasUsed := initialGas - UGas(max(gasRemaining, 0))
 
-	if errors.Is(err, polkavm.ErrHalt) {
-		maybeAddr := regs[polkavm.A0]
-		result := make([]byte, regs[polkavm.A1])
+	if errors.Is(err, ErrHalt) {
+		maybeAddr := regs[A0]
+		result := make([]byte, regs[A1])
 		if maybeAddr > math.MaxUint32 {
 			return gasUsed, []byte{}, x1, nil
 		}
@@ -53,12 +51,12 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.U
 		return gasUsed, result, x1, nil
 	}
 	// if ε = ∞
-	if errors.Is(err, polkavm.ErrOutOfGas) {
+	if errors.Is(err, ErrOutOfGas) {
 		return gasUsed, []byte{}, x1, err
 	}
-	errPageFault := &polkavm.ErrPageFault{}
+	errPageFault := &ErrPageFault{}
 	if errors.As(err, &errPageFault) {
-		return gasUsed, []byte{}, x1, polkavm.ErrPanicf(err.Error())
+		return gasUsed, []byte{}, x1, ErrPanicf(err.Error())
 	}
 	// otherwise
 	return gasUsed, nil, x1, err
@@ -67,17 +65,17 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas polkavm.U
 // InvokeHostCall host call invocation (ΨH eq. A.35 v0.7.2)
 func InvokeHostCall[X any](
 	i *Instance,
-	hostCall polkavm.HostCall[X], x X,
+	hostCall HostCall[X], x X,
 ) (X, error) {
 	for {
-		hostCallIndex, err := Invoke(i)
+		hostCallIndex, err := InvokeBasic(i)
 		if err != nil {
-			if errors.Is(err, polkavm.ErrHostCall) {
+			if errors.Is(err, ErrHostCall) {
 				i.gasRemaining, i.regs, i.memory, x, err = hostCall(hostCallIndex, i.gasRemaining, i.regs, i.memory, x)
 				if err != nil {
 					return x, err
 				}
-				i.instructionCounter += 1 + polkavm.Skip(i.instructionCounter, i.bitmask)
+				i.instructionCounter += 1 + uint64(i.skipLengths[i.instructionCounter])
 				continue
 			}
 
@@ -90,11 +88,11 @@ func InvokeHostCall[X any](
 	return x, nil
 }
 
-// Invoke basic definition (Ψ eq. A.1 v0.7.2)
-func Invoke(i *Instance) (hostCall uint64, err error) {
+// InvokeBasic basic definition (Ψ eq. A.1 v0.7.2)
+func InvokeBasic(i *Instance) (hostCall uint64, err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
-			err = polkavm.ErrPanicf("unexpected program termination: %v", recoveredErr)
+			err = ErrPanicf("unexpected program termination: %v", recoveredErr)
 		}
 	}()
 	for {
@@ -104,6 +102,6 @@ func Invoke(i *Instance) (hostCall uint64, err error) {
 	}
 }
 
-func (i *Instance) Results() (uint64, polkavm.Gas, polkavm.Registers, polkavm.Memory) {
+func (i *Instance) Results() (uint64, Gas, Registers, Memory) {
 	return i.instructionCounter, i.gasRemaining, i.regs, i.memory
 }

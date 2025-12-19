@@ -2,9 +2,8 @@ package authorization
 
 import (
 	"github.com/eigerco/strawberry/internal/common"
-	"github.com/eigerco/strawberry/internal/polkavm"
-	"github.com/eigerco/strawberry/internal/polkavm/host_call"
-	"github.com/eigerco/strawberry/internal/polkavm/interpreter"
+	"github.com/eigerco/strawberry/internal/pvm"
+	"github.com/eigerco/strawberry/internal/pvm/host_call"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/work"
@@ -49,11 +48,11 @@ func (a *Authorization) InvokePVM(
 	// F ∈ Ω⟨{}⟩∶ (n, ϱ, φ, µ)
 	hostCall := func(
 		hostCall uint64,
-		gasCounter polkavm.Gas,
-		regs polkavm.Registers,
-		mem polkavm.Memory,
+		gasCounter pvm.Gas,
+		regs pvm.Registers,
+		mem pvm.Memory,
 		ctx EmptyContext,
-	) (polkavm.Gas, polkavm.Registers, polkavm.Memory, EmptyContext, error) {
+	) (pvm.Gas, pvm.Registers, pvm.Memory, EmptyContext, error) {
 		switch hostCall {
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
@@ -61,13 +60,13 @@ func (a *Authorization) InvokePVM(
 			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, &workPackage, nil, nil, nil, nil, nil, nil)
 		default:
 			// (▸, ϱ−10, [φ0,…,φ6, WHAT, φ8,…], µ)
-			regs[polkavm.A0] = uint64(host_call.WHAT)
+			regs[pvm.A0] = uint64(host_call.WHAT)
 			gasCounter -= isAuthorizedCost
 		}
 
 		// otherwise if ϱ′ < 0
 		if gasCounter < 0 {
-			return gasCounter, regs, mem, ctx, polkavm.ErrOutOfGas
+			return gasCounter, regs, mem, ctx, pvm.ErrOutOfGas
 		}
 		return gasCounter, regs, mem, ctx, err
 	}
@@ -84,7 +83,7 @@ func (a *Authorization) InvokePVM(
 	}
 
 	// (g, r, ∅) = ΨM(pc, 0, GI , E(p, c), F, ∅)
-	_, result, _, err := interpreter.InvokeWholeProgram(
+	_, result, _, err := pvm.InvokeWholeProgram(
 		pvmCode.Code, // pc
 		0,
 		common.MaxAllocatedGasIsAuthorized,

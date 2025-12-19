@@ -10,8 +10,8 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
-	"github.com/eigerco/strawberry/internal/polkavm"
-	"github.com/eigerco/strawberry/internal/polkavm/host_call"
+	"github.com/eigerco/strawberry/internal/pvm"
+	"github.com/eigerco/strawberry/internal/pvm/host_call"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
@@ -21,32 +21,32 @@ import (
 )
 
 func TestGasRemaining(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			InitialHeapPages: 100,
 		},
 	}
 
-	_, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	_, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	gasRemaining, regs, err := host_call.GasRemaining(initialGas, initialRegs)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(90), regs[polkavm.A0])
-	assert.Equal(t, polkavm.Gas(90), gasRemaining)
+	assert.Equal(t, uint64(90), regs[pvm.A0])
+	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }
 
 func TestFetch(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       512,
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
 	}
 
-	mem, regs, err := polkavm.InitializeStandardProgram(pp, nil)
+	mem, regs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	preimageBytes := testutils.RandomBytes(t, 32)
@@ -105,8 +105,8 @@ func TestFetch(t *testing.T) {
 
 	entropy := testutils.RandomHash(t)
 
-	ho := polkavm.RWAddressBase + 100
-	initialGas := polkavm.Gas(100)
+	ho := pvm.RWAddressBase + 100
+	initialGas := pvm.Gas(100)
 	offset := uint64(0)
 	length := uint64(512)
 
@@ -286,12 +286,12 @@ func TestFetch(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			regs[polkavm.A0] = ho
-			regs[polkavm.A1] = offset
-			regs[polkavm.A2] = length
-			regs[polkavm.A3] = tc.dataID
-			regs[polkavm.A4] = tc.idx1
-			regs[polkavm.A5] = tc.idx2
+			regs[pvm.A0] = ho
+			regs[pvm.A1] = offset
+			regs[pvm.A2] = length
+			regs[pvm.A3] = tc.dataID
+			regs[pvm.A4] = tc.idx1
+			regs[pvm.A5] = tc.idx2
 
 			expect := tc.expect()
 
@@ -307,15 +307,15 @@ func TestFetch(t *testing.T) {
 			err = memOut.Read(uint32(ho), actual)
 			require.NoError(t, err)
 			require.Equal(t, expect, actual)
-			require.Equal(t, uint64(len(expect)), regsOut[polkavm.A0])
-			require.Equal(t, polkavm.Gas(90), gasLeft)
+			require.Equal(t, uint64(len(expect)), regsOut[pvm.A0])
+			require.Equal(t, pvm.Gas(90), gasLeft)
 		})
 	}
 }
 
 func TestLookup(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RODataSize:       0,
 			RWDataSize:       256,
 			StackSize:        512,
@@ -324,32 +324,32 @@ func TestLookup(t *testing.T) {
 	}
 
 	t.Run("service_not_found", func(t *testing.T) {
-		mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+		mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 		require.NoError(t, err)
 		gasRemaining, regs, _, err := host_call.Lookup(initialGas, initialRegs, mem, service.ServiceAccount{}, 1, make(service.ServiceState))
 		require.NoError(t, err)
-		assert.Equal(t, uint64(host_call.NONE), regs[polkavm.A0])
-		assert.Equal(t, polkavm.Gas(90), gasRemaining)
+		assert.Equal(t, uint64(host_call.NONE), regs[pvm.A0])
+		assert.Equal(t, pvm.Gas(90), gasRemaining)
 	})
 
 	t.Run("successful_key_lookup", func(t *testing.T) {
 		serviceId := block.ServiceId(1)
 		val := []byte("value to store")
-		mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+		mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 		require.NoError(t, err)
-		ho := polkavm.RWAddressBase
-		bo := polkavm.RWAddressBase + 100
+		ho := pvm.RWAddressBase
+		bo := pvm.RWAddressBase + 100
 		dataToHash := make([]byte, 32)
 		copy(dataToHash, "hash")
 
 		err = mem.Write(uint32(ho), dataToHash)
 		require.NoError(t, err)
 
-		initialRegs[polkavm.A0] = uint64(serviceId)
-		initialRegs[polkavm.A1] = uint64(ho)       // h
-		initialRegs[polkavm.A2] = uint64(bo)       // o
-		initialRegs[polkavm.A3] = 0                // f
-		initialRegs[polkavm.A4] = uint64(len(val)) // l
+		initialRegs[pvm.A0] = uint64(serviceId)
+		initialRegs[pvm.A1] = uint64(ho)       // h
+		initialRegs[pvm.A2] = uint64(bo)       // o
+		initialRegs[pvm.A3] = 0                // f
+		initialRegs[pvm.A4] = uint64(len(val)) // l
 		sa := service.ServiceAccount{
 			PreimageLookup: map[crypto.Hash][]byte{
 				crypto.Hash(dataToHash): val,
@@ -367,21 +367,21 @@ func TestLookup(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, val, actualValue)
-		assert.Equal(t, uint64(len(val)), regs[polkavm.A0])
-		assert.Equal(t, polkavm.Gas(90), gasRemaining)
+		assert.Equal(t, uint64(len(val)), regs[pvm.A0])
+		assert.Equal(t, pvm.Gas(90), gasRemaining)
 	})
 }
 
 func TestRead(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
 	}
 
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	serviceId := block.ServiceId(1)
@@ -400,17 +400,17 @@ func TestRead(t *testing.T) {
 		serviceId: sa,
 	}
 
-	ko := polkavm.RWAddressBase
-	bo := polkavm.RWAddressBase + 100
+	ko := pvm.RWAddressBase
+	bo := pvm.RWAddressBase + 100
 	kz := uint32(len(keyData))
 	vLen := uint64(len(value))
 
-	initialRegs[polkavm.A0] = uint64(serviceId)
-	initialRegs[polkavm.A1] = uint64(ko)
-	initialRegs[polkavm.A2] = uint64(kz)
-	initialRegs[polkavm.A3] = uint64(bo)
-	initialRegs[polkavm.A4] = 0    // f = offset (starting at 0)
-	initialRegs[polkavm.A5] = vLen // l = length (32 bytes)
+	initialRegs[pvm.A0] = uint64(serviceId)
+	initialRegs[pvm.A1] = uint64(ko)
+	initialRegs[pvm.A2] = uint64(kz)
+	initialRegs[pvm.A3] = uint64(bo)
+	initialRegs[pvm.A4] = 0    // f = offset (starting at 0)
+	initialRegs[pvm.A5] = vLen // l = length (32 bytes)
 
 	err = mem.Write(uint32(ko), keyData)
 	require.NoError(t, err)
@@ -422,21 +422,21 @@ func TestRead(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, value, actualValue)
-	assert.Equal(t, uint64(len(value)), regs[polkavm.A0])
+	assert.Equal(t, uint64(len(value)), regs[pvm.A0])
 
-	assert.Equal(t, polkavm.Gas(90), gasRemaining)
+	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }
 
 func TestWrite(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
 	}
 
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	serviceId := block.ServiceId(1)
@@ -449,16 +449,16 @@ func TestWrite(t *testing.T) {
 	sa := service.NewServiceAccount()
 	sa.Balance = 200
 
-	ko := polkavm.RWAddressBase
+	ko := pvm.RWAddressBase
 	kz := uint32(len(keyData))
 
-	vo := polkavm.RWAddressBase + 100
+	vo := pvm.RWAddressBase + 100
 	vz := uint32(len(value))
 
-	initialRegs[polkavm.A0] = uint64(ko)
-	initialRegs[polkavm.A1] = uint64(kz)
-	initialRegs[polkavm.A2] = uint64(vo)
-	initialRegs[polkavm.A3] = uint64(vz)
+	initialRegs[pvm.A0] = uint64(ko)
+	initialRegs[pvm.A1] = uint64(kz)
+	initialRegs[pvm.A2] = uint64(vo)
+	initialRegs[pvm.A3] = uint64(vz)
 	err = mem.Write(uint32(ko), keyData)
 	require.NoError(t, err)
 	err = mem.Write(uint32(vo), value)
@@ -477,7 +477,7 @@ func TestWrite(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, keyData, actualKey)
 
-	require.Equal(t, uint64(host_call.NONE), regs[polkavm.A0])
+	require.Equal(t, uint64(host_call.NONE), regs[pvm.A0])
 	require.NotNil(t, updatedSa)
 	storedValue, keyExists := updatedSa.GetStorage(k)
 	require.True(t, keyExists)
@@ -486,10 +486,10 @@ func TestWrite(t *testing.T) {
 	require.Equal(t, uint32(1), updatedSa.GetTotalNumberOfItems())
 	require.Equal(t, 34+uint64(len(keyData))+uint64(len(value)), updatedSa.GetTotalNumberOfOctets())
 
-	require.Equal(t, polkavm.Gas(90), gasRemaining)
+	require.Equal(t, pvm.Gas(90), gasRemaining)
 
 	// Second call: Delete
-	initialRegs[polkavm.A3] = 0 // vz = 0 → delete
+	initialRegs[pvm.A3] = 0 // vz = 0 → delete
 
 	gasRemaining, _, mem, updatedSa, err = host_call.Write(gasRemaining, initialRegs, mem, updatedSa, serviceId)
 	require.NoError(t, err)
@@ -498,19 +498,19 @@ func TestWrite(t *testing.T) {
 	require.Equal(t, uint64(0), updatedSa.GetTotalNumberOfOctets())
 	_, ok := updatedSa.GetStorage(k)
 	require.False(t, ok)
-	require.Equal(t, polkavm.Gas(80), gasRemaining)
+	require.Equal(t, pvm.Gas(80), gasRemaining)
 }
 
 func TestInfo(t *testing.T) {
-	pp := &polkavm.Program{
-		ProgramMemorySizes: polkavm.ProgramMemorySizes{
+	pp := &pvm.Program{
+		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
 			InitialHeapPages: 10,
 		},
 	}
 
-	mem, initialRegs, err := polkavm.InitializeStandardProgram(pp, nil)
+	mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 	require.NoError(t, err)
 
 	serviceId := block.ServiceId(1)
@@ -533,16 +533,16 @@ func TestInfo(t *testing.T) {
 	// E(ac, E8(ab, at, ag, am, ao), E4(ai), E8(af), E4(ar, aa, ap)) = 96 bytes
 	expectedByteLength := uint64(96)
 
-	omega1 := polkavm.RWAddressBase
-	initialRegs[polkavm.A0] = uint64(serviceId)
-	initialRegs[polkavm.A1] = uint64(omega1)
-	initialRegs[polkavm.A2] = 0
-	initialRegs[polkavm.A3] = expectedByteLength
+	omega1 := pvm.RWAddressBase
+	initialRegs[pvm.A0] = uint64(serviceId)
+	initialRegs[pvm.A1] = uint64(omega1)
+	initialRegs[pvm.A2] = 0
+	initialRegs[pvm.A3] = expectedByteLength
 
 	gasRemaining, regs, mem, err := host_call.Info(initialGas, initialRegs, mem, serviceId, serviceState)
 	require.NoError(t, err)
 
-	require.Equal(t, expectedByteLength, regs[polkavm.A0])
+	require.Equal(t, expectedByteLength, regs[pvm.A0])
 
 	receivedAccountInfo := make([]byte, 32+6*8+4*4)
 	err = mem.Read(uint32(omega1), receivedAccountInfo)
@@ -566,5 +566,5 @@ func TestInfo(t *testing.T) {
 
 	require.Equal(t, expectedAccountInfo, receivedAccountInfo)
 
-	require.Equal(t, polkavm.Gas(90), gasRemaining)
+	require.Equal(t, pvm.Gas(90), gasRemaining)
 }

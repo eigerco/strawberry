@@ -1,4 +1,4 @@
-package polkavm
+package pvm
 
 type Opcode byte
 

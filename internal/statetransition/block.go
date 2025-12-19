@@ -30,7 +30,7 @@ func VerifyBlockHeaderBasic(priorState *state.State, block block.Block, trie *st
 
 	// State root validation. Equation 5.8
 	//  H_R ≡ M_σ(σ)
-	expectedPriorStateRoot, err := merkle.MerklizeState(*priorState, trie)
+	expectedPriorStateRoot, err := merkle.MerklizeStateOnly(*priorState)
 	if err != nil {
 		return fmt.Errorf("failed to merklize state: %w", err)
 	}

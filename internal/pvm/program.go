@@ -1,4 +1,4 @@
-package polkavm
+package pvm
 
 import (
 	"bytes"
@@ -96,15 +96,26 @@ func Deblob(bytecode []byte) ([]byte, jam.BitSequence, []uint64, error) {
 	return code, bitmask, jumpTable, nil
 }
 
-// Skip skip(i N) → N (eq. A.3 v0.7.2)
-func Skip(instructionOffset uint64, bitmask []bool) uint64 {
-	for i, b := range bitmask[instructionOffset+1:] {
-		if i > BitmaskMax {
-			return BitmaskMax
+// PrecomputeSkipLengths precomputes skip(i N) → N (eq. A.3 v0.7.2) for all positions.
+func PrecomputeSkipLengths(bitmask []bool) []uint8 {
+	n := len(bitmask)
+	skipLengths := make([]uint8, n)
+
+	distanceToNext := 0
+	for i := n - 1; i >= 0; i-- {
+		if distanceToNext > BitmaskMax {
+			skipLengths[i] = BitmaskMax
+		} else {
+			skipLengths[i] = uint8(distanceToNext)
 		}
-		if b {
-			return uint64(i)
+
+		// Update distance for next iteration
+		if bitmask[i] {
+			distanceToNext = 0
+		} else {
+			distanceToNext++
 		}
 	}
-	return 0
+
+	return skipLengths
 }
