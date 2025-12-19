@@ -15,6 +15,7 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/guaranteeing"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/merkle"
 	"github.com/eigerco/strawberry/internal/state/serialization"
@@ -49,6 +50,10 @@ type Node struct {
 
 // NewNode create a new conformance testing node
 func NewNode(socketPath string, chain *store.Chain, trie *store.Trie, appName []byte, appVersion, jamVersion Version, features Features) *Node {
+	// Enable ancestry validation if the feature flag is set
+	if features == FeatureAncestry || features == FeatureAncestryAndFork {
+		guaranteeing.Ancestry = true
+	}
 	peerInfo := PeerInfo{
 		FuzzVersion:  1,
 		FuzzFeatures: features,
@@ -147,7 +152,8 @@ func (n *Node) handleConnection(conn net.Conn) {
 			} else if strings.Contains(err.Error(), "future report slot") {
 				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: reports error: report refers to slot in the future")})
 			} else {
-				return
+				// For any other unhandled error, return a generic error message
+				responseMsg = NewMessage(Error{Message: []byte(fmt.Sprintf("Chain error: %s", err.Error()))})
 			}
 		}
 		respMsgBytes, err := jam.Marshal(responseMsg)
@@ -188,7 +194,7 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
 
-		if n.PeerInfo.FuzzFeatures == FeatureAncestryAndFork {
+		if n.PeerInfo.FuzzFeatures == FeatureAncestry || n.PeerInfo.FuzzFeatures == FeatureAncestryAndFork {
 			ancestry := choice.Ancestry
 			for _, item := range ancestry.Items {
 				err := n.chain.PutConformanceHeader(item.Hash, item.Slot)
@@ -197,7 +203,7 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 				}
 			}
 		}
-		stateRoot, err := merkle.MerklizeState(state, n.trie)
+		stateRoot, err := merkle.MerklizeStateOnly(state)
 		if err != nil {
 			return nil, fmt.Errorf("failed to merklize state: %v", err)
 		}
@@ -226,7 +232,7 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
-		stateRoot, err := merkle.MerklizeState(state, n.trie)
+		stateRoot, err := merkle.MerklizeStateOnly(state)
 		if err != nil {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}

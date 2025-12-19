@@ -29,7 +29,7 @@ import (
 // ∀x ∈ x : ∃h ∈ A : hT = xt ∧ H(h) = xl (eq. 11.35 v 0.7.0)
 // TODO: Make this configurable. Currently the test vectors and traces `do not use ancestry.
 // The conformance tests have the option to have it enabled or disabled.
-const Ancestry = false
+var Ancestry = false
 
 // ValidateGuaranteExtrinsicAndReturnReporters validates the guarantees extrinsic according to section 11.4.
 // It performs all validity checks required for work report guarantees and returns the set of reporters.

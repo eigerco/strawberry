@@ -33,9 +33,9 @@ func main() {
 	trieStore := store.NewTrie(chain)
 
 	appName := []byte("strawberry")
-	appVersion := conformance.Version{Major: 0, Minor: 0, Patch: 1}
-	jamVersion := conformance.Version{Major: 0, Minor: 7, Patch: 1}
-	features := conformance.FeatureFork
+	appVersion := conformance.Version{Major: 0, Minor: 0, Patch: 2}
+	jamVersion := conformance.Version{Major: 0, Minor: 7, Patch: 2}
+	features := conformance.FeatureAncestryAndFork
 	node := conformance.NewNode(*socketPath, chain, trieStore, appName, appVersion, jamVersion, features)
 	if err := node.Start(); err != nil {
 		log.Fatalf("Failed to start Node: %v", err)

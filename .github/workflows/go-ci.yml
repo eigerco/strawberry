@@ -88,3 +88,7 @@ jobs:
 
       - name: execute traces-tiny tests
         run: make traces-tiny
+
+      - name: execute conformance tests
+        run: make test-conformance
+ 
