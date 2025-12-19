@@ -8,7 +8,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/eigerco/strawberry/pkg/network/handlers"
@@ -128,33 +127,7 @@ func (n *Node) handleConnection(conn net.Conn) {
 
 		responseMsg, err := n.messageHandler(msg)
 		if err != nil {
-			if strings.Contains(err.Error(), "preimage unneeded") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: preimages error: preimage not required")})
-			} else if strings.Contains(err.Error(), "bad core index") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: reports error: bad core index for work report")})
-			} else if strings.Contains(err.Error(), "wrong assignment") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: reports error: wrong core assignment")})
-			} else if strings.Contains(err.Error(), "bad validator index") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: assurances error: bad attestation validator index")})
-			} else if strings.Contains(err.Error(), "block seal or vrf signature is invalid") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: BadSealSignature")})
-			} else if strings.Contains(err.Error(), "unexpected author") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: UnexpectedAuthor")})
-				// responseMsg = NewMessage(Error{Message: []byte("Chain error: block verification failure: unexpected author")}) //fauty vectors have the error in different format
-			} else if strings.Contains(err.Error(), "epoch marker") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: InvalidEpochMark")})
-				// responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: InvalidEpochMark")}) //fauty vectors have the error in different format
-			} else if strings.Contains(err.Error(), "winning ticket marker") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: InvalidTicketsMark")})
-				// responseMsg = NewMessage(Error{Message: []byte("Chain error: block verification failure: invalid tickets mark")}) //fauty vectors have the error in different format
-			} else if strings.Contains(err.Error(), "core unauthorized") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: reports error: code unauthorized")})
-			} else if strings.Contains(err.Error(), "future report slot") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: reports error: report refers to slot in the future")})
-			} else {
-				// For any other unhandled error, return a generic error message
-				responseMsg = NewMessage(Error{Message: []byte(fmt.Sprintf("Chain error: %s", err.Error()))})
-			}
+			responseMsg = NewMessage(Error{Message: []byte(fmt.Sprintf("Chain error: %s", err.Error()))})
 		}
 		respMsgBytes, err := jam.Marshal(responseMsg)
 		if err != nil {
