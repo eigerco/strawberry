@@ -103,3 +103,7 @@ bench: build-bandersnatch build-erasurecoding
   endif
 	go test -bench=^$(NAME)$$ ./tests/integration --tags=traces,tiny | tee benchmark_results.txt
 	python3 bench-stats.py benchmark_results.txt
+
+.PHONY: bench
+bench-fuzzer:
+	go test -bench=^$(NAME)$$ ./pkg/traceutil --tags=traces,tiny

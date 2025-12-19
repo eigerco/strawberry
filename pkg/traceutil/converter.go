@@ -15,7 +15,7 @@ func CreatePeerInfoMessage() *conformance.Message {
 		JamVersion: conformance.Version{
 			Major: 0,
 			Minor: 7,
-			Patch: 1,
+			Patch: 2,
 		},
 		AppVersion: conformance.Version{
 			Major: 1,
@@ -56,9 +56,9 @@ func TraceToConformancePostState(trace integration.Trace) conformance.State {
 	return traceStateToConformanceState(trace.PostState)
 }
 
-func CreateGetStateMessage(stateRootHash crypto.Hash) *conformance.Message {
+func CreateGetStateMessage(headerHash crypto.Hash) *conformance.Message {
 	return conformance.NewMessage(conformance.GetState{
-		HeaderHash: stateRootHash,
+		HeaderHash: headerHash,
 	})
 }
 
