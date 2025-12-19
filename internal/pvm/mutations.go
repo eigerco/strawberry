@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 	"math/bits"
+
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 // Trap trap ε = ☇
@@ -23,22 +25,42 @@ func (i *Instance) LoadImm64(dst Reg, imm uint64) {
 
 // StoreImmU8 store_imm_u8 μ′↺νX = νY mod 28
 func (i *Instance) StoreImmU8(address uint64, value uint64) error {
-	return i.store(address, uint8(value))
+	i.storeBuf[0] = uint8(value)
+	if err := i.memory.Write(uint32(address), i.storeBuf[:1]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreImmU16 store_imm_u16 μ′↺{νX...+2} = E2(νY mod 2^16)
 func (i *Instance) StoreImmU16(address uint64, value uint64) error {
-	return i.store(address, uint16(value))
+	jam.PutUint16(i.storeBuf[:2], uint16(value))
+	if err := i.memory.Write(uint32(address), i.storeBuf[:2]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreImmU32 store_imm_u32 μ′↺{νX...+4} = E4(νY mod 2^32)
 func (i *Instance) StoreImmU32(address uint64, value uint64) error {
-	return i.store(address, uint32(value))
+	jam.PutUint32(i.storeBuf[:4], uint32(value))
+	if err := i.memory.Write(uint32(address), i.storeBuf[:4]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreImmU64 store_imm_u64 μ′↺{νX...+8} = E8(νY)
 func (i *Instance) StoreImmU64(address uint64, value uint64) error {
-	return i.store(address, value)
+	jam.PutUint64(i.storeBuf[:8], value)
+	if err := i.memory.Write(uint32(address), i.storeBuf[:8]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // Jump jump branch(νX , ⊺)
@@ -78,92 +100,132 @@ func (i *Instance) LoadI8(dst Reg, address uint64) error {
 
 // LoadU16 load_u16 φ′A = E−1_2 (μ↺_{νX...+2})
 func (i *Instance) LoadU16(dst Reg, address uint64) error {
-	var v uint16
-	if err := i.load(address, 2, &v); err != nil {
+	slice := i.loadBuf[:2]
+	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(v))
+	i.setAndSkip(dst, uint64(jam.DecodeUint16(slice)))
 	return nil
 }
 
 // LoadI16 load_i16 φ′A = X2(E−1_2 (μ↺_{νX...+2})
 func (i *Instance) LoadI16(dst Reg, address uint64) error {
-	var v int16
-	if err := i.load(address, 2, &v); err != nil {
+	slice := i.loadBuf[:2]
+	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(v))
+	i.setAndSkip(dst, uint64(int16(jam.DecodeUint16(slice))))
 	return nil
 }
 
 // LoadU32 load_u32 φ′A = E−1_4 (μ↺_{νX...+4})
 func (i *Instance) LoadU32(dst Reg, address uint64) error {
-	var v uint32
-	if err := i.load(address, 4, &v); err != nil {
+	slice := i.loadBuf[:4]
+	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(v))
+	i.setAndSkip(dst, uint64(jam.DecodeUint32(slice)))
 	return nil
 }
 
 // LoadI32 load_i32 φ′A = X4(E−1_4(μ↺_{νX...+4}))
 func (i *Instance) LoadI32(dst Reg, address uint64) error {
-	var v uint32
-	if err := i.load(address, 4, &v); err != nil {
+	slice := i.loadBuf[:4]
+	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, sext(uint64(v), 4))
+	i.setAndSkip(dst, sext(uint64(jam.DecodeUint32(slice)), 4))
 	return nil
 }
 
 // LoadU64 load_u64 φ′A = E−1_8 (μ↺_{νX...+8})
 func (i *Instance) LoadU64(dst Reg, address uint64) error {
-	var v uint64
-	if err := i.load(address, 8, &v); err != nil {
+	slice := i.loadBuf[:8]
+	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, v)
+	i.setAndSkip(dst, jam.DecodeUint64(slice))
 	return nil
 }
 
 // StoreU8 store_u8 μ′↺_νX = φA mod 2^8
 func (i *Instance) StoreU8(src Reg, address uint64) error {
-	return i.store(address, uint8(i.regs[src]))
+	i.storeBuf[0] = uint8(i.regs[src])
+	if err := i.memory.Write(uint32(address), i.storeBuf[:1]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreU16 store_u16 μ′↺_{νX...+2} = E2(φA mod 2^16)
 func (i *Instance) StoreU16(src Reg, address uint64) error {
-	return i.store(address, uint16(i.regs[src]))
+	jam.PutUint16(i.storeBuf[:2], uint16(i.regs[src]))
+	if err := i.memory.Write(uint32(address), i.storeBuf[:2]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreU32 store_u32 μ′↺_{νX...+4} = E4(φA mod 2^32)
 func (i *Instance) StoreU32(src Reg, address uint64) error {
-	return i.store(address, uint32(i.regs[src]))
+	jam.PutUint32(i.storeBuf[:4], uint32(i.regs[src]))
+	if err := i.memory.Write(uint32(address), i.storeBuf[:4]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreU64 store_u64 μ′↺_{νX...+8} = E8(φA)
 func (i *Instance) StoreU64(src Reg, address uint64) error {
-	return i.store(address, i.regs[src])
+	jam.PutUint64(i.storeBuf[:8], i.regs[src])
+	if err := i.memory.Write(uint32(address), i.storeBuf[:8]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreImmIndirectU8 store_imm_ind_u8 μ′↺_{φA+νX} = νY mod 2^8
 func (i *Instance) StoreImmIndirectU8(base Reg, offset uint64, value uint64) error {
-	return i.store(i.regs[base]+offset, uint8(value))
+	i.storeBuf[0] = uint8(value)
+	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:1]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreImmIndirectU16 store_imm_ind_u16 μ′↺_{φA+νX...+2} = E2(νY mod 2^16)
 func (i *Instance) StoreImmIndirectU16(base Reg, offset uint64, value uint64) error {
-	return i.store(i.regs[base]+offset, uint16(value))
+	jam.PutUint16(i.storeBuf[:2], uint16(value))
+	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:2]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreImmIndirectU32 store_imm_ind_u32 μ′↺_{φA+νX...+4} = E4(νY mod 2^32)
 func (i *Instance) StoreImmIndirectU32(base Reg, offset uint64, value uint64) error {
-	return i.store(i.regs[base]+offset, uint32(value))
+	jam.PutUint32(i.storeBuf[:4], uint32(value))
+	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:4]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreImmIndirectU64 store_imm_ind_u64 μ′↺_{φA+νX...+8} = E8(νY)
 func (i *Instance) StoreImmIndirectU64(base Reg, offset uint64, value uint64) error {
-	return i.store(i.regs[base]+offset, value)
+	jam.PutUint64(i.storeBuf[:8], value)
+	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:8]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // LoadImmAndJump load_imm_jump branch(νY , ⊺), φ′A = νX
@@ -294,22 +356,42 @@ func (i *Instance) ReverseBytes(dst Reg, s Reg) {
 
 // StoreIndirectU8 store_ind_u8 μ′↺_{φB+νX} = φA mod 2^8
 func (i *Instance) StoreIndirectU8(src Reg, base Reg, offset uint64) error {
-	return i.store(i.regs[base]+offset, uint8(i.regs[src]))
+	i.storeBuf[0] = uint8(i.regs[src])
+	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:1]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreIndirectU16 store_ind_u16 μ′↺_{φB+νX...+2} = E2(φA mod 2^16)
 func (i *Instance) StoreIndirectU16(src Reg, base Reg, offset uint64) error {
-	return i.store(i.regs[base]+offset, uint16(i.regs[src]))
+	jam.PutUint16(i.storeBuf[:2], uint16(i.regs[src]))
+	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:2]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreIndirectU32 store_ind_u32 μ′↺_{φB+νX...+4} = E4(φA mod 2^32)
 func (i *Instance) StoreIndirectU32(src Reg, base Reg, offset uint64) error {
-	return i.store(i.regs[base]+offset, uint32(i.regs[src]))
+	jam.PutUint32(i.storeBuf[:4], uint32(i.regs[src]))
+	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:4]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // StoreIndirectU64 store_ind_u64 μ′↺_{φB+νX...+8} = E8(φA)
 func (i *Instance) StoreIndirectU64(src Reg, base Reg, offset uint64) error {
-	return i.store(i.regs[base]+offset, i.regs[src])
+	jam.PutUint64(i.storeBuf[:8], i.regs[src])
+	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:8]); err != nil {
+		return err
+	}
+	i.skip()
+	return nil
 }
 
 // LoadIndirectU8 load_ind_u8 φ′A = μ↺_{φB+νX}
@@ -334,51 +416,51 @@ func (i *Instance) LoadIndirectI8(dst Reg, base Reg, offset uint64) error {
 
 // LoadIndirectU16 load_ind_u16 φ′A = E−1_2 (μ↺_{φB+νX...+2})
 func (i *Instance) LoadIndirectU16(dst Reg, base Reg, offset uint64) error {
-	var v uint16
-	if err := i.load(i.regs[base]+offset, 2, &v); err != nil {
+	slice := i.loadBuf[:2]
+	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(v))
+	i.setAndSkip(dst, uint64(jam.DecodeUint16(slice)))
 	return nil
 }
 
 // LoadIndirectI16 load_ind_i16 φ′A = Z−1_8(Z2(E−1_2(μ↺_{φB+νX...+2})))
 func (i *Instance) LoadIndirectI16(dst Reg, base Reg, offset uint64) error {
-	var v int16
-	if err := i.load(i.regs[base]+offset, 2, &v); err != nil {
+	slice := i.loadBuf[:2]
+	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(v))
+	i.setAndSkip(dst, uint64(int16(jam.DecodeUint16(slice))))
 	return nil
 }
 
 // LoadIndirectU32 load_ind_u32 φ′A = E−1_4(μ↺_{φB+νX...+4})
 func (i *Instance) LoadIndirectU32(dst Reg, base Reg, offset uint64) error {
-	var v uint32
-	if err := i.load(i.regs[base]+offset, 4, &v); err != nil {
+	slice := i.loadBuf[:4]
+	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(v))
+	i.setAndSkip(dst, uint64(jam.DecodeUint32(slice)))
 	return nil
 }
 
 // LoadIndirectI32 load_ind_i32 φ′A = Z−1_8(Z4(E−1_4(μ↺_{φB+νX...+4})))
 func (i *Instance) LoadIndirectI32(dst Reg, base Reg, offset uint64) error {
-	var v int32
-	if err := i.load(i.regs[base]+offset, 4, &v); err != nil {
+	slice := i.loadBuf[:4]
+	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(v))
+	i.setAndSkip(dst, uint64(int32(jam.DecodeUint32(slice))))
 	return nil
 }
 
 // LoadIndirectU64 load_ind_u64 φ′A = E−1_8(μ↺_{φB+νX...+8})
 func (i *Instance) LoadIndirectU64(dst Reg, base Reg, offset uint64) error {
-	var v uint64
-	if err := i.load(i.regs[base]+offset, 8, &v); err != nil {
+	slice := i.loadBuf[:8]
+	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, v)
+	i.setAndSkip(dst, jam.DecodeUint64(slice))
 	return nil
 }
 

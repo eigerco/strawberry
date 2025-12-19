@@ -45,6 +45,7 @@ type Instance struct {
 	skipLen           uint64
 	instructionsCache []*instructionCache
 	loadBuf           [8]byte // reusable buffer for load operations
+	storeBuf          [8]byte // reusable buffer for store operations
 }
 
 type instructionCache struct {
@@ -62,71 +63,6 @@ func (i *Instance) deductGas(cost Gas) error {
 		return ErrOutOfGas
 	}
 	i.gasRemaining -= cost
-	return nil
-}
-
-// load E−1_n(μ↺_{a...+n}) where a is address and n is length
-func (i *Instance) load(address uint64, length int, v any) error {
-	slice := i.loadBuf[:length]
-	if err := i.memory.Read(uint32(address), slice); err != nil {
-		return err
-	}
-
-	switch p := v.(type) {
-	case *uint8:
-		*p = jam.DecodeUint8(slice)
-	case *int8:
-		*p = int8(jam.DecodeUint8(slice))
-	case *uint16:
-		*p = jam.DecodeUint16(slice)
-	case *int16:
-		*p = int16(jam.DecodeUint16(slice))
-	case *uint32:
-		*p = jam.DecodeUint32(slice)
-	case *int32:
-		*p = int32(jam.DecodeUint32(slice))
-	case *uint64:
-		*p = jam.DecodeUint64(slice)
-	case *int64:
-		*p = int64(jam.DecodeUint64(slice))
-	default:
-		return jam.Unmarshal(slice, v)
-	}
-	return nil
-}
-
-// store μ′↺_{a...+|v|} = E_|v|(v) where a is address and |v| is the length in bytes required to store v
-func (i *Instance) store(address uint64, v any) error {
-	var data []byte
-	switch val := v.(type) {
-	case uint8:
-		data = jam.EncodeUint8(val)
-	case int8:
-		data = jam.EncodeUint8(uint8(val))
-	case uint16:
-		data = jam.EncodeUint16(val)
-	case int16:
-		data = jam.EncodeUint16(uint16(val))
-	case uint32:
-		data = jam.EncodeUint32(val)
-	case int32:
-		data = jam.EncodeUint32(uint32(val))
-	case uint64:
-		data = jam.EncodeUint64(val)
-	case int64:
-		data = jam.EncodeUint64(uint64(val))
-	default:
-		var err error
-		data, err = jam.Marshal(v)
-		if err != nil {
-			return err
-		}
-	}
-	if err := i.memory.Write(uint32(address), data); err != nil {
-		return err
-	}
-
-	i.skip()
 	return nil
 }
 
