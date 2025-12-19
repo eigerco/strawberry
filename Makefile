@@ -88,6 +88,11 @@ build-conformance: build-bandersnatch build-erasurecoding
 	mkdir -p pkg/conformance/bin
 	go build -tags="tiny" -o pkg/conformance/bin/strawberry ./pkg/conformance/cmd/main.go
 
+.PHONY: test-conformance
+## test-conformance: Runs conformance tests
+test-conformance: build-bandersnatch build-erasurecoding
+	go test ./pkg/conformance/... -v $(DARWIN_TEST_GOFLAGS) --tags=tiny,conformance
+
 .PHONY: run-target
 ## run-target: Runs the conformance target with socket /tmp/jam_target.sock
 run-target:

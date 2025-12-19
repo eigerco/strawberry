@@ -8,13 +8,13 @@ import (
 	"log"
 	"net"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/guaranteeing"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/merkle"
 	"github.com/eigerco/strawberry/internal/state/serialization"
@@ -49,6 +49,10 @@ type Node struct {
 
 // NewNode create a new conformance testing node
 func NewNode(socketPath string, chain *store.Chain, trie *store.Trie, appName []byte, appVersion, jamVersion Version, features Features) *Node {
+	// Enable ancestry validation if the feature flag is set
+	if features == FeatureAncestry || features == FeatureAncestryAndFork {
+		guaranteeing.Ancestry = true
+	}
 	peerInfo := PeerInfo{
 		FuzzVersion:  1,
 		FuzzFeatures: features,
@@ -123,32 +127,7 @@ func (n *Node) handleConnection(conn net.Conn) {
 
 		responseMsg, err := n.messageHandler(msg)
 		if err != nil {
-			if strings.Contains(err.Error(), "preimage unneeded") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: preimages error: preimage not required")})
-			} else if strings.Contains(err.Error(), "bad core index") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: reports error: bad core index for work report")})
-			} else if strings.Contains(err.Error(), "wrong assignment") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: reports error: wrong core assignment")})
-			} else if strings.Contains(err.Error(), "bad validator index") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: assurances error: bad attestation validator index")})
-			} else if strings.Contains(err.Error(), "block seal or vrf signature is invalid") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: BadSealSignature")})
-			} else if strings.Contains(err.Error(), "unexpected author") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: UnexpectedAuthor")})
-				// responseMsg = NewMessage(Error{Message: []byte("Chain error: block verification failure: unexpected author")}) //fauty vectors have the error in different format
-			} else if strings.Contains(err.Error(), "epoch marker") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: InvalidEpochMark")})
-				// responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: InvalidEpochMark")}) //fauty vectors have the error in different format
-			} else if strings.Contains(err.Error(), "winning ticket marker") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block header verification failure: InvalidTicketsMark")})
-				// responseMsg = NewMessage(Error{Message: []byte("Chain error: block verification failure: invalid tickets mark")}) //fauty vectors have the error in different format
-			} else if strings.Contains(err.Error(), "core unauthorized") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: reports error: code unauthorized")})
-			} else if strings.Contains(err.Error(), "future report slot") {
-				responseMsg = NewMessage(Error{Message: []byte("Chain error: block execution failure: reports error: report refers to slot in the future")})
-			} else {
-				return
-			}
+			responseMsg = NewMessage(Error{Message: []byte(fmt.Sprintf("Chain error: %s", err.Error()))})
 		}
 		respMsgBytes, err := jam.Marshal(responseMsg)
 		if err != nil {
@@ -188,7 +167,7 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
 
-		if n.PeerInfo.FuzzFeatures == FeatureAncestryAndFork {
+		if n.PeerInfo.FuzzFeatures == FeatureAncestry || n.PeerInfo.FuzzFeatures == FeatureAncestryAndFork {
 			ancestry := choice.Ancestry
 			for _, item := range ancestry.Items {
 				err := n.chain.PutConformanceHeader(item.Hash, item.Slot)
@@ -197,7 +176,7 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 				}
 			}
 		}
-		stateRoot, err := merkle.MerklizeState(state, n.trie)
+		stateRoot, err := merkle.MerklizeStateOnly(state)
 		if err != nil {
 			return nil, fmt.Errorf("failed to merklize state: %v", err)
 		}
@@ -226,7 +205,7 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
-		stateRoot, err := merkle.MerklizeState(state, n.trie)
+		stateRoot, err := merkle.MerklizeStateOnly(state)
 		if err != nil {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
