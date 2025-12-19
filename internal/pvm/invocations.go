@@ -75,7 +75,7 @@ func InvokeHostCall[X any](
 				if err != nil {
 					return x, err
 				}
-				i.instructionCounter += 1 + Skip(i.instructionCounter, i.bitmask)
+				i.instructionCounter += 1 + uint64(i.skipLengths[i.instructionCounter])
 				continue
 			}
 

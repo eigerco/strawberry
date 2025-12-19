@@ -10,12 +10,16 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit UGas, regs R
 		return nil, err
 	}
 
+	// Precompute skip lengths for all positions
+	bitmaskWithSentinel := append(bitmask, true) // k ⌢ [1, 1, ... ]
+	skipLengths := PrecomputeSkipLengths(bitmaskWithSentinel)
+
 	// ϖ ≡ [0] ⌢ [n + 1 + skip(n) | n <− N_|c| ∧ kn = 1 ∧ cn ∈ T ] (eq. A.5 v0.7.2)
 	basicBlockInstructions := map[uint64]struct{}{0: {}}
 
 	for i, b := range bitmask {
 		if b && Opcode(code[i]).IsBasicBlockTermination() {
-			basicBlockInstructions[uint64(i)+1+Skip(uint64(i), bitmask)] = struct{}{}
+			basicBlockInstructions[uint64(i)+1+uint64(skipLengths[i])] = struct{}{}
 		}
 	}
 
@@ -26,7 +30,8 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit UGas, regs R
 		gasRemaining:           Gas(gasLimit),
 		code:                   code,
 		jumpTable:              jumpTable,
-		bitmask:                append(bitmask, true), // k ⌢ [1, 1, ... ]
+		bitmask:                bitmaskWithSentinel,
+		skipLengths:            skipLengths,
 		basicBlockInstructions: basicBlockInstructions,
 		instructionsCache:      make([]*instructionCache, len(code)),
 	}, nil
@@ -40,6 +45,7 @@ type Instance struct {
 	code                   []byte              // ζ
 	jumpTable              []uint64            // j
 	bitmask                jam.BitSequence     // k
+	skipLengths            []uint8             // precomputed skip lengths for each position
 	basicBlockInstructions map[uint64]struct{} // ϖ
 
 	skipLen           uint64
