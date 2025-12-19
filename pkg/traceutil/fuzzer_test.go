@@ -22,7 +22,7 @@ func readVectorFile(path string) ([]byte, error) {
 	return os.ReadFile(filepath.Join(vectorsDir, path))
 }
 
-func ParseTraceFile(t require.TestingT, path string) (integration.Trace, error) {
+func ParseTraceFile(t *testing.T, path string) (integration.Trace, error) {
 	var trace integration.Trace
 	data, err := readVectorFile(path)
 	require.NoError(t, err)
@@ -31,7 +31,7 @@ func ParseTraceFile(t require.TestingT, path string) (integration.Trace, error) 
 	return trace, nil
 }
 
-func ParseGenesisFile(t require.TestingT, path string) (integration.Genesis, error) {
+func ParseGenesisFile(t *testing.T, path string) (integration.Genesis, error) {
 	var genesis integration.Genesis
 	data, err := readVectorFile(path)
 	require.NoError(t, err)
