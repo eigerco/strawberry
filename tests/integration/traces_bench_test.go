@@ -55,23 +55,16 @@ func runTraceBenchmark(b *testing.B, filename string) {
 		b.Fatalf("failed to read trace file %q: %v", filename, err)
 	}
 
-	db, err := pebble.NewKVStore()
-	if err != nil {
-		b.Fatalf("failed to create pebble KV store: %v", err)
-	}
-	defer func() {
-		err := db.Close()
-		if err != nil {
-			b.Fatalf("failed to close database: %v", err)
-		}
-	}()
-
-	trieDB := store.NewTrie(db)
-	chainDB := store.NewChain(db)
-
-	b.ResetTimer() // Reset timer after setup
-
 	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		db, err := pebble.NewKVStore()
+		if err != nil {
+			b.Fatalf("failed to create pebble KV store: %v", err)
+		}
+
+		trieDB := store.NewTrie(db)
+		chainDB := store.NewChain(db)
+
 		var trace Trace
 		err = jam.Unmarshal(data, &trace)
 		if err != nil {
@@ -88,6 +81,8 @@ func runTraceBenchmark(b *testing.B, filename string) {
 			b.Fatalf("failed to deserialize state: %v", err)
 		}
 
+		b.StartTimer()
+
 		block := trace.Block
 		err = statetransition.UpdateState(
 			&currentState,
@@ -97,6 +92,12 @@ func runTraceBenchmark(b *testing.B, filename string) {
 		)
 		if err != nil {
 			b.Fatalf("failed to update state for block: %v", err)
+		}
+
+		b.StopTimer()
+		err = db.Close()
+		if err != nil {
+			b.Fatalf("failed to close database: %v", err)
 		}
 	}
 }
