@@ -492,17 +492,14 @@ func validateRefinementContexts(contexts []block.RefinementContext, intermediate
 		if Ancestry {
 			// Validate header exists in chain
 			// ∀x ∈ x : ∃h ∈ A : hT = xt ∧ H(h) = xl (eq. 11.35 v 0.7.0)
-			_, found, err := chain.FindHeader(func(ancestor block.Header) bool {
-				ancestorHash, err := ancestor.Hash()
-				if err != nil {
-					return false
-				}
-				return ancestor.TimeSlotIndex == context.LookupAnchor.Timeslot && ancestorHash == context.LookupAnchor.HeaderHash
-			})
+			header, err := chain.GetHeader(context.LookupAnchor.HeaderHash)
 			if err != nil {
-				return fmt.Errorf("finding header: %w", err)
+				if errors.Is(err, store.ErrHeaderNotFound) {
+					return fmt.Errorf("no record of header found")
+				}
+				return fmt.Errorf("getting header: %w", err)
 			}
-			if !found {
+			if header.TimeSlotIndex != context.LookupAnchor.Timeslot {
 				return fmt.Errorf("no record of header found")
 			}
 		}
