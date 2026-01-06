@@ -43,59 +43,35 @@ type GenesisTrace struct {
 	State  StateWithRoot
 }
 
-// TestAncestryFeature tests ancestry storage and validation with 6 cases:
-// 1. FeatureNone: ancestry NOT stored, ImportBlock succeeds (no validation)
-// 2. FeatureFork: ancestry NOT stored, ImportBlock succeeds (no validation)
-// 3. FeatureAncestry: ancestry stored, ImportBlock succeeds
-// 4. FeatureAncestry + delete: ancestry stored then deleted, ImportBlock fails
-// 5. FeatureAncestryAndFork: ancestry stored, ImportBlock succeeds
-// 6. FeatureAncestryAndFork + delete: ancestry stored then deleted, ImportBlock fails
+// TestAncestryFeature tests ancestry storage and validation with 3 cases:
+// 1. FeatureFork: ancestry NOT stored, ImportBlock succeeds (no validation)
+// 2. FeatureAncestryAndFork: ancestry stored, ImportBlock succeeds
+// 3. FeatureAncestryAndFork + delete: ancestry stored then deleted, ImportBlock fails
 func TestAncestryFeature(t *testing.T) {
 	tests := []struct {
 		name                     string
-		features                 Features
+		peerFeatures             Features
 		deleteAncestryFromDB     bool
 		expectBlockImportSuccess bool
 		expectAncestryStored     bool
-	}{{
-		name:                     "ancestry disabled - import succeeds without validation",
-		features:                 FeatureNone,
-		deleteAncestryFromDB:     false,
-		expectBlockImportSuccess: true,
-		expectAncestryStored:     false,
-	},
+	}{
 		{
-			name:                     "ancestry disabled - ancestry not stored in DB",
-			features:                 FeatureFork,
+			name:                     "fork only - ancestry not stored, import succeeds",
+			peerFeatures:             FeatureFork,
 			deleteAncestryFromDB:     false,
 			expectBlockImportSuccess: true,
 			expectAncestryStored:     false,
 		},
 		{
-			name:                     "ancestry enabled and stored - import succeeds",
-			features:                 FeatureAncestry,
+			name:                     "ancestryAndFork - ancestry stored, import succeeds",
+			peerFeatures:             FeatureAncestryAndFork,
 			deleteAncestryFromDB:     false,
 			expectBlockImportSuccess: true,
 			expectAncestryStored:     true,
 		},
 		{
-			name:                     "ancestry enabled but deleted - import fails",
-			features:                 FeatureAncestry,
-			deleteAncestryFromDB:     true,
-			expectBlockImportSuccess: false,
-			expectAncestryStored:     true,
-		},
-
-		{
-			name:                     "ancestryAndFork enabled and stored - import succeeds",
-			features:                 FeatureAncestryAndFork,
-			deleteAncestryFromDB:     false,
-			expectBlockImportSuccess: true,
-			expectAncestryStored:     true,
-		},
-		{
-			name:                     "ancestryAndFork enabled but deleted - import fails",
-			features:                 FeatureAncestryAndFork,
+			name:                     "ancestryAndFork - ancestry deleted, import fails",
+			peerFeatures:             FeatureAncestryAndFork,
 			deleteAncestryFromDB:     true,
 			expectBlockImportSuccess: false,
 			expectAncestryStored:     true,
@@ -125,7 +101,7 @@ func TestAncestryFeature(t *testing.T) {
 			jamVersion := Version{0, 7, 2}
 
 			go func() {
-				n := NewNode(socketPath, chain, trieStore, appName, appVersion, jamVersion, tt.features)
+				n := NewNode(socketPath, chain, trieStore, appName, appVersion, jamVersion, tt.peerFeatures)
 				if err := n.Start(); err != nil {
 					t.Logf("failed to start Node: %v", err)
 				}
@@ -150,9 +126,10 @@ func TestAncestryFeature(t *testing.T) {
 
 			// Handshake
 			requestMsg := NewMessage(PeerInfo{
-				Name:       []byte("test client"),
-				AppVersion: Version{1, 0, 0},
-				JamVersion: Version{0, 7, 2},
+				Name:         []byte("test client"),
+				FuzzFeatures: tt.peerFeatures,
+				AppVersion:   Version{1, 0, 0},
+				JamVersion:   Version{0, 7, 2},
 			})
 			msgBytes, err := jam.Marshal(requestMsg)
 			require.NoError(t, err)
@@ -251,6 +228,92 @@ func TestAncestryFeature(t *testing.T) {
 				require.True(t, isError, "expected Error when ancestry is missing, got %T: %+v", respMsg.Get(), respMsg.Get())
 				assert.Contains(t, string(errorResp.Message), "no record of header found")
 			}
+		})
+	}
+}
+
+// TestHandshakeRejectsMissingForks tests that the node rejects peers that don't support forks
+func TestHandshakeRejectsMissingForks(t *testing.T) {
+	tests := []struct {
+		name         string
+		peerFeatures Features
+	}{
+		{
+			name:         "reject FeatureNone",
+			peerFeatures: FeatureNone,
+		},
+		{
+			name:         "reject FeatureAncestry only",
+			peerFeatures: FeatureAncestry,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			socketPath := fmt.Sprintf("/tmp/test_socket_reject_%s", tt.name)
+
+			kvStore, err := pebble.NewKVStore()
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				if err := kvStore.Close(); err != nil {
+					t.Log("db close error:", err)
+				}
+			})
+
+			chain := store.NewChain(kvStore)
+			trieStore := store.NewTrie(chain)
+
+			appName := []byte("Strawberry")
+			appVersion := Version{0, 0, 2}
+			jamVersion := Version{0, 7, 2}
+
+			go func() {
+				n := NewNode(socketPath, chain, trieStore, appName, appVersion, jamVersion, FeatureAncestryAndFork)
+				if err := n.Start(); err != nil {
+					t.Logf("failed to start Node: %v", err)
+				}
+				t.Cleanup(func() {
+					if err := n.Stop(); err != nil {
+						t.Logf("failed to stop Node: %v", err)
+					}
+				})
+			}()
+
+			time.Sleep(1 * time.Second)
+
+			conn, err := net.Dial("unix", socketPath)
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				if err := conn.Close(); err != nil {
+					t.Logf("failed to close connection: %v", err)
+				}
+			})
+
+			ctx := context.Background()
+
+			// Handshake with unsupported features
+			requestMsg := NewMessage(PeerInfo{
+				Name:         []byte("test client"),
+				FuzzFeatures: tt.peerFeatures,
+				AppVersion:   Version{1, 0, 0},
+				JamVersion:   Version{0, 7, 2},
+			})
+			msgBytes, err := jam.Marshal(requestMsg)
+			require.NoError(t, err)
+			err = handlers.WriteMessageWithContext(ctx, conn, msgBytes)
+			require.NoError(t, err)
+
+			// Should receive an error response
+			bb, err := handlers.ReadMessageWithContext(ctx, conn)
+			require.NoError(t, err)
+
+			respMsg := &Message{}
+			err = jam.Unmarshal(bb.Content, respMsg)
+			require.NoError(t, err)
+
+			errorResp, isError := respMsg.Get().(Error)
+			require.True(t, isError, "expected Error response, got %T: %+v", respMsg.Get(), respMsg.Get())
+			assert.Contains(t, string(errorResp.Message), "forks feature is mandatory")
 		})
 	}
 }

@@ -49,10 +49,6 @@ type Node struct {
 
 // NewNode create a new conformance testing node
 func NewNode(socketPath string, chain *store.Chain, trie *store.Trie, appName []byte, appVersion, jamVersion Version, features Features) *Node {
-	// Enable ancestry validation if the feature flag is set
-	if features == FeatureAncestry || features == FeatureAncestryAndFork {
-		guaranteeing.Ancestry = true
-	}
 	peerInfo := PeerInfo{
 		FuzzVersion:  1,
 		FuzzFeatures: features,
@@ -147,7 +143,17 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	if _, ok := msg.Get().(PeerInfo); ok {
+	if peerInfo, ok := msg.Get().(PeerInfo); ok {
+		switch peerInfo.FuzzFeatures {
+		case FeatureFork:
+			n.PeerInfo.FuzzFeatures = FeatureFork
+			guaranteeing.Ancestry = false
+		case FeatureAncestryAndFork:
+			n.PeerInfo.FuzzFeatures = FeatureAncestryAndFork
+			guaranteeing.Ancestry = true
+		default:
+			return nil, errors.New("forks feature is mandatory but not supported by peer")
+		}
 		n.handshakeDone = true
 		return NewMessage(n.PeerInfo), nil
 	}
