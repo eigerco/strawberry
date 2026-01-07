@@ -50,12 +50,10 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 	intermediateCoreAssignments := disputing.CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
 
 	// ψ′ ≺ (ED, ψ)
-	newJudgements, err := disputing.ValidateDisputesExtrinsicAndProduceJudgements(prevTimeSlot, newBlock.Extrinsic.ED, s.ValidatorState, s.PastJudgements)
+	newJudgements, err := disputing.ValidateDisputesExtrinsicAndProduceJudgements(prevTimeSlot, newBlock.Extrinsic.ED, s.ValidatorState, s.PastJudgements, newBlock.Header.OffendersMarkers)
 	if err != nil {
 		return err
 	}
-
-	// TODO: verify header offenders marker.
 
 	// Update SAFROLE state.
 	safroleInput, err := NewSafroleInputFromBlock(newBlock)

@@ -322,7 +322,16 @@ func TestDisputes(t *testing.T) {
 			expectedState.ValidatorState.ArchivedValidators = lambda
 			expectedState.TimeslotIndex = jamtime.Timeslot(data.PostState.Tau)
 
-			newJudgements, err := disputing.ValidateDisputesExtrinsicAndProduceJudgements(preState.TimeslotIndex, disputes, preState.ValidatorState, preState.PastJudgements)
+			// Manually calcualte offenders markers, as the test vectors do not provide a header with them
+			offendersMarkers := make([]ed25519.PublicKey, 0, len(disputes.Culprits)+len(disputes.Faults))
+			for _, culprit := range disputes.Culprits {
+				offendersMarkers = append(offendersMarkers, culprit.ValidatorEd25519PublicKey)
+			}
+			for _, fault := range disputes.Faults {
+				offendersMarkers = append(offendersMarkers, fault.ValidatorEd25519PublicKey)
+			}
+
+			newJudgements, err := disputing.ValidateDisputesExtrinsicAndProduceJudgements(preState.TimeslotIndex, disputes, preState.ValidatorState, preState.PastJudgements, offendersMarkers)
 			if data.Output.Err != "" {
 				require.Error(t, err)
 				require.EqualError(t, err, strings.ReplaceAll(data.Output.Err, "_", " "))

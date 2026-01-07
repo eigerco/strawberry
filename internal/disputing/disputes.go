@@ -316,7 +316,7 @@ func validateVerdictAndComputeVerdictSummary(v block.Verdict, faults []block.Fau
 //
 // This function ensures all dispute data is valid before updating the on-chain record of
 // judgements and offending validators.
-func ValidateDisputesExtrinsicAndProduceJudgements(prevTimeslot jamtime.Timeslot, disputes block.DisputeExtrinsic, validators validator.ValidatorState, stateJudgements state.Judgements) (state.Judgements, error) {
+func ValidateDisputesExtrinsicAndProduceJudgements(prevTimeslot jamtime.Timeslot, disputes block.DisputeExtrinsic, validators validator.ValidatorState, stateJudgements state.Judgements, offendersMarkers []ed25519.PublicKey) (state.Judgements, error) {
 	// First, verify that all items in the extrinsic are properly sorted and unique.
 	// This ensures deterministic processing and prevents duplicate entries.
 	if err := verifySortedUnique(disputes); err != nil {
@@ -415,6 +415,25 @@ func ValidateDisputesExtrinsicAndProduceJudgements(prevTimeslot jamtime.Timeslot
 	// ψ'O ≡ ψO ∪ { f |(f, . . . ) ∈ EC } ∪ { f |(f, . . . ) ∈ EF }
 	for _, key := range newOffendersMap {
 		newJudgements.OffendingValidators = append(newJudgements.OffendingValidators, key)
+	}
+
+	// H_O ≡ [f | (f, ...) ← E_C] ⌢ [f | (f, ...) ← E_F] equation 10.20 (v0.7.2)
+	culprits := disputes.Culprits
+	faults := disputes.Faults
+
+	if len(offendersMarkers) != len(culprits)+len(faults) {
+		return state.Judgements{}, errors.New("invalid offenders marker")
+	}
+
+	for i, c := range culprits {
+		if !bytes.Equal(offendersMarkers[i], c.ValidatorEd25519PublicKey) {
+			return state.Judgements{}, errors.New("invalid offenders marker")
+		}
+	}
+	for i, f := range faults {
+		if !bytes.Equal(offendersMarkers[len(culprits)+i], f.ValidatorEd25519PublicKey) {
+			return state.Judgements{}, errors.New("invalid offenders marker")
+		}
 	}
 
 	return newJudgements, nil
