@@ -330,7 +330,7 @@ func NextSafroleState(priorState *state.State, nextTimeslot jamtime.Timeslot, de
 	validator.ValidatorState,
 	SafroleOutput,
 	error) {
-	newJudgements, err := disputing.ValidateDisputesExtrinsicAndProduceJudgements(priorState.TimeslotIndex, de, priorState.ValidatorState, priorState.PastJudgements)
+	newJudgements, err := disputing.ValidateDisputesExtrinsicAndProduceJudgements(priorState.TimeslotIndex, de, priorState.ValidatorState, priorState.PastJudgements, nil)
 	if err != nil {
 		return validator.ValidatorState{}, SafroleOutput{}, err
 	}
