@@ -293,7 +293,7 @@ pub unsafe extern "C" fn secret_public(secret: *const u8, public_out: *mut u8) -
 
     let secret_slice = std::slice::from_raw_parts(secret, SECRET_KEY_LENGTH);
 
-    let secret = if let Ok(s) = Secret::deserialize_compressed(secret_slice) {
+    let secret = if let Ok(s) = Secret::deserialize_compressed_unchecked(secret_slice) {
         s
     } else {
         return -1;
@@ -338,7 +338,7 @@ pub unsafe extern "C" fn ietf_vrf_sign(
     let vrf_input_data = slice::from_raw_parts(vrf_input_data, vrf_input_data_len);
     let aux_data = slice::from_raw_parts(aux_data, aux_data_len);
 
-    let secret = if let Ok(s) = Secret::deserialize_compressed(secret_slice) {
+    let secret = if let Ok(s) = Secret::deserialize_compressed_unchecked(secret_slice) {
         s
     } else {
         return -1;
@@ -395,13 +395,13 @@ pub unsafe extern "C" fn ietf_vrf_verify(
     let aux_data_slice = std::slice::from_raw_parts(aux_data, aux_data_len);
     let signature_slice = std::slice::from_raw_parts(signature, IETF_VRF_SIGNATURE_LENGTH);
 
-    let public = if let Ok(p) = Public::deserialize_compressed(public_key_slice) {
+    let public = if let Ok(p) = Public::deserialize_compressed_unchecked(public_key_slice) {
         p
     } else {
         return -1;
     };
 
-    let signature = if let Ok(s) = IetfVrfSignature::deserialize_compressed(signature_slice) {
+    let signature = if let Ok(s) = IetfVrfSignature::deserialize_compressed_unchecked(signature_slice) {
         s
     } else {
         return -1;
@@ -440,7 +440,7 @@ pub unsafe extern "C" fn ietf_vrf_output_hash(
 
     let signature_slice = std::slice::from_raw_parts(signature, IETF_VRF_SIGNATURE_LENGTH);
 
-    let signature = if let Ok(s) = IetfVrfSignature::deserialize_compressed(signature_slice) {
+    let signature = if let Ok(s) = IetfVrfSignature::deserialize_compressed_unchecked(signature_slice) {
         s
     } else {
         return -1;
@@ -477,7 +477,7 @@ pub unsafe extern "C" fn new_ring_vrf_verifier(
     let ring: Vec<Public> = public_keys_slice
         .chunks(PUBLIC_KEY_LENGTH)
         // Invalid public keys become padding points.
-        .map(|chunk| Public::deserialize_compressed(chunk).unwrap_or(padding_point))
+        .map(|chunk| Public::deserialize_compressed_unchecked(chunk).unwrap_or(padding_point))
         .collect();
 
     if ring.len() != num_keys {
@@ -549,7 +549,7 @@ pub unsafe extern "C" fn ring_vrf_output_hash(
 
     let signature_slice = std::slice::from_raw_parts(signature, RING_VRF_SIGNATURE_LENGTH);
 
-    let signature = if let Ok(s) = RingVrfSignature::deserialize_compressed(signature_slice) {
+    let signature = if let Ok(s) = RingVrfSignature::deserialize_compressed_unchecked(signature_slice) {
         s
     } else {
         return -1;
@@ -603,13 +603,13 @@ pub unsafe extern "C" fn ring_vrf_verifier_verify(
     let commitment_slice = std::slice::from_raw_parts(commitment, RING_VRF_COMMITMENT_LENGTH);
     let signature_slice = std::slice::from_raw_parts(signature, RING_VRF_SIGNATURE_LENGTH);
 
-    let commitment = if let Ok(c) = RingCommitment::deserialize_compressed(commitment_slice) {
+    let commitment = if let Ok(c) = RingCommitment::deserialize_compressed_unchecked(commitment_slice) {
         c
     } else {
         return -1;
     };
 
-    let signature = if let Ok(s) = RingVrfSignature::deserialize_compressed(signature_slice) {
+    let signature = if let Ok(s) = RingVrfSignature::deserialize_compressed_unchecked(signature_slice) {
         s
     } else {
         return -1;
@@ -650,7 +650,7 @@ pub unsafe extern "C" fn new_ring_vrf_prover(
     let secret_slice = std::slice::from_raw_parts(secret, SECRET_KEY_LENGTH);
     let public_keys_slice = std::slice::from_raw_parts(public_keys, public_keys_len);
 
-    let secret = if let Ok(s) = Secret::deserialize_compressed(secret_slice) {
+    let secret = if let Ok(s) = Secret::deserialize_compressed_unchecked(secret_slice) {
         s
     } else {
         return std::ptr::null_mut();
@@ -662,7 +662,7 @@ pub unsafe extern "C" fn new_ring_vrf_prover(
     let ring: Vec<Public> = public_keys_slice
         .chunks(PUBLIC_KEY_LENGTH)
         // Invalid public keys become padding points.
-        .map(|chunk| Public::deserialize_compressed(chunk).unwrap_or(padding_point))
+        .map(|chunk| Public::deserialize_compressed_unchecked(chunk).unwrap_or(padding_point))
         .collect();
 
     if ring.len() != num_keys {
