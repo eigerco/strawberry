@@ -85,7 +85,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		return err
 	}
 
-	reporters, err := guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(newBlock.Extrinsic.EG, s, newEntropyPool, chain, newTimeSlot, intermediateRecentHistory, newBlock.Header, intermediateCoreAssignments)
+	reporters, err := guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(newBlock.Extrinsic.EG, s, newValidatorState, newEntropyPool, chain, newTimeSlot, intermediateRecentHistory, newBlock.Header, intermediateCoreAssignments)
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie 
 		return err
 	}
 
-	newValidatorStatistics, err := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, s.ValidatorState.CurrentValidators,
+	newValidatorStatistics, err := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, newValidatorState.CurrentValidators,
 		availableWorkReports, accumulationStats)
 	if err != nil {
 		return err
