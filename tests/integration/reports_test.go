@@ -563,6 +563,7 @@ func TestReports(t *testing.T) {
 				reporters, err = guaranteeing.ValidateGuaranteExtrinsicAndReturnReporters(
 					newBlock.Extrinsic.EG,
 					&preState,
+					preState.ValidatorState,
 					// TODO find a better way to get correct (new) entropy pool.
 					preState.EntropyPool,
 					chain,
