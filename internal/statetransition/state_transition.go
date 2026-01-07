@@ -36,7 +36,7 @@ import (
 //
 //	it might be worth making State immutable and make it so that UpdateState returns a new State with all the updated fields
 func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie *store.Trie) error {
-	err := VerifyBlockHeaderBasic(s, newBlock, trie)
+	err := VerifyBlockHeaderBasic(s, newBlock)
 	if err != nil {
 		return fmt.Errorf("failed to verify block header: %w", err)
 	}

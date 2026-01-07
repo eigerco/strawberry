@@ -7,9 +7,12 @@ import (
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/merkle"
-	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
 )
+
+// CheckTimeliness indicates whether to check if the block timeslot is in the future
+// TODO: make this a config
+var CheckTimeliness bool
 
 // VerifyBlockHeaderBasic verifies header fields which are verifiable with just
 // the prior state:
@@ -18,12 +21,13 @@ import (
 // - The extrinsic hash
 // The trie database must be passed in produce the merkle root of the state.
 // GP v0.7.0
-func VerifyBlockHeaderBasic(priorState *state.State, block block.Block, trie *store.Trie) error {
-	// Timeslot validation. Equation 5.7
-	// P(H)_T < H_T ∧ H_T ⋅ P ≤ T
-	if block.Header.TimeSlotIndex.IsInFuture() {
+func VerifyBlockHeaderBasic(priorState *state.State, block block.Block) error {
+	// H_T · P ≤ T  Equation 5.7 (partial)
+	if CheckTimeliness && block.Header.TimeSlotIndex.IsInFuture() {
 		return errors.New("timeslot is in the future")
 	}
+	// Timeslot must be greater than parent's. Equation 5.7 (the rest)
+	// P(H)_T < H_T
 	if priorState.TimeslotIndex >= block.Header.TimeSlotIndex {
 		return errors.New("timeslot must be greater than the prior state's timeslot")
 	}
