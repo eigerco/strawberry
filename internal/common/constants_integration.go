@@ -14,7 +14,7 @@ const (
 	MaxTicketAttemptsPerValidator                = 3
 	MaxHistoricalTimeslotsForPreimageMeta        = 3
 	SizeOfSegment                                = NumberOfErasureCodecPiecesInSegment * ErasureCodingChunkSize
-	MaxWorkPackageSize                           = 13_794_305
+	MaxWorkPackageSize                           = 13_791_360
 	NumberOfErasureCodecPiecesInSegment          = 1026
 	ErasureCodingOriginalShards                  = 2
 	ErasureCodingChunkSize                       = 4

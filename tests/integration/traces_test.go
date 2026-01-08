@@ -54,7 +54,9 @@ func TestTraceFuzzyLight(t *testing.T) {
 }
 
 func TestTraceFuzzer(t *testing.T) {
-	t.Skip("temporarily disabled until we fix the issues")
+	// Fuzzer uses MaxTimeslotsForLookupAnchor=24, tiny spec uses MaxTimeslotsForLookupAnchor=14400)
+	//TODO: re-enable once we have the config opts
+	t.Skip("temporarily disabled until they sync MaxTimeslotsForLookupAnchor")
 
 	entries, err := os.ReadDir("traces/fuzzer")
 	require.NoError(t, err)
