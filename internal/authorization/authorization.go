@@ -7,6 +7,7 @@ import (
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/pkg/log"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -53,6 +54,12 @@ func (a *Authorization) InvokePVM(
 		mem pvm.Memory,
 		ctx EmptyContext,
 	) (pvm.Gas, pvm.Registers, pvm.Memory, EmptyContext, error) {
+		log.VM.Debug().
+			Str("host_call", host_call.HostCallName(hostCall)).
+			Uint16("core", coreCode).
+			Str("phase", "authorization").
+			Msg("Host call invoked")
+
 		switch hostCall {
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
