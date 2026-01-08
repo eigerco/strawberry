@@ -94,6 +94,12 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 
 	// F (equation B.10)
 	hostCallFunc := func(hostCall uint64, gasCounter pvm.Gas, regs pvm.Registers, mem pvm.Memory, ctx pvm.AccumulateContextPair) (pvm.Gas, pvm.Registers, pvm.Memory, pvm.AccumulateContextPair, error) {
+		log.VM.Debug().
+			Str("host_call", host_call.HostCallName(hostCall)).
+			Uint32("service_id", uint32(serviceIndex)).
+			Str("phase", "accumulate").
+			Msg("Host call invoked")
+
 		// s = (xu)d[xs]
 		currentService := ctx.RegularCtx.AccumulationState.ServiceState[serviceIndex]
 

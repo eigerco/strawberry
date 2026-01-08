@@ -125,6 +125,70 @@ func (r Code) String() string {
 	return "unknown"
 }
 
+// HostCallName returns a human-readable name for a host call ID
+func HostCallName(id uint64) string {
+	switch id {
+	case GasID:
+		return "gas"
+	case FetchID:
+		return "fetch"
+	case LookupID:
+		return "lookup"
+	case ReadID:
+		return "read"
+	case WriteID:
+		return "write"
+	case InfoID:
+		return "info"
+	case HistoricalLookupID:
+		return "historical_lookup"
+	case ExportID:
+		return "export"
+	case MachineID:
+		return "machine"
+	case PeekID:
+		return "peek"
+	case PokeID:
+		return "poke"
+	case PagesID:
+		return "pages"
+	case InvokeID:
+		return "invoke"
+	case ExpungeID:
+		return "expunge"
+	case BlessID:
+		return "bless"
+	case AssignID:
+		return "assign"
+	case DesignateID:
+		return "designate"
+	case CheckpointID:
+		return "checkpoint"
+	case NewID:
+		return "new"
+	case UpgradeID:
+		return "upgrade"
+	case TransferID:
+		return "transfer"
+	case EjectID:
+		return "eject"
+	case QueryID:
+		return "query"
+	case SolicitID:
+		return "solicit"
+	case ForgetID:
+		return "forget"
+	case YieldID:
+		return "yield"
+	case ProvideID:
+		return "provide"
+	case LogID:
+		return "log"
+	default:
+		return "unknown"
+	}
+}
+
 func readNumber[U interface{ ~uint32 | ~uint64 | ~int64 }](mem Memory, addr uint64, length int) (u U, err error) {
 	b := make([]byte, length)
 	if addr > math.MaxUint32 {

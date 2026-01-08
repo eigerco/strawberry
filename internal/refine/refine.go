@@ -10,6 +10,7 @@ import (
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/pkg/log"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -96,6 +97,12 @@ func (r *Refine) InvokePVM(
 
 	// F ∈ Ω⟨(D⟨N → M⟩, ⟦G⟧)⟩∶ (n, ϱ, φ, μ, (m, e))
 	hostCall := func(hostCall uint64, gasCounter pvm.Gas, regs pvm.Registers, mem pvm.Memory, ctxPair pvm.RefineContextPair) (pvm.Gas, pvm.Registers, pvm.Memory, pvm.RefineContextPair, error) {
+		log.VM.Debug().
+			Str("host_call", host_call.HostCallName(hostCall)).
+			Uint32("service_id", uint32(w.ServiceId)).
+			Str("phase", "refine").
+			Msg("Host call invoked")
+
 		switch hostCall {
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
