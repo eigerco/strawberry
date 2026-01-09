@@ -326,6 +326,15 @@ func TestLookup(t *testing.T) {
 	t.Run("service_not_found", func(t *testing.T) {
 		mem, initialRegs, err := pvm.InitializeStandardProgram(pp, nil)
 		require.NoError(t, err)
+
+		// Set A1 to point to valid readable memory
+		h := pvm.RWAddressBase
+		initialRegs[pvm.A1] = uint64(h)
+
+		// Write 32 bytes at that address (key data, content doesn't matter for this test)
+		err = mem.Write(uint32(h), make([]byte, 32))
+		require.NoError(t, err)
+
 		gasRemaining, regs, _, err := host_call.Lookup(initialGas, initialRegs, mem, service.ServiceAccount{}, 1, make(service.ServiceState))
 		require.NoError(t, err)
 		assert.Equal(t, uint64(host_call.NONE), regs[pvm.A0])
