@@ -219,21 +219,20 @@ func Lookup(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAc
 
 	omega7 := regs[pvm.A0]
 
-	// Determine the lookup key 'a'
+	// let a =
+	//   s           if φ₇ ∈ { s, 2⁶⁴ − 1 }
+	//   d[φ₇]       otherwise if φ₇ ∈ K(d)
+	//   ∅           otherwise
 	a := s
+	serviceExists := true
 	if uint64(omega7) != math.MaxUint64 && omega7 != uint64(serviceId) {
-		var exists bool
-		// lookup service account by serviceId in the serviceState
-		a, exists = serviceState[serviceId]
-		if !exists {
-			regs[pvm.A0] = uint64(NONE)
-			return gas, regs, mem, nil
-		}
+		a, serviceExists = serviceState[block.ServiceId(omega7)] //d[φ₇]
 	}
 
-	// let [h, o] = φ8..+2
+	// let [h, o] = φ₈‥₊₂
 	h, o := regs[pvm.A1], regs[pvm.A2]
 
+	// let v = ∇ if N_h‥₊₃₂ ⊄ Vμ (read fault → panic)
 	key := make([]byte, 32)
 	if h > math.MaxUint32 {
 		return gas, regs, mem, pvm.ErrPanicf("inaccessible memory, address out of range")
@@ -242,17 +241,28 @@ func Lookup(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAc
 		return gas, regs, mem, pvm.ErrPanicf(err.Error())
 	}
 
-	// lookup value in storage (v) using the hash
-	v, exists := a.PreimageLookup[crypto.Hash(key)]
-	if !exists {
-		// v=∅ => (▸, NONE, μ)
+	// let v = ∅ otherwise if a = ∅
+	// (ε′, φ′₇, μ′) = (▸, NONE, μ) if v = ∅
+	if !serviceExists {
 		return gas, withCode(regs, NONE), mem, nil
 	}
 
-	if err := writeFromOffset(&mem, o, v, regs[pvm.A3], regs[pvm.A4]); err != nil {
-		return gas, regs, mem, err
+	// let v = ∅ otherwise if μ_h‥₊₃₂ ∉ K(aₚ)
+	// (ε′, φ′₇, μ′) = (▸, NONE, μ) if v = ∅
+	v, exists := a.PreimageLookup[crypto.Hash(key)]
+	if !exists {
+		return gas, withCode(regs, NONE), mem, nil
 	}
 
+	// let f = min(φ₁₀, |v|)
+	// let l = min(φ₁₁, |v| − f)
+	// μ′_o‥₊l = v_f‥₊l
+	// (ε′, φ′₇, μ′) = (☇, φ₇, μ) if N_o‥₊l ⊄ V*μ (write fault → panic)
+	if err := writeFromOffset(&mem, o, v, regs[pvm.A3], regs[pvm.A4]); err != nil {
+		return gas, regs, mem, err // err is a panic
+	}
+
+	// (ε′, φ′₇, μ′) = (▸, |v|, v_f‥₊l)
 	regs[pvm.A0] = uint64(len(v))
 	return gas, regs, mem, nil
 }
