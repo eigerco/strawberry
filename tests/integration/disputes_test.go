@@ -10,11 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/disputing"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
@@ -218,8 +217,8 @@ func mapKey(kappa ValidatorKey) crypto.ValidatorKey {
 	}
 }
 
-func mapJudgments(judgements []Judgement) [common.ValidatorsSuperMajority]block.Judgement {
-	var mappedJudgements [common.ValidatorsSuperMajority]block.Judgement
+func mapJudgments(judgements []Judgement) [constants.ValidatorsSuperMajority]block.Judgement {
+	var mappedJudgements [constants.ValidatorsSuperMajority]block.Judgement
 	for i, judgement := range judgements {
 		mappedJudgements[i] = block.Judgement{
 			IsValid:        judgement.IsValid,

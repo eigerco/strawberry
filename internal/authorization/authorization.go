@@ -1,7 +1,7 @@
 package authorization
 
 import (
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/pvm"
 	"github.com/eigerco/strawberry/internal/pvm/host_call"
 	"github.com/eigerco/strawberry/internal/service"
@@ -93,7 +93,7 @@ func (a *Authorization) InvokePVM(
 	_, result, _, err := pvm.InvokeWholeProgram(
 		pvmCode.Code, // pc
 		0,
-		common.MaxAllocatedGasIsAuthorized,
+		constants.MaxAllocatedGasIsAuthorized,
 		args,
 		hostCall,
 		EmptyContext{},

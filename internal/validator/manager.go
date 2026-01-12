@@ -5,7 +5,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
@@ -98,7 +98,7 @@ func (vm *ValidatorManager) DetermineProxyValidatorIndex(hash crypto.Bandersnatc
 	// Convert the uint32 to an int
 
 	// Modulo the number of validators to get the final index
-	return proxyIndex % uint32(common.NumberOfValidators)
+	return proxyIndex % uint32(constants.NumberOfValidators)
 }
 
 // filterOutSelfFromValidators removes the validator's own key from the list of validators.

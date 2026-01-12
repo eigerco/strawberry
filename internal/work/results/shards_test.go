@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/erasurecoding"
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
 
@@ -147,12 +148,12 @@ func TestComputePagedProofs(t *testing.T) {
 		},
 		{
 			name:          "single page of segments",
-			inputSegments: createSegments(work.SegmentsPerPage),
+			inputSegments: createSegments(constants.SegmentsPerPage),
 			expectError:   false,
 		},
 		{
 			name:          "multiple pages of segments",
-			inputSegments: createSegments(work.SegmentsPerPage * 2),
+			inputSegments: createSegments(constants.SegmentsPerPage * 2),
 			expectError:   false,
 		},
 	}
@@ -168,7 +169,7 @@ func TestComputePagedProofs(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			expectedNumPages := len(tt.inputSegments) / work.SegmentsPerPage
+			expectedNumPages := len(tt.inputSegments) / constants.SegmentsPerPage
 			assert.Equal(t, expectedNumPages, len(proofs))
 		})
 	}
@@ -176,8 +177,8 @@ func TestComputePagedProofs(t *testing.T) {
 
 func TestComputePagedProofsConsistency(t *testing.T) {
 	// Create two identical sets of segments
-	segments1 := createSegments(work.SegmentsPerPage)
-	segments2 := createSegments(work.SegmentsPerPage)
+	segments1 := createSegments(constants.SegmentsPerPage)
+	segments2 := createSegments(constants.SegmentsPerPage)
 
 	proofs1, err := ComputePagedProofs(segments1)
 	require.NoError(t, err)

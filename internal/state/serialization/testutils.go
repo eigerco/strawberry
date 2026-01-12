@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/service"
@@ -95,7 +95,7 @@ func RandomPrivilegedServices() service.PrivilegedServices {
 	}
 	return service.PrivilegedServices{
 		ManagerServiceId:         block.ServiceId(123),
-		AssignedServiceIds:       [common.TotalNumberOfCores]block.ServiceId{234},
+		AssignedServiceIds:       [constants.TotalNumberOfCores]block.ServiceId{234},
 		CreateProtectedServiceId: block.ServiceId(245),
 		DesignateServiceId:       block.ServiceId(345),
 		AmountOfGasPerServiceId:  amountOfGasPerServiceId,
@@ -109,7 +109,7 @@ func RandomEntropyPool(t *testing.T) state.EntropyPool {
 func RandomCoreAuthorizersPool(t *testing.T) state.CoreAuthorizersPool {
 	var pool state.CoreAuthorizersPool
 	for i := range pool {
-		for range state.MaxAuthorizersPerCore {
+		for range constants.MaxAuthorizersPerCore {
 			pool[i] = append(pool[i], testutils.RandomHash(t))
 		}
 	}
@@ -119,7 +119,7 @@ func RandomCoreAuthorizersPool(t *testing.T) state.CoreAuthorizersPool {
 func RandomPendingAuthorizersQueues(t *testing.T) state.PendingAuthorizersQueues {
 	var queue state.PendingAuthorizersQueues
 	for i := range queue {
-		for j := 0; j < state.PendingAuthorizersQueueSize; j++ {
+		for j := 0; j < constants.PendingAuthorizersQueueSize; j++ {
 			queue[i][j] = testutils.RandomHash(t)
 		}
 	}
@@ -223,7 +223,7 @@ func RandomHashSet(t *testing.T, maxSize int) map[crypto.Hash]struct{} {
 
 func RandomRecentHistory(t *testing.T) state.RecentHistory {
 	workReportHashes := make(map[crypto.Hash]crypto.Hash)
-	for i := uint16(0); i < common.TotalNumberOfCores; i++ {
+	for i := uint16(0); i < constants.TotalNumberOfCores; i++ {
 		workReportHashes[testutils.RandomHash(t)] = testutils.RandomHash(t)
 	}
 	accumulationOutputLogHash := testutils.RandomHash(t)
@@ -264,8 +264,8 @@ func RandomValidatorStatistics() validator.ValidatorStatistics {
 
 func RandomValidatorStatisticsState() validator.ActivityStatisticsState {
 	return validator.ActivityStatisticsState{
-		ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
-		ValidatorsLast:    [common.NumberOfValidators]validator.ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
+		ValidatorsCurrent: [constants.NumberOfValidators]validator.ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
+		ValidatorsLast:    [constants.NumberOfValidators]validator.ValidatorStatistics{RandomValidatorStatistics(), RandomValidatorStatistics()},
 	}
 }
 

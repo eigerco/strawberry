@@ -6,7 +6,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/stretchr/testify/assert"
@@ -66,7 +66,7 @@ func TestIsNeighbor(t *testing.T) {
 	keyNotValidator := ed25519.PublicKey("notvalidator")
 
 	// Calculate grid width based on total validator count
-	gridWidth := uint16(math.Floor(math.Sqrt(float64(common.NumberOfValidators))))
+	gridWidth := uint16(math.Floor(math.Sqrt(float64(constants.NumberOfValidators))))
 
 	// Setup indices for different test scenarios
 	sameRowIdx1 := uint16(0)

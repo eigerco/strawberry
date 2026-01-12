@@ -16,7 +16,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/authorization"
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/refine"
@@ -190,9 +190,9 @@ func (h *WorkReportGuarantor) processWorkPackage(
 	coreIndex uint16,
 	bundle *work.PackageBundle,
 ) error {
-	if coreIndex >= common.TotalNumberOfCores {
+	if coreIndex >= constants.TotalNumberOfCores {
 		return fmt.Errorf("invalid coreIndex: %d (must be < %d)",
-			coreIndex, common.TotalNumberOfCores)
+			coreIndex, constants.TotalNumberOfCores)
 	}
 
 	h.mu.RLock()

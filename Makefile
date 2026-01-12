@@ -69,7 +69,7 @@ integration-full: build-bandersnatch build-erasurecoding
 	go test ./tests/... -race -v $(DARWIN_TEST_GOFLAGS) --tags=full,integration
 
 .PHONY: traces-tiny
-## traces: Runs traces tests.
+## traces-tiny: Runs traces tests with tiny configuration.
 traces-tiny: build-bandersnatch build-erasurecoding
 	go test ./tests/... $(DARWIN_TEST_GOFLAGS) --tags=tiny,traces
 
@@ -91,7 +91,8 @@ build-conformance: build-bandersnatch build-erasurecoding
 .PHONY: test-conformance
 ## test-conformance: Runs conformance tests
 test-conformance: build-bandersnatch build-erasurecoding
-	go test ./pkg/conformance/... -v $(DARWIN_TEST_GOFLAGS) --tags=tiny,conformance
+	go test ./tests/... $(DARWIN_TEST_GOFLAGS) --tags=conformance,traces
+	go test ./pkg/conformance/... -v $(DARWIN_TEST_GOFLAGS) --tags=conformance
 
 .PHONY: run-target
 ## run-target: Runs the conformance target with socket /tmp/jam_target.sock

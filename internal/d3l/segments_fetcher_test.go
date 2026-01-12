@@ -11,7 +11,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/d3l"
 	"github.com/eigerco/strawberry/internal/erasurecoding"
@@ -38,7 +38,7 @@ func (a *assurerClientMock) SegmentShardRequestSend(ctx context.Context, peerKey
 }
 
 func TestNewSegmentsFetcher(t *testing.T) {
-	assurers := make([]*peer.Peer, common.NumberOfValidators)
+	assurers := make([]*peer.Peer, constants.NumberOfValidators)
 	for i := range assurers {
 		validatorIndex := uint16(i)
 		pub, _, err := ed25519.GenerateKey(rand.Reader)
@@ -67,7 +67,7 @@ func TestNewSegmentsFetcher(t *testing.T) {
 	t.Run("success all valid assurers", func(t *testing.T) {
 		assurerClient := new(assurerClientMock)
 		assurerClient.On("GetAllPeers").Return(assurers)
-		for i, assurer := range assurers[:common.ErasureCodingOriginalShards] {
+		for i, assurer := range assurers[:constants.ErasureCodingOriginalShards] {
 			assurerClient.On("SegmentShardRequestSend", ctx, assurer.Ed25519Key, erasureRoot, *assurer.ValidatorIndex, segmentIndexes).
 				Return([][]byte{
 					segment1Shards[i],
@@ -90,7 +90,7 @@ func TestNewSegmentsFetcher(t *testing.T) {
 	t.Run("success some valid assurers", func(t *testing.T) {
 		assurerClient := new(assurerClientMock)
 		assurerClient.On("GetAllPeers").Return(assurers)
-		for i, assurer := range assurers[:common.ErasureCodingOriginalShards*2] {
+		for i, assurer := range assurers[:constants.ErasureCodingOriginalShards*2] {
 			if i%2 == 0 {
 				assurerClient.On("SegmentShardRequestSend", mock.Anything, assurer.Ed25519Key, erasureRoot, *assurer.ValidatorIndex, segmentIndexes).
 					Return([][]byte{nil}, errors.New("cannot get the shards"))
@@ -141,7 +141,7 @@ func TestNewSegmentsFetcher(t *testing.T) {
 }
 
 func buildSegment(t *testing.T, data string) work.Segment {
-	require.Less(t, len(data), common.SizeOfSegment)
+	require.Less(t, len(data), constants.SizeOfSegment)
 	seg := work.Segment{}
 	copy(seg[:], data)
 	return seg

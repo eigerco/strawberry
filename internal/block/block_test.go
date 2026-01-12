@@ -5,13 +5,12 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -42,7 +41,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		BlockSealSignature: testutils.RandomBandersnatchSignature(t),
 	}
 
-	for i := 0; i < common.NumberOfValidators; i++ {
+	for i := 0; i < constants.NumberOfValidators; i++ {
 		h.EpochMarker.Keys[i].Bandersnatch = testutils.RandomBandersnatchPublicKey(t)
 		h.EpochMarker.Keys[i].Ed25519 = testutils.RandomED25519PublicKey(t)
 	}
@@ -68,7 +67,7 @@ func Test_BlockEncodeDecode(t *testing.T) {
 		{
 			ReportHash: testutils.RandomHash(t),
 			EpochIndex: jamtime.Epoch(1),
-			Judgements: [common.ValidatorsSuperMajority]Judgement{
+			Judgements: [constants.ValidatorsSuperMajority]Judgement{
 				{
 					IsValid:        true,
 					ValidatorIndex: uint16(2),

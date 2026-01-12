@@ -3,7 +3,7 @@ package results
 import (
 	"fmt"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/erasurecoding"
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
@@ -23,7 +23,7 @@ type Shards struct {
 // implements parts of eq. 14.16
 func ShardBundleAndSegments(auditableBlob []byte, segments []work.Segment) (*Shards, error) {
 	// H#(C⌈|b|/WE⌉(PWE(b)))
-	padded := work.ZeroPadding(auditableBlob, common.ErasureCodingChunkSize)
+	padded := work.ZeroPadding(auditableBlob, constants.ErasureCodingChunkSize)
 	auditableShards, err := erasurecoding.Encode(padded)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func ShardBundleAndSegments(auditableBlob []byte, segments []work.Segment) (*Sha
 
 	var shardsForSegments [][][]byte
 	if len(segmentsWithProofs) > 0 {
-		shardsForSegments = make([][][]byte, common.NumberOfValidators)
+		shardsForSegments = make([][][]byte, constants.NumberOfValidators)
 
 		for _, segmentOrProof := range segmentsWithProofs {
 			segmentOrProofShards, err := erasurecoding.Encode(segmentOrProof[:])
@@ -52,8 +52,8 @@ func ShardBundleAndSegments(auditableBlob []byte, segments []work.Segment) (*Sha
 		}
 	}
 
-	auditableHashSegmentRootPairs := make([][]byte, common.NumberOfValidators)
-	for i := 0; i < common.NumberOfValidators; i++ {
+	auditableHashSegmentRootPairs := make([][]byte, constants.NumberOfValidators)
+	for i := 0; i < constants.NumberOfValidators; i++ {
 		auditShardHash := crypto.HashData(auditableShards[i])
 		auditableHashSegmentRootPairs[i] = auditShardHash[:]
 		if len(shardsForSegments) > 0 {
@@ -77,12 +77,12 @@ func ComputePagedProofs(segments []work.Segment) ([]work.Segment, error) {
 	for i, seg := range segments {
 		blobs[i] = seg[:]
 	}
-	numPages := (len(segments) + work.SegmentsPerPage - 1) / work.SegmentsPerPage
+	numPages := (len(segments) + constants.SegmentsPerPage - 1) / constants.SegmentsPerPage
 	pagedProofs := make([]work.Segment, numPages)
 	for pageIndex := 0; pageIndex < numPages; pageIndex++ {
 		// Get leaf hashes and proof for page
-		leafHashes := binary_tree.GetLeafPage(blobs, pageIndex, common.NumberOfErasureCodecPiecesInSegment, crypto.HashData)
-		proof := binary_tree.GeneratePageProof(blobs, pageIndex, common.NumberOfErasureCodecPiecesInSegment, crypto.HashData)
+		leafHashes := binary_tree.GetLeafPage(blobs, pageIndex, constants.NumberOfErasureCodecPiecesInSegment, crypto.HashData)
+		proof := binary_tree.GeneratePageProof(blobs, pageIndex, constants.NumberOfErasureCodecPiecesInSegment, crypto.HashData)
 
 		// Encode leaves and proof
 		marshalledLeaves, err := jam.Marshal(leafHashes)
@@ -94,7 +94,7 @@ func ComputePagedProofs(segments []work.Segment) ([]work.Segment, error) {
 			return nil, fmt.Errorf("failed to marshal proof: %w", err)
 		}
 		combined := append(marshalledLeaves, marshalledProof...)
-		padded := work.ZeroPadding(combined, common.SizeOfSegment)
+		padded := work.ZeroPadding(combined, constants.SizeOfSegment)
 		copy(pagedProofs[pageIndex][:], padded)
 	}
 	return pagedProofs, nil

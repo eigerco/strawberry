@@ -1,18 +1,19 @@
 package work
 
 import (
+	"maps"
+	"math/rand/v2"
+	"slices"
+	"testing"
+
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/merkle/binary_tree"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"maps"
-	"math/rand/v2"
-	"slices"
-	"testing"
 )
 
 func TestPackageBundleBuildingAndCodec(t *testing.T) {
@@ -92,7 +93,7 @@ func newBundleGenerator(t *testing.T) *bundleGenerator {
 		nrOfSegments := rand.Uint32N(10) + 1
 		segments := make([]Segment, nrOfSegments)
 		for i := range nrOfSegments {
-			segments[i] = Segment(testutils.RandomBytes(t, common.SizeOfSegment))
+			segments[i] = Segment(testutils.RandomBytes(t, constants.SizeOfSegment))
 		}
 		segmentRoot := binary_tree.ComputeConstantDepthRoot(segmentsToByteSlices(segments), crypto.HashData)
 		sp.segmentsPool[segmentRoot] = segments

@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +17,7 @@ func uintToSeed(i uint) (seed crypto.BandersnatchSeedKey) {
 
 func TestInitRingSize(t *testing.T) {
 	// Confirm that the ring size is being correctly intialized within the init() fn.
-	require.Equal(t, uint(common.NumberOfValidators), GetRingSize())
+	require.Equal(t, uint(constants.NumberOfValidators), GetRingSize())
 }
 
 func TestSignAndVerify(t *testing.T) {

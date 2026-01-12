@@ -5,7 +5,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
@@ -38,7 +38,7 @@ func Test_HeaderEncodeDecode(t *testing.T) {
 		BlockSealSignature: testutils.RandomBandersnatchSignature(t),
 	}
 
-	for i := 0; i < common.NumberOfValidators; i++ {
+	for i := 0; i < constants.NumberOfValidators; i++ {
 		h.EpochMarker.Keys[i].Bandersnatch = testutils.RandomBandersnatchPublicKey(t)
 		h.EpochMarker.Keys[i].Ed25519 = testutils.RandomED25519PublicKey(t)
 	}

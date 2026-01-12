@@ -6,13 +6,12 @@ import (
 	"math"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	. "github.com/eigerco/strawberry/internal/pvm"
 	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/internal/service"
-	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
@@ -42,7 +41,7 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	}
 
 	// Na⋅⋅⋅+4C ⊆ Vµ
-	assignersBytes := make([]byte, 4*common.TotalNumberOfCores)
+	assignersBytes := make([]byte, 4*constants.TotalNumberOfCores)
 	if assignServiceAddr > math.MaxUint32 {
 		return gas, regs, mem, ctxPair, ErrPanicf("inaccessible memory, address out of range")
 	}
@@ -51,7 +50,7 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 	// (E−1(4) (µa⋅⋅⋅+4C)
-	var assigners [common.TotalNumberOfCores]block.ServiceId
+	var assigners [constants.TotalNumberOfCores]block.ServiceId
 	err := jam.Unmarshal(assignersBytes, &assigners)
 	if err != nil {
 		// (ℓ, φ_7, (x_e)_(m,a,v,r,z)) if {z, a} ∋ ∇
@@ -102,8 +101,8 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 	// Read the queue from memory first (can panic on invalid memory access)
 	// q = [μo+32i···+32 | i ← NQ] if No···+32Q ⊆ Vμ otherwise ∇
 	// (☇, φ7, (xe)q[c], (xe)a[c]) if q = ∇
-	var queue [state.PendingAuthorizersQueueSize]crypto.Hash
-	for i := range state.PendingAuthorizersQueueSize {
+	var queue [constants.PendingAuthorizersQueueSize]crypto.Hash
+	for i := range constants.PendingAuthorizersQueueSize {
 		bytes := make([]byte, 32)
 		queueAddr, ok := safemath.Add(addr, 32*uint64(i))
 		if !ok {
@@ -119,7 +118,7 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 	}
 
 	// (▸, CORE, ...) otherwise if c ≥ C
-	if core >= uint64(common.TotalNumberOfCores) {
+	if core >= uint64(constants.TotalNumberOfCores) {
 		return gas, withCode(regs, CORE), mem, ctxPair, nil
 	}
 
@@ -155,7 +154,7 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 
 	// let o = φ7
 	addr := regs[A0]
-	for i := 0; i < common.NumberOfValidators; i++ {
+	for i := 0; i < constants.NumberOfValidators; i++ {
 		bytes := make([]byte, 336)
 		valAddr, ok := safemath.Add(addr, 336*uint64(i))
 		if !ok {
@@ -483,7 +482,7 @@ func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, t
 	}
 
 	// if d_l[h, l] = [x, y], y < t − D => OK
-	if len(historicalTimeslots) == 2 && historicalTimeslots[1] < timeslot-jamtime.PreimageExpulsionPeriod {
+	if len(historicalTimeslots) == 2 && historicalTimeslots[1] < timeslot-constants.PreimageExpulsionPeriod {
 		xs := ctxPair.RegularCtx.ServiceAccount()
 		// s'_b = ((x_u)d)[x_s]b + d_b
 		xs.Balance += serviceAccount.Balance
@@ -652,7 +651,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 		return gas, withCode(regs, OK), mem, ctxPair, nil
 
 	case 2: // if (xs)l[h, z] ∈ {[], [X, Y]}, Y < t − D
-		if int(historicalTimeslots[1]) < int(timeslot)-jamtime.PreimageExpulsionPeriod {
+		if int(historicalTimeslots[1]) < int(timeslot)-constants.PreimageExpulsionPeriod {
 
 			// except: K(al) = K((xs)l) ∖ {(h, z)}
 			// except: K(ap) = K((xs)p) ∖ {h}
@@ -679,7 +678,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 		return gas, withCode(regs, OK), mem, ctxPair, nil
 
 	case 3: // if (xs)l[h, z] = [X, Y, w]
-		if int(historicalTimeslots[1]) < int(timeslot)-jamtime.PreimageExpulsionPeriod { // if Y < t − D
+		if int(historicalTimeslots[1]) < int(timeslot)-constants.PreimageExpulsionPeriod { // if Y < t − D
 
 			// except: al[h, z] = [w, t] if (xs)l[h, z] = [x, y, w], y < t − D
 			newHistoricalTimeslots := service.PreimageHistoricalTimeslots{historicalTimeslots[2], timeslot}

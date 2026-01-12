@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/testutils"
 )
@@ -17,13 +17,13 @@ func SetupValidatorState(t *testing.T) *ValidatorState {
 	validatorState.ArchivedValidators = RandomListOfValidators(t)
 	safroleState := safrole.State{}
 	safroleState.NextValidators = RandomListOfValidators(t)
-	safroleState.TicketAccumulator = make([]block.Ticket, jamtime.TimeslotsPerEpoch)
-	for i := 0; i < jamtime.TimeslotsPerEpoch; i++ {
+	safroleState.TicketAccumulator = make([]block.Ticket, constants.TimeslotsPerEpoch)
+	for i := 0; i < constants.TimeslotsPerEpoch; i++ {
 		safroleState.TicketAccumulator[i] = RandomTicket(t)
 	}
 	safroleState.SealingKeySeries = safrole.SealingKeys{}
 	var epochKeys crypto.EpochKeys
-	for i := 0; i < jamtime.TimeslotsPerEpoch; i++ {
+	for i := 0; i < constants.TimeslotsPerEpoch; i++ {
 		epochKeys[i] = testutils.RandomBandersnatchPublicKey(t)
 	}
 	safroleState.SealingKeySeries.Set(epochKeys)

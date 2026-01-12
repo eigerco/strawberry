@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
 
 	"github.com/quic-go/quic-go"
@@ -18,7 +18,7 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
-const SegmentShardSize = 4104 / common.ErasureCodingOriginalShards
+const SegmentShardSize = 4104 / constants.ErasureCodingOriginalShards
 
 // NewShardDistributionHandler creates a new ShardDistributionHandler
 func NewShardDistributionHandler(validatorSvc validator.ValidatorService) protocol.StreamHandler {

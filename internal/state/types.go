@@ -7,7 +7,7 @@ import (
 	"sort"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -66,13 +66,13 @@ func (j Judgements) MarshalJAM() ([]byte, error) {
 	return jam.Marshal(encodedCopy)
 }
 
-type CoreAssignments [common.TotalNumberOfCores]*Assignment
+type CoreAssignments [constants.TotalNumberOfCores]*Assignment
 
-type PendingAuthorizersQueue [PendingAuthorizersQueueSize]crypto.Hash
-type PendingAuthorizersQueues [common.TotalNumberOfCores]PendingAuthorizersQueue
+type PendingAuthorizersQueue [constants.PendingAuthorizersQueueSize]crypto.Hash
+type PendingAuthorizersQueues [constants.TotalNumberOfCores]PendingAuthorizersQueue
 
-type EntropyPool [EntropyPoolSize]crypto.Hash
-type CoreAuthorizersPool [common.TotalNumberOfCores][]crypto.Hash // TODO: Maximum length per core: MaxAuthorizersPerCore
+type EntropyPool [constants.EntropyPoolSize]crypto.Hash
+type CoreAuthorizersPool [constants.TotalNumberOfCores][]crypto.Hash // TODO: Maximum length per core: MaxAuthorizersPerCore
 
 type WorkReportWithUnAccumulatedDependencies struct {
 	WorkReport   block.WorkReport
@@ -80,21 +80,21 @@ type WorkReportWithUnAccumulatedDependencies struct {
 }
 
 // AccumulationQueue ω ∈ ⟦⟦(R, {H})⟧⟧_E (eq. 12.3 v0.7.0)
-type AccumulationQueue [jamtime.TimeslotsPerEpoch][]WorkReportWithUnAccumulatedDependencies
+type AccumulationQueue [constants.TimeslotsPerEpoch][]WorkReportWithUnAccumulatedDependencies
 
 // AccumulationHistory ξ ∈ ⟦{H}⟧_E (eq. 12.1 v0.7.0)
-type AccumulationHistory [jamtime.TimeslotsPerEpoch]map[crypto.Hash]struct{}
+type AccumulationHistory [constants.TimeslotsPerEpoch]map[crypto.Hash]struct{}
 
 // AccumulationState characterization of state components (eq. 12.16 v0.7.1)
 type AccumulationState struct {
-	ServiceState             service.ServiceState                               // Service accounts δ (d ∈ D⟨NS → A⟩)
-	ValidatorKeys            safrole.ValidatorsData                             // Validator keys ι (i ∈ ⟦K⟧V)
-	PendingAuthorizersQueues [common.TotalNumberOfCores]PendingAuthorizersQueue // Queue of authorizers ϕ (q ∈ C⟦H⟧QHC)
-	ManagerServiceId         block.ServiceId                                    // (m)
-	AssignedServiceIds       [common.TotalNumberOfCores]block.ServiceId         // (a)
-	DesignateServiceId       block.ServiceId                                    // (v)
-	CreateProtectedServiceId block.ServiceId                                    // (r)
-	AmountOfGasPerServiceId  map[block.ServiceId]uint64                         // (z)
+	ServiceState             service.ServiceState                                  // Service accounts δ (d ∈ D⟨NS → A⟩)
+	ValidatorKeys            safrole.ValidatorsData                                // Validator keys ι (i ∈ ⟦K⟧V)
+	PendingAuthorizersQueues [constants.TotalNumberOfCores]PendingAuthorizersQueue // Queue of authorizers ϕ (q ∈ C⟦H⟧QHC)
+	ManagerServiceId         block.ServiceId                                       // (m)
+	AssignedServiceIds       [constants.TotalNumberOfCores]block.ServiceId         // (a)
+	DesignateServiceId       block.ServiceId                                       // (v)
+	CreateProtectedServiceId block.ServiceId                                       // (r)
+	AmountOfGasPerServiceId  map[block.ServiceId]uint64                            // (z)
 }
 
 func (j AccumulationState) Clone() AccumulationState {

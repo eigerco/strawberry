@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
@@ -37,7 +36,7 @@ func CalculateIntermediateCoreAssignmentsAndAvailableWorkReports(ae block.Assura
 
 	// Process each assurance in the AssurancesExtrinsic (EA)
 	// Check the availability status for each core in this assurance
-	for coreIndex := range common.TotalNumberOfCores {
+	for coreIndex := range constants.TotalNumberOfCores {
 		for _, assurance := range ae {
 			// Check if the bit corresponding to this core is set (1) in the Bitfield
 			// af[c] ⇒ ρ†[c] ≠ ∅ (eq. 11.15)
@@ -57,12 +56,12 @@ func CalculateIntermediateCoreAssignmentsAndAvailableWorkReports(ae block.Assura
 	// Update assignments based on availability
 	// ∀c ∈ NC : ρ‡[c] ≡ { ∅ if ρ[c]r ∈ R ∨ HT ≥ ρ†[c]t + U
 	//                    ρ†[c] otherwise }
-	for coreIndex := range common.TotalNumberOfCores {
+	for coreIndex := range constants.TotalNumberOfCores {
 		availCountForCore, ok := availabilityCounts[coreIndex]
 		// Remove core if:
 		// 1. There are availability assurances for this core, and they exceed the threshold, i.e > 2/3 of validators are assuring
 		// 2. Assignment report is stale, the report is older than U timeslots ago and should timeout.
-		if ok && availCountForCore > common.AvailabilityThreshold {
+		if ok && availCountForCore > constants.AvailabilityThreshold {
 			// Add any report that is made available to the W set. Note this
 			// includes reports that could already be timed out. We are lenient
 			// here, as long as they are made available they get added to the
@@ -86,7 +85,7 @@ func validateAssurancesExtrinsic(ae block.AssurancesExtrinsic, validators safrol
 		if a.Anchor != header.ParentHash {
 			return errors.New("bad attestation parent")
 		}
-		if int(a.ValidatorIndex) >= common.NumberOfValidators || validators[a.ValidatorIndex].IsEmpty() {
+		if int(a.ValidatorIndex) >= constants.NumberOfValidators || validators[a.ValidatorIndex].IsEmpty() {
 			return errors.New("bad validator index")
 		}
 	}
@@ -101,7 +100,7 @@ func validateAssurancesExtrinsic(ae block.AssurancesExtrinsic, validators safrol
 	}
 
 	// ∀a ∈ EA, c ∈ NC : af[c] ⇒ ρ†[c] ≠ ∅ (eq. 11.15 v 0.7.0)
-	for coreIndex := range common.TotalNumberOfCores {
+	for coreIndex := range constants.TotalNumberOfCores {
 		for _, a := range ae {
 			if a.IsForCore(coreIndex) {
 				if coreAssignments[coreIndex] == nil {
@@ -116,7 +115,7 @@ func validateAssurancesExtrinsic(ae block.AssurancesExtrinsic, validators safrol
 
 // HT ≥ ρ†[c]t + U (Part of equation eq. 11.17 v 0.7.0)
 func isAssignmentStale(currentAssignment *state.Assignment, newTimeslot jamtime.Timeslot) bool {
-	return currentAssignment != nil && newTimeslot >= currentAssignment.Time+common.WorkReportTimeoutPeriod
+	return currentAssignment != nil && newTimeslot >= currentAssignment.Time+constants.WorkReportTimeoutPeriod
 }
 
 // ∀i ∈ {1...|EA|} : EA[i-1]v < EA[i]v (eq. 11.12 v 0.7.0)
@@ -144,7 +143,7 @@ func verifySignatures(ae block.AssurancesExtrinsic, validators safrole.Validator
 		}
 		message = append(message, b...)
 		messageHash := crypto.HashData(message)
-		if !ed25519.Verify(validators[a.ValidatorIndex].Ed25519, append([]byte(state.SignatureContextAvailable), messageHash[:]...), a.Signature[:]) {
+		if !ed25519.Verify(validators[a.ValidatorIndex].Ed25519, append([]byte(constants.SignatureContextAvailable), messageHash[:]...), a.Signature[:]) {
 			return errors.New("bad signature")
 		}
 	}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/service"
 )
@@ -22,8 +22,8 @@ type Package struct {
 
 // ValidateLimits (14.4 v0.6.3)
 func (wp *Package) ValidateLimits() error {
-	if len(wp.WorkItems) > MaxNumberOfItems {
-		return fmt.Errorf("exceeded maximum work items: %d/%d", len(wp.WorkItems), MaxNumberOfItems)
+	if len(wp.WorkItems) > constants.MaxNumberOfItems {
+		return fmt.Errorf("exceeded maximum work items: %d/%d", len(wp.WorkItems), constants.MaxNumberOfItems)
 	}
 
 	var totalExported, totalImported, totalExtrinsics uint16
@@ -33,15 +33,15 @@ func (wp *Package) ValidateLimits() error {
 		totalExtrinsics += uint16(len(w.Extrinsics))
 	}
 
-	if totalExported > MaxNumberOfExports {
-		return fmt.Errorf("exceeded maximum exported segments: %d/%d", totalExported, MaxNumberOfExports)
+	if totalExported > constants.MaxNumberOfExports {
+		return fmt.Errorf("exceeded maximum exported segments: %d/%d", totalExported, constants.MaxNumberOfExports)
 	}
-	if totalImported > MaxNumberOfImports {
-		return fmt.Errorf("exceeded maximum imported segments: %d/%d", totalImported, MaxNumberOfImports)
+	if totalImported > constants.MaxNumberOfImports {
+		return fmt.Errorf("exceeded maximum imported segments: %d/%d", totalImported, constants.MaxNumberOfImports)
 	}
 
-	if totalExtrinsics > MaxNumberOfExtrinsics {
-		return fmt.Errorf("exceeded maximum extrinsics: %d/%d", totalExtrinsics, MaxNumberOfExtrinsics)
+	if totalExtrinsics > constants.MaxNumberOfExtrinsics {
+		return fmt.Errorf("exceeded maximum extrinsics: %d/%d", totalExtrinsics, constants.MaxNumberOfExtrinsics)
 	}
 
 	return nil
@@ -55,8 +55,8 @@ func (wp *Package) ValidateSize() error {
 		totalSize += w.Size()
 	}
 
-	if totalSize > MaxSizeOfEncodedWorkPackage {
-		return fmt.Errorf("work-package size exceeds limit: %d/%d bytes", totalSize, MaxSizeOfEncodedWorkPackage)
+	if totalSize > constants.MaxWorkPackageSize {
+		return fmt.Errorf("work-package size exceeds limit: %d/%d bytes", totalSize, constants.MaxWorkPackageSize)
 	}
 
 	return nil
@@ -70,11 +70,11 @@ func (wp *Package) ValidateGas() error {
 		totalRefine += w.GasLimitRefine
 	}
 
-	if totalAccumulate >= common.MaxAllocatedGasAccumulation {
-		return fmt.Errorf("accumulation gas exceeds limit GA: %d/%d", totalAccumulate, common.MaxAllocatedGasAccumulation)
+	if totalAccumulate >= constants.MaxAllocatedGasAccumulation {
+		return fmt.Errorf("accumulation gas exceeds limit GA: %d/%d", totalAccumulate, constants.MaxAllocatedGasAccumulation)
 	}
-	if totalRefine >= common.MaxAllocatedGasRefine {
-		return fmt.Errorf("refine gas exceeds limit GR: %d/%d", totalRefine, common.MaxAllocatedGasRefine)
+	if totalRefine >= constants.MaxAllocatedGasRefine {
+		return fmt.Errorf("refine gas exceeds limit GR: %d/%d", totalRefine, constants.MaxAllocatedGasRefine)
 	}
 
 	return nil

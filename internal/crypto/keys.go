@@ -1,9 +1,8 @@
 package crypto
 
 import (
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
-	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
 type Ed25519Signature [Ed25519SignatureSize]byte
@@ -21,7 +20,7 @@ type RingVrfSignature [VrfProofSize]byte
 type MetadataKey [MetadataSize]byte
 type RingCommitment [BandersnatchRingSize]byte
 
-type EpochKeys [jamtime.TimeslotsPerEpoch]BandersnatchPublicKey
+type EpochKeys [constants.TimeslotsPerEpoch]BandersnatchPublicKey
 
 func (e EpochKeys) TicketsOrKeysType() {}
 

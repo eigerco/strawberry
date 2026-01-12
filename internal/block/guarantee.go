@@ -3,7 +3,7 @@ package block
 import (
 	"fmt"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -78,8 +78,8 @@ type RefinementContextLookupAnchor struct {
 // GuarantorAssignments represents the mapping of validators to cores and their keys
 // M ∈ {⟦NC⟧V, ⟦H̄⟧V} (eq. 11.18 v 0.7.0)
 type GuarantorAssignments struct {
-	CoreAssignments [common.NumberOfValidators]uint16            // Core index for each validator
-	ValidatorKeys   [common.NumberOfValidators]ed25519.PublicKey // Ed25519 public key for each validator
+	CoreAssignments [constants.NumberOfValidators]uint16            // Core index for each validator
+	ValidatorKeys   [constants.NumberOfValidators]ed25519.PublicKey // Ed25519 public key for each validator
 }
 
 // WorkResultError represents the type of error that occurred during work execution
@@ -219,12 +219,12 @@ func (w WorkReport) OutputSizeIsValid() bool {
 	}
 	totalOutputSize = sum
 
-	return totalOutputSize <= common.MaxWorkPackageSizeBytes
+	return totalOutputSize <= constants.MaxWorkPackageSizeBytes
 }
 
 // ∀r ∈ R : |rl| + |(rc)p| ≤ J (eq. 11.3 v 0.7.0)
 func (w WorkReport) DependenciesCountIsValid() bool {
 	segmentRootLookupCount := len(w.SegmentRootLookup)
 	prerequisiteCount := len(w.RefinementContext.PrerequisiteWorkPackage)
-	return segmentRootLookupCount+prerequisiteCount <= common.WorkReportMaxSumOfDependencies
+	return segmentRootLookupCount+prerequisiteCount <= constants.WorkReportMaxSumOfDependencies
 }

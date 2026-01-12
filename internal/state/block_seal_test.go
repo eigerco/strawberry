@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -19,7 +20,7 @@ func TestSealVerifyBlockTicket(t *testing.T) {
 
 	ticketBodies := randomTicketBodies(t, entropy)
 
-	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
+	randomTimeslot := testutils.RandomUint32() % constants.TimeslotsPerEpoch
 	t.Logf("random timeslot: %d", randomTimeslot)
 
 	// Create a winning ticket for our private key.
@@ -89,7 +90,7 @@ func TestSealVerifyBlockFallback(t *testing.T) {
 
 	var epochKeys = testutils.RandomEpochKeys(t)
 
-	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
+	randomTimeslot := testutils.RandomUint32() % constants.TimeslotsPerEpoch
 	t.Logf("random timeslot: %d", randomTimeslot)
 
 	// Replace one of the keys in the accumulator with our public key. This
@@ -172,7 +173,7 @@ func TestVerfyBlockInvalidVRFSignature(t *testing.T) {
 	entropy := testutils.RandomHash(t)
 	ticketBodies := randomTicketBodies(t, entropy)
 
-	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
+	randomTimeslot := testutils.RandomUint32() % constants.TimeslotsPerEpoch
 	t.Logf("random timeslot: %d", randomTimeslot)
 
 	// Create a winning ticket for our private key.
@@ -229,7 +230,7 @@ func TestVerifyBlockInvalidVRFFallback(t *testing.T) {
 
 	var epochKeys = testutils.RandomEpochKeys(t)
 
-	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
+	randomTimeslot := testutils.RandomUint32() % constants.TimeslotsPerEpoch
 	t.Logf("random timeslot: %d", randomTimeslot)
 
 	// Replace one of the keys in the accumulator with our public key. This
@@ -278,7 +279,7 @@ func TestVerifyBlockInvalidUnexpectedAuthorFallback(t *testing.T) {
 
 	var epochKeys = testutils.RandomEpochKeys(t)
 
-	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
+	randomTimeslot := testutils.RandomUint32() % constants.TimeslotsPerEpoch
 	t.Logf("random timeslot: %d", randomTimeslot)
 
 	// Replace one of the keys in the accumulator with our public key. This
@@ -333,7 +334,7 @@ func createTicket(t *testing.T, privateKey crypto.BandersnatchPrivateKey, entrop
 func randomTicketBodies(t *testing.T, entropy crypto.Hash) safrole.TicketsBodies {
 	var ticketsBodies safrole.TicketsBodies
 
-	for i := 0; i < jamtime.TimeslotsPerEpoch; i++ {
+	for i := 0; i < constants.TimeslotsPerEpoch; i++ {
 		privateKey := testutils.RandomBandersnatchPrivateKey(t)
 		attempt := uint8(rand.Intn(256))
 		ticketsBodies[i] = createTicket(t, privateKey, entropy, attempt)
@@ -351,7 +352,7 @@ func TestIsSlotLeaderFallback(t *testing.T) {
 
 	var epochKeys = testutils.RandomEpochKeys(t)
 
-	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
+	randomTimeslot := testutils.RandomUint32() % constants.TimeslotsPerEpoch
 	t.Logf("random timeslot: %d", randomTimeslot)
 
 	// Replace one of the keys in the accumulator with our public key. This
@@ -379,7 +380,7 @@ func TestIsSlotLeaderTicket(t *testing.T) {
 
 	ticketBodies := randomTicketBodies(t, entropy)
 
-	randomTimeslot := testutils.RandomUint32() % jamtime.TimeslotsPerEpoch
+	randomTimeslot := testutils.RandomUint32() % constants.TimeslotsPerEpoch
 	t.Logf("random timeslot: %d", randomTimeslot)
 
 	// Create a winning ticket for our private key.

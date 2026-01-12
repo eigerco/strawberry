@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/stretchr/testify/require"
 )
@@ -121,7 +121,7 @@ func TestEncodeFailureCases(t *testing.T) {
 		},
 		{
 			name:  "dataTooLarge",
-			input: make([]byte, common.MaxWorkPackageSize+1),
+			input: make([]byte, constants.MaxWorkPackageSize+1),
 		},
 	}
 

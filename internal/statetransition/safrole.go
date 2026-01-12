@@ -9,7 +9,7 @@ import (
 	"sort"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/eigerco/strawberry/internal/disputing"
@@ -67,7 +67,7 @@ type SafroleOutput struct {
 // GP v0.7.0
 func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, ticketProofs []block.TicketProof) ([]block.Ticket, error) {
 	// Equation 6.30: |E_T| ≤ K if m′ < Y
-	if len(ticketProofs) > common.MaxTicketExtrinsicSize {
+	if len(ticketProofs) > constants.MaxTicketExtrinsicSize {
 		return []block.Ticket{}, errors.New("too many tickets")
 	}
 
@@ -89,7 +89,7 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 	tickets := make([]block.Ticket, len(ticketProofs))
 	for i, tp := range ticketProofs {
 		// Equation 6.29: e ∈ N_N
-		if tp.EntryIndex >= common.MaxTicketAttemptsPerValidator {
+		if tp.EntryIndex >= constants.MaxTicketAttemptsPerValidator {
 			return []block.Ticket{}, errors.New("bad ticket attempt")
 		}
 
@@ -175,7 +175,7 @@ func UpdateSafroleState(
 	epoch := nextTimeSlot.ToEpoch()   // e'
 	preEpoch := preTimeSlot.ToEpoch() // e
 	// |γ_A| = E, a condition of equation 6.24
-	ticketAccumulatorFull := len(validatorState.SafroleState.TicketAccumulator) == jamtime.TimeslotsPerEpoch
+	ticketAccumulatorFull := len(validatorState.SafroleState.TicketAccumulator) == constants.TimeslotsPerEpoch
 
 	// Note that this condition allows epochs to be skipped, e' > e, as in equations 6.13, 6.23, 6.27
 	// We don't care about the timeslot, only the epoch.
@@ -274,8 +274,8 @@ func UpdateSafroleState(
 		})
 
 		// Drop older tickets, limiting the accumulator to |E|.
-		if len(allTickets) > jamtime.TimeslotsPerEpoch {
-			allTickets = allTickets[:jamtime.TimeslotsPerEpoch]
+		if len(allTickets) > constants.TimeslotsPerEpoch {
+			allTickets = allTickets[:constants.TimeslotsPerEpoch]
 		}
 
 		// Ensure all incoming tickets exist in the accumulator. No useless

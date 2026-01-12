@@ -15,7 +15,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/assuring"
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
@@ -106,14 +106,14 @@ func mapCoreAssignments(availAssignments []*Assignment) state.CoreAssignments {
 			Time:       a.Timeout,
 		}
 	})
-	assignmentsArray := make([]*state.Assignment, common.TotalNumberOfCores)
+	assignmentsArray := make([]*state.Assignment, constants.TotalNumberOfCores)
 	copy(assignmentsArray, assignments)
 	return state.CoreAssignments(assignmentsArray)
 }
 
 func mapCurrValidators(currValidators []ValidatorKey) safrole.ValidatorsData {
 	validators := mapSlice(currValidators, mapKey)
-	validatorsArray := make([]crypto.ValidatorKey, common.NumberOfValidators)
+	validatorsArray := make([]crypto.ValidatorKey, constants.NumberOfValidators)
 	copy(validatorsArray, validators)
 	return safrole.ValidatorsData(validatorsArray)
 }

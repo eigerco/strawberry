@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/pvm"
 	"github.com/eigerco/strawberry/internal/pvm/host_call"
@@ -91,7 +92,7 @@ func (r *Refine) InvokePVM(
 	}
 
 	// if |Λ(δ[s], ct, c)| > W_C then (BIG, [])
-	if len(pvmCode.Code) > work.MaxSizeServiceCode {
+	if len(pvmCode.Code) > constants.MaxSizeServiceCode {
 		return nil, nil, 0, ErrBig
 	}
 

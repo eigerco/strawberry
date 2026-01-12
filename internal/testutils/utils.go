@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -130,7 +131,7 @@ func RandomEd25519Signature(t *testing.T) crypto.Ed25519Signature {
 
 func RandomEpochKeys(t *testing.T) crypto.EpochKeys {
 	var epochKeys crypto.EpochKeys
-	for i := 0; i < jamtime.TimeslotsPerEpoch; i++ {
+	for i := 0; i < constants.TimeslotsPerEpoch; i++ {
 		epochKeys[i] = RandomBandersnatchPublicKey(t)
 	}
 	return epochKeys
