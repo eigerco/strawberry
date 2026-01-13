@@ -4,9 +4,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/pkg/conformance"
-	"github.com/eigerco/strawberry/pkg/db/pebble"
 )
 
 func main() {
@@ -18,25 +16,11 @@ func main() {
 		log.Fatalf("unexpected arguments: %v", flag.Args())
 	}
 
-	db, err := pebble.NewKVStore()
-	if err != nil {
-		log.Fatalf("failed to create kv store: %v", err)
-	}
-
-	defer func() {
-		if err := db.Close(); err != nil {
-			log.Printf("error closing database: %v", err)
-		}
-	}()
-
-	chain := store.NewChain(db)
-	trieStore := store.NewTrie(chain)
-
 	appName := []byte("strawberry")
 	appVersion := conformance.Version{Major: 0, Minor: 0, Patch: 2}
 	jamVersion := conformance.Version{Major: 0, Minor: 7, Patch: 2}
 	features := conformance.FeatureAncestryAndFork
-	node := conformance.NewNode(*socketPath, chain, trieStore, appName, appVersion, jamVersion, features)
+	node := conformance.NewNode(*socketPath, appName, appVersion, jamVersion, features)
 	if err := node.Start(); err != nil {
 		log.Fatalf("Failed to start Node: %v", err)
 	}

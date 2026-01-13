@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eigerco/strawberry/internal/store"
-	"github.com/eigerco/strawberry/pkg/db/pebble"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/stretchr/testify/require"
@@ -134,18 +132,12 @@ func getTargetsFromExamplesDir(t *testing.T) ([]any, error) {
 func createTargetNode(t *testing.T) (*Node, func()) {
 	socketPath := "jam_test_target.sock"
 	os.Remove(socketPath)
-	db, err := pebble.NewKVStore()
-	require.NoError(t, err)
-
-	chain := store.NewChain(db)
-	trieStore := store.NewTrie(chain)
 	appName := []byte("polkajam")
 	appVersion := Version{Major: 0, Minor: 1, Patch: 25}
 	jamVersion := Version{Major: 0, Minor: 7, Patch: 0}
 	features := FeatureFork
-	node := NewNode(socketPath, chain, trieStore, appName, appVersion, jamVersion, features)
+	node := NewNode(socketPath, appName, appVersion, jamVersion, features)
 	cleanup := func() {
-		db.Close()
 		os.Remove(socketPath)
 	}
 	return node, cleanup

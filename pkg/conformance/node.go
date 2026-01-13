@@ -8,7 +8,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"sync"
 
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -21,6 +20,7 @@ import (
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/statetransition"
 	"github.com/eigerco/strawberry/internal/store"
+	"github.com/eigerco/strawberry/pkg/db/pebble"
 )
 
 type Features uint32
@@ -37,7 +37,6 @@ const (
 // opens a connection via a unix socket and listens to fuzzer messages and updates the state accordingly
 type Node struct {
 	socketPath string
-	mu         sync.Mutex
 	chain      *store.Chain
 	trie       *store.Trie
 	listener   net.Listener
@@ -48,7 +47,7 @@ type Node struct {
 }
 
 // NewNode create a new conformance testing node
-func NewNode(socketPath string, chain *store.Chain, trie *store.Trie, appName []byte, appVersion, jamVersion Version, features Features) *Node {
+func NewNode(socketPath string, appName []byte, appVersion, jamVersion Version, features Features) *Node {
 	peerInfo := PeerInfo{
 		FuzzVersion:  1,
 		FuzzFeatures: features,
@@ -57,12 +56,8 @@ func NewNode(socketPath string, chain *store.Chain, trie *store.Trie, appName []
 		Name:         appName,
 	}
 	return &Node{
-		socketPath:    socketPath,
-		mu:            sync.Mutex{},
-		chain:         chain,
-		trie:          trie,
-		PeerInfo:      peerInfo,
-		headerToState: make(map[crypto.Hash]state.State),
+		socketPath: socketPath,
+		PeerInfo:   peerInfo,
 	}
 }
 
@@ -103,6 +98,24 @@ func (n *Node) handleConnection(conn net.Conn) {
 			log.Printf("error closing connection: %v", err)
 		}
 	}()
+
+	// Reset state for new session
+	db, err := pebble.NewKVStore()
+	if err != nil {
+		log.Printf("error creating db: %v", err)
+		return
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("error closing db: %v", err)
+		}
+	}()
+	n.chain = store.NewChain(db)
+	n.trie = store.NewTrie(n.chain)
+	n.headerToState = make(map[crypto.Hash]state.State)
+	n.handshakeDone = false
+	guaranteeing.Ancestry = false
+
 	for {
 		ctx := context.Background()
 
@@ -140,9 +153,6 @@ func (n *Node) handleConnection(conn net.Conn) {
 
 // messageHandler handling of each message choice type according to the protocol description
 func (n *Node) messageHandler(msg *Message) (*Message, error) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
 	if peerInfo, ok := msg.Get().(PeerInfo); ok {
 		switch peerInfo.FuzzFeatures {
 		case FeatureFork:
