@@ -1,4 +1,4 @@
-//go:build tiny && conformance
+//go:build conformance
 
 package conformance
 

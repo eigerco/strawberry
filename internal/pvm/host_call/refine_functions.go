@@ -5,7 +5,7 @@ import (
 	"math"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	. "github.com/eigerco/strawberry/internal/pvm"
@@ -84,7 +84,7 @@ func Export(
 	requestedLength := regs[A1] // φ8
 
 	// let z = min(φ8,WG)
-	z := min(requestedLength, common.SizeOfSegment)
+	z := min(requestedLength, constants.SizeOfSegment)
 
 	data := make([]byte, z)
 	if p > math.MaxUint32 {
@@ -96,13 +96,13 @@ func Export(
 	}
 
 	// Apply zero-padding Pn to data to make it WG-sized
-	paddedData := work.ZeroPadding(data, common.SizeOfSegment)
+	paddedData := work.ZeroPadding(data, constants.SizeOfSegment)
 
 	var segmentData work.Segment
 	copy(segmentData[:], paddedData)
 
 	currentCount := uint64(len(ctxPair.Segments))
-	if exportOffset+currentCount >= work.MaxNumberOfImports {
+	if exportOffset+currentCount >= constants.MaxNumberOfImports {
 		return gas, withCode(regs, FULL), mem, ctxPair, nil
 	}
 

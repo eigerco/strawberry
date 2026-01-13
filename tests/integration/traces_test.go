@@ -1,4 +1,4 @@
-//go:build tiny && traces
+//go:build traces || conformance
 
 package integration
 
@@ -22,61 +22,6 @@ import (
 	"github.com/eigerco/strawberry/pkg/db/pebble"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
-
-func TestTracePreimagesLight(t *testing.T) {
-	runTracesTests(t, "traces/preimages_light")
-}
-
-func TestTracePreimages(t *testing.T) {
-	runTracesTests(t, "traces/preimages")
-}
-
-func TestTraceStorageLight(t *testing.T) {
-	runTracesTests(t, "traces/storage_light")
-}
-
-func TestTraceStorage(t *testing.T) {
-	runTracesTests(t, "traces/storage")
-}
-
-func TestTraceFallback(t *testing.T) {
-	runTracesTests(t, "traces/fallback")
-}
-
-func TestTraceSafrole(t *testing.T) {
-	runTracesTests(t, "traces/safrole")
-}
-func TestTraceFuzzy(t *testing.T) {
-	runTracesTests(t, "traces/fuzzy")
-}
-func TestTraceFuzzyLight(t *testing.T) {
-	runTracesTests(t, "traces/fuzzy_light")
-}
-
-func TestTraceFuzzer(t *testing.T) {
-	// Fuzzer uses MaxTimeslotsForLookupAnchor=24, tiny spec uses MaxTimeslotsForLookupAnchor=14400)
-	//TODO: re-enable once we have the config opts
-	t.Skip("temporarily disabled until they sync MaxTimeslotsForLookupAnchor")
-
-	entries, err := os.ReadDir("traces/fuzzer")
-	require.NoError(t, err)
-
-	var directories []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			directories = append(directories, entry.Name())
-		}
-	}
-	require.NotEmpty(t, directories, "no fuzzer directories found in traces/fuzzer")
-
-	sort.Strings(directories)
-	for _, directory := range directories {
-		t.Run(directory, func(t *testing.T) {
-			t.Parallel()
-			runTracesTests(t, filepath.Join("traces/fuzzer", directory))
-		})
-	}
-}
 
 func runTracesTests(t *testing.T, directory string) {
 	files, err := filepath.Glob(fmt.Sprintf("%s/*.bin", directory))

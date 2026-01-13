@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	. "github.com/eigerco/strawberry/internal/pvm"
@@ -31,16 +31,16 @@ func TestAccumulate(t *testing.T) {
 		},
 	}
 
-	authHashes := generate(t, testutils.RandomHash, state.PendingAuthorizersQueueSize)
-	validatorKeys := generate(t, testutils.RandomValidatorKey, common.NumberOfValidators)
+	authHashes := generate(t, testutils.RandomHash, constants.PendingAuthorizersQueueSize)
+	validatorKeys := generate(t, testutils.RandomValidatorKey, constants.NumberOfValidators)
 	checkpointCtx := AccumulateContext{
 		AccumulationState: state.AccumulationState{
 			PendingAuthorizersQueues: state.PendingAuthorizersQueues{
-				0: [state.PendingAuthorizersQueueSize]crypto.Hash(
-					generate(t, testutils.RandomHash, state.PendingAuthorizersQueueSize),
+				0: [constants.PendingAuthorizersQueueSize]crypto.Hash(
+					generate(t, testutils.RandomHash, constants.PendingAuthorizersQueueSize),
 				),
 			},
-			ValidatorKeys: safrole.ValidatorsData(generate(t, testutils.RandomValidatorKey, common.NumberOfValidators)),
+			ValidatorKeys: safrole.ValidatorsData(generate(t, testutils.RandomValidatorKey, constants.NumberOfValidators)),
 		},
 		ServiceId:         123,
 		ProvidedPreimages: []block.Preimage{},
@@ -87,7 +87,7 @@ func TestAccumulate(t *testing.T) {
 			name: "bless",
 			fn:   fnStd(Bless),
 			alloc: alloc{
-				A1: make([]byte, uint32(4*common.TotalNumberOfCores)),
+				A1: make([]byte, uint32(4*constants.TotalNumberOfCores)),
 				A4: slices.Concat(
 					encodeNumber(t, uint32(123)),
 					encodeNumber(t, uint64(12341234)),
@@ -112,7 +112,7 @@ func TestAccumulate(t *testing.T) {
 			expectedX: AccumulateContext{
 				AccumulationState: state.AccumulationState{
 					ManagerServiceId:         111,
-					AssignedServiceIds:       [common.TotalNumberOfCores]block.ServiceId{},
+					AssignedServiceIds:       [constants.TotalNumberOfCores]block.ServiceId{},
 					DesignateServiceId:       333,
 					CreateProtectedServiceId: 444,
 					AmountOfGasPerServiceId: map[block.ServiceId]uint64{
@@ -138,7 +138,7 @@ func TestAccumulate(t *testing.T) {
 					ServiceState: service.ServiceState{
 						340: service.ServiceAccount{}, // new assigner must exist
 					},
-					AssignedServiceIds: [common.TotalNumberOfCores]block.ServiceId{
+					AssignedServiceIds: [constants.TotalNumberOfCores]block.ServiceId{
 						1: 0, // current assigner for core 1 must match ServiceId (0)
 					},
 				},
@@ -155,9 +155,9 @@ func TestAccumulate(t *testing.T) {
 						340: service.ServiceAccount{},
 					},
 					PendingAuthorizersQueues: state.PendingAuthorizersQueues{
-						1: [state.PendingAuthorizersQueueSize]crypto.Hash(authHashes),
+						1: [constants.PendingAuthorizersQueueSize]crypto.Hash(authHashes),
 					},
-					AssignedServiceIds: [common.TotalNumberOfCores]block.ServiceId{
+					AssignedServiceIds: [constants.TotalNumberOfCores]block.ServiceId{
 						1: 340,
 					},
 				},
@@ -824,7 +824,7 @@ func TestAccumulate(t *testing.T) {
 			expectedDeltaRegs: deltaRegs{A0: uint64(OK)},
 			initialGas:        100,
 			expectedGas:       90,
-			extraParam:        randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1,
+			extraParam:        randomTimeslot2 + constants.PreimageExpulsionPeriod + 1,
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
 				AccumulationState: state.AccumulationState{
@@ -870,7 +870,7 @@ func TestAccumulate(t *testing.T) {
 			expectedDeltaRegs: deltaRegs{A0: uint64(OK)},
 			initialGas:        100,
 			expectedGas:       90,
-			extraParam:        randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1,
+			extraParam:        randomTimeslot2 + constants.PreimageExpulsionPeriod + 1,
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
 				AccumulationState: state.AccumulationState{
@@ -909,7 +909,7 @@ func TestAccumulate(t *testing.T) {
 								Balance:        111,
 							}
 
-							err = account.InsertPreimageMeta(k, length, service.PreimageHistoricalTimeslots{randomTimeslot3, randomTimeslot2 + jamtime.PreimageExpulsionPeriod + 1})
+							err = account.InsertPreimageMeta(k, length, service.PreimageHistoricalTimeslots{randomTimeslot3, randomTimeslot2 + constants.PreimageExpulsionPeriod + 1})
 							require.NoError(t, err)
 
 							return account

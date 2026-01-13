@@ -10,7 +10,7 @@ import (
 
 	"github.com/ebitengine/purego"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 )
 
@@ -100,7 +100,7 @@ func init() {
 	// any other functions, otherwise the ring size will initialize to a default
 	// of 1023 on the Rust side. This allows us to switch between 1023 and 6 for
 	// test vectors with build tags that control NumberOfValidators.
-	err = InitRingSize(common.NumberOfValidators)
+	err = InitRingSize(constants.NumberOfValidators)
 	if err != nil {
 		panic(err)
 	}

@@ -1,4 +1,4 @@
-//go:build tiny && traces
+//go:build conformance
 
 package conformance
 

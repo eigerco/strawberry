@@ -2,14 +2,12 @@ package d3l
 
 import (
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
 	"log"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/erasurecoding"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/network/peer"
@@ -84,20 +82,20 @@ func (m *segmentsFetcher) Fetch(ctx context.Context, segmentRoot crypto.Hash, se
 		nrOfShards++
 
 		// We have enough shards to reconstruct the segments no need to waste time querying all the other validators
-		if nrOfShards >= common.ErasureCodingOriginalShards {
+		if nrOfShards >= constants.ErasureCodingOriginalShards {
 			break
 		}
 	}
 
 	// Error if we didn't gather enough shards to reconstruct the segment
-	if nrOfShards < common.ErasureCodingOriginalShards {
-		return nil, fmt.Errorf("couldn't get enough shards for segment root=%x; got %d out of %d", segmentRoot, nrOfShards, common.ErasureCodingOriginalShards)
+	if nrOfShards < constants.ErasureCodingOriginalShards {
+		return nil, fmt.Errorf("couldn't get enough shards for segment root=%x; got %d out of %d", segmentRoot, nrOfShards, constants.ErasureCodingOriginalShards)
 	}
 
 	// Decode each segment for each index
 	segments := make([]work.Segment, len(segmentIndexes))
 	for i, segmentIndex := range segmentIndexes {
-		segment, err := erasurecoding.Decode(shardsByIndex[segmentIndex], common.SizeOfSegment)
+		segment, err := erasurecoding.Decode(shardsByIndex[segmentIndex], constants.SizeOfSegment)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode segment with index %v: %w", segmentIndex, err)
 		}

@@ -2,6 +2,8 @@ package jamtime
 
 import (
 	"time"
+
+	"github.com/eigerco/strawberry/internal/constants"
 )
 
 const (
@@ -17,7 +19,7 @@ const (
 	// TimeslotDuration defines the length of each timeslot in the JAM protocol.
 	// Each timeslot is exactly 6 seconds long, as specified in the JAM Graypaper.
 	// This constant duration is used for conversions between timeslots and actual time.
-	TimeslotDuration = SlotPeriodInSeconds * time.Second
+	TimeslotDuration = constants.SlotPeriodInSeconds * time.Second
 )
 
 // Timeslot represents a 6-second window in JAM time
@@ -73,7 +75,7 @@ func (ts Timeslot) PreviousTimeslot() (Timeslot, error) {
 
 // TimeslotInEpoch returns the timeslot number within the epoch (0-599)
 func (ts Timeslot) TimeslotInEpoch() uint32 {
-	return uint32(ts % TimeslotsPerEpoch)
+	return uint32(ts % constants.TimeslotsPerEpoch)
 }
 
 // IsFirstTimeslotInEpoch checks if the timeslot is the first in its epoch
@@ -83,12 +85,12 @@ func (ts Timeslot) IsFirstTimeslotInEpoch() bool {
 
 // IsLastTimeslotInEpoch checks if the timeslot is the last in its epoch
 func (ts Timeslot) IsLastTimeslotInEpoch() bool {
-	return ts.TimeslotInEpoch() == TimeslotsPerEpoch-1
+	return ts.TimeslotInEpoch() == constants.TimeslotsPerEpoch-1
 }
 
 // ToEpoch converts a Timeslot to its corresponding Epoch
 func (ts Timeslot) ToEpoch() Epoch {
-	return Epoch(ts / TimeslotsPerEpoch)
+	return Epoch(ts / constants.TimeslotsPerEpoch)
 }
 
 // ValidateTimeslot checks if a given Timeslot is within the valid range
@@ -99,18 +101,18 @@ func ValidateTimeslot(ts Timeslot) error {
 
 // IsTicketSubmissionPeriod checks if tickets can still be submitted in the given Timeslot
 func (ts Timeslot) IsTicketSubmissionPeriod() bool {
-	return ts.TimeslotInEpoch() < TicketSubmissionTimeSlots
+	return ts.TimeslotInEpoch() < constants.TicketSubmissionTimeSlots
 }
 
 // IsWinningTicketMarkerPeriod checks if it's the first available Timeslot after
 // the ticket submission lottery ends and where the winning ticket marker can be
 // generated.
 func (ts Timeslot) IsWinningTicketMarkerPeriod(previous Timeslot) bool {
-	return previous.TimeslotInEpoch() < TicketSubmissionTimeSlots &&
-		TicketSubmissionTimeSlots <= ts.TimeslotInEpoch()
+	return previous.TimeslotInEpoch() < constants.TicketSubmissionTimeSlots &&
+		constants.TicketSubmissionTimeSlots <= ts.TimeslotInEpoch()
 }
 
 // IsLastCoreRotation checks if the timeslot is within the last core rotation of the epoch
 func (ts Timeslot) IsLastCoreRotation() bool {
-	return ts.TimeslotInEpoch() >= uint32(TimeslotsPerEpoch-ValidatorRotationPeriod)
+	return ts.TimeslotInEpoch() >= uint32(constants.TimeslotsPerEpoch-constants.ValidatorRotationPeriod)
 }

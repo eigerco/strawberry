@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
@@ -502,7 +502,7 @@ type ActivityStatistics struct {
 }
 
 func (as ActivityStatistics) To() validator.ActivityStatisticsState {
-	valsCurrent := [common.NumberOfValidators]validator.ValidatorStatistics{}
+	valsCurrent := [constants.NumberOfValidators]validator.ValidatorStatistics{}
 	for i, v := range as.ValsCurrent {
 		valsCurrent[i] = validator.ValidatorStatistics{
 			NumOfBlocks:                 v.Blocks,
@@ -514,7 +514,7 @@ func (as ActivityStatistics) To() validator.ActivityStatisticsState {
 		}
 	}
 
-	valsLast := [common.NumberOfValidators]validator.ValidatorStatistics{}
+	valsLast := [constants.NumberOfValidators]validator.ValidatorStatistics{}
 	for i, v := range as.ValsLast {
 		valsLast[i] = validator.ValidatorStatistics{
 			NumOfBlocks:                 v.Blocks,
@@ -526,7 +526,7 @@ func (as ActivityStatistics) To() validator.ActivityStatisticsState {
 		}
 	}
 
-	coreStats := [common.TotalNumberOfCores]validator.CoreStatistics{}
+	coreStats := [constants.TotalNumberOfCores]validator.CoreStatistics{}
 	for i, c := range as.Cores {
 		coreStats[i] = validator.CoreStatistics{
 			DALoad:         c.DALoad,
@@ -549,7 +549,7 @@ func (as ActivityStatistics) To() validator.ActivityStatisticsState {
 }
 
 func NewActivityStatistics(stats validator.ActivityStatisticsState) ActivityStatistics {
-	valsCurrent := make([]ValidatorStatistics, common.NumberOfValidators)
+	valsCurrent := make([]ValidatorStatistics, constants.NumberOfValidators)
 	for i, v := range stats.ValidatorsCurrent {
 		valsCurrent[i] = ValidatorStatistics{
 			Blocks:        v.NumOfBlocks,
@@ -561,7 +561,7 @@ func NewActivityStatistics(stats validator.ActivityStatisticsState) ActivityStat
 		}
 	}
 
-	valsLast := make([]ValidatorStatistics, common.NumberOfValidators)
+	valsLast := make([]ValidatorStatistics, constants.NumberOfValidators)
 	for i, v := range stats.ValidatorsLast {
 		valsLast[i] = ValidatorStatistics{
 			Blocks:        v.NumOfBlocks,
@@ -573,7 +573,7 @@ func NewActivityStatistics(stats validator.ActivityStatisticsState) ActivityStat
 		}
 	}
 
-	coreStats := make([]CoreStatistics, common.TotalNumberOfCores)
+	coreStats := make([]CoreStatistics, constants.TotalNumberOfCores)
 	for i, c := range stats.Cores {
 		coreStats[i] = CoreStatistics{
 			DALoad:         c.DALoad,
@@ -1039,10 +1039,10 @@ type RefineLoad struct {
 }
 
 type PrivilegedServices struct {
-	ManagerService   uint32                                     `json:"chi_m"`
-	AssignServices   [common.TotalNumberOfCores]block.ServiceId `json:"chi_a"`
-	DesignateService uint32                                     `json:"chi_v"`
-	GasUsed          map[uint32]uint64                          `json:"chi_g"`
+	ManagerService   uint32                                        `json:"chi_m"`
+	AssignServices   [constants.TotalNumberOfCores]block.ServiceId `json:"chi_a"`
+	DesignateService uint32                                        `json:"chi_v"`
+	GasUsed          map[uint32]uint64                             `json:"chi_g"`
 }
 
 func (p PrivilegedServices) To() service.PrivilegedServices {

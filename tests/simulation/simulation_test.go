@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/state"
@@ -152,7 +152,7 @@ func submitTickets(
 
 	ticketProofs := []block.TicketProof{}
 	for _, key := range keys {
-		if ticketAttempts[key.Name] < common.MaxTicketAttemptsPerValidator {
+		if ticketAttempts[key.Name] < constants.MaxTicketAttemptsPerValidator {
 			attempt := ticketAttempts[key.Name]
 			// TODO this will need fancier logic too. Needs to use the right yk and eta depending on epoch change.
 			ticketProof, err := state.CreateTicketProof(pendingValidators, entropy, key.BandersnatchPrivate, uint8(attempt))
@@ -162,7 +162,7 @@ func submitTickets(
 			ticketProofs = append(ticketProofs, ticketProof)
 			ticketAttempts[key.Name]++
 		}
-		if len(ticketProofs) == common.MaxTicketExtrinsicSize {
+		if len(ticketProofs) == constants.MaxTicketExtrinsicSize {
 			break
 		}
 	}

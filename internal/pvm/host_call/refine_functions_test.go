@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/pvm"
@@ -149,7 +149,7 @@ func TestExport(t *testing.T) {
 
 	require.Len(t, ctxPair.Segments, 1)
 	seg := ctxPair.Segments[0]
-	expectedSegment := make([]byte, common.SizeOfSegment)
+	expectedSegment := make([]byte, constants.SizeOfSegment)
 	copy(expectedSegment, dataToExport)
 	assert.Equal(t, expectedSegment, seg[:])
 

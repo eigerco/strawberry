@@ -1,11 +1,11 @@
 package block
 
 import (
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 )
 
-const AvailBitfieldBytes = (common.TotalNumberOfCores + 7) / 8 // (cores-count + 7) / 8
+const AvailBitfieldBytes = (constants.TotalNumberOfCores + 7) / 8 // (cores-count + 7) / 8
 
 // Assurance represents a single validator's attestation of data availability
 // for work reports on specific cores. It is part of the Assurances Extrinsic (E_A).
@@ -41,7 +41,7 @@ func (a Assurance) SetCoreIndexes() []uint16 {
 	indexes := []uint16{}
 
 	// TODO make this more efficient, but this is fine for now.
-	for i := uint16(0); i < common.TotalNumberOfCores; i++ {
+	for i := uint16(0); i < constants.TotalNumberOfCores; i++ {
 		if a.IsForCore(i) {
 			indexes = append(indexes, i)
 		}

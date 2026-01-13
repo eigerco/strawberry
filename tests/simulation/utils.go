@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
 	"github.com/eigerco/strawberry/internal/jamtime"
@@ -182,8 +183,8 @@ func filterTicketProofs(
 	})
 
 	// Drop older tickets, limiting the accumulator to |E|.
-	if len(allTickets) > jamtime.TimeslotsPerEpoch {
-		allTickets = allTickets[:jamtime.TimeslotsPerEpoch]
+	if len(allTickets) > constants.TimeslotsPerEpoch {
+		allTickets = allTickets[:constants.TimeslotsPerEpoch]
 	}
 
 	// Filter out any ticket proofs that are not in the accumulator now.

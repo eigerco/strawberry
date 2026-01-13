@@ -2,16 +2,14 @@ package handlers
 
 import (
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
 	"slices"
 
 	"github.com/quic-go/quic-go"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -54,7 +52,7 @@ func (s *SegmentShardRequestHandler) HandleStream(ctx context.Context, stream qu
 	if err := jam.Unmarshal(requestMsg.Content, req); err != nil {
 		return fmt.Errorf("failed to decode erasure root shard and segment indexes: %w", err)
 	}
-	if len(req.SegmentIndexes) > 2*common.MaxNrImportsExports {
+	if len(req.SegmentIndexes) > 2*constants.MaxNrImportsExports {
 		return fmt.Errorf("requested number of segment shards is too high")
 	}
 

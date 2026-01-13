@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
@@ -320,7 +320,7 @@ func mapServices(services []ServiceInfo) service.ServiceState {
 func mapValidators(validators []ValidatorKey) safrole.ValidatorsData {
 	var data safrole.ValidatorsData
 	for i, v := range validators {
-		if i >= common.NumberOfValidators {
+		if i >= constants.NumberOfValidators {
 			break
 		}
 		data[i] = mapKey(v)
@@ -373,7 +373,7 @@ func mapRecentHistory(recentBlocks RecentBlocks) state.RecentHistory {
 
 func mapAuthPools(pools [][]string) state.CoreAuthorizersPool {
 	var result state.CoreAuthorizersPool
-	totalNumberOfCores := int(common.TotalNumberOfCores)
+	totalNumberOfCores := int(constants.TotalNumberOfCores)
 	for i, pool := range pools {
 		if i >= totalNumberOfCores {
 			break
@@ -395,7 +395,7 @@ func mapAvailAssignments(assignments []*AvailAssignments) state.CoreAssignments 
 
 	// Iterate through the assignments array
 	for i, assignment := range assignments {
-		if i >= int(common.TotalNumberOfCores) {
+		if i >= int(constants.TotalNumberOfCores) {
 			break
 		}
 
@@ -458,11 +458,11 @@ func mapState(s ReportsState) state.State {
 	}
 }
 
-// Map []CoreStatistics from JSON to [common.TotalNumberOfCores]validator.CoreStatistics
-func mapCoresStatistics(stats []CoreStatistics) [common.TotalNumberOfCores]validator.CoreStatistics {
-	var result [common.TotalNumberOfCores]validator.CoreStatistics
+// Map []CoreStatistics from JSON to [constants.TotalNumberOfCores]validator.CoreStatistics
+func mapCoresStatistics(stats []CoreStatistics) [constants.TotalNumberOfCores]validator.CoreStatistics {
+	var result [constants.TotalNumberOfCores]validator.CoreStatistics
 	for i, s := range stats {
-		if i >= int(common.TotalNumberOfCores) {
+		if i >= int(constants.TotalNumberOfCores) {
 			break
 		}
 		result[i] = validator.CoreStatistics{
@@ -652,8 +652,8 @@ func TestReports(t *testing.T) {
 				}
 
 				// Set ValidatorsCurrent and ValidatorsLast to empty as the test vectors do not include it
-				preState.ActivityStatistics.ValidatorsCurrent = [common.NumberOfValidators]validator.ValidatorStatistics{}
-				preState.ActivityStatistics.ValidatorsLast = [common.NumberOfValidators]validator.ValidatorStatistics{}
+				preState.ActivityStatistics.ValidatorsCurrent = [constants.NumberOfValidators]validator.ValidatorStatistics{}
+				preState.ActivityStatistics.ValidatorsLast = [constants.NumberOfValidators]validator.ValidatorStatistics{}
 
 				require.Equal(t, expectedPostState, preState)
 			}

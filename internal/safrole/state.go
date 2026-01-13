@@ -5,10 +5,9 @@ import (
 	"sync"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
-	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -29,7 +28,7 @@ type State struct {
 	TicketAccumulator []block.Ticket        // (γA) Sealing-key contest ticket accumulator.
 }
 
-type ValidatorsData [common.NumberOfValidators]crypto.ValidatorKey
+type ValidatorsData [constants.NumberOfValidators]crypto.ValidatorKey
 
 // Returns a new RingVrfVerifier for this these validators.
 func (vsd ValidatorsData) RingVerifier() (*bandersnatch.RingVrfVerifier, error) {
@@ -121,7 +120,7 @@ func (vsd ValidatorsData) RingProver(privateKey crypto.BandersnatchPrivateKey) (
 // GP v0.7.0
 func SelectFallbackKeys(entropy crypto.Hash, currentValidators ValidatorsData) (crypto.EpochKeys, error) {
 	var fallbackKeys crypto.EpochKeys
-	for i := uint32(0); i < jamtime.TimeslotsPerEpoch; i++ {
+	for i := uint32(0); i < constants.TimeslotsPerEpoch; i++ {
 		// E₄(i): Encode i as a 4-byte sequence
 		iBytes, err := jam.Marshal(i)
 		if err != nil {

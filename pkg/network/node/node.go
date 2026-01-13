@@ -15,7 +15,7 @@ import (
 	"github.com/eigerco/strawberry/internal/authorization"
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/d3l"
 	"github.com/eigerco/strawberry/internal/guaranteeing"
@@ -512,7 +512,7 @@ func (n *Node) UpdateCoreAssignments() error {
 //   - R = recovery threshold: the minimum number of EC shards required to recover the original data
 //   - V = total number of validators
 func (n *Node) assignedShardIndex(coreIndex, validatorIndex uint16) uint16 {
-	return (coreIndex*uint16(common.ErasureCodingOriginalShards) + validatorIndex) % common.NumberOfValidators
+	return (coreIndex*uint16(constants.ErasureCodingOriginalShards) + validatorIndex) % constants.NumberOfValidators
 }
 
 // AnnounceBlock implements the UP 0 block announcement protocol from the JAM spec.

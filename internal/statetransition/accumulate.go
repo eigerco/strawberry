@@ -6,6 +6,7 @@ import (
 	"github.com/eigerco/strawberry/pkg/log"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/pvm"
@@ -13,7 +14,6 @@ import (
 	"github.com/eigerco/strawberry/internal/safemath"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
-	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -57,7 +57,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 
 	_, c := account.EncodedCodeAndMetadata()
 	// if c = ∅ ∨ ∣c∣ > WC
-	if c == nil || len(c) == work.MaxSizeServiceCode {
+	if c == nil || len(c) == constants.MaxSizeServiceCode {
 		return AccumulationOutput{AccumulationState: stateWithBalance}, nil
 	}
 

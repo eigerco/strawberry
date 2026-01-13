@@ -4,7 +4,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
 )
@@ -19,10 +19,10 @@ type ValidatorState struct {
 
 // ActivityStatisticsState represents the statistics related to validators.
 type ActivityStatisticsState struct {
-	ValidatorsCurrent [common.NumberOfValidators]ValidatorStatistics // Present validator statistics (π_v) - The activity statistics for the validators which are currently being accumulated.
-	ValidatorsLast    [common.NumberOfValidators]ValidatorStatistics // Completed validator statistics (π_l) - The activity statistics for the validators which have completed their work.
-	Cores             [common.TotalNumberOfCores]CoreStatistics      // Core statistics (π_c) - The activity statistics for each core.
-	Services          ServiceStatistics                              // Service statistics (π_s) - The activity statistics for each service.
+	ValidatorsCurrent [constants.NumberOfValidators]ValidatorStatistics // Present validator statistics (π_v) - The activity statistics for the validators which are currently being accumulated.
+	ValidatorsLast    [constants.NumberOfValidators]ValidatorStatistics // Completed validator statistics (π_l) - The activity statistics for the validators which have completed their work.
+	Cores             [constants.TotalNumberOfCores]CoreStatistics      // Core statistics (π_c) - The activity statistics for each core.
+	Services          ServiceStatistics                                 // Service statistics (π_s) - The activity statistics for each service.
 }
 
 type ValidatorStatistics struct {

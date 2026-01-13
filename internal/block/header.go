@@ -5,7 +5,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -35,10 +35,10 @@ type ValidatorKeys struct {
 type EpochMarker struct {
 	Entropy        crypto.Hash
 	TicketsEntropy crypto.Hash
-	Keys           [common.NumberOfValidators]ValidatorKeys
+	Keys           [constants.NumberOfValidators]ValidatorKeys
 }
 
-type WinningTicketMarker [jamtime.TimeslotsPerEpoch]Ticket
+type WinningTicketMarker [constants.TimeslotsPerEpoch]Ticket
 
 // Hash returns the hash of the header
 func (h Header) Hash() (crypto.Hash, error) {

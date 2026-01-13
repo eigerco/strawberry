@@ -1,10 +1,9 @@
 package block
 
 import (
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
@@ -33,9 +32,9 @@ type DisputeExtrinsic struct {
 // Verdict represents a collection of judgments made by validators on a work report.
 // It includes the report hash, epoch index, and a super-majority of judgments.
 type Verdict struct {
-	ReportHash crypto.Hash                               // H, hash of the work report
-	EpochIndex jamtime.Epoch                             // ⌊τ/E⌋ - N2 (current or prev), epoch index
-	Judgements [common.ValidatorsSuperMajority]Judgement // ⟦{{⊺,⊥}, NV, V̄}⟧⌊2/3V⌋+1
+	ReportHash crypto.Hash                                  // H, hash of the work report
+	EpochIndex jamtime.Epoch                                // ⌊τ/E⌋ - N2 (current or prev), epoch index
+	Judgements [constants.ValidatorsSuperMajority]Judgement // ⟦{{⊺,⊥}, NV, V̄}⟧⌊2/3V⌋+1
 }
 
 // Culprit represents misbehaving guarantor who guaranteed an invalid work-report

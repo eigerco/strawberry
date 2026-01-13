@@ -8,9 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/eigerco/strawberry/internal/common"
-
 	"github.com/ebitengine/purego"
+	"github.com/eigerco/strawberry/internal/constants"
 )
 
 const (
@@ -73,7 +72,7 @@ func New(originalShardsCount, recoveryShardsCount int) (*Encoder, error) {
 // length of the original shards count + the recovery shards count. Data is not
 // copied, so the input data should not be modified after.
 func (r *Encoder) Chunk(data []byte) ([][]byte, error) {
-	if len(data) > common.MaxWorkPackageSize {
+	if len(data) > constants.MaxWorkPackageSize {
 		return nil, errors.New("data length too long")
 	}
 	// Need at least two bytes per chunk.

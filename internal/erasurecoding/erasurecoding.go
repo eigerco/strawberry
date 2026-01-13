@@ -4,16 +4,16 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/erasurecoding/reedsolomon"
 )
 
 // These parameters allow data to be retrieved even when only 1/3 of the
 // validators are available.
 const (
-	OriginalShards = common.ErasureCodingOriginalShards             // Number of original data shards.
-	RecoveryShards = common.NumberOfValidators - OriginalShards     // Number of recovery data shards.
-	ChunkShardSize = common.ErasureCodingChunkSize / OriginalShards // In bytes.
+	OriginalShards = constants.ErasureCodingOriginalShards             // Number of original data shards.
+	RecoveryShards = constants.NumberOfValidators - OriginalShards     // Number of recovery data shards.
+	ChunkShardSize = constants.ErasureCodingChunkSize / OriginalShards // In bytes.
 )
 
 // Encode transforms input data into striped erasure-coded shards using
@@ -27,7 +27,7 @@ func Encode(data []byte) ([][]byte, error) {
 	if len(data) == 0 {
 		return nil, errors.New("data has length 0")
 	}
-	if len(data) > common.MaxWorkPackageSize {
+	if len(data) > constants.MaxWorkPackageSize {
 		return nil, errors.New("data length too long")
 	}
 
@@ -36,7 +36,7 @@ func Encode(data []byte) ([][]byte, error) {
 		return nil, errors.New("error creating encoder")
 	}
 
-	chunks := unzip(common.ErasureCodingChunkSize, data)
+	chunks := unzip(constants.ErasureCodingChunkSize, data)
 	if len(chunks) == 0 {
 		return nil, errors.New("couldn't unzip data")
 	}

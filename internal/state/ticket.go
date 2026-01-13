@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
 
@@ -14,7 +14,7 @@ import (
 // Creates a ticket proof as per equation 6.29 in the graypaper (v0.6.4)
 // The ticket extrinic is a sequence of ticket proofs.
 func CreateTicketProof(pendingValidators safrole.ValidatorsData, entropy crypto.Hash, privateKey crypto.BandersnatchPrivateKey, attempt uint8) (block.TicketProof, error) {
-	if attempt > common.MaxTicketAttemptsPerValidator {
+	if attempt > constants.MaxTicketAttemptsPerValidator {
 		return block.TicketProof{}, errors.New("attempts exceeded")
 	}
 
@@ -53,7 +53,7 @@ func VerifyTicketProof(ringCommitment crypto.RingCommitment, entropy crypto.Hash
 		return crypto.BandersnatchOutputHash{}, err
 	}
 
-	if ticket.EntryIndex >= common.MaxTicketAttemptsPerValidator {
+	if ticket.EntryIndex >= constants.MaxTicketAttemptsPerValidator {
 		return crypto.BandersnatchOutputHash{}, errors.New("bad ticket attempt")
 	}
 

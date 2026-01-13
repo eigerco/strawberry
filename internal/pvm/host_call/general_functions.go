@@ -3,20 +3,18 @@ package host_call
 import (
 	"bytes"
 	"fmt"
-	"github.com/eigerco/strawberry/internal/common"
 	"math"
 	"slices"
 
-	"github.com/eigerco/strawberry/pkg/log"
-
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/pvm"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/work"
+	"github.com/eigerco/strawberry/pkg/log"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
@@ -514,39 +512,39 @@ func Log(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, core *uint16, serviceI
 // )
 
 var encodedChainConstants = slices.Concat(
-	jam.EncodeUint64(service.AdditionalMinimumBalancePerItem),    // BI
-	jam.EncodeUint64(service.AdditionalMinimumBalancePerOctet),   // BL
-	jam.EncodeUint64(service.BasicMinimumBalance),                // BS
-	jam.EncodeUint16(common.TotalNumberOfCores),                  // C
-	jam.EncodeUint32(jamtime.PreimageExpulsionPeriod),            // D
-	jam.EncodeUint32(jamtime.TimeslotsPerEpoch),                  // E
-	jam.EncodeUint64(common.MaxAllocatedGasAccumulation),         // GA
-	jam.EncodeUint64(common.MaxAllocatedGasIsAuthorized),         // GI
-	jam.EncodeUint64(common.MaxAllocatedGasRefine),               // GR
-	jam.EncodeUint64(common.TotalGasAccumulation),                // GT
-	jam.EncodeUint16(state.MaxRecentBlocks),                      // H
-	jam.EncodeUint16(work.MaxNumberOfItems),                      // I
-	jam.EncodeUint16(work.MaxNumberOfDependencyItems),            // J
-	jam.EncodeUint16(block.MaxTicketsPerBlock),                   // K
-	jam.EncodeUint32(state.MaxTimeslotsForLookupAnchor),          // L
-	jam.EncodeUint16(common.MaxTicketAttemptsPerValidator),       // N
-	jam.EncodeUint16(state.MaxAuthorizersPerCore),                // O
-	jam.EncodeUint16(jamtime.SlotPeriodInSeconds),                // P
-	jam.EncodeUint16(state.PendingAuthorizersQueueSize),          // Q
-	jam.EncodeUint16(uint16(jamtime.ValidatorRotationPeriod)),    // R
-	jam.EncodeUint16(work.MaxNumberOfExtrinsics),                 // T
-	jam.EncodeUint16(uint16(common.WorkReportTimeoutPeriod)),     // U
-	jam.EncodeUint16(common.NumberOfValidators),                  // V
-	jam.EncodeUint32(state.MaximumSizeIsAuthorizedCode),          // W_A
-	jam.EncodeUint32(common.MaxWorkPackageSize),                  // W_B
-	jam.EncodeUint32(work.MaxSizeServiceCode),                    // W_C
-	jam.EncodeUint32(common.ErasureCodingChunkSize),              // W_E
-	jam.EncodeUint32(work.MaxNumberOfImports),                    // W_M
-	jam.EncodeUint32(common.NumberOfErasureCodecPiecesInSegment), // W_P
-	jam.EncodeUint32(common.MaxWorkPackageSizeBytes),             // W_R
-	jam.EncodeUint32(service.TransferMemoSizeBytes),              // W_T
-	jam.EncodeUint32(work.MaxNumberOfExports),                    // W_X
-	jam.EncodeUint32(jamtime.TicketSubmissionTimeSlots),          // Y
+	jam.EncodeUint64(service.AdditionalMinimumBalancePerItem),       // BI
+	jam.EncodeUint64(service.AdditionalMinimumBalancePerOctet),      // BL
+	jam.EncodeUint64(service.BasicMinimumBalance),                   // BS
+	jam.EncodeUint16(constants.TotalNumberOfCores),                  // C
+	jam.EncodeUint32(constants.PreimageExpulsionPeriod),             // D
+	jam.EncodeUint32(constants.TimeslotsPerEpoch),                   // E
+	jam.EncodeUint64(constants.MaxAllocatedGasAccumulation),         // GA
+	jam.EncodeUint64(constants.MaxAllocatedGasIsAuthorized),         // GI
+	jam.EncodeUint64(constants.MaxAllocatedGasRefine),               // GR
+	jam.EncodeUint64(constants.TotalGasAccumulation),                // GT
+	jam.EncodeUint16(constants.MaxRecentBlocks),                     // H
+	jam.EncodeUint16(constants.MaxNumberOfItems),                    // I
+	jam.EncodeUint16(constants.MaxNumberOfDependencyItems),          // J
+	jam.EncodeUint16(constants.MaxTicketsPerBlock),                  // K
+	jam.EncodeUint32(constants.MaxTimeslotsForLookupAnchor),         // L
+	jam.EncodeUint16(constants.MaxTicketAttemptsPerValidator),       // N
+	jam.EncodeUint16(constants.MaxAuthorizersPerCore),               // O
+	jam.EncodeUint16(constants.SlotPeriodInSeconds),                 // P
+	jam.EncodeUint16(constants.PendingAuthorizersQueueSize),         // Q
+	jam.EncodeUint16(uint16(constants.ValidatorRotationPeriod)),     // R
+	jam.EncodeUint16(constants.MaxNumberOfExtrinsics),               // T
+	jam.EncodeUint16(uint16(constants.WorkReportTimeoutPeriod)),     // U
+	jam.EncodeUint16(constants.NumberOfValidators),                  // V
+	jam.EncodeUint32(constants.MaximumSizeIsAuthorizedCode),         // W_A
+	jam.EncodeUint32(constants.MaxWorkPackageSize),                  // W_B
+	jam.EncodeUint32(constants.MaxSizeServiceCode),                  // W_C
+	jam.EncodeUint32(constants.ErasureCodingChunkSize),              // W_E
+	jam.EncodeUint32(constants.MaxNumberOfImports),                  // W_M
+	jam.EncodeUint32(constants.NumberOfErasureCodecPiecesInSegment), // W_P
+	jam.EncodeUint32(constants.MaxWorkPackageSizeBytes),             // W_R
+	jam.EncodeUint32(service.TransferMemoSizeBytes),                 // W_T
+	jam.EncodeUint32(constants.MaxNumberOfExports),                  // W_X
+	jam.EncodeUint32(constants.TicketSubmissionTimeSlots),           // Y
 )
 
 func GetChainConstants() []byte {

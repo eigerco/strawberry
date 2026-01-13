@@ -11,6 +11,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safemath"
@@ -76,7 +77,7 @@ func CalculatePosteriorCoreAssignments(ge block.GuaranteesExtrinsic, intermediat
 func RotateSequence(sequence []uint32, n uint32) []uint32 {
 	rotated := make([]uint32, len(sequence))
 	for i, x := range sequence {
-		rotated[i] = (x + n) % uint32(common.TotalNumberOfCores)
+		rotated[i] = (x + n) % uint32(constants.TotalNumberOfCores)
 	}
 	return rotated
 }
@@ -86,9 +87,9 @@ func RotateSequence(sequence []uint32, n uint32) []uint32 {
 // P(e, t) ≡ R(F([⌊C · i/V⌋ | i ← N_V], e), ⌊(t mod E)/R⌋) (eq. 11.20 v0.7.0)
 func PermuteAssignments(entropy crypto.Hash, timeslot jamtime.Timeslot) ([]uint32, error) {
 	// [⌊C ⋅ i/V⌋ ∣i ∈ NV]
-	coreIndices := make([]uint32, common.NumberOfValidators)
-	for i := range uint32(common.NumberOfValidators) {
-		coreIndices[i] = (uint32(common.TotalNumberOfCores) * i) / common.NumberOfValidators
+	coreIndices := make([]uint32, constants.NumberOfValidators)
+	for i := range uint32(constants.NumberOfValidators) {
+		coreIndices[i] = (uint32(constants.TotalNumberOfCores) * i) / constants.NumberOfValidators
 	}
 
 	// F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e)
@@ -98,7 +99,7 @@ func PermuteAssignments(entropy crypto.Hash, timeslot jamtime.Timeslot) ([]uint3
 	}
 
 	// ⌊(t mod E) / R⌋
-	rotationAmount := uint32(timeslot % jamtime.TimeslotsPerEpoch / jamtime.ValidatorRotationPeriod)
+	rotationAmount := uint32(timeslot % constants.TimeslotsPerEpoch / constants.ValidatorRotationPeriod)
 
 	// R(F([⌊C ⋅ i/V⌋ ∣i ∈ NV], e), ⌊(t mod E)/R⌋)
 	rotatedSequence := RotateSequence(shuffledSequence, rotationAmount)
@@ -145,8 +146,8 @@ func DetermineValidatorsAndDataForPermutation(
 	currentValidators safrole.ValidatorsData, // κ'
 	archivedValidators safrole.ValidatorsData, // λ'
 ) (safrole.ValidatorsData, crypto.Hash, jamtime.Timeslot, error) {
-	currentRotation := newTimeslot / jamtime.ValidatorRotationPeriod
-	guaranteeRotation := guaranteeTimeslot / jamtime.ValidatorRotationPeriod
+	currentRotation := newTimeslot / constants.ValidatorRotationPeriod
+	guaranteeRotation := guaranteeTimeslot / constants.ValidatorRotationPeriod
 
 	var entropy crypto.Hash
 	var timeslotForPermutation jamtime.Timeslot
@@ -160,13 +161,13 @@ func DetermineValidatorsAndDataForPermutation(
 	} else { // ⌊τ'/R⌋ ≠ ⌊t/R⌋ → use M*
 		// Eq. 11.22: M* ≡ (P(e, τ' - R), Φ(k))
 		var ok bool
-		timeslotForPermutation, ok = safemath.Sub(newTimeslot, jamtime.ValidatorRotationPeriod)
+		timeslotForPermutation, ok = safemath.Sub(newTimeslot, constants.ValidatorRotationPeriod)
 		if !ok {
 			return safrole.ValidatorsData{}, crypto.Hash{}, 0, errors.New("timeslot underflow")
 		}
 
-		currentEpochIndex := newTimeslot / jamtime.TimeslotsPerEpoch
-		previousRotationEpochIndex := timeslotForPermutation / jamtime.TimeslotsPerEpoch
+		currentEpochIndex := newTimeslot / constants.TimeslotsPerEpoch
+		previousRotationEpochIndex := timeslotForPermutation / constants.TimeslotsPerEpoch
 
 		if currentEpochIndex == previousRotationEpochIndex { // ⌊(τ'-R)/E⌋ = ⌊τ'/E⌋
 			// (e,k) = (η₂', κ')
@@ -205,7 +206,7 @@ func verifySortedUnique(ge block.GuaranteesExtrinsic) error {
 
 		// Check all validator indices are within range
 		for j := 0; j < len(g.Credentials); j++ {
-			if g.Credentials[j].ValidatorIndex >= uint16(common.NumberOfValidators) {
+			if g.Credentials[j].ValidatorIndex >= uint16(constants.NumberOfValidators) {
 				return fmt.Errorf("bad validator index")
 			}
 		}
@@ -263,7 +264,7 @@ func verifySignatures(ge block.GuaranteesExtrinsic, validatorState validator.Val
 		if err != nil {
 			return reporters, fmt.Errorf("failed to marshal work report: %w", err)
 		}
-		message := append([]byte(state.SignatureContextGuarantee), reportHash[:]...)
+		message := append([]byte(constants.SignatureContextGuarantee), reportHash[:]...)
 
 		for _, c := range g.Credentials {
 			validatorKey := validators[c.ValidatorIndex].Ed25519
@@ -346,7 +347,7 @@ func validateGasLimits(ge block.GuaranteesExtrinsic, services service.ServiceSta
 		}
 
 		// Check total gas limit: ∑(r∈wr) rg ≤ GA
-		if totalGas > common.MaxAllocatedGasAccumulation {
+		if totalGas > constants.MaxAllocatedGasAccumulation {
 			return fmt.Errorf("work report gas too high")
 		}
 	}
@@ -355,8 +356,8 @@ func validateGasLimits(ge block.GuaranteesExtrinsic, services service.ServiceSta
 
 // R(⌊τ'/R⌋ - 1) ≤ t ≤ τ' (eq. 11.26 v0.7.0)
 func verifyGuaranteeAge(guarantee block.Guarantee, newTimeslot jamtime.Timeslot) error {
-	guaranteeRotation := guarantee.Timeslot / jamtime.ValidatorRotationPeriod
-	currentRotation := newTimeslot / jamtime.ValidatorRotationPeriod
+	guaranteeRotation := guarantee.Timeslot / constants.ValidatorRotationPeriod
+	currentRotation := newTimeslot / constants.ValidatorRotationPeriod
 
 	// Guarantee must not be from future timeslot
 	if guarantee.Timeslot > newTimeslot {
@@ -478,15 +479,15 @@ func validateRefinementContexts(contexts []block.RefinementContext, intermediate
 		// Validate lookup anchor timeslot
 		// ∀x ∈ x : xt ≥ HT − L (eq. 11.34 v 0.7.0)
 		var minValidTimeslot jamtime.Timeslot
-		if newBlockHeader.TimeSlotIndex > state.MaxTimeslotsForLookupAnchor {
-			minValidTimeslot = newBlockHeader.TimeSlotIndex - state.MaxTimeslotsForLookupAnchor
+		if newBlockHeader.TimeSlotIndex > constants.MaxTimeslotsForLookupAnchor {
+			minValidTimeslot = newBlockHeader.TimeSlotIndex - constants.MaxTimeslotsForLookupAnchor
 		} else {
 			minValidTimeslot = 0 // Any timeslot is valid if we're within the first L slots
 		}
 
 		if context.LookupAnchor.Timeslot < minValidTimeslot {
 			return fmt.Errorf("lookup anchor block (timeslot %d) not within the last %d timeslots (current timeslot: %d, minimum valid: %d)",
-				context.LookupAnchor.Timeslot, state.MaxTimeslotsForLookupAnchor, newBlockHeader.TimeSlotIndex, minValidTimeslot)
+				context.LookupAnchor.Timeslot, constants.MaxTimeslotsForLookupAnchor, newBlockHeader.TimeSlotIndex, minValidTimeslot)
 		}
 
 		if Ancestry {

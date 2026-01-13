@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/eigerco/strawberry/pkg/log"
 	"maps"
 	"slices"
 	"sort"
@@ -12,7 +11,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/assuring"
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/disputing"
@@ -27,6 +26,7 @@ import (
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
+	"github.com/eigerco/strawberry/pkg/log"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"golang.org/x/sync/errgroup"
 )
@@ -315,8 +315,8 @@ func UpdateRecentHistory(
 	newRecentHistory.BlockHistory = append(newRecentHistory.BlockHistory, newBlockState)
 
 	// Then keep only last H blocks
-	if len(newRecentHistory.BlockHistory) > state.MaxRecentBlocks {
-		newRecentHistory.BlockHistory = newRecentHistory.BlockHistory[len(newRecentHistory.BlockHistory)-state.MaxRecentBlocks:]
+	if len(newRecentHistory.BlockHistory) > constants.MaxRecentBlocks {
+		newRecentHistory.BlockHistory = newRecentHistory.BlockHistory[len(newRecentHistory.BlockHistory)-constants.MaxRecentBlocks:]
 	}
 
 	return newRecentHistory, nil
@@ -377,7 +377,7 @@ func CalculateNewCoreAuthorizations(header block.Header, guarantees block.Guaran
 	var newCoreAuthorizations state.CoreAuthorizersPool
 
 	// For each core c in Nc (Equation 8.2: ∀c ∈ Nc)
-	for c := range common.TotalNumberOfCores {
+	for c := range constants.TotalNumberOfCores {
 		// Start with the existing authorizations for this core α[c]
 		newAuths := make([]crypto.Hash, len(currentAuthorizations[c]))
 		copy(newAuths, currentAuthorizations[c])
@@ -396,7 +396,7 @@ func CalculateNewCoreAuthorizations(header block.Header, guarantees block.Guaran
 
 		// Get new authorizer from the queue based on current timeslot
 		// φ'[c][Ht]↺O - Get authorizer from queue, wrapping around queue size
-		queueIndex := header.TimeSlotIndex % state.PendingAuthorizersQueueSize
+		queueIndex := header.TimeSlotIndex % constants.PendingAuthorizersQueueSize
 		newAuthorizer := pendingAuthorizations[c][queueIndex]
 
 		// ← Append new authorizer maintaining max size O
@@ -428,7 +428,7 @@ func removeAuthorizer(auths []crypto.Hash, toRemove crypto.Hash) []crypto.Hash {
 // This implements the "←" (append limited) operator from the paper
 func appendAuthorizerLimited(auths []crypto.Hash, newAuth crypto.Hash) []crypto.Hash {
 	// If at max size, remove oldest (leftmost) element
-	if len(auths) >= state.MaxAuthorizersPerCore {
+	if len(auths) >= constants.MaxAuthorizersPerCore {
 		copy(auths, auths[1:])
 		auths = auths[:len(auths)-1]
 	}
@@ -487,7 +487,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	var queuedWorkReports = updateQueue(workReportWithDeps, flattenAccumulationHistory(currentState.AccumulationHistory))
 
 	// let m = Ht mod E (eq. 12.10 v0.7.1)
-	timeslotPerEpoch := header.TimeSlotIndex % jamtime.TimeslotsPerEpoch
+	timeslotPerEpoch := header.TimeSlotIndex % constants.TimeslotsPerEpoch
 
 	// q = E(⋃(ωm...) ⌢ ⋃(ω...m) ⌢ RQ, P(R!)) (eq. 12.12 v0.7.1)
 	workReportsFromQueueDeps := updateQueue(
@@ -511,7 +511,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		}
 	}
 	// let g = max(GT, GA ⋅ C + [∑x∈V(χ_Z)](x)) (eq. 12.24 v0.7.1)
-	gasCores, ok := safemath.Mul(common.MaxAllocatedGasAccumulation, uint64(common.TotalNumberOfCores))
+	gasCores, ok := safemath.Mul(constants.MaxAllocatedGasAccumulation, uint64(constants.TotalNumberOfCores))
 	if !ok {
 		err = fmt.Errorf("gas limit multiplication overflow")
 		return
@@ -521,7 +521,7 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 		err = fmt.Errorf("gas limit addition overflow")
 		return
 	}
-	gasLimit := max(common.TotalGasAccumulation, gasSum)
+	gasLimit := max(constants.TotalGasAccumulation, gasSum)
 
 	accumulator := NewAccumulator(newEntropyPool, header, newTimeslot)
 	// e = (d: δ, i: ι, q: ϕ, m: χ_M, a: χ_A, v: χ_V, r: χ_R, z: χ_Z) (eq. 12.24 v0.7.1)
@@ -630,14 +630,14 @@ func CalculateWorkReportsAndAccumulate(header *block.Header, currentState *state
 	))
 
 	// ξ′E−1
-	lastAccumulation := newAccumulationHistory[jamtime.TimeslotsPerEpoch-1]
+	lastAccumulation := newAccumulationHistory[constants.TimeslotsPerEpoch-1]
 
 	// Eq. 12.32 v0.7.1
 	//					  ⎧ E(RQ, ξ′E−1) 		if i = 0
 	// ∀i ∈ NE ∶ ω′↺m−i ≡ ⎨ [] 					if 1 ≤ i < τ′ − τ
 	// 					  ⎩ E(ω↺m−i, ξ′E−1) 	if i ≥ τ′ − τ
-	for i := range jamtime.TimeslotsPerEpoch {
-		indexPerEpoch := mod(int(timeslotPerEpoch)-i, jamtime.TimeslotsPerEpoch)
+	for i := range constants.TimeslotsPerEpoch {
+		indexPerEpoch := mod(int(timeslotPerEpoch)-i, constants.TimeslotsPerEpoch)
 		if i == 0 {
 			newAccumulationQueue[indexPerEpoch] = updateQueue(queuedWorkReports, lastAccumulation)
 		} else if 1 <= i && jamtime.Timeslot(i) < newTimeslot-currentState.TimeslotIndex {
@@ -756,18 +756,18 @@ func CalculateNewActivityStatistics(
 func CalculateNewValidatorStatistics(
 	blk block.Block,
 	prevTimeslot jamtime.Timeslot,
-	validatorStatsCurrent, validatorStatsLast [common.NumberOfValidators]validator.ValidatorStatistics,
+	validatorStatsCurrent, validatorStatsLast [constants.NumberOfValidators]validator.ValidatorStatistics,
 	reporters crypto.ED25519PublicKeySet,
 	currValidators safrole.ValidatorsData,
-) ([common.NumberOfValidators]validator.ValidatorStatistics, [common.NumberOfValidators]validator.ValidatorStatistics, error) { // (current, last)
+) ([constants.NumberOfValidators]validator.ValidatorStatistics, [constants.NumberOfValidators]validator.ValidatorStatistics, error) { // (current, last)
 	// Implements equations 13.3 - 13.4:
 	// let e = ⌊τ/E⌋, e′ = ⌊τ′/E⌋
 	// (a, π′₁) ≡ { (π₀, π₁) if e′ = e
 	//              ([{0,...,[0,...]},...], π₀) otherwise
 	if prevTimeslot.ToEpoch() != blk.Header.TimeSlotIndex.ToEpoch() {
 		// Rotate statistics - completed stats become history, start fresh present stats
-		validatorStatsLast = validatorStatsCurrent                                         // Move current to history
-		validatorStatsCurrent = [common.NumberOfValidators]validator.ValidatorStatistics{} // Reset current
+		validatorStatsLast = validatorStatsCurrent                                            // Move current to history
+		validatorStatsCurrent = [constants.NumberOfValidators]validator.ValidatorStatistics{} // Reset current
 	}
 
 	// Implements equation 13.5: ∀v ∈ NV
@@ -844,10 +844,10 @@ func CalculateNewValidatorStatistics(
 //	u = gas used, l = bundle size, d = DA load, p = popularity
 func CalculateNewCoreStatistics(
 	blk block.Block,
-	coreStats [common.TotalNumberOfCores]validator.CoreStatistics,
+	coreStats [constants.TotalNumberOfCores]validator.CoreStatistics,
 	availableReports []block.WorkReport,
-) ([common.TotalNumberOfCores]validator.CoreStatistics, error) {
-	newCoreStats := [common.TotalNumberOfCores]validator.CoreStatistics{}
+) ([constants.TotalNumberOfCores]validator.CoreStatistics, error) {
+	newCoreStats := [constants.TotalNumberOfCores]validator.CoreStatistics{}
 	var ok bool
 
 	// Equations 13.9 and 13.10: Statistics from incoming work reports (I)
@@ -865,30 +865,30 @@ func CalculateNewCoreStatistics(
 		// 13.10: (rs)l - auditable work bundle length
 		newCoreStats[coreIndex].BundleSize, ok = safemath.Add(newCoreStats[coreIndex].BundleSize, workReport.AvailabilitySpecification.AuditableWorkBundleLength)
 		if !ok {
-			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+			return [constants.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 		}
 
 		// 13.9: Sum over work digests d ∈ rd
 		for _, workDigest := range workReport.WorkDigests {
 			newCoreStats[coreIndex].Imports, ok = safemath.Add(newCoreStats[coreIndex].Imports, workDigest.SegmentsImportedCount) // di
 			if !ok {
-				return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+				return [constants.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 			}
 			newCoreStats[coreIndex].Exports, ok = safemath.Add(newCoreStats[coreIndex].Exports, workDigest.SegmentsExportedCount) // de
 			if !ok {
-				return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+				return [constants.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 			}
 			newCoreStats[coreIndex].ExtrinsicCount, ok = safemath.Add(newCoreStats[coreIndex].ExtrinsicCount, workDigest.ExtrinsicCount) // dx
 			if !ok {
-				return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+				return [constants.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 			}
 			newCoreStats[coreIndex].ExtrinsicSize, ok = safemath.Add(newCoreStats[coreIndex].ExtrinsicSize, workDigest.ExtrinsicSize) // dz
 			if !ok {
-				return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+				return [constants.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 			}
 			newCoreStats[coreIndex].GasUsed, ok = safemath.Add(newCoreStats[coreIndex].GasUsed, workDigest.GasUsed) // du
 			if !ok {
-				return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+				return [constants.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 			}
 		}
 	}
@@ -901,7 +901,7 @@ func CalculateNewCoreStatistics(
 	//   R = set of newly available work reports
 	//   (rs)l = auditable work bundle length
 	//   (rs)n = segment count
-	//   WG = segment size in octets (common.SizeOfSegment = 4104)
+	//   WG = segment size in octets (constants.SizeOfSegment = 4104)
 	//
 	// The 65/64 factor accounts for paged-proof overhead: for every 64 exported
 	// segments, 1 additional segment is needed for Merkle proofs (see section 14.4.1).
@@ -916,30 +916,30 @@ func CalculateNewCoreStatistics(
 		// Compute ⌈(rs)n × 65/64⌉ using integer ceiling division: ⌈a/b⌉ = (a + b - 1) / b
 		nTimes65, ok := safemath.Mul(uint32(n), 65)
 		if !ok {
-			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+			return [constants.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 		}
 		nCeil, ok := safemath.Add(nTimes65, 63)
 		if !ok {
-			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+			return [constants.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 		}
 		nCeil /= 64
 
 		// WG⌈(rs)n × 65/64⌉
-		segmentLoad, ok := safemath.Mul(common.SizeOfSegment, nCeil)
+		segmentLoad, ok := safemath.Mul(constants.SizeOfSegment, nCeil)
 		if !ok {
-			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+			return [constants.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 		}
 
 		// (rs)l + WG⌈(rs)n × 65/64⌉
 		daLoad, ok := safemath.Add(l, segmentLoad)
 		if !ok {
-			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+			return [constants.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 		}
 
 		// ∑_{r∈R, rc=c} - accumulate for this core
 		newCoreStats[coreIndex].DALoad, ok = safemath.Add(newCoreStats[coreIndex].DALoad, daLoad)
 		if !ok {
-			return [common.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
+			return [constants.TotalNumberOfCores]validator.CoreStatistics{}, safemath.ErrOverflow
 		}
 	}
 
@@ -952,7 +952,7 @@ func CalculateNewCoreStatistics(
 			var ok bool
 			newCoreStats[coreIndex].Popularity, ok = safemath.Add(newCoreStats[coreIndex].Popularity, 1)
 			if !ok {
-				return [common.TotalNumberOfCores]validator.CoreStatistics{}, fmt.Errorf("popularity overflow")
+				return [constants.TotalNumberOfCores]validator.CoreStatistics{}, fmt.Errorf("popularity overflow")
 			}
 		}
 	}
@@ -1335,8 +1335,8 @@ func (a *Accumulator) ParallelDelta(
 	// e* = ∆(m)e
 	managerState := delta[initState.ManagerServiceId].AccumulationState
 
-	var newPendingAuthorizersQueues [common.TotalNumberOfCores]state.PendingAuthorizersQueue
-	var newAssignedServiceIds [common.TotalNumberOfCores]block.ServiceId
+	var newPendingAuthorizersQueues [constants.TotalNumberOfCores]state.PendingAuthorizersQueue
+	var newAssignedServiceIds [constants.TotalNumberOfCores]block.ServiceId
 	for core, serviceId := range initState.AssignedServiceIds {
 		// ∀c ∈ NC ∶ q′c = ((∆(a_c)e)q)c
 		newPendingAuthorizersQueues[core] = delta[serviceId].AccumulationState.PendingAuthorizersQueues[core]

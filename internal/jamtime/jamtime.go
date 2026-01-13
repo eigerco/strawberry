@@ -3,6 +3,8 @@ package jamtime
 import (
 	"fmt"
 	"time"
+
+	"github.com/eigerco/strawberry/internal/constants"
 )
 
 var now = time.Now()
@@ -54,7 +56,7 @@ func FromTime(t time.Time) (JamTime, error) {
 
 // EpochAndTimeslotToJamTime converts an Epoch and a timeslot within that epoch to JamTime
 func EpochAndTimeslotToJamTime(e Epoch, timeslot Timeslot) (JamTime, error) {
-	if timeslot >= TimeslotsPerEpoch {
+	if timeslot >= constants.TimeslotsPerEpoch {
 		return JamTime{}, ErrTimeslotExceedsEpochLength
 	}
 	epochStart := FromEpoch(e)
@@ -154,7 +156,7 @@ func (jt *JamTime) UnmarshalJSON(data []byte) error {
 // ToEpochAndTimeslot converts a JamTime to its Epoch and timeslot within that epoch
 func (jt JamTime) ToEpochAndTimeslot() (Epoch, Timeslot) {
 	epoch := jt.ToEpoch()
-	timeslotInEpoch := uint32((jt.Seconds / uint64(TimeslotDuration.Seconds())) % TimeslotsPerEpoch)
+	timeslotInEpoch := uint32((jt.Seconds / uint64(TimeslotDuration.Seconds())) % constants.TimeslotsPerEpoch)
 	return epoch, Timeslot(timeslotInEpoch)
 }
 

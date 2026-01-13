@@ -3,21 +3,19 @@ package statetransition
 import (
 	"testing"
 
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
-	"github.com/eigerco/strawberry/internal/disputing"
-	"github.com/eigerco/strawberry/internal/service"
-	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+	"github.com/eigerco/strawberry/internal/disputing"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
+	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/state"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/testutils"
 	"github.com/eigerco/strawberry/internal/validator"
 )
@@ -358,8 +356,8 @@ func TestCalculateIntermediateCoreAssignmentsFromExtrinsics(t *testing.T) {
 
 	disputes := block.DisputeExtrinsic{
 		Verdicts: []block.Verdict{
-			createVerdictWithJudgments(hash1, common.ValidatorsSuperMajority-1),
-			createVerdictWithJudgments(hash2, common.ValidatorsSuperMajority),
+			createVerdictWithJudgments(hash1, constants.ValidatorsSuperMajority-1),
+			createVerdictWithJudgments(hash2, constants.ValidatorsSuperMajority),
 		},
 	}
 
@@ -451,7 +449,7 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 
 		// Fill current authorizations to max size
 		currentAuths := state.CoreAuthorizersPool{}
-		for i := 0; i < state.MaxAuthorizersPerCore; i++ {
+		for i := 0; i < constants.MaxAuthorizersPerCore; i++ {
 			currentAuths[0] = append(currentAuths[0], testutils.RandomHash(t))
 		}
 
@@ -463,8 +461,8 @@ func TestCalculateNewCoreAuthorizations(t *testing.T) {
 		newAuths := CalculateNewCoreAuthorizations(header, block.GuaranteesExtrinsic{}, pendingAuths, currentAuths)
 
 		// Check that size limit is maintained and both oldest auth and left-shifted auth were removed
-		require.Len(t, newAuths[0], state.MaxAuthorizersPerCore)
-		assert.Equal(t, newAuth, newAuths[0][state.MaxAuthorizersPerCore-1])
+		require.Len(t, newAuths[0], constants.MaxAuthorizersPerCore)
+		assert.Equal(t, newAuth, newAuths[0][constants.MaxAuthorizersPerCore-1])
 		assert.NotEqual(t, currentAuths[0][0], newAuths[0][0], "First auth should be removed")
 		assert.Equal(t, currentAuths[0][1], newAuths[0][0], "Second auth should be first now due to left-shift")
 	})
@@ -575,11 +573,11 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 	t.Run("new epoch transition", func(t *testing.T) {
 		// Initial state with some existing stats
 		initialStats := validator.ActivityStatisticsState{
-			ValidatorsLast: [common.NumberOfValidators]validator.ValidatorStatistics{
+			ValidatorsLast: [constants.NumberOfValidators]validator.ValidatorStatistics{
 				0: {NumOfBlocks: 5},
 				1: {NumOfTickets: 3},
 			},
-			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{
+			ValidatorsCurrent: [constants.NumberOfValidators]validator.ValidatorStatistics{
 				0: {NumOfBlocks: 10},
 				1: {NumOfTickets: 6},
 			},
@@ -605,7 +603,7 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 
 	t.Run("block author statistics", func(t *testing.T) {
 		initialStats := validator.ActivityStatisticsState{
-			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
+			ValidatorsCurrent: [constants.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
 		}
 
 		blk := block.Block{
@@ -640,7 +638,7 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 
 	t.Run("guarantees and assurances", func(t *testing.T) {
 		initialStats := validator.ActivityStatisticsState{
-			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
+			ValidatorsCurrent: [constants.NumberOfValidators]validator.ValidatorStatistics{}, // Current epoch stats
 		}
 
 		blk := block.Block{
@@ -687,7 +685,7 @@ func TestCalculateNewActivityStatisticsForValidatorStatisticsOnly(t *testing.T) 
 
 	t.Run("full block processing", func(t *testing.T) {
 		initialStats := validator.ActivityStatisticsState{
-			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics{
+			ValidatorsCurrent: [constants.NumberOfValidators]validator.ValidatorStatistics{
 				1: {
 					NumOfBlocks:                 5,
 					NumOfTickets:                10,
@@ -755,13 +753,13 @@ func TestCalculateNewCoreStatistics(t *testing.T) {
 		name              string
 		block             block.Block
 		availableReports  []block.WorkReport
-		expectedCoreStats [common.TotalNumberOfCores]validator.CoreStatistics
+		expectedCoreStats [constants.TotalNumberOfCores]validator.CoreStatistics
 	}{
 		{
 			name:              "empty block, no available reports",
 			block:             block.Block{},
 			availableReports:  []block.WorkReport{},
-			expectedCoreStats: [common.TotalNumberOfCores]validator.CoreStatistics{},
+			expectedCoreStats: [constants.TotalNumberOfCores]validator.CoreStatistics{},
 		},
 		{
 			name: "reports being made available",
@@ -793,7 +791,7 @@ func TestCalculateNewCoreStatistics(t *testing.T) {
 					},
 				},
 			},
-			expectedCoreStats: [common.TotalNumberOfCores]validator.CoreStatistics{
+			expectedCoreStats: [constants.TotalNumberOfCores]validator.CoreStatistics{
 				0: {
 					DALoad:     20961,
 					Popularity: 6,
@@ -853,7 +851,7 @@ func TestCalculateNewCoreStatistics(t *testing.T) {
 				},
 			},
 			availableReports: []block.WorkReport{},
-			expectedCoreStats: [common.TotalNumberOfCores]validator.CoreStatistics{
+			expectedCoreStats: [constants.TotalNumberOfCores]validator.CoreStatistics{
 				0: {
 					GasUsed:        821,
 					Imports:        8,
@@ -876,7 +874,7 @@ func TestCalculateNewCoreStatistics(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			newCoreStats, err := CalculateNewCoreStatistics(tc.block, [common.TotalNumberOfCores]validator.CoreStatistics{}, tc.availableReports)
+			newCoreStats, err := CalculateNewCoreStatistics(tc.block, [constants.TotalNumberOfCores]validator.CoreStatistics{}, tc.availableReports)
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedCoreStats, newCoreStats)
 		})
@@ -1007,7 +1005,7 @@ func TestCalculateNewServiceStatistics(t *testing.T) {
 }
 
 func createVerdictWithJudgments(reportHash crypto.Hash, positiveJudgments uint16) block.Verdict {
-	var judgments [common.ValidatorsSuperMajority]block.Judgement
+	var judgments [constants.ValidatorsSuperMajority]block.Judgement
 	for i := uint16(0); i < positiveJudgments; i++ {
 		judgments[i] = block.Judgement{
 			IsValid:        i < positiveJudgments,

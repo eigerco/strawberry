@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -258,17 +259,17 @@ func TestTimeSlot_IsTicketSubmissionPeriod(t *testing.T) {
 		},
 		{
 			name:     "Last submission slot",
-			timeslot: TicketSubmissionTimeSlots - 1,
+			timeslot: constants.TicketSubmissionTimeSlots - 1,
 			want:     true,
 		},
 		{
 			name:     "First non-submission slot",
-			timeslot: TicketSubmissionTimeSlots,
+			timeslot: constants.TicketSubmissionTimeSlots,
 			want:     false,
 		},
 		{
 			name:     "Last slot in epoch",
-			timeslot: TimeslotsPerEpoch - 1,
+			timeslot: constants.TimeslotsPerEpoch - 1,
 			want:     false,
 		},
 	}
@@ -290,26 +291,26 @@ func TestIsWinningTicketMarkerPeriod(t *testing.T) {
 	}{
 		{
 			name:     "First winning marker slot",
-			next:     TicketSubmissionTimeSlots,
-			previous: TicketSubmissionTimeSlots - 1,
+			next:     constants.TicketSubmissionTimeSlots,
+			previous: constants.TicketSubmissionTimeSlots - 1,
 			want:     true,
 		},
 		{
 			name:     "Winning marker slot, early submission slot, late end submission slot",
-			next:     TicketSubmissionTimeSlots + 1,
-			previous: TicketSubmissionTimeSlots - 6,
+			next:     constants.TicketSubmissionTimeSlots + 1,
+			previous: constants.TicketSubmissionTimeSlots - 6,
 			want:     true,
 		},
 		{
 			name:     "Both slots in submission period",
-			next:     TicketSubmissionTimeSlots - 2,
-			previous: TicketSubmissionTimeSlots - 3,
+			next:     constants.TicketSubmissionTimeSlots - 2,
+			previous: constants.TicketSubmissionTimeSlots - 3,
 			want:     false,
 		},
 		{
 			name:     "Both slots after submission period",
-			next:     TicketSubmissionTimeSlots + 1,
-			previous: TicketSubmissionTimeSlots,
+			next:     constants.TicketSubmissionTimeSlots + 1,
+			previous: constants.TicketSubmissionTimeSlots,
 			want:     false,
 		},
 	}
@@ -323,10 +324,10 @@ func TestIsWinningTicketMarkerPeriod(t *testing.T) {
 }
 
 func TestIsLastCoreRotation(t *testing.T) {
-	lastRotationStart := TimeslotsPerEpoch - ValidatorRotationPeriod
+	lastRotationStart := Timeslot(constants.TimeslotsPerEpoch - constants.ValidatorRotationPeriod)
 
 	assert.False(t, Timeslot(0).IsLastCoreRotation())
 	assert.False(t, (lastRotationStart - 1).IsLastCoreRotation())
 	assert.True(t, lastRotationStart.IsLastCoreRotation())
-	assert.True(t, Timeslot(TimeslotsPerEpoch-1).IsLastCoreRotation())
+	assert.True(t, Timeslot(constants.TimeslotsPerEpoch-1).IsLastCoreRotation())
 }

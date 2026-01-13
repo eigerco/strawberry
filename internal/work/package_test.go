@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/service"
@@ -53,7 +53,7 @@ func Test_ValidateSize(t *testing.T) {
 	assert.NoError(t, err)
 
 	// over the limit
-	hugePayload := make([]byte, work.MaxSizeOfEncodedWorkPackage+1)
+	hugePayload := make([]byte, constants.MaxWorkPackageSize+1)
 	p.WorkItems[0].Payload = hugePayload
 
 	err = p.ValidateSize()
@@ -72,13 +72,13 @@ func Test_ValidateGas(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Exceed refine
-	p.WorkItems[1].GasLimitRefine = common.MaxAllocatedGasRefine + 1
+	p.WorkItems[1].GasLimitRefine = constants.MaxAllocatedGasRefine + 1
 	err = p.ValidateGas()
 	assert.Error(t, err)
 
 	// Reset and exceed accumulate
 	p.WorkItems[1].GasLimitRefine = 100
-	p.WorkItems[1].GasLimitAccumulate = common.MaxAllocatedGasAccumulation + 1
+	p.WorkItems[1].GasLimitAccumulate = constants.MaxAllocatedGasAccumulation + 1
 	err = p.ValidateGas()
 	assert.Error(t, err)
 }

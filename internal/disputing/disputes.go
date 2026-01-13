@@ -2,19 +2,16 @@ package disputing
 
 import (
 	"bytes"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"sort"
 
-	"slices"
-
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
 	"github.com/eigerco/strawberry/internal/state"
@@ -22,9 +19,9 @@ import (
 )
 
 const (
-	DisputeVoteBad   uint16 = 0                                       // 0 positive votes - report is bad
-	DisputeVoteWonky uint16 = common.NumberOfValidators / 3           // 1/3 positive votes - report is wonky/unknowable
-	DisputeVoteGood  uint16 = (2 * common.NumberOfValidators / 3) + 1 // 2/3+1 positive votes - report is good
+	DisputeVoteBad   uint16 = 0                                          // 0 positive votes - report is bad
+	DisputeVoteWonky uint16 = constants.NumberOfValidators / 3           // 1/3 positive votes - report is wonky/unknowable
+	DisputeVoteGood  uint16 = (2 * constants.NumberOfValidators / 3) + 1 // 2/3+1 positive votes - report is good
 )
 
 // CalculateIntermediateCoreAssignmentsFromExtrinsics processes dispute verdicts to clear
@@ -47,7 +44,7 @@ func CalculateIntermediateCoreAssignmentsFromExtrinsics(de block.DisputeExtrinsi
 		// cleared from its core to prevent accumulation
 		if positiveJudgments < DisputeVoteGood {
 			// Search all cores to find where this work-report is assigned
-			for c := uint16(0); c < common.TotalNumberOfCores; c++ {
+			for c := uint16(0); c < constants.TotalNumberOfCores; c++ {
 				if newAssignments[c] == nil {
 					continue
 				}
@@ -82,9 +79,9 @@ func verifyVerdictSignatures(currentTimeslot jamtime.Timeslot, verdict block.Ver
 		validatorSet = archivedValidators
 	}
 	for _, judgment := range verdict.Judgements {
-		context := state.SignatureContextValid
+		context := constants.SignatureContextValid
 		if !judgment.IsValid {
-			context = state.SignatureContextInvalid
+			context = constants.SignatureContextInvalid
 		}
 
 		message := append([]byte(context), verdict.ReportHash[:]...)
@@ -167,9 +164,9 @@ func validateFault(fault block.Fault, verdictSummaries []block.VerdictSummary, o
 	}
 
 	// Verify signature
-	context := state.SignatureContextValid
+	context := constants.SignatureContextValid
 	if !fault.IsValid {
-		context = state.SignatureContextInvalid
+		context = constants.SignatureContextInvalid
 	}
 	message := append([]byte(context), fault.ReportHash[:]...)
 	if !ed25519.Verify(fault.ValidatorEd25519PublicKey, message, fault.Signature[:]) {
@@ -192,7 +189,7 @@ func validateCulprit(culprit block.Culprit, badReports []crypto.Hash, offendingV
 	}
 
 	// Verify guarantee signature
-	message := append([]byte(state.SignatureContextGuarantee), culprit.ReportHash[:]...)
+	message := append([]byte(constants.SignatureContextGuarantee), culprit.ReportHash[:]...)
 	if !ed25519.Verify(culprit.ValidatorEd25519PublicKey, message, culprit.Signature[:]) {
 		return errors.New("bad signature")
 	}
@@ -267,7 +264,7 @@ func verifyNotAlreadyJudged(verdict block.Verdict, stateJudgements state.Judgeme
 // 4. Bad verdicts have at least two culprit entries
 func validateVerdictAndComputeVerdictSummary(v block.Verdict, faults []block.Fault, culprits []block.Culprit) (block.VerdictSummary, error) {
 	for _, j := range v.Judgements {
-		if j.ValidatorIndex >= common.NumberOfValidators {
+		if j.ValidatorIndex >= constants.NumberOfValidators {
 			return block.VerdictSummary{}, errors.New("invalid validator index")
 		}
 	}
@@ -444,9 +441,9 @@ func ValidateDisputesExtrinsicAndProduceJudgements(prevTimeslot jamtime.Timeslot
 // GetJudgmentSignaturePayload constructs the message to sign for judgments
 // The signature payload is: context ⌢ reportHash
 func GetJudgmentSignaturePayload(reportHash crypto.Hash, isValid bool) []byte {
-	context := state.SignatureContextInvalid
+	context := constants.SignatureContextInvalid
 	if isValid {
-		context = state.SignatureContextValid
+		context = constants.SignatureContextValid
 	}
 
 	// Create payload: context ⌢ reportHash
@@ -460,7 +457,7 @@ func GetJudgmentSignaturePayload(reportHash crypto.Hash, isValid bool) []byte {
 // CreateJudgment creates and signs a judgment on a work-report
 func CreateJudgment(validatorIndex uint16, validatorKey ed25519.PrivateKey, reportHash crypto.Hash, isValid bool) (block.Judgement, error) {
 	// Validate the validator index
-	if validatorIndex >= common.NumberOfValidators {
+	if validatorIndex >= constants.NumberOfValidators {
 		return block.Judgement{}, errors.New("invalid validator index")
 	}
 
@@ -483,7 +480,7 @@ func CreateJudgment(validatorIndex uint16, validatorKey ed25519.PrivateKey, repo
 // CreateVerdict assembles judgments into a verdict
 func CreateVerdict(reportHash crypto.Hash, epochIndex jamtime.Epoch, judgments []block.Judgement) (block.Verdict, error) {
 	// Check if we have the required number of judgments
-	if len(judgments) != int(common.ValidatorsSuperMajority) {
+	if len(judgments) != int(constants.ValidatorsSuperMajority) {
 		return block.Verdict{}, errors.New("invalid number of judgments")
 	}
 
@@ -504,7 +501,7 @@ func CreateVerdict(reportHash crypto.Hash, epochIndex jamtime.Epoch, judgments [
 	}
 
 	// Convert sorted slice to fixed-size array
-	var judgmentsArray [common.ValidatorsSuperMajority]block.Judgement
+	var judgmentsArray [constants.ValidatorsSuperMajority]block.Judgement
 	copy(judgmentsArray[:], sortedJudgments)
 
 	verdict := block.Verdict{

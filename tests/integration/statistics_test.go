@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/eigerco/strawberry/internal/block"
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/state"
@@ -137,7 +137,7 @@ func mapStatisticsInput(s StatisticsInput) block.Block {
 func mapStatisticsState(s StatisticsState) state.State {
 	return state.State{
 		ActivityStatistics: validator.ActivityStatisticsState{
-			ValidatorsLast: [common.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.ValsLast, func(sd StatisticsData) validator.ValidatorStatistics {
+			ValidatorsLast: [constants.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.ValsLast, func(sd StatisticsData) validator.ValidatorStatistics {
 				return validator.ValidatorStatistics{
 					NumOfBlocks:                 sd.Blocks,
 					NumOfTickets:                sd.Tickets,
@@ -147,7 +147,7 @@ func mapStatisticsState(s StatisticsState) state.State {
 					NumOfAvailabilityAssurances: sd.Assurances,
 				}
 			})),
-			ValidatorsCurrent: [common.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.ValsCurrent, func(sd StatisticsData) validator.ValidatorStatistics {
+			ValidatorsCurrent: [constants.NumberOfValidators]validator.ValidatorStatistics(mapSlice(s.ValsCurrent, func(sd StatisticsData) validator.ValidatorStatistics {
 				return validator.ValidatorStatistics{
 					NumOfBlocks:                 sd.Blocks,
 					NumOfTickets:                sd.Tickets,

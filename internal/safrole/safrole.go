@@ -6,11 +6,11 @@ import (
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
-	"github.com/eigerco/strawberry/internal/jamtime"
 )
 
-type TicketsBodies [jamtime.TimeslotsPerEpoch]block.Ticket
+type TicketsBodies [constants.TimeslotsPerEpoch]block.Ticket
 
 func (t TicketsBodies) TicketsOrKeysType() {}
 

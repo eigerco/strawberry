@@ -6,7 +6,7 @@ import (
 
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
-	"github.com/eigerco/strawberry/internal/common"
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
 )
@@ -185,7 +185,7 @@ func getCurrentEpochNeighborIndices(validatorIndex uint16) []uint16 {
 
 	// Calculate row neighbors
 	rowStart := (validatorIndex / gridWidth) * gridWidth
-	rowEnd := min(rowStart+gridWidth, common.NumberOfValidators)
+	rowEnd := min(rowStart+gridWidth, constants.NumberOfValidators)
 	for i := rowStart; i < rowEnd; i++ {
 		if i != validatorIndex {
 			neighbors = append(neighbors, i)
@@ -193,7 +193,7 @@ func getCurrentEpochNeighborIndices(validatorIndex uint16) []uint16 {
 	}
 
 	// Calculate column neighbors
-	for i := validatorIndex % gridWidth; i < common.NumberOfValidators; i += gridWidth {
+	for i := validatorIndex % gridWidth; i < constants.NumberOfValidators; i += gridWidth {
 		if i != validatorIndex {
 			neighbors = append(neighbors, i)
 		}
@@ -219,5 +219,5 @@ func areGridNeighbors(validatorIndex1, validatorIndex2 uint16) bool {
 // all validators.
 func getGridWidth() uint16 {
 	// floor(sqrt(numValidators))
-	return uint16(math.Floor(math.Sqrt(float64(common.NumberOfValidators))))
+	return uint16(math.Floor(math.Sqrt(float64(constants.NumberOfValidators))))
 }
