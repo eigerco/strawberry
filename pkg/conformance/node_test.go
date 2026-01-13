@@ -17,9 +17,7 @@ import (
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/guaranteeing"
 	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
-	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/testutils"
-	"github.com/eigerco/strawberry/pkg/db/pebble"
 	"github.com/eigerco/strawberry/pkg/network/handlers"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
@@ -85,32 +83,21 @@ func TestAncestryFeature(t *testing.T) {
 
 			socketPath := fmt.Sprintf("/tmp/test_socket_ancestry_%s", tt.name)
 
-			kvStore, err := pebble.NewKVStore()
-			require.NoError(t, err)
-			t.Cleanup(func() {
-				if err := kvStore.Close(); err != nil {
-					t.Log("db close error:", err)
-				}
-			})
-
-			chain := store.NewChain(kvStore)
-			trieStore := store.NewTrie(chain)
-
 			appName := []byte("Strawberry")
 			appVersion := Version{0, 0, 2}
 			jamVersion := Version{0, 7, 2}
 
+			n := NewNode(socketPath, appName, appVersion, jamVersion, tt.peerFeatures)
 			go func() {
-				n := NewNode(socketPath, chain, trieStore, appName, appVersion, jamVersion, tt.peerFeatures)
 				if err := n.Start(); err != nil {
 					t.Logf("failed to start Node: %v", err)
 				}
-				t.Cleanup(func() {
-					if err := n.Stop(); err != nil {
-						t.Logf("failed to stop Node: %v", err)
-					}
-				})
 			}()
+			t.Cleanup(func() {
+				if err := n.Stop(); err != nil {
+					t.Logf("failed to stop Node: %v", err)
+				}
+			})
 
 			time.Sleep(1 * time.Second)
 
@@ -188,7 +175,8 @@ func TestAncestryFeature(t *testing.T) {
 
 			// Verify ancestry storage behavior using the random test hash
 			// (not the lookup_anchor which may be stored as genesis header)
-			_, err = chain.GetHeader(testAncestryHash)
+			require.NotNil(t, n.chain)
+			_, err = n.chain.GetHeader(testAncestryHash)
 			if tt.expectAncestryStored {
 				require.NoError(t, err, "test ancestry hash should be stored in database")
 			} else {
@@ -198,7 +186,7 @@ func TestAncestryFeature(t *testing.T) {
 			// Delete lookup_anchor from DB to test failure case (missing ancestry)
 			if tt.deleteAncestryFromDB && tt.expectAncestryStored {
 				headerKey := append([]byte{0x01}, lookupAnchorHash[:]...)
-				err = kvStore.Delete(headerKey)
+				err = n.chain.Delete(headerKey)
 				require.NoError(t, err)
 			}
 
@@ -252,32 +240,21 @@ func TestHandshakeRejectsMissingForks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			socketPath := fmt.Sprintf("/tmp/test_socket_reject_%s", tt.name)
 
-			kvStore, err := pebble.NewKVStore()
-			require.NoError(t, err)
-			t.Cleanup(func() {
-				if err := kvStore.Close(); err != nil {
-					t.Log("db close error:", err)
-				}
-			})
-
-			chain := store.NewChain(kvStore)
-			trieStore := store.NewTrie(chain)
-
 			appName := []byte("Strawberry")
 			appVersion := Version{0, 0, 2}
 			jamVersion := Version{0, 7, 2}
 
+			n := NewNode(socketPath, appName, appVersion, jamVersion, FeatureAncestryAndFork)
 			go func() {
-				n := NewNode(socketPath, chain, trieStore, appName, appVersion, jamVersion, FeatureAncestryAndFork)
 				if err := n.Start(); err != nil {
 					t.Logf("failed to start Node: %v", err)
 				}
-				t.Cleanup(func() {
-					if err := n.Stop(); err != nil {
-						t.Logf("failed to stop Node: %v", err)
-					}
-				})
 			}()
+			t.Cleanup(func() {
+				if err := n.Stop(); err != nil {
+					t.Logf("failed to stop Node: %v", err)
+				}
+			})
 
 			time.Sleep(1 * time.Second)
 
