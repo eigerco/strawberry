@@ -65,7 +65,7 @@ func runTraceTest(t *testing.T, filename string) {
 	postState := parseTrace(t, trace.PostState, trieDB)
 	block := trace.Block
 
-	err = statetransition.UpdateState(
+	err = statetransition.UpdateStateFromState(
 		currentState,
 		block,
 		chainDB,

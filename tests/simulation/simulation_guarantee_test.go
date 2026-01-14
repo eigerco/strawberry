@@ -63,7 +63,7 @@ func TestSimulateGuarantee(t *testing.T) {
 	require.Equal(t, report.AuthorizerHash, currentState.CoreAuthorizersPool[coreIndex][0])
 
 	// Update state
-	err = statetransition.UpdateState(
+	err = statetransition.UpdateStateFromState(
 		currentState,
 		testBlock,
 		chainDB,

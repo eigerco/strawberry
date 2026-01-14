@@ -5,8 +5,11 @@ import (
 	"fmt"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/merkle"
+	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/internal/validator"
 )
 
@@ -19,9 +22,9 @@ var CheckTimeliness bool
 // - The timeslot
 // - The prior state root
 // - The extrinsic hash
-// The trie database must be passed in produce the merkle root of the state.
+// The trie database must be passed in produce the merkle root of the state and store trie nodes.
 // GP v0.7.0
-func VerifyBlockHeaderBasic(priorState *state.State, block block.Block) error {
+func VerifyBlockHeaderBasic(priorState *state.State, block block.Block, trie *store.Trie) error {
 	// H_T · P ≤ T  Equation 5.7 (partial)
 	if CheckTimeliness && block.Header.TimeSlotIndex.IsInFuture() {
 		return errors.New("timeslot is in the future")
@@ -34,12 +37,44 @@ func VerifyBlockHeaderBasic(priorState *state.State, block block.Block) error {
 
 	// State root validation. Equation 5.8
 	//  H_R ≡ M_σ(σ)
-	expectedPriorStateRoot, err := merkle.MerklizeStateOnly(*priorState)
+	expectedPriorStateRoot, err := merkle.MerklizeState(*priorState, trie)
 	if err != nil {
 		return fmt.Errorf("failed to merklize state: %w", err)
 	}
 	if block.Header.PriorStateRoot != expectedPriorStateRoot {
 		return fmt.Errorf("invalid prior state root: %x", expectedPriorStateRoot)
+	}
+
+	// Check extrinsic hash. Equation 5.4
+	// H_X ≡ H(E(H#(a)))
+	expectedExtrinsicsHash, err := block.Extrinsic.Hash()
+	if err != nil {
+		return fmt.Errorf("failed to hash extrinsics: %w", err)
+	}
+	if block.Header.ExtrinsicHash != expectedExtrinsicsHash {
+		return fmt.Errorf("invalid extrinsics hash: %x", expectedExtrinsicsHash)
+	}
+
+	return nil
+}
+
+// VerifyBlockHeaderBasicFromStateRoot verifies header fields using a cached prior state root.
+// This does not store trie nodes.
+func VerifyBlockHeaderBasicFromStateRoot(priorStateRoot crypto.Hash, priorTimeslot jamtime.Timeslot, block block.Block) error {
+	// H_T · P ≤ T  Equation 5.7 (partial)
+	if CheckTimeliness && block.Header.TimeSlotIndex.IsInFuture() {
+		return errors.New("timeslot is in the future")
+	}
+	// Timeslot must be greater than parent's. Equation 5.7 (the rest)
+	// P(H)_T < H_T
+	if priorTimeslot >= block.Header.TimeSlotIndex {
+		return errors.New("timeslot must be greater than the prior state's timeslot")
+	}
+
+	// State root validation. Equation 5.8
+	//  H_R ≡ M_σ(σ)
+	if block.Header.PriorStateRoot != priorStateRoot {
+		return fmt.Errorf("invalid prior state root: %x", priorStateRoot)
 	}
 
 	// Check extrinsic hash. Equation 5.4
