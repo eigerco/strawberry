@@ -53,7 +53,7 @@ func (m *Manager) OnConnection(conn TransportConn) *ProtocolConn {
 // handleStreams manages the lifecycle of streams for a protocol connection.
 // It continuously accepts new streams and handles connection closure and timeouts.
 func (m *Manager) handleStreams(protoConn *ProtocolConn) {
-	defer protoConn.Close() // Ensure proper cleanup of the connection
+	defer protoConn.Close() //nolint:errcheck // TODO: handle error
 
 	for {
 		// Attempt to accept an incoming stream
@@ -68,7 +68,7 @@ func (m *Manager) handleStreams(protoConn *ProtocolConn) {
 			// Explicitly handle QUIC timeout errors
 			if isTimeoutError(streamErr) {
 				fmt.Println("Connection timed out due to inactivity")
-				protoConn.Close() // Close the connection explicitly
+				protoConn.Close() //nolint:errcheck // TODO: handle error
 				return
 			}
 

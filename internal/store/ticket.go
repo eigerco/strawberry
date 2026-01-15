@@ -70,7 +70,7 @@ func (t *Ticket) GetTicketsForEpoch(epoch uint32) ([]block.TicketProof, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create iterator: %w", err)
 	}
-	defer iter.Close()
+	defer iter.Close() //nolint:errcheck // TODO: handle error
 
 	var tickets []block.TicketProof
 

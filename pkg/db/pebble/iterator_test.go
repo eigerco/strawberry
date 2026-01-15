@@ -30,7 +30,7 @@ func TestIterator(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store, err := NewKVStore()
 			require.NoError(t, err)
-			defer store.Close()
+			defer store.Close() //nolint:errcheck // TODO: handle error
 
 			tc.fn(t, store)
 		})
@@ -54,7 +54,7 @@ func testFullRangeIteration(t *testing.T, store db.KVStore) {
 	// Test full range iteration
 	iter, err := store.NewIterator(nil, nil)
 	require.NoError(t, err)
-	defer iter.Close()
+	defer iter.Close() //nolint:errcheck // TODO: handle error
 
 	count := 0
 	// First position the iterator at the start
@@ -99,7 +99,7 @@ func testBoundedRangeIteration(t *testing.T, store db.KVStore) {
 	// Test bounded range iteration (b to d)
 	iter, err := store.NewIterator([]byte("b"), []byte("e"))
 	require.NoError(t, err)
-	defer iter.Close()
+	defer iter.Close() //nolint:errcheck // TODO: handle error
 
 	expected := map[string]string{
 		"b": "value-b",
@@ -144,7 +144,7 @@ func testIteratorValidity(t *testing.T, store db.KVStore) {
 
 	iter, err := store.NewIterator(nil, nil)
 	require.NoError(t, err)
-	defer iter.Close()
+	defer iter.Close() //nolint:errcheck // TODO: handle error
 
 	// Initial state - iterator is not positioned
 	assert.False(t, iter.Valid())

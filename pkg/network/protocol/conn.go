@@ -53,7 +53,7 @@ func (pc *ProtocolConn) OpenStream(ctx context.Context, kind StreamKind) (quic.S
 
 	// Write stream kind
 	if err := writeWithContext(ctx, stream, []byte{byte(kind)}); err != nil {
-		stream.Close()
+		stream.Close() //nolint:errcheck // TODO: handle error
 		return nil, fmt.Errorf("failed to write stream kind: %w", err)
 	}
 
@@ -73,14 +73,14 @@ func (pc *ProtocolConn) AcceptStream() error {
 	// Read stream kind
 	kind := make([]byte, 1)
 	if _, err := stream.Read(kind); err != nil {
-		stream.Close()
+		stream.Close() //nolint:errcheck // TODO: handle error
 		return fmt.Errorf("failed to read stream kind: %w", err)
 	}
 
 	// Get handler for this stream kind
 	handler, err := pc.Registry.GetHandler(StreamKind(kind[0]))
 	if err != nil {
-		stream.Close()
+		stream.Close() //nolint:errcheck // TODO: handle error
 		return err
 	}
 

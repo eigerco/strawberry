@@ -85,7 +85,7 @@ func ParseProtocolID(protocol string) (*ProtocolID, error) {
 		return nil, fmt.Errorf("invalid chain hash length: %s", chainHash)
 	}
 	for _, c := range chainHash {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return nil, fmt.Errorf("invalid chain hash character: %c", c)
 		}
 	}

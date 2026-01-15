@@ -30,7 +30,7 @@ func TestBatch(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store, err := NewKVStore()
 			require.NoError(t, err)
-			defer store.Close()
+			defer store.Close() //nolint:errcheck // TODO: handle error
 
 			tc.fn(t, store)
 		})
@@ -39,7 +39,7 @@ func TestBatch(t *testing.T) {
 
 func testBasicBatchOperations(t *testing.T, store db.KVStore) {
 	batch := store.NewBatch()
-	defer batch.Close()
+	defer batch.Close() //nolint:errcheck // TODO: handle error
 
 	// Test batch Put operations
 	keys := [][]byte{[]byte("key1"), []byte("key2"), []byte("key3")}
@@ -106,8 +106,8 @@ func testBatchCommitAndClose(t *testing.T, store db.KVStore) {
 func testMultipleBatches(t *testing.T, store db.KVStore) {
 	batch1 := store.NewBatch()
 	batch2 := store.NewBatch()
-	defer batch1.Close()
-	defer batch2.Close()
+	defer batch1.Close() //nolint:errcheck // TODO: handle error
+	defer batch2.Close() //nolint:errcheck // TODO: handle error
 
 	// Write to both batches
 	err := batch1.Put([]byte("key1"), []byte("batch1"))
