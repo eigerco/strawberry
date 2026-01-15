@@ -31,6 +31,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// TODO: make this a config
+var stateTransitionConcurrent = true
+
 // UpdateStateFromState updates the state by verifying the header against the current state.
 // This is a convenience wrapper for tests and other code that doesn't have a cached prior root.
 // This also stores the trie nodes in the provided trie database.
@@ -55,15 +58,50 @@ func UpdateStateWithPriorRoot(s *state.State, priorStateRoot crypto.Hash, newBlo
 	return updateStateWithVerifiedHeader(s, newBlock, chain)
 }
 
+func runTasks(concurrent bool, tasks ...func() error) error {
+	if !concurrent {
+		for _, task := range tasks {
+			if err := task(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	var g errgroup.Group
+	for _, task := range tasks {
+		g.Go(task)
+	}
+	return g.Wait()
+}
+
 func updateStateWithVerifiedHeader(s *state.State, newBlock block.Block, chain *store.Chain) error {
 	prevTimeSlot := s.TimeslotIndex
 	newTimeSlot := CalculateNewTimeState(newBlock.Header)
 
-	intermediateRecentHistory := CalculateIntermediateRecentHistory(newBlock.Header, s.RecentHistory)
+	// Phase 1: Run independent operations in parallel
+	var (
+		intermediateRecentHistory   state.RecentHistory
+		intermediateCoreAssignments state.CoreAssignments
+	)
 
-	// ρ† ≺ (ED , ρ)
-	intermediateCoreAssignments := disputing.CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
+	if err := runTasks(stateTransitionConcurrent,
+		func() error {
+			intermediateRecentHistory = CalculateIntermediateRecentHistory(newBlock.Header, s.RecentHistory)
+			return nil
+		},
+		func() error {
+			intermediateCoreAssignments = disputing.CalculateIntermediateCoreAssignmentsFromExtrinsics(newBlock.Extrinsic.ED, s.CoreAssignments)
+			return nil
+		},
+		func() error {
+			return ValidatePreimages(newBlock.Extrinsic.EP, s.Services)
+		},
+	); err != nil {
+		return err
+	}
 
+	// Phase 2: Sequential operations that depend on disputes and SAFROLE
 	// ψ′ ≺ (ED, ψ)
 	newJudgements, err := disputing.ValidateDisputesExtrinsicAndProduceJudgements(prevTimeSlot, newBlock.Extrinsic.ED, s.ValidatorState, s.PastJudgements, newBlock.Header.OffendersMarkers)
 	if err != nil {
@@ -90,10 +128,7 @@ func updateStateWithVerifiedHeader(s *state.State, newBlock block.Block, chain *
 		return fmt.Errorf("failed to verify block header: %w", err)
 	}
 
-	if err := ValidatePreimages(newBlock.Extrinsic.EP, s.Services); err != nil {
-		return err
-	}
-
+	// Phase 3: Operations that need SAFROLE output
 	// ρ‡ ≺ (EA, ρ†) (eq. 4.13 v0.7.0) and R* ≺ (EA, ρ†) (eq 4.15 v0.7.0)
 	intermediateCoreAssignments, availableWorkReports, err := assuring.CalculateIntermediateCoreAssignmentsAndAvailableWorkReports(newBlock.Extrinsic.EA, s.ValidatorState.CurrentValidators, intermediateCoreAssignments, newBlock.Header)
 	if err != nil {
@@ -126,23 +161,38 @@ func updateStateWithVerifiedHeader(s *state.State, newBlock block.Block, chain *
 		return err
 	}
 
-	finalServicesState, err := CalculateNewServiceStateWithPreimages(newBlock.Extrinsic.EP, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
-	if err != nil {
+	// Phase 4: Final calculations that can run in parallel after accumulation
+	var (
+		finalServicesState     service.ServiceState
+		newValidatorStatistics validator.ActivityStatisticsState
+		newRecentHistory       state.RecentHistory
+		newCoreAuthorizations  state.CoreAuthorizersPool
+	)
+
+	if err := runTasks(stateTransitionConcurrent,
+		func() error {
+			var err error
+			finalServicesState, err = CalculateNewServiceStateWithPreimages(newBlock.Extrinsic.EP, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
+			return err
+		},
+		func() error {
+			var err error
+			newValidatorStatistics, err = CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, newValidatorState.CurrentValidators,
+				availableWorkReports, accumulationStats)
+			return err
+		},
+		func() error {
+			var err error
+			newRecentHistory, err = CalculateNewRecentHistory(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentHistory, accumulationOutputLog)
+			return err
+		},
+		func() error {
+			newCoreAuthorizations = CalculateNewCoreAuthorizations(newBlock.Header, newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
+			return nil
+		},
+	); err != nil {
 		return err
 	}
-
-	newValidatorStatistics, err := CalculateNewActivityStatistics(newBlock, prevTimeSlot, s.ActivityStatistics, reporters, newValidatorState.CurrentValidators,
-		availableWorkReports, accumulationStats)
-	if err != nil {
-		return err
-	}
-
-	newRecentHistory, err := CalculateNewRecentHistory(newBlock.Header, newBlock.Extrinsic.EG, intermediateRecentHistory, accumulationOutputLog)
-	if err != nil {
-		return err
-	}
-
-	newCoreAuthorizations := CalculateNewCoreAuthorizations(newBlock.Header, newBlock.Extrinsic.EG, newPendingCoreAuthorizations, s.CoreAuthorizersPool)
 
 	// Update the state with new state values.
 	s.TimeslotIndex = newTimeSlot
