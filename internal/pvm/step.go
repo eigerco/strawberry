@@ -81,11 +81,11 @@ func (i *Instance) step() (uint64, error) {
 		return 0, i.Jump(i.decodeArgsOffset())
 
 	// (eq. A.25 v0.7.0)
-	case JumpIndirect:
+	case JumpInd:
 		if err := i.deductGas(JumpIndirectCost); err != nil {
 			return 0, err
 		}
-		return 0, i.JumpIndirect(i.decodeArgsRegImm())
+		return 0, i.JumpInd(i.decodeArgsRegImm())
 	case LoadImm:
 		if err := i.deductGas(LoadImmCost); err != nil {
 			return 0, err
@@ -148,83 +148,83 @@ func (i *Instance) step() (uint64, error) {
 		return 0, i.StoreU64(i.decodeArgsRegImm())
 
 	// (eq. A.26 v0.7.0)
-	case StoreImmIndirectU8:
+	case StoreImmIndU8:
 		if err := i.deductGas(StoreImmIndirectU8Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.StoreImmIndirectU8(i.decodeArgsRegImm2())
-	case StoreImmIndirectU16:
+		return 0, i.StoreImmIndU8(i.decodeArgsRegImm2())
+	case StoreImmIndU16:
 		if err := i.deductGas(StoreImmIndirectU16Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.StoreImmIndirectU16(i.decodeArgsRegImm2())
-	case StoreImmIndirectU32:
+		return 0, i.StoreImmIndU16(i.decodeArgsRegImm2())
+	case StoreImmIndU32:
 		if err := i.deductGas(StoreImmIndirectU32Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.StoreImmIndirectU32(i.decodeArgsRegImm2())
-	case StoreImmIndirectU64:
+		return 0, i.StoreImmIndU32(i.decodeArgsRegImm2())
+	case StoreImmIndU64:
 		if err := i.deductGas(StoreImmIndirectU64Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.StoreImmIndirectU64(i.decodeArgsRegImm2())
+		return 0, i.StoreImmIndU64(i.decodeArgsRegImm2())
 
 	// (eq. A.27 v0.7.0)
-	case LoadImmAndJump:
+	case LoadImmJump:
 		if err := i.deductGas(LoadImmAndJumpCost); err != nil {
 			return 0, err
 		}
-		return 0, i.LoadImmAndJump(i.decodeArgsRegImmOffset())
+		return 0, i.LoadImmJump(i.decodeArgsRegImmOffset())
 	case BranchEqImm:
 		if err := i.deductGas(BranchEqImmCost); err != nil {
 			return 0, err
 		}
 		return 0, i.BranchEqImm(i.decodeArgsRegImmOffset())
-	case BranchNotEqImm:
+	case BranchNeImm:
 		if err := i.deductGas(BranchNotEqImmCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchNotEqImm(i.decodeArgsRegImmOffset())
-	case BranchLessUnsignedImm:
+		return 0, i.BranchNeImm(i.decodeArgsRegImmOffset())
+	case BranchLtUImm:
 		if err := i.deductGas(BranchLessUnsignedImmCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchLessUnsignedImm(i.decodeArgsRegImmOffset())
-	case BranchLessOrEqualUnsignedImm:
+		return 0, i.BranchLtUImm(i.decodeArgsRegImmOffset())
+	case BranchLeUImm:
 		if err := i.deductGas(BranchLessOrEqualUnsignedImmCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchLessOrEqualUnsignedImm(i.decodeArgsRegImmOffset())
-	case BranchGreaterOrEqualUnsignedImm:
+		return 0, i.BranchLeUImm(i.decodeArgsRegImmOffset())
+	case BranchGeUImm:
 		if err := i.deductGas(BranchGreaterOrEqualUnsignedImmCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchGreaterOrEqualUnsignedImm(i.decodeArgsRegImmOffset())
-	case BranchGreaterUnsignedImm:
+		return 0, i.BranchGeUImm(i.decodeArgsRegImmOffset())
+	case BranchGtUImm:
 		if err := i.deductGas(BranchGreaterUnsignedImmCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchGreaterUnsignedImm(i.decodeArgsRegImmOffset())
-	case BranchLessSignedImm:
+		return 0, i.BranchGtUImm(i.decodeArgsRegImmOffset())
+	case BranchLtSImm:
 		if err := i.deductGas(BranchLessSignedImmCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchLessSignedImm(i.decodeArgsRegImmOffset())
-	case BranchLessOrEqualSignedImm:
+		return 0, i.BranchLtSImm(i.decodeArgsRegImmOffset())
+	case BranchLeSImm:
 		if err := i.deductGas(BranchLessOrEqualSignedImmCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchLessOrEqualSignedImm(i.decodeArgsRegImmOffset())
-	case BranchGreaterOrEqualSignedImm:
+		return 0, i.BranchLeSImm(i.decodeArgsRegImmOffset())
+	case BranchGeSImm:
 		if err := i.deductGas(BranchGreaterOrEqualSignedImmCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchGreaterOrEqualSignedImm(i.decodeArgsRegImmOffset())
-	case BranchGreaterSignedImm:
+		return 0, i.BranchGeSImm(i.decodeArgsRegImmOffset())
+	case BranchGtSImm:
 		if err := i.deductGas(BranchGreaterSignedImmCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchGreaterSignedImm(i.decodeArgsRegImmOffset())
+		return 0, i.BranchGtSImm(i.decodeArgsRegImmOffset())
 
 	// (eq. A.28 v0.7.0)
 	case MoveReg:
@@ -289,61 +289,61 @@ func (i *Instance) step() (uint64, error) {
 		i.ReverseBytes(i.decodeArgsReg2())
 
 	// (eq. A.29 v0.7.0)
-	case StoreIndirectU8:
+	case StoreIndU8:
 		if err := i.deductGas(StoreIndirectU8Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.StoreIndirectU8(i.decodeArgsReg2Imm())
-	case StoreIndirectU16:
+		return 0, i.StoreIndU8(i.decodeArgsReg2Imm())
+	case StoreIndU16:
 		if err := i.deductGas(StoreIndirectU16Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.StoreIndirectU16(i.decodeArgsReg2Imm())
-	case StoreIndirectU32:
+		return 0, i.StoreIndU16(i.decodeArgsReg2Imm())
+	case StoreIndU32:
 		if err := i.deductGas(StoreIndirectU32Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.StoreIndirectU32(i.decodeArgsReg2Imm())
-	case StoreIndirectU64:
+		return 0, i.StoreIndU32(i.decodeArgsReg2Imm())
+	case StoreIndU64:
 		if err := i.deductGas(StoreIndirectU64Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.StoreIndirectU64(i.decodeArgsReg2Imm())
-	case LoadIndirectU8:
+		return 0, i.StoreIndU64(i.decodeArgsReg2Imm())
+	case LoadIndU8:
 		if err := i.deductGas(LoadIndirectU8Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.LoadIndirectU8(i.decodeArgsReg2Imm())
-	case LoadIndirectI8:
+		return 0, i.LoadIndU8(i.decodeArgsReg2Imm())
+	case LoadIndI8:
 		if err := i.deductGas(LoadIndirectI8Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.LoadIndirectI8(i.decodeArgsReg2Imm())
-	case LoadIndirectU16:
+		return 0, i.LoadIndI8(i.decodeArgsReg2Imm())
+	case LoadIndU16:
 		if err := i.deductGas(LoadIndirectU16Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.LoadIndirectU16(i.decodeArgsReg2Imm())
-	case LoadIndirectI16:
+		return 0, i.LoadIndU16(i.decodeArgsReg2Imm())
+	case LoadIndI16:
 		if err := i.deductGas(LoadIndirectI16Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.LoadIndirectI16(i.decodeArgsReg2Imm())
-	case LoadIndirectU32:
+		return 0, i.LoadIndI16(i.decodeArgsReg2Imm())
+	case LoadIndU32:
 		if err := i.deductGas(LoadIndirectU32Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.LoadIndirectU32(i.decodeArgsReg2Imm())
-	case LoadIndirectI32:
+		return 0, i.LoadIndU32(i.decodeArgsReg2Imm())
+	case LoadIndI32:
 		if err := i.deductGas(LoadIndirectI32Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.LoadIndirectI32(i.decodeArgsReg2Imm())
-	case LoadIndirectU64:
+		return 0, i.LoadIndI32(i.decodeArgsReg2Imm())
+	case LoadIndU64:
 		if err := i.deductGas(LoadIndirectU64Cost); err != nil {
 			return 0, err
 		}
-		return 0, i.LoadIndirectU64(i.decodeArgsReg2Imm())
+		return 0, i.LoadIndU64(i.decodeArgsReg2Imm())
 	case AddImm32:
 		if err := i.deductGas(AddImm32Cost); err != nil {
 			return 0, err
@@ -369,71 +369,71 @@ func (i *Instance) step() (uint64, error) {
 			return 0, err
 		}
 		i.MulImm32(i.decodeArgsReg2Imm())
-	case SetLessThanUnsignedImm:
+	case SetLtUImm:
 		if err := i.deductGas(SetLessThanUnsignedImmCost); err != nil {
 			return 0, err
 		}
-		i.SetLessThanUnsignedImm(i.decodeArgsReg2Imm())
-	case SetLessThanSignedImm:
+		i.SetLtUImm(i.decodeArgsReg2Imm())
+	case SetLtSImm:
 		if err := i.deductGas(SetLessThanSignedImmCost); err != nil {
 			return 0, err
 		}
-		i.SetLessThanSignedImm(i.decodeArgsReg2Imm())
-	case ShiftLogicalLeftImm32:
+		i.SetLtSImm(i.decodeArgsReg2Imm())
+	case ShloLImm32:
 		if err := i.deductGas(ShiftLogicalLeftImm32Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalLeftImm32(i.decodeArgsReg2Imm())
-	case ShiftLogicalRightImm32:
+		i.ShloLImm32(i.decodeArgsReg2Imm())
+	case ShloRImm32:
 		if err := i.deductGas(ShiftLogicalRightImm32Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalRightImm32(i.decodeArgsReg2Imm())
-	case ShiftArithmeticRightImm32:
+		i.ShloRImm32(i.decodeArgsReg2Imm())
+	case SharRImm32:
 		if err := i.deductGas(ShiftArithmeticRightImm32Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftArithmeticRightImm32(i.decodeArgsReg2Imm())
-	case NegateAndAddImm32:
+		i.SharRImm32(i.decodeArgsReg2Imm())
+	case NegAddImm32:
 		if err := i.deductGas(NegateAndAddImm32Cost); err != nil {
 			return 0, err
 		}
-		i.NegateAndAddImm32(i.decodeArgsReg2Imm())
-	case SetGreaterThanUnsignedImm:
+		i.NegAddImm32(i.decodeArgsReg2Imm())
+	case SetGtUImm:
 		if err := i.deductGas(SetGreaterThanUnsignedImmCost); err != nil {
 			return 0, err
 		}
-		i.SetGreaterThanUnsignedImm(i.decodeArgsReg2Imm())
-	case SetGreaterThanSignedImm:
+		i.SetGtUImm(i.decodeArgsReg2Imm())
+	case SetGtSImm:
 		if err := i.deductGas(SetGreaterThanSignedImmCost); err != nil {
 			return 0, err
 		}
-		i.SetGreaterThanSignedImm(i.decodeArgsReg2Imm())
-	case ShiftLogicalLeftImmAlt32:
+		i.SetGtSImm(i.decodeArgsReg2Imm())
+	case ShloLImmAlt32:
 		if err := i.deductGas(ShiftLogicalLeftImmAlt32Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalLeftImmAlt32(i.decodeArgsReg2Imm())
-	case ShiftArithmeticRightImmAlt32:
+		i.ShloLImmAlt32(i.decodeArgsReg2Imm())
+	case ShloRImmAlt32:
 		if err := i.deductGas(ShiftArithmeticRightImmAlt32Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalRightImmAlt32(i.decodeArgsReg2Imm())
-	case ShiftLogicalRightImmAlt32:
+		i.SharRImmAlt32(i.decodeArgsReg2Imm())
+	case SharRImmAlt32:
 		if err := i.deductGas(ShiftLogicalRightImmAlt32Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftArithmeticRightImmAlt32(i.decodeArgsReg2Imm())
-	case CmovIfZeroImm:
+		i.ShloRImmAlt32(i.decodeArgsReg2Imm())
+	case CmovIzImm:
 		if err := i.deductGas(CmovIfZeroImmCost); err != nil {
 			return 0, err
 		}
-		i.CmovIfZeroImm(i.decodeArgsReg2Imm())
-	case CmovIfNotZeroImm:
+		i.CmovIzImm(i.decodeArgsReg2Imm())
+	case CmovNzImm:
 		if err := i.deductGas(CmovIfNotZeroImmCost); err != nil {
 			return 0, err
 		}
-		i.CmovIfNotZeroImm(i.decodeArgsReg2Imm())
+		i.CmovNzImm(i.decodeArgsReg2Imm())
 	case AddImm64:
 		if err := i.deductGas(AddImm64Cost); err != nil {
 			return 0, err
@@ -444,41 +444,41 @@ func (i *Instance) step() (uint64, error) {
 			return 0, err
 		}
 		i.MulImm64(i.decodeArgsReg2Imm())
-	case ShiftLogicalLeftImm64:
+	case ShloLImm64:
 		if err := i.deductGas(ShiftLogicalLeftImm64Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalLeftImm64(i.decodeArgsReg2Imm())
-	case ShiftLogicalRightImm64:
+		i.ShloLImm64(i.decodeArgsReg2Imm())
+	case ShloRImm64:
 		if err := i.deductGas(ShiftLogicalRightImm64Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalRightImm64(i.decodeArgsReg2Imm())
-	case ShiftArithmeticRightImm64:
+		i.ShloRImm64(i.decodeArgsReg2Imm())
+	case SharRImm64:
 		if err := i.deductGas(ShiftArithmeticRightImm64Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftArithmeticRightImm64(i.decodeArgsReg2Imm())
-	case NegateAndAddImm64:
+		i.SharRImm64(i.decodeArgsReg2Imm())
+	case NegAddImm64:
 		if err := i.deductGas(NegateAndAddImm64Cost); err != nil {
 			return 0, err
 		}
-		i.NegateAndAddImm64(i.decodeArgsReg2Imm())
-	case ShiftLogicalLeftImmAlt64:
+		i.NegAddImm64(i.decodeArgsReg2Imm())
+	case ShloLImmAlt64:
 		if err := i.deductGas(ShiftLogicalLeftImmAlt64Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalLeftImmAlt64(i.decodeArgsReg2Imm())
-	case ShiftLogicalRightImmAlt64:
+		i.ShloLImmAlt64(i.decodeArgsReg2Imm())
+	case ShloRImmAlt64:
 		if err := i.deductGas(ShiftLogicalRightImmAlt64Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalRightImmAlt64(i.decodeArgsReg2Imm())
-	case ShiftArithmeticRightImmAlt64:
+		i.ShloRImmAlt64(i.decodeArgsReg2Imm())
+	case SharRImmAlt64:
 		if err := i.deductGas(ShiftArithmeticRightImmAlt64Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftArithmeticRightImmAlt64(i.decodeArgsReg2Imm())
+		i.SharRImmAlt64(i.decodeArgsReg2Imm())
 	case RotR64Imm:
 		if err := i.deductGas(RotR64ImmCost); err != nil {
 			return 0, err
@@ -506,38 +506,38 @@ func (i *Instance) step() (uint64, error) {
 			return 0, err
 		}
 		return 0, i.BranchEq(i.decodeArgsReg2Offset())
-	case BranchNotEq:
+	case BranchNe:
 		if err := i.deductGas(BranchNotEqCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchNotEq(i.decodeArgsReg2Offset())
-	case BranchLessUnsigned:
+		return 0, i.BranchNe(i.decodeArgsReg2Offset())
+	case BranchLtU:
 		if err := i.deductGas(BranchLessUnsignedCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchLessUnsigned(i.decodeArgsReg2Offset())
-	case BranchLessSigned:
+		return 0, i.BranchLtU(i.decodeArgsReg2Offset())
+	case BranchLtS:
 		if err := i.deductGas(BranchLessSignedCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchLessSigned(i.decodeArgsReg2Offset())
-	case BranchGreaterOrEqualUnsigned:
+		return 0, i.BranchLtS(i.decodeArgsReg2Offset())
+	case BranchGeU:
 		if err := i.deductGas(BranchGreaterOrEqualUnsignedCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchGreaterOrEqualUnsigned(i.decodeArgsReg2Offset())
-	case BranchGreaterOrEqualSigned:
+		return 0, i.BranchGeU(i.decodeArgsReg2Offset())
+	case BranchGeS:
 		if err := i.deductGas(BranchGreaterOrEqualSignedCost); err != nil {
 			return 0, err
 		}
-		return 0, i.BranchGreaterOrEqualSigned(i.decodeArgsReg2Offset())
+		return 0, i.BranchGeS(i.decodeArgsReg2Offset())
 
 	// (eq. A.31 v0.7.0)
-	case LoadImmAndJumpIndirect:
+	case LoadImmJumpInd:
 		if err := i.deductGas(LoadImmAndJumpIndirectCost); err != nil {
 			return 0, err
 		}
-		return 0, i.LoadImmAndJumpIndirect(i.decodeArgsReg2Imm2())
+		return 0, i.LoadImmJumpInd(i.decodeArgsReg2Imm2())
 
 	// (eq. A.32 v0.7.0)
 	case Add32:
@@ -555,41 +555,41 @@ func (i *Instance) step() (uint64, error) {
 			return 0, err
 		}
 		i.Mul32(i.decodeArgsReg3())
-	case DivUnsigned32:
+	case DivU32:
 		if err := i.deductGas(DivUnsigned32Cost); err != nil {
 			return 0, err
 		}
-		i.DivUnsigned32(i.decodeArgsReg3())
-	case DivSigned32:
+		i.DivU32(i.decodeArgsReg3())
+	case DivS32:
 		if err := i.deductGas(DivSigned32Cost); err != nil {
 			return 0, err
 		}
-		i.DivSigned32(i.decodeArgsReg3())
-	case RemUnsigned32:
+		i.DivS32(i.decodeArgsReg3())
+	case RemU32:
 		if err := i.deductGas(RemUnsigned32Cost); err != nil {
 			return 0, err
 		}
-		i.RemUnsigned32(i.decodeArgsReg3())
-	case RemSigned32:
+		i.RemU32(i.decodeArgsReg3())
+	case RemS32:
 		if err := i.deductGas(RemSigned32Cost); err != nil {
 			return 0, err
 		}
-		i.RemSigned32(i.decodeArgsReg3())
-	case ShiftLogicalLeft32:
+		i.RemS32(i.decodeArgsReg3())
+	case ShloL32:
 		if err := i.deductGas(ShiftLogicalLeft32Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalLeft32(i.decodeArgsReg3())
-	case ShiftLogicalRight32:
+		i.ShloL32(i.decodeArgsReg3())
+	case ShloR32:
 		if err := i.deductGas(ShiftLogicalRight32Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalRight32(i.decodeArgsReg3())
-	case ShiftArithmeticRight32:
+		i.ShloR32(i.decodeArgsReg3())
+	case SharR32:
 		if err := i.deductGas(ShiftArithmeticRight32Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftArithmeticRight32(i.decodeArgsReg3())
+		i.SharR32(i.decodeArgsReg3())
 	case Add64:
 		if err := i.deductGas(Add64Cost); err != nil {
 			return 0, err
@@ -605,41 +605,41 @@ func (i *Instance) step() (uint64, error) {
 			return 0, err
 		}
 		i.Mul64(i.decodeArgsReg3())
-	case DivUnsigned64:
+	case DivU64:
 		if err := i.deductGas(DivUnsigned64Cost); err != nil {
 			return 0, err
 		}
-		i.DivUnsigned64(i.decodeArgsReg3())
-	case DivSigned64:
+		i.DivU64(i.decodeArgsReg3())
+	case DivS64:
 		if err := i.deductGas(DivSigned64Cost); err != nil {
 			return 0, err
 		}
-		i.DivSigned64(i.decodeArgsReg3())
-	case RemUnsigned64:
+		i.DivS64(i.decodeArgsReg3())
+	case RemU64:
 		if err := i.deductGas(RemUnsigned64Cost); err != nil {
 			return 0, err
 		}
-		i.RemUnsigned64(i.decodeArgsReg3())
-	case RemSigned64:
+		i.RemU64(i.decodeArgsReg3())
+	case RemS64:
 		if err := i.deductGas(RemSigned64Cost); err != nil {
 			return 0, err
 		}
-		i.RemSigned64(i.decodeArgsReg3())
-	case ShiftLogicalLeft64:
+		i.RemS64(i.decodeArgsReg3())
+	case ShloL64:
 		if err := i.deductGas(ShiftLogicalLeft64Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalLeft64(i.decodeArgsReg3())
-	case ShiftLogicalRight64:
+		i.ShloL64(i.decodeArgsReg3())
+	case ShloR64:
 		if err := i.deductGas(ShiftLogicalRight64Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftLogicalRight64(i.decodeArgsReg3())
-	case ShiftArithmeticRight64:
+		i.ShloR64(i.decodeArgsReg3())
+	case SharR64:
 		if err := i.deductGas(ShiftArithmeticRight64Cost); err != nil {
 			return 0, err
 		}
-		i.ShiftArithmeticRight64(i.decodeArgsReg3())
+		i.SharR64(i.decodeArgsReg3())
 	case And:
 		if err := i.deductGas(AndCost); err != nil {
 			return 0, err
@@ -655,41 +655,41 @@ func (i *Instance) step() (uint64, error) {
 			return 0, err
 		}
 		i.Or(i.decodeArgsReg3())
-	case MulUpperSignedSigned:
+	case MulUpperSS:
 		if err := i.deductGas(MulUpperSignedSignedCost); err != nil {
 			return 0, err
 		}
-		i.MulUpperSignedSigned(i.decodeArgsReg3())
-	case MulUpperUnsignedUnsigned:
+		i.MulUpperSS(i.decodeArgsReg3())
+	case MulUpperUU:
 		if err := i.deductGas(MulUpperUnsignedUnsignedCost); err != nil {
 			return 0, err
 		}
-		i.MulUpperUnsignedUnsigned(i.decodeArgsReg3())
-	case MulUpperSignedUnsigned:
+		i.MulUpperUU(i.decodeArgsReg3())
+	case MulUpperSU:
 		if err := i.deductGas(MulUpperSignedUnsignedCost); err != nil {
 			return 0, err
 		}
-		i.MulUpperSignedUnsigned(i.decodeArgsReg3())
-	case SetLessThanUnsigned:
+		i.MulUpperSU(i.decodeArgsReg3())
+	case SetLtU:
 		if err := i.deductGas(SetLessThanUnsignedCost); err != nil {
 			return 0, err
 		}
-		i.SetLessThanUnsigned(i.decodeArgsReg3())
-	case SetLessThanSigned:
+		i.SetLtU(i.decodeArgsReg3())
+	case SetLtS:
 		if err := i.deductGas(SetLessThanSignedCost); err != nil {
 			return 0, err
 		}
-		i.SetLessThanSigned(i.decodeArgsReg3())
-	case CmovIfZero:
+		i.SetLtS(i.decodeArgsReg3())
+	case CmovIz:
 		if err := i.deductGas(CmovIfZeroCost); err != nil {
 			return 0, err
 		}
-		i.CmovIfZero(i.decodeArgsReg3())
-	case CmovIfNotZero:
+		i.CmovIz(i.decodeArgsReg3())
+	case CmovNz:
 		if err := i.deductGas(CmovIfNotZeroCost); err != nil {
 			return 0, err
 		}
-		i.CmovIfNotZero(i.decodeArgsReg3())
+		i.CmovNz(i.decodeArgsReg3())
 	case RotL64:
 		if err := i.deductGas(RotL64Cost); err != nil {
 			return 0, err
