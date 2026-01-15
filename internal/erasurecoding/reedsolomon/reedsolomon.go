@@ -265,7 +265,7 @@ func getErasurecodingLibaryPath() (string, error) {
 	libPath := filepath.Join(tmpDir, rustLibraryName)
 	err = os.WriteFile(libPath, rustLibraryBytes, 0755)
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		os.RemoveAll(tmpDir) //nolint:errcheck // TODO: handle error
 		return "", err
 	}
 

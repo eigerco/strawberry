@@ -8,7 +8,7 @@ import (
 	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/jamtime"
-	. "github.com/eigerco/strawberry/internal/pvm"
+	. "github.com/eigerco/strawberry/internal/pvm" //nolint:staticcheck // TODO: remove dot import
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"

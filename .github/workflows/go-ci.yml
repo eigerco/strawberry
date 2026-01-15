@@ -4,7 +4,7 @@ on:
   pull_request:
 
 env:
-  GO_VERSION: '1.23.8'
+  GO_VERSION: '1.25.5'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -53,9 +53,9 @@ jobs:
           touch internal/crypto/bandersnatch/lib/libbandersnatch.so
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.64.8
+          version: v2.8.0
           args: --timeout=5m
 
   test:

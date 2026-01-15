@@ -309,7 +309,7 @@ func (n *Node) RequestBlocks(ctx context.Context, hash crypto.Hash, ascending bo
 			return nil, fmt.Errorf("failed to open stream: %w", err)
 		}
 
-		defer stream.Close()
+		defer stream.Close() //nolint:errcheck // TODO: handle error
 		blocks, err := n.blockRequester.RequestBlocks(ctx, stream, hash, ascending, maxBlocks)
 		if err != nil {
 			return nil, fmt.Errorf("failed to request block from peer: %w", err)
@@ -556,11 +556,11 @@ func (n *Node) AnnounceBlock(ctx context.Context, header *block.Header, peer *pe
 		select {
 		case err := <-errCh:
 			if err != nil {
-				stream.Close()
+				stream.Close() //nolint:errcheck // TODO: handle error
 				return fmt.Errorf("failed to start announcement handler: %w", err)
 			}
 		case <-ctx.Done():
-			stream.Close()
+			stream.Close() //nolint:errcheck // TODO: handle error
 			return ctx.Err()
 		}
 		return peer.BAnnouncer.SendAnnouncement(header)
@@ -610,7 +610,7 @@ func (n *Node) RequestState(ctx context.Context, headerHash crypto.Hash, keyStar
 		}
 
 		// Ensure the stream is closed when the function returns
-		defer stream.Close()
+		defer stream.Close() //nolint:errcheck // TODO: handle error
 
 		// Use the StateRequester to perform the actual request
 		// This sends the request message and processes the response
@@ -700,7 +700,7 @@ func (n *Node) sendTicket(ctx context.Context, streamKind protocol.StreamKind, t
 	if err != nil {
 		return fmt.Errorf("failed to open stream: %w", err)
 	}
-	defer stream.Close()
+	defer stream.Close() //nolint:errcheck // TODO: handle error
 
 	if err := n.safroleTicketSubmiter.Submit(ctx, stream, ticket); err != nil {
 		return fmt.Errorf("failed to submit ticket: %w", err)

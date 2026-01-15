@@ -209,7 +209,7 @@ func (br *byteReader) decodeCustomPrimitive(value reflect.Value) error {
 
 func (br *byteReader) ReadOctet() (byte, error) {
 	var b [1]byte
-	_, err := br.Reader.Read(b[:])
+	_, err := br.Read(b[:])
 	if err != nil {
 		return 0, err
 	}

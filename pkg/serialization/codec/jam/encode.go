@@ -190,7 +190,7 @@ func (bw *byteWriter) encodeArray(in interface{}) error {
 }
 
 func (bw *byteWriter) encodeEd25519PublicKey(in ed25519.PublicKey) error {
-	_, err := bw.Writer.Write(in)
+	_, err := bw.Write(in)
 	if err != nil {
 		return err
 	}

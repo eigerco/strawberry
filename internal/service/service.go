@@ -116,8 +116,8 @@ func (sa *ServiceAccount) InsertStorage(key statekey.StateKey, originalKeySize u
 		sa.globalKV = make(map[statekey.StateKey][]byte)
 	}
 
-	var newTotalNumberOfItems uint32 = sa.totalNumberOfItems
-	var newTotalNumberOfOctets uint64 = sa.totalNumberOfOctets
+	var newTotalNumberOfItems = sa.totalNumberOfItems
+	var newTotalNumberOfOctets = sa.totalNumberOfOctets
 
 	if prevVal, ok := sa.GetStorage(key); !ok {
 		newTotalNumberOfItems, ok = safemath.Add(newTotalNumberOfItems, 1)
@@ -160,8 +160,8 @@ func (sa *ServiceAccount) InsertStorage(key statekey.StateKey, originalKeySize u
 // DeleteStorage removes a storage entry and updates both the item and octet counters accordingly (9.8 v0.7.0)
 func (sa *ServiceAccount) DeleteStorage(key statekey.StateKey, keyLen uint64, valueLen uint64) error {
 	if _, ok := sa.GetStorage(key); ok {
-		var newTotalNumberOfItems uint32 = sa.totalNumberOfItems
-		var newTotalNumberOfOctets uint64 = sa.totalNumberOfOctets
+		var newTotalNumberOfItems = sa.totalNumberOfItems
+		var newTotalNumberOfOctets = sa.totalNumberOfOctets
 
 		newTotalNumberOfItems, ok = safemath.Sub(newTotalNumberOfItems, 1)
 		if !ok {
@@ -216,8 +216,8 @@ func (sa *ServiceAccount) InsertPreimageMeta(key statekey.StateKey, length uint6
 		sa.globalKV = make(map[statekey.StateKey][]byte)
 	}
 
-	var newTotalNumberOfItems uint32 = sa.totalNumberOfItems
-	var newTotalNumberOfOctets uint64 = sa.totalNumberOfOctets
+	var newTotalNumberOfItems = sa.totalNumberOfItems
+	var newTotalNumberOfOctets = sa.totalNumberOfOctets
 
 	if _, ok := sa.GetPreimageMeta(key); !ok {
 		// Update footprint
@@ -265,8 +265,8 @@ func (sa *ServiceAccount) UpdatePreimageMeta(key statekey.StateKey, newValue Pre
 // DeletePreimageMeta removes a preimage entry and updates both the item and octet counters accordingly (9.8 v0.7.0)
 func (sa *ServiceAccount) DeletePreimageMeta(key statekey.StateKey, length uint64) error {
 	if _, ok := sa.GetPreimageMeta(key); ok {
-		var newTotalNumberOfItems uint32 = sa.totalNumberOfItems
-		var newTotalNumberOfOctets uint64 = sa.totalNumberOfOctets
+		var newTotalNumberOfItems = sa.totalNumberOfItems
+		var newTotalNumberOfOctets = sa.totalNumberOfOctets
 
 		newTotalNumberOfItems, ok = safemath.Sub(newTotalNumberOfItems, 2)
 		if !ok {

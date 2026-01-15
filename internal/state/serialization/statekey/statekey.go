@@ -142,7 +142,7 @@ func NewPreimageMeta(serviceId block.ServiceId, originalHash crypto.Hash, origin
 // Checks if the given state key is a chapter key of the format: [i, 0, 0,...]
 func (s StateKey) IsChapterKey() bool {
 	// Chapter keys should be between 1 and 254
-	if !(s[0] > 0 && s[0] < 255) {
+	if s[0] == 0 || s[0] == 255 {
 		return false
 	}
 
@@ -158,8 +158,8 @@ func (s StateKey) IsChapterKey() bool {
 // Checks if the given state key is a service account key of the format: [255, n0, 0, n1, 0, n2, 0, n3, 0, 0,...]
 // Where n is the service ID (uint32) little endian encoded.
 func (s StateKey) IsServiceKey() bool {
-	if !(s[0] == ChapterServiceIndex && // Service account keys start with 255.
-		s[2] == 0 && s[4] == 0 && s[6] == 0) {
+	if s[0] != ChapterServiceIndex ||
+		s[2] != 0 || s[4] != 0 || s[6] != 0 {
 		return false
 	}
 
@@ -194,7 +194,7 @@ func (s StateKey) IsPreimageLookupKey(preimageValue []byte) (bool, error) {
 // where i is an uint8, and n is the service ID (uint32) little endian encoded.
 func (s StateKey) ExtractChapterServiceID() (uint8,
 	block.ServiceId, error) {
-	if !(s[2] == 0 && s[4] == 0 && s[6] == 0) {
+	if s[2] != 0 || s[4] != 0 || s[6] != 0 {
 		return 0, 0, fmt.Errorf("extracting chapter and service id: not an airty 2 state key")
 	}
 

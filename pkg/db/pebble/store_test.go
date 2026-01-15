@@ -30,7 +30,7 @@ func TestKVStore(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store, err := NewKVStore()
 			require.NoError(t, err)
-			defer store.Close()
+			defer store.Close() //nolint:errcheck // TODO: handle error
 
 			tc.fn(t, store)
 		})

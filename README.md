@@ -32,7 +32,7 @@ Strawberry follows the latest specification outlined in the graypaper which itse
 
 ### Prerequisites
 - Make
-- Go 1.23.8 or higher
+- Go 1.25.5 or higher
 - Rust 1.81.1 or higher
 
 ### Installation
@@ -100,4 +100,3 @@ We would like to thank the Web3 Foundation for their support and the Polkadot co
 ---
 
 If you have any questions contact us at hello@eiger.co
-
