@@ -5,10 +5,11 @@ import (
 	"github.com/eigerco/strawberry/internal/merkle/trie"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/state/serialization"
+	"github.com/eigerco/strawberry/internal/state/serialization/statekey"
 	"github.com/eigerco/strawberry/internal/store"
 )
 
-// MerklizeState computes the Merkle root of a given state.
+// MerklizeState computes the Merkle root of a given state and stores the trie nodes in the provided store.
 func MerklizeState(s state.State, store *store.Trie) (crypto.Hash, error) {
 	// Serialize the state
 	serializedState, err := serialization.SerializeState(s)
@@ -30,25 +31,14 @@ func MerklizeState(s state.State, store *store.Trie) (crypto.Hash, error) {
 	return rootHash, nil
 }
 
-func MerklizeStateOnly(s state.State) (crypto.Hash, error) {
-	// Serialize the state
-	serializedState, err := serialization.SerializeState(s)
-	if err != nil {
-		return crypto.Hash{}, err
+// MerklizeStateOnly computes the Merkle root of the given serialized state key-values
+// without storing any trie nodes.
+func MerklizeStateOnly(keyValues []statekey.KeyValue) (crypto.Hash, error) {
+	// Convert the serialized state slice to the key-value format that Merklize expects.
+	kvs := make([][2][]byte, len(keyValues))
+	for i, kv := range keyValues {
+		kvs[i] = [2][]byte{kv.Key[:], kv.Value}
 	}
 
-	// Convert the serialized state map to the key-value format that Merklize expects
-	var kvs [][2][]byte
-	for key, value := range serializedState {
-		kvs = append(kvs, [2][]byte{key[:], value})
-	}
-
-	root, err := trie.Merklize(kvs, 0,
-		func(hash crypto.Hash, node trie.Node) error { return nil },
-		func(value []byte) error { return nil })
-	if err != nil {
-		return crypto.Hash{}, err
-	}
-
-	return root, nil
+	return trie.Merklize(kvs, 0, nil, nil)
 }

@@ -31,16 +31,31 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// UpdateState updates the state
-// TODO: all the calculations which are not dependent on intermediate / new state can be done in parallel
-//
-//	it might be worth making State immutable and make it so that UpdateState returns a new State with all the updated fields
-func UpdateState(s *state.State, newBlock block.Block, chain *store.Chain, trie *store.Trie) error {
-	err := VerifyBlockHeaderBasic(s, newBlock)
+// UpdateStateFromState updates the state by verifying the header against the current state.
+// This is a convenience wrapper for tests and other code that doesn't have a cached prior root.
+// This also stores the trie nodes in the provided trie database.
+func UpdateStateFromState(s *state.State, newBlock block.Block, chain *store.Chain, trie *store.Trie) error {
+	err := VerifyBlockHeaderBasic(s, newBlock, trie)
 	if err != nil {
 		return fmt.Errorf("failed to verify block header: %w", err)
 	}
 
+	return updateStateWithVerifiedHeader(s, newBlock, chain)
+}
+
+// UpdateStateWithPriorRoot updates the state using a cached prior state root.
+// This avoids re-merklizing prior state key-values for header verification.
+// This does not store trie nodes.
+func UpdateStateWithPriorRoot(s *state.State, priorStateRoot crypto.Hash, newBlock block.Block, chain *store.Chain) error {
+	err := VerifyBlockHeaderBasicFromStateRoot(priorStateRoot, s.TimeslotIndex, newBlock)
+	if err != nil {
+		return fmt.Errorf("failed to verify block header: %w", err)
+	}
+
+	return updateStateWithVerifiedHeader(s, newBlock, chain)
+}
+
+func updateStateWithVerifiedHeader(s *state.State, newBlock block.Block, chain *store.Chain) error {
 	prevTimeSlot := s.TimeslotIndex
 	newTimeSlot := CalculateNewTimeState(newBlock.Header)
 

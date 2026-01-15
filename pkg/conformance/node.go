@@ -41,9 +41,15 @@ type Node struct {
 	trie       *store.Trie
 	listener   net.Listener
 
-	headerToState map[crypto.Hash]state.State
+	headerToState map[crypto.Hash]stateSnapshot
 	handshakeDone bool
 	PeerInfo      PeerInfo
+}
+
+type stateSnapshot struct {
+	state     state.State
+	keyVals   []statekey.KeyValue
+	stateRoot crypto.Hash
 }
 
 // NewNode create a new conformance testing node
@@ -112,7 +118,7 @@ func (n *Node) handleConnection(conn net.Conn) {
 	}()
 	n.chain = store.NewChain(db)
 	n.trie = store.NewTrie(n.chain)
-	n.headerToState = make(map[crypto.Hash]state.State)
+	n.headerToState = make(map[crypto.Hash]stateSnapshot)
 	n.handshakeDone = false
 	guaranteeing.Ancestry = false
 
@@ -192,14 +198,20 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 				}
 			}
 		}
-		stateRoot, err := merkle.MerklizeStateOnly(state)
+		stateRoot, err := merkle.MerklizeStateOnly(choice.State.StateItems)
 		if err != nil {
 			return nil, fmt.Errorf("failed to merklize state: %v", err)
 		}
-		if err := n.chain.PutHeader(choice.Header); err != nil {
-			return nil, fmt.Errorf("failed to put header: %v", err)
+		if n.PeerInfo.FuzzFeatures == FeatureAncestry || n.PeerInfo.FuzzFeatures == FeatureAncestryAndFork {
+			if err := n.chain.PutHeader(choice.Header); err != nil {
+				return nil, fmt.Errorf("failed to put header: %v", err)
+			}
 		}
-		n.headerToState[headerHash] = state
+		n.headerToState[headerHash] = stateSnapshot{
+			state:     state,
+			keyVals:   choice.State.StateItems,
+			stateRoot: stateRoot,
+		}
 
 		return NewMessage(StateRoot{
 			StateRootHash: stateRoot,
@@ -209,11 +221,12 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 		if len(n.headerToState) == 0 {
 			return nil, fmt.Errorf("state not imported")
 		}
-		state, ok := n.headerToState[choice.Block.Header.ParentHash]
+		snapshot, ok := n.headerToState[choice.Block.Header.ParentHash]
 		if !ok {
 			return nil, fmt.Errorf("parent state not found")
 		}
-		err := statetransition.UpdateState(&state, choice.Block, n.chain, n.trie)
+		state := snapshot.state
+		err := statetransition.UpdateStateWithPriorRoot(&state, snapshot.stateRoot, choice.Block, n.chain)
 		if err != nil {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
@@ -221,33 +234,41 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
-		stateRoot, err := merkle.MerklizeStateOnly(state)
+
+		// Serialize the new state to get key-values for storage
+		newStateKeyVals, err := serializeState(state)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize state: %v", err)
+		}
+
+		stateRoot, err := merkle.MerklizeStateOnly(newStateKeyVals)
 		if err != nil {
 			return nil, fmt.Errorf("failed to import block: %v", err)
 		}
-		if err := n.chain.PutBlock(choice.Block); err != nil {
-			return nil, fmt.Errorf("failed to import block: %v", err)
+		if n.PeerInfo.FuzzFeatures == FeatureAncestry || n.PeerInfo.FuzzFeatures == FeatureAncestryAndFork {
+			if err := n.chain.PutBlock(choice.Block); err != nil {
+				return nil, fmt.Errorf("failed to import block: %v", err)
+			}
 		}
 
-		n.headerToState[headerHash] = state
+		n.headerToState[headerHash] = stateSnapshot{
+			state:     state,
+			keyVals:   newStateKeyVals,
+			stateRoot: stateRoot,
+		}
 
 		return NewMessage(StateRoot{
 			StateRootHash: stateRoot,
 		}), nil
 
 	case GetState:
-		state, ok := n.headerToState[choice.HeaderHash]
+		snapshot, ok := n.headerToState[choice.HeaderHash]
 		if !ok {
 			return nil, fmt.Errorf("header hash not found")
 		}
 
-		keyValuePairs, err := serializeState(state)
-		if err != nil {
-			return nil, fmt.Errorf("failed to serialize state: %v", err)
-		}
-
 		return NewMessage(State{
-			StateItems: keyValuePairs,
+			StateItems: snapshot.keyVals,
 		}), nil
 	}
 

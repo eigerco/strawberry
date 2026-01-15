@@ -70,7 +70,7 @@ func TestSimulateAssurance(t *testing.T) {
 	require.NotNil(t, currentState.CoreAssignments[1].WorkReport)
 
 	// Update state
-	err = statetransition.UpdateState(
+	err = statetransition.UpdateStateFromState(
 		currentState,
 		testBlock,
 		chainDB,

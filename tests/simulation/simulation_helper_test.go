@@ -83,7 +83,7 @@ func TestBlockGenerator(t *testing.T) {
 	require.NoError(t, err)
 
 	// Update state
-	err = statetransition.UpdateState(
+	err = statetransition.UpdateStateFromState(
 		currentState,
 		newBlock,
 		chainDB,
