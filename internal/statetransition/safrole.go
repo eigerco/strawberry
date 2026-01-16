@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/constants"
@@ -59,7 +60,6 @@ type SafroleOutput struct {
 type ticketVerifyResult struct {
 	index      int
 	outputHash crypto.BandersnatchOutputHash
-	err        error
 }
 
 // Validates then produces tickets from submitted ticket proofs.
@@ -89,57 +89,46 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 	}
 
 	ringVerifier, err := safstate.NextValidators.RingVerifier()
+	defer ringVerifier.Free()
 	if err != nil {
 		return []block.Ticket{}, err
 	}
-	defer ringVerifier.Free()
 
-	// Verify tickets in parallel using goroutines with early cancellation.
+	// Verify tickets in parallel using errgroup with early cancellation.
 	// Thread-safety: RingVrfVerifier is safe for concurrent use - the Rust type
 	// implements Send + Sync traits.
 	vrfInputPrefix := append([]byte(state.TicketSealContext), entropyPool[2][:]...)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var wg sync.WaitGroup
 	results := make([]ticketVerifyResult, len(ticketProofs))
+	g, ctx := errgroup.WithContext(context.Background())
 
 	for i, tp := range ticketProofs {
-		wg.Add(1)
-		go func(idx int, proof block.TicketProof) {
-			defer wg.Done()
-
+		g.Go(func() error {
 			// Check for early cancellation before doing expensive work
 			select {
 			case <-ctx.Done():
-				return
+				return ctx.Err()
 			default:
 			}
 
 			// Build VRF input data for this ticket
 			vrfInputData := make([]byte, len(vrfInputPrefix)+1)
 			copy(vrfInputData, vrfInputPrefix)
-			vrfInputData[len(vrfInputPrefix)] = proof.EntryIndex
+			vrfInputData[len(vrfInputPrefix)] = tp.EntryIndex
 
 			// Verify the ring signature
-			ok, outputHash := ringVerifier.Verify(vrfInputData, []byte{}, safstate.RingCommitment, proof.Proof)
+			ok, outputHash := ringVerifier.Verify(vrfInputData, []byte{}, safstate.RingCommitment, tp.Proof)
 			if !ok {
-				results[idx] = ticketVerifyResult{index: idx, err: errors.New("bad ticket proof")}
-				cancel() // Signal other goroutines to stop
-				return
+				return errors.New("bad ticket proof")
 			}
-			results[idx] = ticketVerifyResult{index: idx, outputHash: outputHash}
-		}(i, tp)
+
+			results[i] = ticketVerifyResult{index: i, outputHash: outputHash}
+			return nil
+		})
 	}
 
-	wg.Wait()
-
-	// Check for verification errors
-	for _, result := range results {
-		if result.err != nil {
-			return []block.Ticket{}, result.err
-		}
+	if err := g.Wait(); err != nil {
+		return []block.Ticket{}, err
 	}
 
 	// Build tickets from results
