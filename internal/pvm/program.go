@@ -159,6 +159,8 @@ func (p *program) skip(instructionCounter uint64) uint8 {
 }
 
 // opcode gets the opcode for the current instruction counter (eq. A.23 v0.7.2)
+//
+//nolint:staticcheck
 func (p *program) opcode(instructionCounter uint64) Opcode {
 	op := Opcode(p.code[instructionCounter])
 	if !opcodeValid(op) {
@@ -168,6 +170,12 @@ func (p *program) opcode(instructionCounter uint64) Opcode {
 		return Trap
 	}
 	return op
+}
+
+// unsafeOpcode gets the opcode for the current instruction without additional checks for faster execution
+// must be used with care only when there are additional checks in place and receiving a bad code is highly unlikely
+func (p *program) unsafeOpcode(instructionCounter uint64) Opcode {
+	return Opcode(p.code[instructionCounter])
 }
 
 func (p *program) decodeArgsImm(instructionCounter uint64, skipLen uint8) (valueX uint64) {

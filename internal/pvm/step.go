@@ -7,7 +7,7 @@ func (i *Instance) step() (uint64, error) {
 
 	// ζ ≡ c ⌢ [0, 0, ... ] (eq. A.4 v0.7.2)
 	// We cannot add infinite items to a slice, but we simulate this by defaulting to trap opcode
-	opcode := i.opcode(i.instructionCounter)
+	opcode := i.unsafeOpcode(i.instructionCounter)
 
 	// ϱ′ = ϱ − ϱ∆ (eq. A.9 v0.7.2)
 	switch opcode {
@@ -733,6 +733,9 @@ func (i *Instance) step() (uint64, error) {
 		i.MinUnsigned(i.decodeArgsReg3(i.instructionCounter))
 	default:
 		// c_n if kn = 1 ∧ cn ∈ U otherwise 0 (eq. A.19 v0.7.2)
+		if err := i.deductGas(TrapCost); err != nil {
+			return 0, err
+		}
 		return 0, i.Trap()
 	}
 

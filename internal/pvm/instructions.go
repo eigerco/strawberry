@@ -222,6 +222,8 @@ func (o Opcode) IsBasicBlockTermination() bool {
 }
 
 // opcodeValid c_n ∈ U (eq A.23)
+//
+//nolint:staticcheck
 func opcodeValid(c Opcode) bool {
 	switch c {
 	case Trap, Fallthrough, Ecalli, LoadImm64, StoreImmU8, StoreImmU16, StoreImmU32, StoreImmU64, Jump,
