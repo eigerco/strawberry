@@ -68,8 +68,8 @@ func (i *Instance) Jump(target uint64) error {
 	return i.branch(true, target)
 }
 
-// JumpIndirect jump_ind djump((φA + νX) mod 2^32)
-func (i *Instance) JumpIndirect(base Reg, offset uint64) error {
+// JumpInd jump_ind djump((φA + νX) mod 2^32)
+func (i *Instance) JumpInd(base Reg, offset uint64) error {
 	return i.djump(uint32(i.regs[base] + offset))
 }
 
@@ -188,8 +188,8 @@ func (i *Instance) StoreU64(src Reg, address uint64) error {
 	return nil
 }
 
-// StoreImmIndirectU8 store_imm_ind_u8 μ′↺_{φA+νX} = νY mod 2^8
-func (i *Instance) StoreImmIndirectU8(base Reg, offset uint64, value uint64) error {
+// StoreImmIndU8 store_imm_ind_u8 μ′↺_{φA+νX} = νY mod 2^8
+func (i *Instance) StoreImmIndU8(base Reg, offset uint64, value uint64) error {
 	i.storeBuf[0] = uint8(value)
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:1]); err != nil {
 		return err
@@ -198,8 +198,8 @@ func (i *Instance) StoreImmIndirectU8(base Reg, offset uint64, value uint64) err
 	return nil
 }
 
-// StoreImmIndirectU16 store_imm_ind_u16 μ′↺_{φA+νX...+2} = E2(νY mod 2^16)
-func (i *Instance) StoreImmIndirectU16(base Reg, offset uint64, value uint64) error {
+// StoreImmIndU16 store_imm_ind_u16 μ′↺_{φA+νX...+2} = E2(νY mod 2^16)
+func (i *Instance) StoreImmIndU16(base Reg, offset uint64, value uint64) error {
 	jam.PutUint16(i.storeBuf[:2], uint16(value))
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:2]); err != nil {
 		return err
@@ -208,8 +208,8 @@ func (i *Instance) StoreImmIndirectU16(base Reg, offset uint64, value uint64) er
 	return nil
 }
 
-// StoreImmIndirectU32 store_imm_ind_u32 μ′↺_{φA+νX...+4} = E4(νY mod 2^32)
-func (i *Instance) StoreImmIndirectU32(base Reg, offset uint64, value uint64) error {
+// StoreImmIndU32 store_imm_ind_u32 μ′↺_{φA+νX...+4} = E4(νY mod 2^32)
+func (i *Instance) StoreImmIndU32(base Reg, offset uint64, value uint64) error {
 	jam.PutUint32(i.storeBuf[:4], uint32(value))
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:4]); err != nil {
 		return err
@@ -218,8 +218,8 @@ func (i *Instance) StoreImmIndirectU32(base Reg, offset uint64, value uint64) er
 	return nil
 }
 
-// StoreImmIndirectU64 store_imm_ind_u64 μ′↺_{φA+νX...+8} = E8(νY)
-func (i *Instance) StoreImmIndirectU64(base Reg, offset uint64, value uint64) error {
+// StoreImmIndU64 store_imm_ind_u64 μ′↺_{φA+νX...+8} = E8(νY)
+func (i *Instance) StoreImmIndU64(base Reg, offset uint64, value uint64) error {
 	jam.PutUint64(i.storeBuf[:8], value)
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:8]); err != nil {
 		return err
@@ -228,8 +228,8 @@ func (i *Instance) StoreImmIndirectU64(base Reg, offset uint64, value uint64) er
 	return nil
 }
 
-// LoadImmAndJump load_imm_jump branch(νY , ⊺), φ′A = νX
-func (i *Instance) LoadImmAndJump(ra Reg, value uint64, target uint64) error {
+// LoadImmJump load_imm_jump branch(νY , ⊺), φ′A = νX
+func (i *Instance) LoadImmJump(ra Reg, value uint64, target uint64) error {
 	i.regs[ra] = value
 	return i.branch(true, target)
 }
@@ -239,48 +239,48 @@ func (i *Instance) BranchEqImm(regA Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] == valueX, target)
 }
 
-// BranchNotEqImm branch_ne_imm branch(νY, φA ≠ νX)
-func (i *Instance) BranchNotEqImm(regA Reg, valueX uint64, target uint64) error {
+// BranchNeImm branch_ne_imm branch(νY, φA ≠ νX)
+func (i *Instance) BranchNeImm(regA Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] != valueX, target)
 }
 
-// BranchLessUnsignedImm branch_lt_u_imm branch(νY , φA < νX)
-func (i *Instance) BranchLessUnsignedImm(regA Reg, valueX uint64, target uint64) error {
+// BranchLtUImm branch_lt_u_imm branch(νY , φA < νX)
+func (i *Instance) BranchLtUImm(regA Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] < valueX, target)
 }
 
-// BranchLessOrEqualUnsignedImm branch_le_u_imm branch(νY, φA ≤ νX)
-func (i *Instance) BranchLessOrEqualUnsignedImm(regA Reg, valueX uint64, target uint64) error {
+// BranchLeUImm branch_le_u_imm branch(νY, φA ≤ νX)
+func (i *Instance) BranchLeUImm(regA Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] <= valueX, target)
 }
 
-// BranchGreaterOrEqualUnsignedImm branch_ge_u_imm branch(νY, φA ≥ νX)
-func (i *Instance) BranchGreaterOrEqualUnsignedImm(regA Reg, valueX uint64, target uint64) error {
+// BranchGeUImm branch_ge_u_imm branch(νY, φA ≥ νX)
+func (i *Instance) BranchGeUImm(regA Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] >= valueX, target)
 }
 
-// BranchGreaterUnsignedImm branch_gt_u_imm branch(νY, φA > νX)
-func (i *Instance) BranchGreaterUnsignedImm(regA Reg, valueX uint64, target uint64) error {
+// BranchGtUImm branch_gt_u_imm branch(νY, φA > νX)
+func (i *Instance) BranchGtUImm(regA Reg, valueX uint64, target uint64) error {
 	return i.branch(i.regs[regA] > valueX, target)
 }
 
-// BranchLessSignedImm branch_lt_s_imm branch(νY, Z8(φA) < Z8(νX))
-func (i *Instance) BranchLessSignedImm(regA Reg, valueX uint64, target uint64) error {
+// BranchLtSImm branch_lt_s_imm branch(νY, Z8(φA) < Z8(νX))
+func (i *Instance) BranchLtSImm(regA Reg, valueX uint64, target uint64) error {
 	return i.branch(int64(i.regs[regA]) < int64(valueX), target)
 }
 
-// BranchLessOrEqualSignedImm branch_le_s_imm branch(νY , Z8(φA) ≤ Z8(νX))
-func (i *Instance) BranchLessOrEqualSignedImm(regA Reg, valueX uint64, target uint64) error {
+// BranchLeSImm branch_le_s_imm branch(νY , Z8(φA) ≤ Z8(νX))
+func (i *Instance) BranchLeSImm(regA Reg, valueX uint64, target uint64) error {
 	return i.branch(int64(i.regs[regA]) <= int64(valueX), target)
 }
 
-// BranchGreaterOrEqualSignedImm branch_ge_s_imm branch(νY, Z8(φA) ≥ Z8(νX))
-func (i *Instance) BranchGreaterOrEqualSignedImm(regA Reg, valueX uint64, target uint64) error {
+// BranchGeSImm branch_ge_s_imm branch(νY, Z8(φA) ≥ Z8(νX))
+func (i *Instance) BranchGeSImm(regA Reg, valueX uint64, target uint64) error {
 	return i.branch(int64(i.regs[regA]) >= int64(valueX), target)
 }
 
-// BranchGreaterSignedImm branch_gt_s_imm branch(νY, Z8(φA) > Z8(νX))
-func (i *Instance) BranchGreaterSignedImm(regA Reg, valueX uint64, target uint64) error {
+// BranchGtSImm branch_gt_s_imm branch(νY, Z8(φA) > Z8(νX))
+func (i *Instance) BranchGtSImm(regA Reg, valueX uint64, target uint64) error {
 	return i.branch(int64(i.regs[regA]) > int64(valueX), target)
 }
 
@@ -354,8 +354,8 @@ func (i *Instance) ReverseBytes(dst Reg, s Reg) {
 	i.setAndSkip(dst, bits.ReverseBytes64(i.regs[s]))
 }
 
-// StoreIndirectU8 store_ind_u8 μ′↺_{φB+νX} = φA mod 2^8
-func (i *Instance) StoreIndirectU8(src Reg, base Reg, offset uint64) error {
+// StoreIndU8 store_ind_u8 μ′↺_{φB+νX} = φA mod 2^8
+func (i *Instance) StoreIndU8(src Reg, base Reg, offset uint64) error {
 	i.storeBuf[0] = uint8(i.regs[src])
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:1]); err != nil {
 		return err
@@ -364,8 +364,8 @@ func (i *Instance) StoreIndirectU8(src Reg, base Reg, offset uint64) error {
 	return nil
 }
 
-// StoreIndirectU16 store_ind_u16 μ′↺_{φB+νX...+2} = E2(φA mod 2^16)
-func (i *Instance) StoreIndirectU16(src Reg, base Reg, offset uint64) error {
+// StoreIndU16 store_ind_u16 μ′↺_{φB+νX...+2} = E2(φA mod 2^16)
+func (i *Instance) StoreIndU16(src Reg, base Reg, offset uint64) error {
 	jam.PutUint16(i.storeBuf[:2], uint16(i.regs[src]))
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:2]); err != nil {
 		return err
@@ -374,8 +374,8 @@ func (i *Instance) StoreIndirectU16(src Reg, base Reg, offset uint64) error {
 	return nil
 }
 
-// StoreIndirectU32 store_ind_u32 μ′↺_{φB+νX...+4} = E4(φA mod 2^32)
-func (i *Instance) StoreIndirectU32(src Reg, base Reg, offset uint64) error {
+// StoreIndU32 store_ind_u32 μ′↺_{φB+νX...+4} = E4(φA mod 2^32)
+func (i *Instance) StoreIndU32(src Reg, base Reg, offset uint64) error {
 	jam.PutUint32(i.storeBuf[:4], uint32(i.regs[src]))
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:4]); err != nil {
 		return err
@@ -384,8 +384,8 @@ func (i *Instance) StoreIndirectU32(src Reg, base Reg, offset uint64) error {
 	return nil
 }
 
-// StoreIndirectU64 store_ind_u64 μ′↺_{φB+νX...+8} = E8(φA)
-func (i *Instance) StoreIndirectU64(src Reg, base Reg, offset uint64) error {
+// StoreIndU64 store_ind_u64 μ′↺_{φB+νX...+8} = E8(φA)
+func (i *Instance) StoreIndU64(src Reg, base Reg, offset uint64) error {
 	jam.PutUint64(i.storeBuf[:8], i.regs[src])
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:8]); err != nil {
 		return err
@@ -394,8 +394,8 @@ func (i *Instance) StoreIndirectU64(src Reg, base Reg, offset uint64) error {
 	return nil
 }
 
-// LoadIndirectU8 load_ind_u8 φ′A = μ↺_{φB+νX}
-func (i *Instance) LoadIndirectU8(dst Reg, base Reg, offset uint64) error {
+// LoadIndU8 load_ind_u8 φ′A = μ↺_{φB+νX}
+func (i *Instance) LoadIndU8(dst Reg, base Reg, offset uint64) error {
 	slice := i.loadBuf[:1]
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
@@ -404,8 +404,8 @@ func (i *Instance) LoadIndirectU8(dst Reg, base Reg, offset uint64) error {
 	return nil
 }
 
-// LoadIndirectI8 load_ind_i8 φ′A = Z−1_8(Z1(μ↺_{φB+νX}))
-func (i *Instance) LoadIndirectI8(dst Reg, base Reg, offset uint64) error {
+// LoadIndI8 load_ind_i8 φ′A = Z−1_8(Z1(μ↺_{φB+νX}))
+func (i *Instance) LoadIndI8(dst Reg, base Reg, offset uint64) error {
 	slice := i.loadBuf[:1]
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
@@ -414,8 +414,8 @@ func (i *Instance) LoadIndirectI8(dst Reg, base Reg, offset uint64) error {
 	return nil
 }
 
-// LoadIndirectU16 load_ind_u16 φ′A = E−1_2 (μ↺_{φB+νX...+2})
-func (i *Instance) LoadIndirectU16(dst Reg, base Reg, offset uint64) error {
+// LoadIndU16 load_ind_u16 φ′A = E−1_2 (μ↺_{φB+νX...+2})
+func (i *Instance) LoadIndU16(dst Reg, base Reg, offset uint64) error {
 	slice := i.loadBuf[:2]
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
@@ -424,8 +424,8 @@ func (i *Instance) LoadIndirectU16(dst Reg, base Reg, offset uint64) error {
 	return nil
 }
 
-// LoadIndirectI16 load_ind_i16 φ′A = Z−1_8(Z2(E−1_2(μ↺_{φB+νX...+2})))
-func (i *Instance) LoadIndirectI16(dst Reg, base Reg, offset uint64) error {
+// LoadIndI16 load_ind_i16 φ′A = Z−1_8(Z2(E−1_2(μ↺_{φB+νX...+2})))
+func (i *Instance) LoadIndI16(dst Reg, base Reg, offset uint64) error {
 	slice := i.loadBuf[:2]
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
@@ -434,8 +434,8 @@ func (i *Instance) LoadIndirectI16(dst Reg, base Reg, offset uint64) error {
 	return nil
 }
 
-// LoadIndirectU32 load_ind_u32 φ′A = E−1_4(μ↺_{φB+νX...+4})
-func (i *Instance) LoadIndirectU32(dst Reg, base Reg, offset uint64) error {
+// LoadIndU32 load_ind_u32 φ′A = E−1_4(μ↺_{φB+νX...+4})
+func (i *Instance) LoadIndU32(dst Reg, base Reg, offset uint64) error {
 	slice := i.loadBuf[:4]
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
@@ -444,8 +444,8 @@ func (i *Instance) LoadIndirectU32(dst Reg, base Reg, offset uint64) error {
 	return nil
 }
 
-// LoadIndirectI32 load_ind_i32 φ′A = Z−1_8(Z4(E−1_4(μ↺_{φB+νX...+4})))
-func (i *Instance) LoadIndirectI32(dst Reg, base Reg, offset uint64) error {
+// LoadIndI32 load_ind_i32 φ′A = Z−1_8(Z4(E−1_4(μ↺_{φB+νX...+4})))
+func (i *Instance) LoadIndI32(dst Reg, base Reg, offset uint64) error {
 	slice := i.loadBuf[:4]
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
@@ -454,8 +454,8 @@ func (i *Instance) LoadIndirectI32(dst Reg, base Reg, offset uint64) error {
 	return nil
 }
 
-// LoadIndirectU64 load_ind_u64 φ′A = E−1_8(μ↺_{φB+νX...+8})
-func (i *Instance) LoadIndirectU64(dst Reg, base Reg, offset uint64) error {
+// LoadIndU64 load_ind_u64 φ′A = E−1_8(μ↺_{φB+νX...+8})
+func (i *Instance) LoadIndU64(dst Reg, base Reg, offset uint64) error {
 	slice := i.loadBuf[:8]
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
@@ -489,71 +489,71 @@ func (i *Instance) MulImm32(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]*value)), 4))
 }
 
-// SetLessThanUnsignedImm set_lt_u_imm φ′A = φB < νX
-func (i *Instance) SetLessThanUnsignedImm(dst Reg, regA Reg, value uint64) {
+// SetLtUImm set_lt_u_imm φ′A = φB < νX
+func (i *Instance) SetLtUImm(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, bool2uint64((i.regs[regA]) < value))
 }
 
-// SetLessThanSignedImm set_lt_s_imm φ′A = Z8(φB) < Z8(νX)
-func (i *Instance) SetLessThanSignedImm(dst Reg, regA Reg, value uint64) {
+// SetLtSImm set_lt_s_imm φ′A = Z8(φB) < Z8(νX)
+func (i *Instance) SetLtSImm(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, bool2uint64(int64(i.regs[regA]) < int64(value)))
 }
 
-// ShiftLogicalLeftImm32 shlo_l_imm_32 φ′A = X4((φB ⋅ 2^νX mod 32) mod 2^32)
-func (i *Instance) ShiftLogicalLeftImm32(dst Reg, regA Reg, value uint64) {
+// ShloLImm32 shlo_l_imm_32 φ′A = X4((φB ⋅ 2^νX mod 32) mod 2^32)
+func (i *Instance) ShloLImm32(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])<<value), 4))
 }
 
-// ShiftLogicalRightImm32 shlo_r_imm_32 φ′A = X4(⌊ φB mod 2^32 ÷ 2^νX mod 32 ⌋)
-func (i *Instance) ShiftLogicalRightImm32(dst Reg, regA Reg, value uint64) {
+// ShloRImm32 shlo_r_imm_32 φ′A = X4(⌊ φB mod 2^32 ÷ 2^νX mod 32 ⌋)
+func (i *Instance) ShloRImm32(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])>>value), 4))
 }
 
-// ShiftArithmeticRightImm32 shar_r_imm_32 φ′A = Z−1_8(⌊ Z4(φB mod 2^32) ÷ 2^νX mod 32 ⌋)
-func (i *Instance) ShiftArithmeticRightImm32(dst Reg, regA Reg, value uint64) {
+// SharRImm32 shar_r_imm_32 φ′A = Z−1_8(⌊ Z4(φB mod 2^32) ÷ 2^νX mod 32 ⌋)
+func (i *Instance) SharRImm32(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, uint64(int32(uint32(i.regs[regA]))>>value))
 }
 
-// NegateAndAddImm32 neg_add_imm_32 φ′A = X4((νX + 2^32 − φB) mod 2^32)
-func (i *Instance) NegateAndAddImm32(dst Reg, regA Reg, value uint64) {
+// NegAddImm32 neg_add_imm_32 φ′A = X4((νX + 2^32 − φB) mod 2^32)
+func (i *Instance) NegAddImm32(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(value-i.regs[regA])), 4))
 }
 
-// SetGreaterThanUnsignedImm set_gt_u_imm φ′A = φB > νX
-func (i *Instance) SetGreaterThanUnsignedImm(dst Reg, regA Reg, value uint64) {
+// SetGtUImm set_gt_u_imm φ′A = φB > νX
+func (i *Instance) SetGtUImm(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, bool2uint64(i.regs[regA] > value))
 }
 
-// SetGreaterThanSignedImm set_gt_s_imm φ′A = Z8(φB) > Z8(νX)
-func (i *Instance) SetGreaterThanSignedImm(dst Reg, regA Reg, value uint64) {
+// SetGtSImm set_gt_s_imm φ′A = Z8(φB) > Z8(νX)
+func (i *Instance) SetGtSImm(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, bool2uint64(int64(i.regs[regA]) > int64(value)))
 }
 
-// ShiftLogicalLeftImmAlt32 shlo_l_imm_alt_32 φ′A = X4((νX ⋅ 2φB mod 32) mod 2^32)
-func (i *Instance) ShiftLogicalLeftImmAlt32(dst Reg, regB Reg, value uint64) {
+// ShloLImmAlt32 shlo_l_imm_alt_32 φ′A = X4((νX ⋅ 2φB mod 32) mod 2^32)
+func (i *Instance) ShloLImmAlt32(dst Reg, regB Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(value<<(i.regs[regB]&31))), 4))
 }
 
-// ShiftLogicalRightImmAlt32 shlo_r_imm_alt_32 φ′A = X4(⌊ νX mod 2^32 ÷ 2^φB mod 32 ⌋)
-func (i *Instance) ShiftLogicalRightImmAlt32(dst Reg, regB Reg, value uint64) {
+// SharRImmAlt32 shlo_r_imm_alt_32 φ′A = X4(⌊ νX mod 2^32 ÷ 2^φB mod 32 ⌋)
+func (i *Instance) SharRImmAlt32(dst Reg, regB Reg, value uint64) {
 	i.setAndSkip(dst, sext(uint64(uint32(value)>>uint32(i.regs[regB]&31)), 4))
 }
 
-// ShiftArithmeticRightImmAlt32 shar_r_imm_alt_32 φ′A = Z−1_8(⌊ Z4(νX mod 2^32) ÷ 2φB mod 32 ⌋)
-func (i *Instance) ShiftArithmeticRightImmAlt32(dst Reg, regB Reg, value uint64) {
+// ShloRImmAlt32 shar_r_imm_alt_32 φ′A = Z−1_8(⌊ Z4(νX mod 2^32) ÷ 2φB mod 32 ⌋)
+func (i *Instance) ShloRImmAlt32(dst Reg, regB Reg, value uint64) {
 	i.setAndSkip(dst, uint64(int32(uint32(value))>>uint32(i.regs[regB]&31)))
 }
 
-// CmovIfZeroImm cmov_iz_imm φ′A = νX if φB = 0 otherwise φA
-func (i *Instance) CmovIfZeroImm(dst Reg, c Reg, s uint64) {
+// CmovIzImm cmov_iz_imm φ′A = νX if φB = 0 otherwise φA
+func (i *Instance) CmovIzImm(dst Reg, c Reg, s uint64) {
 	if i.regs[c] == 0 {
 		i.regs[dst] = s
 	}
 	i.skip()
 }
 
-// CmovIfNotZeroImm cmov_nz_imm φ′A = νX if φB ≠ 0 otherwise φA
-func (i *Instance) CmovIfNotZeroImm(dst Reg, c Reg, s uint64) {
+// CmovNzImm cmov_nz_imm φ′A = νX if φB ≠ 0 otherwise φA
+func (i *Instance) CmovNzImm(dst Reg, c Reg, s uint64) {
 	if i.regs[c] != 0 {
 		i.regs[dst] = s
 	}
@@ -571,38 +571,38 @@ func (i *Instance) MulImm64(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, i.regs[regA]*value)
 }
 
-// ShiftLogicalLeftImm64 shlo_l_imm_64 φ′A = X8((φB ⋅ 2^νX mod 64) mod 2^64)
-func (i *Instance) ShiftLogicalLeftImm64(dst Reg, regA Reg, value uint64) {
+// ShloLImm64 shlo_l_imm_64 φ′A = X8((φB ⋅ 2^νX mod 64) mod 2^64)
+func (i *Instance) ShloLImm64(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, sext(i.regs[regA]<<value, 8))
 }
 
-// ShiftLogicalRightImm64 shlo_r_imm_64 φ′A = X8(⌊ φB ÷ 2^νX mod 64 ⌋)
-func (i *Instance) ShiftLogicalRightImm64(dst Reg, regA Reg, value uint64) {
+// ShloRImm64 shlo_r_imm_64 φ′A = X8(⌊ φB ÷ 2^νX mod 64 ⌋)
+func (i *Instance) ShloRImm64(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, sext(i.regs[regA]>>value, 8))
 }
 
-// ShiftArithmeticRightImm64 shar_r_imm_64 φ′A = Z−1_8(⌊ Z8(φB) ÷ 2νX mod 64 ⌋)
-func (i *Instance) ShiftArithmeticRightImm64(dst Reg, regA Reg, value uint64) {
+// SharRImm64 shar_r_imm_64 φ′A = Z−1_8(⌊ Z8(φB) ÷ 2νX mod 64 ⌋)
+func (i *Instance) SharRImm64(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, uint64(int64(i.regs[regA])>>value))
 }
 
-// NegateAndAddImm64 neg_add_imm_64 φ′A = (νX + 2^64 − φB) mod 2^64
-func (i *Instance) NegateAndAddImm64(dst Reg, regA Reg, value uint64) {
+// NegAddImm64 neg_add_imm_64 φ′A = (νX + 2^64 − φB) mod 2^64
+func (i *Instance) NegAddImm64(dst Reg, regA Reg, value uint64) {
 	i.setAndSkip(dst, value-i.regs[regA])
 }
 
-// ShiftLogicalLeftImmAlt64 shlo_l_imm_alt_64 φ′A = (νX ⋅ 2φB mod 64) mod 2^64
-func (i *Instance) ShiftLogicalLeftImmAlt64(dst Reg, regB Reg, value uint64) {
+// ShloLImmAlt64 shlo_l_imm_alt_64 φ′A = (νX ⋅ 2φB mod 64) mod 2^64
+func (i *Instance) ShloLImmAlt64(dst Reg, regB Reg, value uint64) {
 	i.setAndSkip(dst, value<<(i.regs[regB]&63))
 }
 
-// ShiftLogicalRightImmAlt64 shlo_r_imm_alt_64 φ′A = ⌊ νX ÷ 2^φB mod 64 ⌋
-func (i *Instance) ShiftLogicalRightImmAlt64(dst Reg, regB Reg, value uint64) {
+// ShloRImmAlt64 shlo_r_imm_alt_64 φ′A = ⌊ νX ÷ 2^φB mod 64 ⌋
+func (i *Instance) ShloRImmAlt64(dst Reg, regB Reg, value uint64) {
 	i.setAndSkip(dst, value>>(i.regs[regB]&63))
 }
 
-// ShiftArithmeticRightImmAlt64 shar_r_imm_alt_64 φ′A = Z−1_8(⌊ Z8(νX) ÷ 2φB mod 64 ⌋)
-func (i *Instance) ShiftArithmeticRightImmAlt64(dst Reg, regB Reg, value uint64) {
+// SharRImmAlt64 shar_r_imm_alt_64 φ′A = Z−1_8(⌊ Z8(νX) ÷ 2φB mod 64 ⌋)
+func (i *Instance) SharRImmAlt64(dst Reg, regB Reg, value uint64) {
 	i.setAndSkip(dst, uint64(int64(value)>>(i.regs[regB]&63)))
 }
 
@@ -631,33 +631,33 @@ func (i *Instance) BranchEq(regA Reg, regB Reg, target uint64) error {
 	return i.branch(i.regs[regA] == i.regs[regB], target)
 }
 
-// BranchNotEq branch_ne branch(νX, φA ≠ φB)
-func (i *Instance) BranchNotEq(regA Reg, regB Reg, target uint64) error {
+// BranchNe branch_ne branch(νX, φA ≠ φB)
+func (i *Instance) BranchNe(regA Reg, regB Reg, target uint64) error {
 	return i.branch(i.regs[regA] != i.regs[regB], target)
 }
 
-// BranchLessUnsigned branch_lt_u branch(νX, φA < φB)
-func (i *Instance) BranchLessUnsigned(regA Reg, regB Reg, target uint64) error {
+// BranchLtU branch_lt_u branch(νX, φA < φB)
+func (i *Instance) BranchLtU(regA Reg, regB Reg, target uint64) error {
 	return i.branch(i.regs[regA] < i.regs[regB], target)
 }
 
-// BranchLessSigned branch_lt_s branch(νX, Z8(φA) < Z8(φB))
-func (i *Instance) BranchLessSigned(regA Reg, regB Reg, target uint64) error {
+// BranchLtS branch_lt_s branch(νX, Z8(φA) < Z8(φB))
+func (i *Instance) BranchLtS(regA Reg, regB Reg, target uint64) error {
 	return i.branch(int64(i.regs[regA]) < int64(i.regs[regB]), target)
 }
 
-// BranchGreaterOrEqualUnsigned branch_ge_u branch(νX, φA ≥ φB)
-func (i *Instance) BranchGreaterOrEqualUnsigned(regA Reg, regB Reg, target uint64) error {
+// BranchGeU branch_ge_u branch(νX, φA ≥ φB)
+func (i *Instance) BranchGeU(regA Reg, regB Reg, target uint64) error {
 	return i.branch(i.regs[regA] >= i.regs[regB], target)
 }
 
-// BranchGreaterOrEqualSigned branch_ge_s branch(νX, Z8(φA) ≥ Z8(φB))
-func (i *Instance) BranchGreaterOrEqualSigned(regA Reg, regB Reg, target uint64) error {
+// BranchGeS branch_ge_s branch(νX, Z8(φA) ≥ Z8(φB))
+func (i *Instance) BranchGeS(regA Reg, regB Reg, target uint64) error {
 	return i.branch(int64(i.regs[regA]) >= int64(i.regs[regB]), target)
 }
 
-// LoadImmAndJumpIndirect load_imm_jump_ind djump((φB + νY) mod 232), φ′A = νX
-func (i *Instance) LoadImmAndJumpIndirect(regA Reg, base Reg, value, offset uint64) error {
+// LoadImmJumpInd load_imm_jump_ind djump((φB + νY) mod 232), φ′A = νX
+func (i *Instance) LoadImmJumpInd(regA Reg, base Reg, value, offset uint64) error {
 	target := i.regs[base] + offset
 	i.regs[regA] = value
 	return i.djump(uint32(target))
@@ -678,8 +678,8 @@ func (i *Instance) Mul32(dst Reg, regA, regB Reg) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]*i.regs[regB])), 4))
 }
 
-// DivUnsigned32 div_u_32 φ′D = 2^64 − 1 if φB mod 2^32 = 0 otherwise X4(⌊ (φA mod 2^32) ÷ (φB mod 2^32) ⌋)
-func (i *Instance) DivUnsigned32(dst Reg, regA, regB Reg) {
+// DivU32 div_u_32 φ′D = 2^64 − 1 if φB mod 2^32 = 0 otherwise X4(⌊ (φA mod 2^32) ÷ (φB mod 2^32) ⌋)
+func (i *Instance) DivU32(dst Reg, regA, regB Reg) {
 	lhs, rhs := uint32(i.regs[regA]), uint32(i.regs[regB])
 	if rhs == 0 {
 		i.regs[dst] = math.MaxUint64
@@ -689,12 +689,12 @@ func (i *Instance) DivUnsigned32(dst Reg, regA, regB Reg) {
 	i.skip()
 }
 
-// DivSigned32 div_s_32 φ′D =
+// DivS32 div_s_32 φ′D =
 // ⎧ 2^64 − 1 			if b = 0
 // ⎨ Z−1_8(a) 			if a = −2^31 ∧ b = −1
 // ⎩ Z−1_8 (rtz(a ÷ b)) otherwise
 // where a = Z4(φA mod 2^32), b = Z4(φB mod 2^32)
-func (i *Instance) DivSigned32(dst Reg, regA, regB Reg) {
+func (i *Instance) DivS32(dst Reg, regA, regB Reg) {
 	lhs := int32(uint32(i.regs[regA]))
 	rhs := int32(uint32(i.regs[regB]))
 	if rhs == 0 {
@@ -707,8 +707,8 @@ func (i *Instance) DivSigned32(dst Reg, regA, regB Reg) {
 	i.skip()
 }
 
-// RemUnsigned32 rem_u_32 φ′D = X4(φA mod 2^32) if φB mod 2^32 = 0 otherwise X4((φA mod 2^32) mod (φB mod 2^32))
-func (i *Instance) RemUnsigned32(dst Reg, regA, regB Reg) {
+// RemU32 rem_u_32 φ′D = X4(φA mod 2^32) if φB mod 2^32 = 0 otherwise X4((φA mod 2^32) mod (φB mod 2^32))
+func (i *Instance) RemU32(dst Reg, regA, regB Reg) {
 	lhs, rhs := uint32(i.regs[regA]), uint32(i.regs[regB])
 	if rhs == 0 {
 		i.regs[dst] = sext(uint64(lhs), 4)
@@ -718,12 +718,12 @@ func (i *Instance) RemUnsigned32(dst Reg, regA, regB Reg) {
 	i.skip()
 }
 
-// RemSigned32 rem_s_32 φ′D =
+// RemS32 rem_s_32 φ′D =
 // ⎧ 0			 		if a = −2^31 ∧ b = −1
 // ⎨
 // ⎩ Z−1_8 (smod(a, b)) otherwise
 // where a = Z4(φA mod 2^32), b = Z4(φB mod 2^32)
-func (i *Instance) RemSigned32(dst Reg, regA, regB Reg) {
+func (i *Instance) RemS32(dst Reg, regA, regB Reg) {
 	lhs := int32(uint32(i.regs[regA]))
 	rhs := int32(uint32(i.regs[regB]))
 	if lhs == math.MinInt32 && rhs == -1 {
@@ -734,18 +734,18 @@ func (i *Instance) RemSigned32(dst Reg, regA, regB Reg) {
 	i.skip()
 }
 
-// ShiftLogicalLeft32 shlo_l_32 φ′D = X4((φA ⋅ 2φB mod 32) mod 2^32)
-func (i *Instance) ShiftLogicalLeft32(dst Reg, regA, regB Reg) {
+// ShloL32 shlo_l_32 φ′D = X4((φA ⋅ 2φB mod 32) mod 2^32)
+func (i *Instance) ShloL32(dst Reg, regA, regB Reg) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])<<(uint32(i.regs[regB])%32)), 4))
 }
 
-// ShiftLogicalRight32 shlo_r_32 φ′D = X4(⌊ (φA mod 2^32) ÷ 2φB mod 32 ⌋)
-func (i *Instance) ShiftLogicalRight32(dst Reg, regA, regB Reg) {
+// ShloR32 shlo_r_32 φ′D = X4(⌊ (φA mod 2^32) ÷ 2φB mod 32 ⌋)
+func (i *Instance) ShloR32(dst Reg, regA, regB Reg) {
 	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])>>(uint32(i.regs[regB])%32)), 4))
 }
 
-// ShiftArithmeticRight32 shar_r_32 φ′D = Z−1_8(⌊ Z4(φA mod 2^32) ÷ 2φB mod 32 ⌋)
-func (i *Instance) ShiftArithmeticRight32(dst Reg, regA, regB Reg) {
+// SharR32 shar_r_32 φ′D = Z−1_8(⌊ Z4(φA mod 2^32) ÷ 2φB mod 32 ⌋)
+func (i *Instance) SharR32(dst Reg, regA, regB Reg) {
 	shiftAmount := uint32(i.regs[regB]) % 32
 	shiftedValue := int32(uint32(i.regs[regA])) >> shiftAmount
 	i.setAndSkip(dst, uint64(shiftedValue))
@@ -766,8 +766,8 @@ func (i *Instance) Mul64(dst Reg, regA, regB Reg) {
 	i.setAndSkip(dst, i.regs[regA]*i.regs[regB])
 }
 
-// DivUnsigned64 div_u_64 φ′D = 2^64 − 1 if φB = 0 otherwise ⌊ φA ÷ φB ⌋
-func (i *Instance) DivUnsigned64(dst Reg, regA, regB Reg) {
+// DivU64 div_u_64 φ′D = 2^64 − 1 if φB = 0 otherwise ⌊ φA ÷ φB ⌋
+func (i *Instance) DivU64(dst Reg, regA, regB Reg) {
 	lhs, rhs := i.regs[regA], i.regs[regB]
 	if rhs == 0 {
 		i.regs[dst] = math.MaxUint64
@@ -777,11 +777,11 @@ func (i *Instance) DivUnsigned64(dst Reg, regA, regB Reg) {
 	i.skip()
 }
 
-// DivSigned64 div_s_64 φ′D =
+// DivS64 div_s_64 φ′D =
 // ⎧ 2^64 − 1 						if φB = 0
 // ⎨ φA								if Z8(φA) = −2^63 ∧ Z8(φB) = −1
 // ⎩ Z−1_8(rtz(Z8(φA) ÷ Z8(φB))) 	otherwise
-func (i *Instance) DivSigned64(dst Reg, regA, regB Reg) {
+func (i *Instance) DivS64(dst Reg, regA, regB Reg) {
 	lhs := int64(i.regs[regA])
 	rhs := int64(i.regs[regB])
 	if rhs == 0 {
@@ -794,8 +794,8 @@ func (i *Instance) DivSigned64(dst Reg, regA, regB Reg) {
 	i.skip()
 }
 
-// RemUnsigned64 rem_u_64 φ′D = φA if φB = 0 otherwise φA mod φB
-func (i *Instance) RemUnsigned64(dst Reg, regA, regB Reg) {
+// RemU64 rem_u_64 φ′D = φA if φB = 0 otherwise φA mod φB
+func (i *Instance) RemU64(dst Reg, regA, regB Reg) {
 	lhs, rhs := i.regs[regA], i.regs[regB]
 	if rhs == 0 {
 		i.regs[dst] = lhs
@@ -805,11 +805,11 @@ func (i *Instance) RemUnsigned64(dst Reg, regA, regB Reg) {
 	i.skip()
 }
 
-// RemSigned64 rem_s_64 φ′D =
+// RemS64 rem_s_64 φ′D =
 // ⎧ φA						 	 if φB = 0
 // ⎨ 0 							 if Z8(φA) = −2^63 ∧ Z8(φB) = −1
 // ⎩ Z−1_8(smod(Z8(φA), Z8(φB))) otherwise
-func (i *Instance) RemSigned64(dst Reg, regA, regB Reg) {
+func (i *Instance) RemS64(dst Reg, regA, regB Reg) {
 	lhs, rhs := int64(i.regs[regA]), int64(i.regs[regB])
 	if lhs == math.MinInt64 && rhs == -1 {
 		i.regs[dst] = 0
@@ -819,20 +819,20 @@ func (i *Instance) RemSigned64(dst Reg, regA, regB Reg) {
 	i.skip()
 }
 
-// ShiftLogicalLeft64 shlo_l_64 φ′D = (φA ⋅ 2φB mod 64) mod 2^64
-func (i *Instance) ShiftLogicalLeft64(dst Reg, regA, regB Reg) {
+// ShloL64 shlo_l_64 φ′D = (φA ⋅ 2φB mod 64) mod 2^64
+func (i *Instance) ShloL64(dst Reg, regA, regB Reg) {
 	shiftAmount := i.regs[regB] % 64
 	shiftedValue := i.regs[regA] << shiftAmount
 	i.setAndSkip(dst, shiftedValue)
 }
 
-// ShiftLogicalRight64 shlo_r_64 φ′D = ⌊ φA ÷ 2φB mod 64 ⌋
-func (i *Instance) ShiftLogicalRight64(dst Reg, regA, regB Reg) {
+// ShloR64 shlo_r_64 φ′D = ⌊ φA ÷ 2φB mod 64 ⌋
+func (i *Instance) ShloR64(dst Reg, regA, regB Reg) {
 	i.setAndSkip(dst, i.regs[regA]>>(i.regs[regB]%64))
 }
 
-// ShiftArithmeticRight64 shar_r_64 φ′D = Z−1_8(⌊ Z8(φA) ÷ 2φB mod 64 ⌋)
-func (i *Instance) ShiftArithmeticRight64(dst Reg, regA, regB Reg) {
+// SharR64 shar_r_64 φ′D = Z−1_8(⌊ Z8(φA) ÷ 2φB mod 64 ⌋)
+func (i *Instance) SharR64(dst Reg, regA, regB Reg) {
 	shiftAmount := i.regs[regB] % 64
 	shiftedValue := int64(i.regs[regA]) >> shiftAmount
 	i.setAndSkip(dst, uint64(shiftedValue))
@@ -853,50 +853,50 @@ func (i *Instance) Or(dst Reg, regA, regB Reg) {
 	i.setAndSkip(dst, i.regs[regA]|i.regs[regB])
 }
 
-// MulUpperSignedSigned mul_upper_s_s φ′D = Z−1_8(⌊ (Z8(φA) ⋅ Z8(φB)) ÷ 2^64 ⌋)
-func (i *Instance) MulUpperSignedSigned(dst Reg, regA, regB Reg) {
+// MulUpperSS mul_upper_s_s φ′D = Z−1_8(⌊ (Z8(φA) ⋅ Z8(φB)) ÷ 2^64 ⌋)
+func (i *Instance) MulUpperSS(dst Reg, regA, regB Reg) {
 	lhs := big.NewInt(int64(i.regs[regA]))
 	rhs := big.NewInt(int64(i.regs[regB]))
 	mul := lhs.Mul(lhs, rhs)
 	i.setAndSkip(dst, uint64(mul.Rsh(mul, 64).Int64()))
 }
 
-// MulUpperUnsignedUnsigned mul_upper_u_u φ′D = ⌊ (φA ⋅ φB ) ÷ 2^64 ⌋
-func (i *Instance) MulUpperUnsignedUnsigned(dst Reg, regA, regB Reg) {
+// MulUpperUU mul_upper_u_u φ′D = ⌊ (φA ⋅ φB ) ÷ 2^64 ⌋
+func (i *Instance) MulUpperUU(dst Reg, regA, regB Reg) {
 	lhs := (&big.Int{}).SetUint64(i.regs[regA])
 	rhs := (&big.Int{}).SetUint64(i.regs[regB])
 	mul := lhs.Mul(lhs, rhs)
 	i.setAndSkip(dst, uint64(mul.Rsh(mul, 64).Int64()))
 }
 
-// MulUpperSignedUnsigned mul_upper_s_u φ′D = Z−1_8(⌊ (Z8(φA) ⋅ φB) ÷ 2^64 ⌋)
-func (i *Instance) MulUpperSignedUnsigned(dst Reg, regA, regB Reg) {
+// MulUpperSU mul_upper_s_u φ′D = Z−1_8(⌊ (Z8(φA) ⋅ φB) ÷ 2^64 ⌋)
+func (i *Instance) MulUpperSU(dst Reg, regA, regB Reg) {
 	lhs := big.NewInt(int64(i.regs[regA]))
 	rhs := (&big.Int{}).SetUint64(i.regs[regB])
 	mul := lhs.Mul(lhs, rhs)
 	i.setAndSkip(dst, uint64(mul.Rsh(mul, 64).Int64()))
 }
 
-// SetLessThanUnsigned set_lt_u φ′D = φA < φB
-func (i *Instance) SetLessThanUnsigned(dst Reg, regA, regB Reg) {
+// SetLtU set_lt_u φ′D = φA < φB
+func (i *Instance) SetLtU(dst Reg, regA, regB Reg) {
 	i.setAndSkip(dst, bool2uint64(i.regs[regA] < i.regs[regB]))
 }
 
-// SetLessThanSigned set_lt_s φ′D = Z8(φA) < Z8(φB)
-func (i *Instance) SetLessThanSigned(dst Reg, regA, regB Reg) {
+// SetLtS set_lt_s φ′D = Z8(φA) < Z8(φB)
+func (i *Instance) SetLtS(dst Reg, regA, regB Reg) {
 	i.setAndSkip(dst, bool2uint64(int64(i.regs[regA]) < int64(i.regs[regB])))
 }
 
-// CmovIfZero cmov_iz φ′D = φA if φB = 0 otherwise φD
-func (i *Instance) CmovIfZero(dst Reg, s, c Reg) {
+// CmovIz cmov_iz φ′D = φA if φB = 0 otherwise φD
+func (i *Instance) CmovIz(dst Reg, s, c Reg) {
 	if i.regs[c] == 0 {
 		i.regs[dst] = i.regs[s]
 	}
 	i.skip()
 }
 
-// CmovIfNotZero cmov_nz φ′D = φA if φB ≠ 0 otherwise φD
-func (i *Instance) CmovIfNotZero(dst Reg, s, c Reg) {
+// CmovNz cmov_nz φ′D = φA if φB ≠ 0 otherwise φD
+func (i *Instance) CmovNz(dst Reg, s, c Reg) {
 	if i.regs[c] != 0 {
 		i.regs[dst] = i.regs[s]
 	}

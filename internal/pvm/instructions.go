@@ -197,6 +197,8 @@ const (
 )
 
 // IsBasicBlockTermination (eq A.3)
+
+// IsBasicBlockTermination (eq A.3)
 func (o Opcode) IsBasicBlockTermination() bool {
 	switch o {
 	case
@@ -204,18 +206,18 @@ func (o Opcode) IsBasicBlockTermination() bool {
 		Trap, Fallthrough,
 
 		// Jumps: jump, jump_ind
-		Jump, JumpIndirect,
+		Jump, JumpInd,
 
 		// Load-and-Jumps: load_imm_jump , load_imm_jump_ind
-		LoadImmAndJump, LoadImmAndJumpIndirect,
+		LoadImmJump, LoadImmJumpInd,
 
 		// Branches: branch_eq, branch_ne, branch_ge_u, branch_ge_s, branch_lt_u, branch_lt_s, branch_eq_imm, branch_ne_imm
-		BranchEq, BranchNotEq, BranchGreaterOrEqualUnsigned, BranchGreaterOrEqualSigned,
-		BranchLessUnsigned, BranchLessSigned, BranchEqImm, BranchNotEqImm,
+		BranchEq, BranchNe, BranchGeU, BranchGeS,
+		BranchLtU, BranchLtS, BranchEqImm, BranchNeImm,
 
 		// Immediate branches: branch_lt_u_imm, branch_lt_s_imm, branch_le_u_imm, branch_le_s_imm, branch_ge_u_imm, branch_ge_s_imm, branch_gt_u_imm, branch_gt_s_imm
-		BranchLessUnsignedImm, BranchLessSignedImm, BranchLessOrEqualUnsignedImm, BranchLessOrEqualSignedImm,
-		BranchGreaterOrEqualUnsignedImm, BranchGreaterOrEqualSignedImm, BranchGreaterUnsignedImm, BranchGreaterSignedImm:
+		BranchLtUImm, BranchLtSImm, BranchLeUImm, BranchLeSImm,
+		BranchGeUImm, BranchGeSImm, BranchGtUImm, BranchGtSImm:
 		return true
 	}
 	return false
