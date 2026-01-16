@@ -2,16 +2,15 @@ package statetransition
 
 import (
 	"bytes"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
+	"context"
 	"errors"
-	"sort"
+	"sync"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/bandersnatch"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/disputing"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/safrole"
@@ -56,6 +55,13 @@ type SafroleOutput struct {
 	SealingEntropy crypto.Hash // n_3
 }
 
+// ticketVerifyResult holds the result of verifying a single ticket
+type ticketVerifyResult struct {
+	index      int
+	outputHash crypto.BandersnatchOutputHash
+	err        error
+}
+
 // Validates then produces tickets from submitted ticket proofs.
 // Implements equations 6.29-6.34
 // E_T ∈ D{e ∈ N_N, p ∈ V[]γ'z⟨X_T ⌢ η′2 ++ e⟩}  (6.29)
@@ -71,46 +77,80 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 		return []block.Ticket{}, errors.New("too many tickets")
 	}
 
-	ringVerifier, err := safstate.NextValidators.RingVerifier()
-	defer ringVerifier.Free()
-	if err != nil {
-		return []block.Ticket{}, err
+	if len(ticketProofs) == 0 {
+		return []block.Ticket{}, nil
 	}
 
-	// Equation 6.33: {x_y | x ∈ n} ⫰ {x_y | x ∈ γ_A}
-	// Check for duplicate tickets in γ_a
-	existingIds := make(map[crypto.BandersnatchOutputHash]struct{}, len(safstate.TicketAccumulator))
-	for _, ticket := range safstate.TicketAccumulator {
-		existingIds[ticket.Identifier] = struct{}{}
-	}
-	// Equations 6.29 and 6.31
-	// E_T ∈ D{e ∈ N_N, p ∈ V[]γ'z⟨X_T ⌢ η′2 ++ e⟩}
-	// n ≡ [(y: Y(i_p), e: i_e) | i <− E_T]
-	tickets := make([]block.Ticket, len(ticketProofs))
-	for i, tp := range ticketProofs {
-		// Equation 6.29: e ∈ N_N
+	// Validate all entry indexes first (Equation 6.29: e ∈ N_N)
+	for _, tp := range ticketProofs {
 		if tp.EntryIndex >= constants.MaxTicketAttemptsPerValidator {
 			return []block.Ticket{}, errors.New("bad ticket attempt")
 		}
+	}
 
-		// Validate the ring signature. VrfInputData is X_t ⌢ η_2′ ++ r. Equation 6.29
-		vrfInputData := append([]byte(state.TicketSealContext), entropyPool[2][:]...)
-		vrfInputData = append(vrfInputData, tp.EntryIndex)
-		// This produces the output hash we need to construct the ticket further down.
-		ok, outputHash := ringVerifier.Verify(vrfInputData, []byte{}, safstate.RingCommitment, tp.Proof)
-		if !ok {
-			return []block.Ticket{}, errors.New("bad ticket proof")
-		}
+	ringVerifier, err := safstate.NextValidators.RingVerifier()
+	if err != nil {
+		return []block.Ticket{}, err
+	}
+	defer ringVerifier.Free()
 
-		// Equation 6.33: {x_y | x ∈ n} ⫰ {x_y | x ∈ γ_A}
-		if _, exists := existingIds[outputHash]; exists {
-			return []block.Ticket{}, errors.New("duplicate ticket")
+	// Verify tickets in parallel using goroutines with early cancellation.
+	// Thread-safety: RingVrfVerifier is safe for concurrent use - the Rust type
+	// implements Send + Sync traits.
+	vrfInputPrefix := append([]byte(state.TicketSealContext), entropyPool[2][:]...)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+	results := make([]ticketVerifyResult, len(ticketProofs))
+
+	for i, tp := range ticketProofs {
+		wg.Add(1)
+		go func(idx int, proof block.TicketProof) {
+			defer wg.Done()
+
+			// Check for early cancellation before doing expensive work
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			// Build VRF input data for this ticket
+			vrfInputData := make([]byte, len(vrfInputPrefix)+1)
+			copy(vrfInputData, vrfInputPrefix)
+			vrfInputData[len(vrfInputPrefix)] = proof.EntryIndex
+
+			// Verify the ring signature
+			ok, outputHash := ringVerifier.Verify(vrfInputData, []byte{}, safstate.RingCommitment, proof.Proof)
+			if !ok {
+				results[idx] = ticketVerifyResult{index: idx, err: errors.New("bad ticket proof")}
+				cancel() // Signal other goroutines to stop
+				return
+			}
+			results[idx] = ticketVerifyResult{index: idx, outputHash: outputHash}
+		}(i, tp)
+	}
+
+	wg.Wait()
+
+	// Check for verification errors
+	for _, result := range results {
+		if result.err != nil {
+			return []block.Ticket{}, result.err
 		}
+	}
+
+	// Build tickets from results
+	tickets := make([]block.Ticket, len(ticketProofs))
+	for i, result := range results {
+		outputHash := result.outputHash
 
 		// Equation 6.31: n ≡ [(y: Y(i_p), e: i_e) | i <− E_T]
 		tickets[i] = block.Ticket{
 			Identifier: outputHash,
-			EntryIndex: tp.EntryIndex,
+			EntryIndex: ticketProofs[i].EntryIndex,
 		}
 	}
 
@@ -124,7 +164,83 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 		}
 	}
 
+	if err := verifyNoDuplicateTickets(safstate.TicketAccumulator, tickets); err != nil {
+		return []block.Ticket{}, err
+	}
+
 	return tickets, nil
+}
+
+func verifyNoDuplicateTickets(accumulator []block.Ticket, tickets []block.Ticket) error {
+	if len(accumulator) == 0 || len(tickets) == 0 {
+		return nil
+	}
+
+	i, j := 0, 0
+	for i < len(accumulator) && j < len(tickets) {
+		cmp := bytes.Compare(accumulator[i].Identifier[:], tickets[j].Identifier[:])
+		if cmp == 0 {
+			return errors.New("duplicate ticket")
+		}
+		if cmp < 0 {
+			i++
+		} else {
+			j++
+		}
+	}
+
+	return nil
+}
+
+func mergeTicketAccumulator(accumulator []block.Ticket, tickets []block.Ticket) ([]block.Ticket, error) {
+	if len(tickets) == 0 {
+		return accumulator, nil
+	}
+
+	total := len(accumulator) + len(tickets)
+	merged := accumulator
+	if cap(accumulator) >= total {
+		merged = accumulator[:total]
+	} else {
+		merged = make([]block.Ticket, total)
+		copy(merged, accumulator)
+	}
+
+	i, j, k := len(accumulator)-1, len(tickets)-1, total-1
+	for i >= 0 && j >= 0 {
+		if bytes.Compare(accumulator[i].Identifier[:], tickets[j].Identifier[:]) > 0 {
+			merged[k] = accumulator[i]
+			i--
+		} else {
+			merged[k] = tickets[j]
+			j--
+		}
+		k--
+	}
+	for j >= 0 {
+		merged[k] = tickets[j]
+		j--
+		k--
+	}
+	for i >= 0 {
+		merged[k] = accumulator[i]
+		i--
+		k--
+	}
+
+	// Drop older tickets, limiting the accumulator to |E|.
+	limit := total
+	if limit > constants.TimeslotsPerEpoch {
+		limit = constants.TimeslotsPerEpoch
+	}
+
+	// Ensure all incoming tickets exist in the accumulator. No useless
+	// tickets are allowed. Equation 6.35: n ⊆ γ′A
+	if total > limit && bytes.Compare(tickets[len(tickets)-1].Identifier[:], merged[limit-1].Identifier[:]) > 0 {
+		return nil, errors.New("useless ticket")
+	}
+
+	return merged[:limit], nil
 }
 
 // Implements section 6 of the graypaper.
@@ -262,32 +378,11 @@ func UpdateSafroleState(
 
 		// Update the accumulator γ_A.
 		// Equation 6.34: γ′A ≡ [x ∈ n ∪ {∅ if e′ > e, γ_A otherwise}]E
-		// Combine existing and new tickets.
+		// Combine existing and new tickets while keeping order by identifier.
 		accumulator := newValidatorState.SafroleState.TicketAccumulator
-		allTickets := make([]block.Ticket, len(accumulator)+len(tickets))
-		copy(allTickets, accumulator)
-		copy(allTickets[len(accumulator):], tickets)
-
-		// Resort by identifier.
-		sort.Slice(allTickets, func(i, j int) bool {
-			return bytes.Compare(allTickets[i].Identifier[:], allTickets[j].Identifier[:]) < 0
-		})
-
-		// Drop older tickets, limiting the accumulator to |E|.
-		if len(allTickets) > constants.TimeslotsPerEpoch {
-			allTickets = allTickets[:constants.TimeslotsPerEpoch]
-		}
-
-		// Ensure all incoming tickets exist in the accumulator. No useless
-		// tickets are allowed. Equation 6.35: n ⊆ γ′A
-		existingIds := make(map[crypto.BandersnatchOutputHash]struct{}, len(allTickets))
-		for _, ticket := range allTickets {
-			existingIds[ticket.Identifier] = struct{}{}
-		}
-		for _, ticket := range tickets {
-			if _, ok := existingIds[ticket.Identifier]; !ok {
-				return entropyPool, validatorState, SafroleOutput{}, errors.New("useless ticket")
-			}
+		allTickets, err := mergeTicketAccumulator(accumulator, tickets)
+		if err != nil {
+			return entropyPool, validatorState, SafroleOutput{}, err
 		}
 		newValidatorState.SafroleState.TicketAccumulator = allTickets
 	}
@@ -308,7 +403,10 @@ func calculateNewEntropyPool(currentTimeslot jamtime.Timeslot, newTimeslot jamti
 		newEntropyPool = rotateEntropyPool(entropyPool)
 	}
 
-	newEntropyPool[0] = crypto.HashData(append(entropyPool[0][:], entropyInput[:]...))
+	var hashInput [crypto.HashSize * 2]byte
+	copy(hashInput[:crypto.HashSize], entropyPool[0][:])
+	copy(hashInput[crypto.HashSize:], entropyInput[:])
+	newEntropyPool[0] = crypto.HashData(hashInput[:])
 	return newEntropyPool, nil
 }
 

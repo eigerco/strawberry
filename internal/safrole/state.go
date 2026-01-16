@@ -120,24 +120,20 @@ func (vsd ValidatorsData) RingProver(privateKey crypto.BandersnatchPrivateKey) (
 // GP v0.7.0
 func SelectFallbackKeys(entropy crypto.Hash, currentValidators ValidatorsData) (crypto.EpochKeys, error) {
 	var fallbackKeys crypto.EpochKeys
+	data := make([]byte, len(entropy)+4)
+	copy(data, entropy[:])
+	indexBytes := data[len(entropy):]
+	validatorCount := uint32(len(currentValidators))
 	for i := uint32(0); i < constants.TimeslotsPerEpoch; i++ {
 		// E₄(i): Encode i as a 4-byte sequence
-		iBytes, err := jam.Marshal(i)
-		if err != nil {
-			return crypto.EpochKeys{}, err
-		}
+		jam.PutUint32(indexBytes, i)
 		// r ⌢ E₄(i): Concatenate entropy with encoded i
-		data := append(entropy[:], iBytes...)
 		// H₄(r ⌢ E₄(i)): Take first 4 bytes of Blake2 hash
 		hash := crypto.HashData(data)
 		// E⁻¹(...): Decode back to a number
-		var index uint32
-		err = jam.Unmarshal(hash[:], &index)
-		if err != nil {
-			return crypto.EpochKeys{}, err
-		}
+		index := jam.DecodeUint32(hash[:4])
 		// k[...]↺b: Select validator key and wrap around if needed
-		fallbackKeys[i] = currentValidators[index%uint32(len(currentValidators))].Bandersnatch
+		fallbackKeys[i] = currentValidators[index%validatorCount].Bandersnatch
 	}
 	return fallbackKeys, nil
 }
