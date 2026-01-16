@@ -21,7 +21,7 @@ import (
 )
 
 func TestGasRemaining(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			InitialHeapPages: 100,
 		},
@@ -38,7 +38,7 @@ func TestGasRemaining(t *testing.T) {
 }
 
 func TestFetch(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       512,
 			StackSize:        512,
@@ -314,7 +314,7 @@ func TestFetch(t *testing.T) {
 }
 
 func TestLookup(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RODataSize:       0,
 			RWDataSize:       256,
@@ -382,7 +382,7 @@ func TestLookup(t *testing.T) {
 }
 
 func TestRead(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
@@ -437,7 +437,7 @@ func TestRead(t *testing.T) {
 }
 
 func TestWrite(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
@@ -511,7 +511,7 @@ func TestWrite(t *testing.T) {
 }
 
 func TestInfo(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,

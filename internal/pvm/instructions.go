@@ -197,8 +197,6 @@ const (
 )
 
 // IsBasicBlockTermination (eq A.3)
-
-// IsBasicBlockTermination (eq A.3)
 func (o Opcode) IsBasicBlockTermination() bool {
 	switch o {
 	case
@@ -220,5 +218,40 @@ func (o Opcode) IsBasicBlockTermination() bool {
 		BranchGeUImm, BranchGeSImm, BranchGtUImm, BranchGtSImm:
 		return true
 	}
+	return false
+}
+
+// opcodeValid c_n ∈ U (eq A.23)
+//
+//nolint:unused
+func opcodeValid(c Opcode) bool {
+	switch c {
+	case Trap, Fallthrough, Ecalli, LoadImm64, StoreImmU8, StoreImmU16, StoreImmU32, StoreImmU64, Jump,
+		JumpInd, LoadImm, LoadU8, LoadI8, LoadU16, LoadI16, LoadU32, LoadI32, LoadU64, StoreU8, StoreU16, StoreU32, StoreU64,
+		StoreImmIndU8, StoreImmIndU16, StoreImmIndU32, StoreImmIndU64, LoadImmJump,
+		BranchEqImm, BranchNeImm, BranchLtUImm, BranchLeUImm,
+		BranchGeUImm, BranchGtUImm, BranchLtSImm,
+		BranchLeSImm, BranchGeSImm, BranchGtSImm,
+		MoveReg, Sbrk, CountSetBits64, CountSetBits32, LeadingZeroBits64, LeadingZeroBits32,
+		TrailingZeroBits64, TrailingZeroBits32, SignExtend8, SignExtend16, ZeroExtend16, ReverseBytes,
+		StoreIndU8, StoreIndU16, StoreIndU32, StoreIndU64, LoadIndU8, LoadIndI8,
+		LoadIndU16, LoadIndI16, LoadIndU32, LoadIndI32, LoadIndU64,
+		AddImm32, AndImm, XorImm, OrImm, MulImm32, SetLtUImm, SetLtSImm,
+		ShloLImm32, ShloRImm32, SharRImm32,
+		NegAddImm32, SetGtUImm, SetGtSImm,
+		ShloLImmAlt32, ShloRImmAlt32, SharRImmAlt32,
+		CmovIzImm, CmovNzImm, AddImm64, MulImm64, ShloLImm64, ShloRImm64,
+		SharRImm64, NegAddImm64, ShloLImmAlt64, ShloRImmAlt64,
+		SharRImmAlt64, RotR64Imm, RotR64ImmAlt, RotR32Imm, RotR32ImmAlt, BranchEq,
+		BranchNe, BranchLtU, BranchLtS, BranchGeU, BranchGeS,
+		LoadImmJumpInd, Add32, Sub32, Mul32, DivU32, DivS32, RemU32, RemS32,
+		ShloL32, ShloR32, SharR32, Add64, Sub64, Mul64,
+		DivU64, DivS64, RemU64, RemS64, ShloL64, ShloR64,
+		SharR64, And, Xor, Or, MulUpperSS, MulUpperUU, MulUpperSU,
+		SetLtU, SetLtS, CmovIz, CmovNz, RotL64, RotL32, RotR64, RotR32,
+		AndInv, OrInv, Xnor, Max, MaxU, Min, MinU:
+		return true
+	}
+
 	return false
 }

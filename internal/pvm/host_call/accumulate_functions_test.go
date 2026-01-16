@@ -22,7 +22,7 @@ import (
 )
 
 func TestAccumulate(t *testing.T) {
-	pp := &Program{
+	pp := &ProgramBlob{
 		ProgramMemorySizes: ProgramMemorySizes{
 			RODataSize:       0,
 			RWDataSize:       256,
