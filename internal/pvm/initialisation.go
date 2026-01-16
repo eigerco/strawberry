@@ -23,7 +23,7 @@ var (
 )
 
 // InitializeStandardProgram (eq. A.37 v0.7.2)
-func InitializeStandardProgram(program *Program, argsData []byte) (Memory, Registers, error) {
+func InitializeStandardProgram(program *ProgramBlob, argsData []byte) (Memory, Registers, error) {
 	ram, err := InitializeMemory(program.ROData, program.RWData, argsData, program.ProgramMemorySizes.StackSize, program.ProgramMemorySizes.InitialHeapPages)
 	if err != nil {
 		return Memory{}, Registers{}, err
