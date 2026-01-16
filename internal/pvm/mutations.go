@@ -289,21 +289,6 @@ func (i *Instance) MoveReg(dst Reg, s Reg) {
 	i.setAndSkip(dst, i.regs[s])
 }
 
-// Sbrk sbrk φ′D ≡ min(x ∈ NR) ∶
-// x ≥ h
-// Nx⋅⋅⋅+φA ~⊆ Vμ
-// Nx⋅⋅⋅+φA ⊆ V∗μ′
-// The term h above refers to the beginning of the heap
-func (i *Instance) Sbrk(dst Reg, sizeReg Reg) error {
-	size := i.regs[sizeReg]
-	heapTop, err := i.memory.Sbrk(uint32(size))
-	if err != nil {
-		return err
-	}
-	i.setAndSkip(dst, uint64(heapTop))
-	return nil
-}
-
 // CountSetBits64 count_set_bits_64 φ′D = {63;i=0}∑ B8(φA)_i
 func (i *Instance) CountSetBits64(dst Reg, s Reg) {
 	i.setAndSkip(dst, uint64(bits.OnesCount64(i.regs[s])))

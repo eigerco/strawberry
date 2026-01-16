@@ -232,11 +232,6 @@ func (i *Instance) step() (uint64, error) {
 			return 0, err
 		}
 		i.MoveReg(i.decodeArgsReg2())
-	case Sbrk:
-		if err := i.deductGas(SbrkCost); err != nil {
-			return 0, err
-		}
-		return 0, i.Sbrk(i.decodeArgsReg2())
 	case CountSetBits64:
 		if err := i.deductGas(CountSetBits64Cost); err != nil {
 			return 0, err

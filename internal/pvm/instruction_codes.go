@@ -4,6 +4,7 @@ package pvm
 const (
 	Trap        Opcode = 0 // trap
 	Fallthrough Opcode = 1 // fallthrough
+	Unlikely    Opcode = 2 // unlikely
 )
 
 // A.5.2. Instructions with Arguments of One Immediate.
@@ -72,17 +73,16 @@ const (
 // A.5.9. Instructions with Arguments of Two Registers.
 const (
 	MoveReg            Opcode = 100 // move_reg
-	Sbrk               Opcode = 101 // sbrk
-	CountSetBits64     Opcode = 102 // count_set_bits_64
-	CountSetBits32     Opcode = 103 // count_set_bits_32
-	LeadingZeroBits64  Opcode = 104 // leading_zero_bits_64
-	LeadingZeroBits32  Opcode = 105 // leading_zero_bits_32
-	TrailingZeroBits64 Opcode = 106 // trailing_zero_bits_64
-	TrailingZeroBits32 Opcode = 107 // trailing_zero_bits_32
-	SignExtend8        Opcode = 108 // sign_extend_8
-	SignExtend16       Opcode = 109 // sign_extend_16
-	ZeroExtend16       Opcode = 110 // zero_extend_16
-	ReverseBytes       Opcode = 111 // reverse_bytes
+	CountSetBits64     Opcode = 101 // count_set_bits_64
+	CountSetBits32     Opcode = 102 // count_set_bits_32
+	LeadingZeroBits64  Opcode = 103 // leading_zero_bits_64
+	LeadingZeroBits32  Opcode = 104 // leading_zero_bits_32
+	TrailingZeroBits64 Opcode = 105 // trailing_zero_bits_64
+	TrailingZeroBits32 Opcode = 106 // trailing_zero_bits_32
+	SignExtend8        Opcode = 107 // sign_extend_8
+	SignExtend16       Opcode = 108 // sign_extend_16
+	ZeroExtend16       Opcode = 109 // zero_extend_16
+	ReverseBytes       Opcode = 110 // reverse_bytes
 )
 
 // A.5.10. Instructions with Arguments of Two Registers & One Immediate.
