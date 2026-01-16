@@ -35,7 +35,7 @@ func (m *MockPreimageFetcher) FetchPreimage(hash crypto.Hash) ([]byte, error) {
 const initialGas = 100
 
 func TestHistoricalLookup(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
@@ -110,7 +110,7 @@ func TestHistoricalLookup(t *testing.T) {
 }
 
 func TestExport(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
@@ -157,7 +157,7 @@ func TestExport(t *testing.T) {
 }
 
 func TestMachine(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
@@ -206,7 +206,7 @@ func TestMachine(t *testing.T) {
 }
 
 func TestPeek(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
@@ -272,7 +272,7 @@ func TestPeek(t *testing.T) {
 }
 
 func TestPoke(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
@@ -332,7 +332,7 @@ func TestPoke(t *testing.T) {
 }
 
 func TestPages_Modes(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
@@ -429,7 +429,7 @@ func TestPages_Modes(t *testing.T) {
 }
 
 func TestInvoke(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
@@ -498,7 +498,7 @@ func TestInvoke(t *testing.T) {
 var addInstrProgram = []byte{0, 0, 3, 190, 135, 9, 1} // copied from the future testvectors :P
 
 func TestExpunge(t *testing.T) {
-	pp := &pvm.Program{
+	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
 			RWDataSize:       256,
 			StackSize:        512,
