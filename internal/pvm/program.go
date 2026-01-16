@@ -160,7 +160,7 @@ func (p *program) skip(instructionCounter uint64) uint8 {
 
 // opcode gets the opcode for the current instruction counter (eq. A.23 v0.7.2)
 //
-//nolint:staticcheck
+//nolint:unused
 func (p *program) opcode(instructionCounter uint64) Opcode {
 	op := Opcode(p.code[instructionCounter])
 	if !opcodeValid(op) {

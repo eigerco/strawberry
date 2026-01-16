@@ -2,12 +2,18 @@ package pvm
 
 // step Ψ1(B, B, ⟦NR⟧, NR, NG, ⟦NR⟧13, M) → ({☇, ∎, ▸} ∪ {F,-h} × NR, NR, ZG, ⟦NR⟧13, M) (A.6 v0.7.2)
 func (i *Instance) step() (uint64, error) {
+	codeLength := uint64(len(i.code))
 	// ℓ ≡ skip(ı) (eq. A.20 v0.7.2)
+	// precomputed skip length
 	i.skipLen = i.program.skip(i.instructionCounter)
 
 	// ζ ≡ c ⌢ [0, 0, ... ] (eq. A.4 v0.7.2)
 	// We cannot add infinite items to a slice, but we simulate this by defaulting to trap opcode
-	opcode := i.unsafeOpcode(i.instructionCounter)
+	opcode := Trap
+
+	if i.instructionCounter < codeLength {
+		opcode = i.unsafeOpcode(i.instructionCounter)
+	}
 
 	// ϱ′ = ϱ − ϱ∆ (eq. A.9 v0.7.2)
 	switch opcode {

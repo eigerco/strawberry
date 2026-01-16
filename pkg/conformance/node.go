@@ -42,6 +42,8 @@ type Node struct {
 	listener   net.Listener
 
 	headerToState map[crypto.Hash]stateSnapshot
+	mainChainHead *crypto.Hash // current head of the main chain
+	headParent    *crypto.Hash // parent of the current head (for mutations)
 	handshakeDone bool
 	PeerInfo      PeerInfo
 }
@@ -119,6 +121,8 @@ func (n *Node) handleConnection(conn net.Conn) {
 	n.chain = store.NewChain(db)
 	n.trie = store.NewTrie(n.chain)
 	n.headerToState = make(map[crypto.Hash]stateSnapshot)
+	n.mainChainHead = nil
+	n.headParent = nil
 	n.handshakeDone = false
 	guaranteeing.Ancestry = false
 
@@ -212,6 +216,8 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 			keyVals:   choice.State.StateItems,
 			stateRoot: stateRoot,
 		}
+		n.mainChainHead = &headerHash
+		n.headParent = nil
 
 		return NewMessage(StateRoot{
 			StateRootHash: stateRoot,
@@ -221,10 +227,19 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 		if len(n.headerToState) == 0 {
 			return nil, fmt.Errorf("state not imported")
 		}
-		snapshot, ok := n.headerToState[choice.Block.Header.ParentHash]
+		parentHash := choice.Block.Header.ParentHash
+		snapshot, ok := n.headerToState[parentHash]
 		if !ok {
 			return nil, fmt.Errorf("parent state not found")
 		}
+
+		// Validate fork depth before expensive operations
+		isExtendingMainChain := n.mainChainHead != nil && parentHash == *n.mainChainHead
+		isMutation := n.headParent != nil && parentHash == *n.headParent
+		if !isExtendingMainChain && !isMutation {
+			return nil, fmt.Errorf("invalid fork depth: can only build on head or head's parent")
+		}
+
 		state := snapshot.state
 		err := statetransition.UpdateStateWithPriorRoot(&state, snapshot.stateRoot, choice.Block, n.chain)
 		if err != nil {
@@ -251,11 +266,27 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 			}
 		}
 
+		// Store the new state
 		n.headerToState[headerHash] = stateSnapshot{
 			state:     state,
 			keyVals:   newStateKeyVals,
 			stateRoot: stateRoot,
 		}
+
+		// If extending main chain, prune old states and update pointers
+		if isExtendingMainChain {
+			if n.headParent != nil {
+				// Delete all states except current head (becomes new parent) and new block
+				for hash := range n.headerToState {
+					if hash != *n.mainChainHead && hash != headerHash {
+						delete(n.headerToState, hash)
+					}
+				}
+			}
+			n.headParent = n.mainChainHead
+			n.mainChainHead = &headerHash
+		}
+		// If mutation, no changes needed - state is stored, no limit enforced
 
 		return NewMessage(StateRoot{
 			StateRootHash: stateRoot,

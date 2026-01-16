@@ -491,7 +491,7 @@ func TestInvoke(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, uint64(3), ctxPair.IntegratedPVMMap[pvmKey].InstructionCounter)
-	assert.Equal(t, 9998, invokeGasAndRegs[0])
+	assert.Equal(t, uint64(9998), invokeGasAndRegs[0])
 	assert.Equal(t, []uint64{0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0}, invokeGasAndRegs[1:])
 }
 
