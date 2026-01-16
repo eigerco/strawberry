@@ -236,7 +236,7 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 		// Validate fork depth before expensive operations
 		isExtendingMainChain := n.mainChainHead != nil && parentHash == *n.mainChainHead
 		isMutation := n.headParent != nil && parentHash == *n.headParent
-		if n.mainChainHead != nil && !isExtendingMainChain && !isMutation {
+		if !isExtendingMainChain && !isMutation {
 			return nil, fmt.Errorf("invalid fork depth: can only build on head or head's parent")
 		}
 
