@@ -50,7 +50,6 @@ type Node struct {
 
 type stateSnapshot struct {
 	state     state.State
-	keyVals   []statekey.KeyValue
 	stateRoot crypto.Hash
 }
 
@@ -213,7 +212,6 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 		}
 		n.headerToState[headerHash] = stateSnapshot{
 			state:     state,
-			keyVals:   choice.State.StateItems,
 			stateRoot: stateRoot,
 		}
 		n.mainChainHead = &headerHash
@@ -269,7 +267,6 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 		// Store the new state
 		n.headerToState[headerHash] = stateSnapshot{
 			state:     state,
-			keyVals:   newStateKeyVals,
 			stateRoot: stateRoot,
 		}
 
@@ -298,8 +295,13 @@ func (n *Node) messageHandler(msg *Message) (*Message, error) {
 			return nil, fmt.Errorf("header hash not found")
 		}
 
+		keyVals, err := serializeState(snapshot.state)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize state: %v", err)
+		}
+
 		return NewMessage(State{
-			StateItems: snapshot.keyVals,
+			StateItems: keyVals,
 		}), nil
 	}
 
