@@ -26,7 +26,7 @@ var (
 
 // vrfCache caches the result of VRF signature verifications.
 var (
-	vrfCache    = make(map[vrfCacheKey]bool)
+	vrfCache    = make(map[vrfCacheKey]bool, vrfCacheMax)
 	vrfCacheMu  sync.RWMutex
 	vrfCacheMax = 1000 // prevents unbounded growth
 )
@@ -34,7 +34,7 @@ var (
 // ResetVRFCache clears the VRF signature verification cache. For testing purposes.
 func ResetVRFCache() {
 	vrfCacheMu.Lock()
-	vrfCache = make(map[vrfCacheKey]bool)
+	vrfCache = make(map[vrfCacheKey]bool, vrfCacheMax)
 	vrfCacheMu.Unlock()
 }
 

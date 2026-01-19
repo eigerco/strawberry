@@ -15,7 +15,7 @@ import (
 // This avoids redundant expensive KZG commitment computations when the same
 // validator set appears across multiple epochs.
 var (
-	ringCommitmentCache    = make(map[crypto.Hash]crypto.RingCommitment)
+	ringCommitmentCache    = make(map[crypto.Hash]crypto.RingCommitment, ringCommitmentCacheMax)
 	ringCommitmentCacheMu  sync.RWMutex
 	ringCommitmentCacheMax = 1000 // prevents unbounded growth
 )
@@ -23,7 +23,7 @@ var (
 // ResetRingCommitmentCache clears the ring commitment cache. For testing purposes.
 func ResetRingCommitmentCache() {
 	ringCommitmentCacheMu.Lock()
-	ringCommitmentCache = make(map[crypto.Hash]crypto.RingCommitment)
+	ringCommitmentCache = make(map[crypto.Hash]crypto.RingCommitment, ringCommitmentCacheMax)
 	ringCommitmentCacheMu.Unlock()
 }
 
@@ -77,7 +77,7 @@ func (vsd ValidatorsData) RingCommitment() (crypto.RingCommitment, error) {
 	// Store in cache for future use
 	ringCommitmentCacheMu.Lock()
 	if len(ringCommitmentCache) >= ringCommitmentCacheMax {
-		ringCommitmentCache = make(map[crypto.Hash]crypto.RingCommitment)
+		ringCommitmentCache = make(map[crypto.Hash]crypto.RingCommitment, ringCommitmentCacheMax)
 	}
 	ringCommitmentCache[cacheKey] = commitment
 	ringCommitmentCacheMu.Unlock()

@@ -93,6 +93,7 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 	if err != nil {
 		return []block.Ticket{}, err
 	}
+	defer ringVerifier.Free()
 
 	// Verify tickets in parallel using errgroup with early cancellation.
 	// Thread-safety: RingVrfVerifier is safe for concurrent use - the Rust type
