@@ -3,6 +3,7 @@ package state
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 
@@ -22,6 +23,27 @@ const (
 var (
 	ErrBlockSealInvalidAuthor = errors.New("invalid block seal author")
 )
+
+// vrfCache caches the result of VRF signature verifications.
+var (
+	vrfCache    = make(map[vrfCacheKey]bool)
+	vrfCacheMu  sync.RWMutex
+	vrfCacheMax = 1000 // prevents unbounded growth
+)
+
+// ResetVRFCache clears the VRF signature verification cache. For testing purposes.
+func ResetVRFCache() {
+	vrfCacheMu.Lock()
+	vrfCache = make(map[vrfCacheKey]bool)
+	vrfCacheMu.Unlock()
+}
+
+// vrfCacheKey is the key for the VRF signature verification cache.
+type vrfCacheKey struct {
+	publicKey      crypto.BandersnatchPublicKey  // 32 bytes
+	sealOutputHash crypto.BandersnatchOutputHash // 32 bytes
+	signature      crypto.BandersnatchSignature  // 96 bytes
+}
 
 // This represents a union of either a block.Ticket or a
 // crypto.BandersnatchPublic key as a fallback.
@@ -512,14 +534,35 @@ func VerifyBlockSignatures(
 			return false, nil
 		}
 
-		ok, _ = bandersnatch.Verify(
-			tok,
-			buildVRFContext(sealOutputHash),
-			[]byte{},
-			header.VRFSignature,
-		)
-		if !ok {
-			return false, nil
+		key := vrfCacheKey{
+			publicKey:      tok,
+			sealOutputHash: sealOutputHash,
+			signature:      header.VRFSignature,
+		}
+		vrfCacheMu.RLock()
+		if verified, found := vrfCache[key]; found {
+			vrfCacheMu.RUnlock()
+			if !verified {
+				return false, nil
+			}
+			return true, nil
+		} else {
+			vrfCacheMu.RUnlock()
+			ok, _ := bandersnatch.Verify(
+				tok,
+				buildVRFContext(sealOutputHash),
+				[]byte{},
+				header.VRFSignature,
+			)
+			vrfCacheMu.Lock()
+			if len(vrfCache) >= vrfCacheMax {
+				vrfCache = make(map[vrfCacheKey]bool)
+			}
+			vrfCache[key] = ok
+			vrfCacheMu.Unlock()
+			if !ok {
+				return false, nil
+			}
 		}
 
 		return true, nil

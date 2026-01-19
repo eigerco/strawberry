@@ -15,9 +15,17 @@ import (
 // This avoids redundant expensive KZG commitment computations when the same
 // validator set appears across multiple epochs.
 var (
-	ringCommitmentCache   = make(map[crypto.Hash]crypto.RingCommitment)
-	ringCommitmentCacheMu sync.RWMutex
+	ringCommitmentCache    = make(map[crypto.Hash]crypto.RingCommitment)
+	ringCommitmentCacheMu  sync.RWMutex
+	ringCommitmentCacheMax = 1000 // prevents unbounded growth
 )
+
+// ResetRingCommitmentCache clears the ring commitment cache. For testing purposes.
+func ResetRingCommitmentCache() {
+	ringCommitmentCacheMu.Lock()
+	ringCommitmentCache = make(map[crypto.Hash]crypto.RingCommitment)
+	ringCommitmentCacheMu.Unlock()
+}
 
 // State relevant to Safrole protocol
 // GP v0.7.0
@@ -68,6 +76,9 @@ func (vsd ValidatorsData) RingCommitment() (crypto.RingCommitment, error) {
 
 	// Store in cache for future use
 	ringCommitmentCacheMu.Lock()
+	if len(ringCommitmentCache) >= ringCommitmentCacheMax {
+		ringCommitmentCache = make(map[crypto.Hash]crypto.RingCommitment)
+	}
 	ringCommitmentCache[cacheKey] = commitment
 	ringCommitmentCacheMu.Unlock()
 

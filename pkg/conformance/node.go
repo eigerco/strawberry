@@ -117,6 +117,9 @@ func (n *Node) handleConnection(conn net.Conn) {
 			log.Printf("error closing db: %v", err)
 		}
 	}()
+	// Reset caches on new initialization for testing consistency
+	// state.ResetVRFCache()
+	// safrole.ResetRingCommitmentCache()
 	n.chain = store.NewChain(db)
 	n.trie = store.NewTrie(n.chain)
 	n.headerToState = make(map[crypto.Hash]stateSnapshot)
