@@ -97,7 +97,7 @@ test-conformance: build-bandersnatch build-erasurecoding
 .PHONY: run-target
 ## run-target: Runs the conformance target with socket /tmp/jam_target.sock
 run-target:
-	./pkg/conformance/bin/strawberry --socket /tmp/jam_target.sock
+	./pkg/conformance/bin/strawberry --socket /tmp/jam_target.sock --pprof localhost:6060
 
 .PHONY: bench
 ## bench: Runs a specific benchmark test. 

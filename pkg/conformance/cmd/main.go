@@ -3,17 +3,30 @@ package main
 import (
 	"flag"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 
 	"github.com/eigerco/strawberry/pkg/conformance"
 )
 
 func main() {
 	socketPath := flag.String("socket", "/tmp/jam_target.sock", "Path to the socket for the fuzzer to connect to")
+	pprofAddr := flag.String("pprof", "", "Address for pprof HTTP server (e.g., localhost:6060)")
 	flag.Parse()
 
 	// Ensure no extra positional arguments
 	if flag.NArg() > 0 {
 		log.Fatalf("unexpected arguments: %v", flag.Args())
+	}
+
+	// Start pprof server if address provided
+	if *pprofAddr != "" {
+		go func() {
+			log.Printf("Starting pprof server on %s", *pprofAddr)
+			if err := http.ListenAndServe(*pprofAddr, nil); err != nil {
+				log.Printf("pprof server error: %v", err)
+			}
+		}()
 	}
 
 	appName := []byte("strawberry")

@@ -88,11 +88,12 @@ func calculateTickets(safstate safrole.State, entropyPool state.EntropyPool, tic
 		}
 	}
 
-	ringVerifier, err := safstate.NextValidators.RingVerifier()
-	defer ringVerifier.Free()
+	// Empty verifier is sufficient because verification only uses the commitment, not the ring.
+	ringVerifier, err := bandersnatch.EmptyRingVerifier()
 	if err != nil {
 		return []block.Ticket{}, err
 	}
+	defer ringVerifier.Free()
 
 	// Verify tickets in parallel using errgroup with early cancellation.
 	// Thread-safety: RingVrfVerifier is safe for concurrent use - the Rust type

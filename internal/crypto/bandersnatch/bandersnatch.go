@@ -104,6 +104,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
 }
 
 func getBandersnatchLibraryPath() (string, error) {
@@ -216,6 +217,12 @@ func OutputHash(signature crypto.BandersnatchSignature) (outputHash crypto.Bande
 
 // A container for the RingVrfVerifier opaque pointer coming from Rust's FFI.
 type RingVrfVerifier struct{ ptr unsafe.Pointer }
+
+// EmptyRingVerifier returns a new verifier without a ring.
+// Callers must Free() the returned verifier.
+func EmptyRingVerifier() (*RingVrfVerifier, error) {
+	return NewRingVerifier([]crypto.BandersnatchPublicKey{})
+}
 
 // Creates a new RingVrfVerifier from a ring of bandersnatch public keys.
 // Returns an opaque pointer from Rust FFI. Invalid bandersnatch public keys
