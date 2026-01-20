@@ -2,13 +2,21 @@ package crypto
 
 import (
 	"encoding/hex"
-	"golang.org/x/crypto/blake2b"
-	"golang.org/x/crypto/sha3"
+	"io"
 	"log"
 	"strings"
+
+	"golang.org/x/crypto/blake2b"
+	"golang.org/x/crypto/sha3"
 )
 
 type Hash [HashSize]byte
+
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (h *Hash) UnmarshalJAM(r io.Reader) error {
+	_, err := io.ReadFull(r, h[:])
+	return err
+}
 
 func HashData(data []byte) Hash {
 	hash := blake2b.Sum256(data)

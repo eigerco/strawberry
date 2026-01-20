@@ -1,11 +1,10 @@
 package pvm
 
 import (
+	"encoding/binary"
 	"math"
 	"math/big"
 	"math/bits"
-
-	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 // Trap trap ε = ☇
@@ -35,7 +34,7 @@ func (i *Instance) StoreImmU8(address uint64, value uint64) error {
 
 // StoreImmU16 store_imm_u16 μ′↺{νX...+2} = E2(νY mod 2^16)
 func (i *Instance) StoreImmU16(address uint64, value uint64) error {
-	jam.PutUint16(i.storeBuf[:2], uint16(value))
+	binary.LittleEndian.PutUint16(i.storeBuf[:2], uint16(value))
 	if err := i.memory.Write(uint32(address), i.storeBuf[:2]); err != nil {
 		return err
 	}
@@ -45,7 +44,7 @@ func (i *Instance) StoreImmU16(address uint64, value uint64) error {
 
 // StoreImmU32 store_imm_u32 μ′↺{νX...+4} = E4(νY mod 2^32)
 func (i *Instance) StoreImmU32(address uint64, value uint64) error {
-	jam.PutUint32(i.storeBuf[:4], uint32(value))
+	binary.LittleEndian.PutUint32(i.storeBuf[:4], uint32(value))
 	if err := i.memory.Write(uint32(address), i.storeBuf[:4]); err != nil {
 		return err
 	}
@@ -55,7 +54,7 @@ func (i *Instance) StoreImmU32(address uint64, value uint64) error {
 
 // StoreImmU64 store_imm_u64 μ′↺{νX...+8} = E8(νY)
 func (i *Instance) StoreImmU64(address uint64, value uint64) error {
-	jam.PutUint64(i.storeBuf[:8], value)
+	binary.LittleEndian.PutUint64(i.storeBuf[:8], value)
 	if err := i.memory.Write(uint32(address), i.storeBuf[:8]); err != nil {
 		return err
 	}
@@ -104,7 +103,7 @@ func (i *Instance) LoadU16(dst Reg, address uint64) error {
 	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(jam.DecodeUint16(slice)))
+	i.setAndSkip(dst, uint64(binary.LittleEndian.Uint16(slice)))
 	return nil
 }
 
@@ -114,7 +113,7 @@ func (i *Instance) LoadI16(dst Reg, address uint64) error {
 	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(int16(jam.DecodeUint16(slice))))
+	i.setAndSkip(dst, uint64(int16(binary.LittleEndian.Uint16(slice))))
 	return nil
 }
 
@@ -124,7 +123,7 @@ func (i *Instance) LoadU32(dst Reg, address uint64) error {
 	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(jam.DecodeUint32(slice)))
+	i.setAndSkip(dst, uint64(binary.LittleEndian.Uint32(slice)))
 	return nil
 }
 
@@ -134,7 +133,7 @@ func (i *Instance) LoadI32(dst Reg, address uint64) error {
 	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, sext(uint64(jam.DecodeUint32(slice)), 4))
+	i.setAndSkip(dst, sext(uint64(binary.LittleEndian.Uint32(slice)), 4))
 	return nil
 }
 
@@ -144,7 +143,7 @@ func (i *Instance) LoadU64(dst Reg, address uint64) error {
 	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, jam.DecodeUint64(slice))
+	i.setAndSkip(dst, binary.LittleEndian.Uint64(slice))
 	return nil
 }
 
@@ -160,7 +159,7 @@ func (i *Instance) StoreU8(src Reg, address uint64) error {
 
 // StoreU16 store_u16 μ′↺_{νX...+2} = E2(φA mod 2^16)
 func (i *Instance) StoreU16(src Reg, address uint64) error {
-	jam.PutUint16(i.storeBuf[:2], uint16(i.regs[src]))
+	binary.LittleEndian.PutUint16(i.storeBuf[:2], uint16(i.regs[src]))
 	if err := i.memory.Write(uint32(address), i.storeBuf[:2]); err != nil {
 		return err
 	}
@@ -170,7 +169,7 @@ func (i *Instance) StoreU16(src Reg, address uint64) error {
 
 // StoreU32 store_u32 μ′↺_{νX...+4} = E4(φA mod 2^32)
 func (i *Instance) StoreU32(src Reg, address uint64) error {
-	jam.PutUint32(i.storeBuf[:4], uint32(i.regs[src]))
+	binary.LittleEndian.PutUint32(i.storeBuf[:4], uint32(i.regs[src]))
 	if err := i.memory.Write(uint32(address), i.storeBuf[:4]); err != nil {
 		return err
 	}
@@ -180,7 +179,7 @@ func (i *Instance) StoreU32(src Reg, address uint64) error {
 
 // StoreU64 store_u64 μ′↺_{νX...+8} = E8(φA)
 func (i *Instance) StoreU64(src Reg, address uint64) error {
-	jam.PutUint64(i.storeBuf[:8], i.regs[src])
+	binary.LittleEndian.PutUint64(i.storeBuf[:8], i.regs[src])
 	if err := i.memory.Write(uint32(address), i.storeBuf[:8]); err != nil {
 		return err
 	}
@@ -200,7 +199,7 @@ func (i *Instance) StoreImmIndU8(base Reg, offset uint64, value uint64) error {
 
 // StoreImmIndU16 store_imm_ind_u16 μ′↺_{φA+νX...+2} = E2(νY mod 2^16)
 func (i *Instance) StoreImmIndU16(base Reg, offset uint64, value uint64) error {
-	jam.PutUint16(i.storeBuf[:2], uint16(value))
+	binary.LittleEndian.PutUint16(i.storeBuf[:2], uint16(value))
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:2]); err != nil {
 		return err
 	}
@@ -210,7 +209,7 @@ func (i *Instance) StoreImmIndU16(base Reg, offset uint64, value uint64) error {
 
 // StoreImmIndU32 store_imm_ind_u32 μ′↺_{φA+νX...+4} = E4(νY mod 2^32)
 func (i *Instance) StoreImmIndU32(base Reg, offset uint64, value uint64) error {
-	jam.PutUint32(i.storeBuf[:4], uint32(value))
+	binary.LittleEndian.PutUint32(i.storeBuf[:4], uint32(value))
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:4]); err != nil {
 		return err
 	}
@@ -220,7 +219,7 @@ func (i *Instance) StoreImmIndU32(base Reg, offset uint64, value uint64) error {
 
 // StoreImmIndU64 store_imm_ind_u64 μ′↺_{φA+νX...+8} = E8(νY)
 func (i *Instance) StoreImmIndU64(base Reg, offset uint64, value uint64) error {
-	jam.PutUint64(i.storeBuf[:8], value)
+	binary.LittleEndian.PutUint64(i.storeBuf[:8], value)
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:8]); err != nil {
 		return err
 	}
@@ -351,7 +350,7 @@ func (i *Instance) StoreIndU8(src Reg, base Reg, offset uint64) error {
 
 // StoreIndU16 store_ind_u16 μ′↺_{φB+νX...+2} = E2(φA mod 2^16)
 func (i *Instance) StoreIndU16(src Reg, base Reg, offset uint64) error {
-	jam.PutUint16(i.storeBuf[:2], uint16(i.regs[src]))
+	binary.LittleEndian.PutUint16(i.storeBuf[:2], uint16(i.regs[src]))
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:2]); err != nil {
 		return err
 	}
@@ -361,7 +360,7 @@ func (i *Instance) StoreIndU16(src Reg, base Reg, offset uint64) error {
 
 // StoreIndU32 store_ind_u32 μ′↺_{φB+νX...+4} = E4(φA mod 2^32)
 func (i *Instance) StoreIndU32(src Reg, base Reg, offset uint64) error {
-	jam.PutUint32(i.storeBuf[:4], uint32(i.regs[src]))
+	binary.LittleEndian.PutUint32(i.storeBuf[:4], uint32(i.regs[src]))
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:4]); err != nil {
 		return err
 	}
@@ -371,7 +370,7 @@ func (i *Instance) StoreIndU32(src Reg, base Reg, offset uint64) error {
 
 // StoreIndU64 store_ind_u64 μ′↺_{φB+νX...+8} = E8(φA)
 func (i *Instance) StoreIndU64(src Reg, base Reg, offset uint64) error {
-	jam.PutUint64(i.storeBuf[:8], i.regs[src])
+	binary.LittleEndian.PutUint64(i.storeBuf[:8], i.regs[src])
 	if err := i.memory.Write(uint32(i.regs[base]+offset), i.storeBuf[:8]); err != nil {
 		return err
 	}
@@ -405,7 +404,7 @@ func (i *Instance) LoadIndU16(dst Reg, base Reg, offset uint64) error {
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(jam.DecodeUint16(slice)))
+	i.setAndSkip(dst, uint64(binary.LittleEndian.Uint16(slice)))
 	return nil
 }
 
@@ -415,7 +414,7 @@ func (i *Instance) LoadIndI16(dst Reg, base Reg, offset uint64) error {
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(int16(jam.DecodeUint16(slice))))
+	i.setAndSkip(dst, uint64(int16(binary.LittleEndian.Uint16(slice))))
 	return nil
 }
 
@@ -425,7 +424,7 @@ func (i *Instance) LoadIndU32(dst Reg, base Reg, offset uint64) error {
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(jam.DecodeUint32(slice)))
+	i.setAndSkip(dst, uint64(binary.LittleEndian.Uint32(slice)))
 	return nil
 }
 
@@ -435,7 +434,7 @@ func (i *Instance) LoadIndI32(dst Reg, base Reg, offset uint64) error {
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, uint64(int32(jam.DecodeUint32(slice))))
+	i.setAndSkip(dst, uint64(int32(binary.LittleEndian.Uint32(slice))))
 	return nil
 }
 
@@ -445,7 +444,7 @@ func (i *Instance) LoadIndU64(dst Reg, base Reg, offset uint64) error {
 	if err := i.memory.Read(uint32(i.regs[base]+offset), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, jam.DecodeUint64(slice))
+	i.setAndSkip(dst, binary.LittleEndian.Uint64(slice))
 	return nil
 }
 

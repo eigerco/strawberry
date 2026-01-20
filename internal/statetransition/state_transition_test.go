@@ -144,7 +144,8 @@ func TestCalculateIntermediateServiceState(t *testing.T) {
 		}(),
 	}
 
-	newServiceState, err := CalculateNewServiceStateWithPreimages(preimages, serviceState, newTimeslot)
+	preimageHashes := []crypto.Hash{preimageHash}
+	newServiceState, err := CalculateNewServiceStateWithPreimages(preimages, preimageHashes, serviceState, newTimeslot)
 	require.NoError(t, err)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
@@ -167,7 +168,7 @@ func TestCalculateIntermediateServiceStateEmptyPreimages(t *testing.T) {
 
 	expectedServiceState := serviceState
 
-	newServiceState, err := CalculateNewServiceStateWithPreimages(block.PreimageExtrinsic{}, serviceState, jamtime.Timeslot(100))
+	newServiceState, err := CalculateNewServiceStateWithPreimages(block.PreimageExtrinsic{}, []crypto.Hash{}, serviceState, jamtime.Timeslot(100))
 	require.NoError(t, err)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
@@ -198,7 +199,7 @@ func TestCalculateIntermediateServiceStateNonExistentService(t *testing.T) {
 		block.ServiceId(0): sa,
 	}
 
-	err = ValidatePreimages(preimages, serviceState)
+	_, err = ValidatePreimages(preimages, serviceState)
 	require.Error(t, err)
 	require.Equal(t, "preimage unneeded", err.Error())
 }
@@ -260,7 +261,8 @@ func TestCalculateIntermediateServiceStateMultiplePreimages(t *testing.T) {
 		}(),
 	}
 
-	newServiceState, err := CalculateNewServiceStateWithPreimages(preimages, serviceState, newTimeslot)
+	preimageHashes := []crypto.Hash{preimageHash1, preimageHash2}
+	newServiceState, err := CalculateNewServiceStateWithPreimages(preimages, preimageHashes, serviceState, newTimeslot)
 	require.NoError(t, err)
 	require.Equal(t, expectedServiceState, newServiceState)
 }
@@ -306,7 +308,7 @@ func TestCalculateIntermediateServiceStateExistingPreimage(t *testing.T) {
 		block.ServiceId(0): sa,
 	}
 
-	err = ValidatePreimages(preimages, serviceState)
+	_, err = ValidatePreimages(preimages, serviceState)
 	require.Error(t, err)
 	require.Equal(t, "preimage unneeded", err.Error())
 }
@@ -336,7 +338,7 @@ func TestCalculateIntermediateServiceStateExistingMetadata(t *testing.T) {
 		block.ServiceId(0): sa,
 	}
 
-	err = ValidatePreimages(preimages, serviceState)
+	_, err = ValidatePreimages(preimages, serviceState)
 	require.Error(t, err)
 	require.Equal(t, "preimage unneeded", err.Error())
 }

@@ -131,13 +131,20 @@ func TestPreimage(t *testing.T) {
 			preimages := mapPreimages(t, data.Input.Preimages)
 
 			newTimeSlot := jamtime.Timeslot(data.Input.Slot)
-			err = statetransition.ValidatePreimages(preimages, preServiceState)
+			_, err = statetransition.ValidatePreimages(preimages, preServiceState)
 			if data.Output.Err != "" {
 				require.Error(t, err)
 				require.EqualError(t, err, strings.ReplaceAll(data.Output.Err, "_", " "))
 				return
 			}
-			newServiceState, err := statetransition.CalculateNewServiceStateWithPreimages(preimages, preServiceState, newTimeSlot)
+
+			// Compute preimage hashes
+			preimageHashes := make([]crypto.Hash, len(preimages))
+			for i, p := range preimages {
+				preimageHashes[i] = crypto.HashData(p.Data)
+			}
+
+			newServiceState, err := statetransition.CalculateNewServiceStateWithPreimages(preimages, preimageHashes, preServiceState, newTimeSlot)
 			if data.Output.Err != "" {
 				require.Error(t, err)
 				require.EqualError(t, err, strings.ReplaceAll(data.Output.Err, "_", " "))
