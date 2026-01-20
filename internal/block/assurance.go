@@ -1,8 +1,11 @@
 package block
 
 import (
+	"io"
+
 	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 const AvailBitfieldBytes = (constants.TotalNumberOfCores + 7) / 8 // (cores-count + 7) / 8
@@ -21,6 +24,23 @@ type Assurance struct {
 	Bitfield       [AvailBitfieldBytes]byte // Bitstring of assurances, one bit per core (f ∈ B_C)
 	ValidatorIndex uint16                   // Index of the attesting validator (v ∈ N_V)
 	Signature      crypto.Ed25519Signature  // Ed25519 signature (s ∈ V̄)
+}
+
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (a *Assurance) UnmarshalJAM(r io.Reader) error {
+	if _, err := io.ReadFull(r, a.Anchor[:]); err != nil {
+		return err
+	}
+	if _, err := io.ReadFull(r, a.Bitfield[:]); err != nil {
+		return err
+	}
+	buf := make([]byte, 2)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return err
+	}
+	a.ValidatorIndex = jam.DecodeUint16(buf)
+	_, err := io.ReadFull(r, a.Signature[:])
+	return err
 }
 
 type AssurancesExtrinsic []Assurance

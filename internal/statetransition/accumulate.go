@@ -252,10 +252,6 @@ func (a *Accumulator) newServiceID(serviceIndex block.ServiceId) (block.ServiceI
 		return 0, err
 	}
 	hashData := crypto.HashData(hashBytes)
-	newId := block.ServiceId(0)
-	err = jam.Unmarshal(hashData[:], &newId)
-	if err != nil {
-		return 0, err
-	}
+	newId := block.ServiceId(jam.DecodeUint32(hashData[:4]))
 	return newId, nil
 }
