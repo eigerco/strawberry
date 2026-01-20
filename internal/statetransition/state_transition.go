@@ -83,6 +83,7 @@ func updateStateWithVerifiedHeader(s *state.State, newBlock block.Block, chain *
 	var (
 		intermediateRecentHistory   state.RecentHistory
 		intermediateCoreAssignments state.CoreAssignments
+		preimageHashes              []crypto.Hash
 	)
 
 	if err := runTasks(stateTransitionConcurrent,
@@ -95,24 +96,37 @@ func updateStateWithVerifiedHeader(s *state.State, newBlock block.Block, chain *
 			return nil
 		},
 		func() error {
-			return ValidatePreimages(newBlock.Extrinsic.EP, s.Services)
+			var err error
+			preimageHashes, err = ValidatePreimages(newBlock.Extrinsic.EP, s.Services)
+			return err
 		},
 	); err != nil {
 		return err
 	}
 
-	// Phase 2: Sequential operations that depend on disputes and SAFROLE
-	// ψ′ ≺ (ED, ψ)
-	newJudgements, err := disputing.ValidateDisputesExtrinsicAndProduceJudgements(prevTimeSlot, newBlock.Extrinsic.ED, s.ValidatorState, s.PastJudgements, newBlock.Header.OffendersMarkers)
-	if err != nil {
+	// Phase 2: Run disputes validation and safrole input preparation in parallel
+	var (
+		newJudgements state.Judgements
+		safroleInput  SafroleInput
+	)
+
+	if err := runTasks(stateTransitionConcurrent,
+		func() error {
+			var err error
+			// ψ′ ≺ (ED, ψ)
+			newJudgements, err = disputing.ValidateDisputesExtrinsicAndProduceJudgements(prevTimeSlot, newBlock.Extrinsic.ED, s.ValidatorState, s.PastJudgements, newBlock.Header.OffendersMarkers)
+			return err
+		},
+		func() error {
+			var err error
+			safroleInput, err = NewSafroleInputFromBlock(newBlock)
+			return err
+		},
+	); err != nil {
 		return err
 	}
 
 	// Update SAFROLE state.
-	safroleInput, err := NewSafroleInputFromBlock(newBlock)
-	if err != nil {
-		return err
-	}
 	newEntropyPool, newValidatorState, safroleOutput, err := UpdateSafroleState(
 		safroleInput,
 		prevTimeSlot,
@@ -172,7 +186,7 @@ func updateStateWithVerifiedHeader(s *state.State, newBlock block.Block, chain *
 	if err := runTasks(stateTransitionConcurrent,
 		func() error {
 			var err error
-			finalServicesState, err = CalculateNewServiceStateWithPreimages(newBlock.Extrinsic.EP, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
+			finalServicesState, err = CalculateNewServiceStateWithPreimages(newBlock.Extrinsic.EP, preimageHashes, postAccumulationServiceState, newBlock.Header.TimeSlotIndex)
 			return err
 		},
 		func() error {
@@ -217,14 +231,13 @@ func updateStateWithVerifiedHeader(s *state.State, newBlock block.Block, chain *
 
 // preimageHasBeenSolicited checks if a preimage has been solicited but not yet provided
 // Y(d, s, h, l) ⇔ d[s]l[(h, l)] = [] (eq. 12.22 v0.7.2)
-func preimageHasBeenSolicited(serviceState service.ServiceState, serviceIndex block.ServiceId, preimageBlob []byte) bool {
-	preimageHash := crypto.HashData(preimageBlob)
+func preimageHasBeenSolicited(serviceState service.ServiceState, serviceIndex block.ServiceId, preimageHash crypto.Hash, preimageLen uint32) bool {
 	account, ok := serviceState[serviceIndex]
 	if !ok {
 		return false
 	}
 
-	k, err := statekey.NewPreimageMeta(serviceIndex, preimageHash, uint32(len(preimageBlob)))
+	k, err := statekey.NewPreimageMeta(serviceIndex, preimageHash, preimageLen)
 	if err != nil {
 		return false
 	}
@@ -257,25 +270,29 @@ func isPreimagesSortedUnique(preimages block.PreimageExtrinsic) bool {
 
 // ValidatePreimages implements equations 12.39 and 12.40 v0.7.0
 // checks that the preimages are ordered, unique and solicited by a service
-func ValidatePreimages(preimages block.PreimageExtrinsic, serviceState service.ServiceState) error {
+// Returns the computed hashes for reuse in integration phase.
+func ValidatePreimages(preimages block.PreimageExtrinsic, serviceState service.ServiceState) ([]crypto.Hash, error) {
 	if !isPreimagesSortedUnique(preimages) {
-		return errors.New("preimages not sorted unique")
+		return nil, errors.New("preimages not sorted unique")
 	}
 
-	for _, preimage := range preimages {
+	hashes := make([]crypto.Hash, len(preimages))
+	for i, preimage := range preimages {
 		// ∀(s, p) ∈ E_P∶ R(δ, s, H(p), |p|) (eq. 12.35 v0.7.1)
-		if !preimageHasBeenSolicited(serviceState, block.ServiceId(preimage.ServiceIndex), preimage.Data) {
-			return errors.New("preimage unneeded")
+		hashes[i] = crypto.HashData(preimage.Data)
+		if !preimageHasBeenSolicited(serviceState, block.ServiceId(preimage.ServiceIndex), hashes[i], uint32(len(preimage.Data))) {
+			return nil, errors.New("preimage unneeded")
 		}
 	}
 
-	return nil
+	return hashes, nil
 }
 
 // CalculateNewServiceStateWithPreimages implements Equations 12.33 through 12.35 v0.7.1
 // This function calculates the final service state δ′ based on:
 // - The current service state δ (serviceState)
 // - The preimage extrinsic EP (preimages)
+// - The pre-computed hashes from validation phase (preimageHashes)
 // - The new timeslot τ′ (newTimeslot)
 //
 // For each preimage in EP:
@@ -286,10 +303,11 @@ func ValidatePreimages(preimages block.PreimageExtrinsic, serviceState service.S
 // The function returns a new ServiceState without modifying the input state.
 func CalculateNewServiceStateWithPreimages(
 	preimages block.PreimageExtrinsic,
+	preimageHashes []crypto.Hash,
 	postAccumulationServiceState service.ServiceState,
 	newTimeslot jamtime.Timeslot,
 ) (service.ServiceState, error) {
-	return preimageIntegration(newTimeslot, postAccumulationServiceState, preimages)
+	return preimageIntegration(newTimeslot, postAccumulationServiceState, preimages, preimageHashes)
 }
 
 // Final State Calculation Functions
@@ -399,23 +417,10 @@ func ComputeAccumulationRoot(pairs state.AccumulationOutputLog) (crypto.Hash, er
 	// Create sequence of [s ^^ E_4(s) ⌢ E(h)] for each (s,h) pair
 	items := make([][]byte, len(pairs))
 	for i, pair := range pairs {
-		// Create concatenated item
-		item := make([]byte, 0)
-
-		s, err := jam.Marshal(pair.ServiceId)
-		if err != nil {
-			return crypto.Hash{}, err
-		}
-
-		// Append service ID encoding
-		item = append(item, s...)
-
-		h, err := jam.Marshal(pair.Hash)
-		if err != nil {
-			return crypto.Hash{}, err
-		}
-		// Append hash encoding
-		item = append(item, h...)
+		// E_4(s) ⌢ E(h) without reflection/allocs.
+		item := make([]byte, 4+len(pair.Hash))
+		jam.PutUint32(item[:4], uint32(pair.ServiceId))
+		copy(item[4:], pair.Hash[:])
 
 		items[i] = item
 	}
@@ -1411,10 +1416,15 @@ func (a *Accumulator) ParallelDelta(
 	}
 
 	allPreimageProvisions = dedupePreimages(allPreimageProvisions)
+	// Compute hashes for preimage provisions
+	preimageHashes := make([]crypto.Hash, len(allPreimageProvisions))
+	for i, p := range allPreimageProvisions {
+		preimageHashes[i] = crypto.HashData(p.Data)
+	}
 	newServiceState := initState.ServiceState.Clone()
 	newServiceState.Merge(allAddedServices)
 	newServiceState.Delete(slices.Collect(maps.Keys(allRemovedIndices))...)
-	newServiceState, err := preimageIntegration(a.newTimeslot, newServiceState, allPreimageProvisions)
+	newServiceState, err := preimageIntegration(a.newTimeslot, newServiceState, allPreimageProvisions, preimageHashes)
 	if err != nil {
 		log.StateTransition.Error().Err(err).Msg("preimage integration failed")
 	}
@@ -1537,14 +1547,15 @@ func dedupePreimages(preimages []block.Preimage) (newPreimages []block.Preimage)
 }
 
 // I(d ⟨NS → A⟩,p {(NS , B)}) → ⟨NS → A⟩ (eq. 12.21 v0.7.2)
-func preimageIntegration(newTimeslot jamtime.Timeslot, services service.ServiceState, preimages []block.Preimage) (service.ServiceState, error) {
+func preimageIntegration(newTimeslot jamtime.Timeslot, services service.ServiceState, preimages []block.Preimage, preimageHashes []crypto.Hash) (service.ServiceState, error) {
 	servicesWithPreimages := services.Clone()
 
 	// ∀(s, i) ∈ p, Y(d, s, i)∶
-	for _, preimage := range preimages {
-		preimageHash := crypto.HashData(preimage.Data)
-		if preimageHasBeenSolicited(services, preimage.ServiceIndex, preimage.Data) {
-			k, err := statekey.NewPreimageMeta(preimage.ServiceIndex, preimageHash, uint32(len(preimage.Data)))
+	for i, preimage := range preimages {
+		preimageHash := preimageHashes[i]
+		preimageLen := uint32(len(preimage.Data))
+		if preimageHasBeenSolicited(services, preimage.ServiceIndex, preimageHash, preimageLen) {
+			k, err := statekey.NewPreimageMeta(preimage.ServiceIndex, preimageHash, preimageLen)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create state key")
 			}
@@ -1554,7 +1565,7 @@ func preimageIntegration(newTimeslot jamtime.Timeslot, services service.ServiceS
 			// d′[s]p[H(i)] = i
 			serviceWithPreimage := servicesWithPreimages[preimage.ServiceIndex]
 
-			err = serviceWithPreimage.InsertPreimageMeta(k, uint64(len(preimage.Data)), service.PreimageHistoricalTimeslots{newTimeslot})
+			err = serviceWithPreimage.InsertPreimageMeta(k, uint64(preimageLen), service.PreimageHistoricalTimeslots{newTimeslot})
 			if err != nil {
 				return nil, fmt.Errorf("failed to insert preimage meta")
 			}

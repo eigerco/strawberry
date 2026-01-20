@@ -55,7 +55,12 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 	}
 
 	// Find service keys
-	var serviceKeys, preimageLookupKeys, storageOrPreimageMetaKeys []statekey.StateKey
+	type preimageLookupEntry struct {
+		key  statekey.StateKey
+		hash crypto.Hash
+	}
+	var serviceKeys, storageOrPreimageMetaKeys []statekey.StateKey
+	var preimageLookupEntries []preimageLookupEntry
 	for sk, value := range serializedState {
 		if sk.IsChapterKey() {
 			continue
@@ -66,12 +71,12 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 			continue
 		}
 
-		ok, err := sk.IsPreimageLookupKey(value)
+		ok, hash, err := sk.IsPreimageLookupKey(value)
 		if err != nil {
 			return deserializedState, fmt.Errorf("error checking if key is preimage lookup key: %w", err)
 		}
 		if ok {
-			preimageLookupKeys = append(preimageLookupKeys, sk)
+			preimageLookupEntries = append(preimageLookupEntries, preimageLookupEntry{key: sk, hash: hash})
 			continue
 		}
 
@@ -89,9 +94,8 @@ func DeserializeState(serializedState map[statekey.StateKey][]byte) (state.State
 	}
 
 	// Deserialize preimage lookup keys.
-
-	for _, preimageLookupKey := range preimageLookupKeys {
-		if err := deserializePreimageLookup(&deserializedState, preimageLookupKey, serializedState[preimageLookupKey]); err != nil {
+	for _, entry := range preimageLookupEntries {
+		if err := deserializePreimageLookupWithHash(&deserializedState, entry.key, serializedState[entry.key], entry.hash); err != nil {
 			return deserializedState, err
 		}
 	}
@@ -147,9 +151,9 @@ func deserializeService(state *state.State, sk statekey.StateKey, encodedValue [
 	return nil
 }
 
-// deserializePreimageLookup deserializes a preimage lookup from the given state key and encoded value.
-// The original preimage lookup hash is found by simply hashing the decoded value.
-func deserializePreimageLookup(state *state.State, sk statekey.StateKey, encodedValue []byte) error {
+// deserializePreimageLookupWithHash deserializes a preimage lookup from the given state key and encoded value.
+// Uses the pre-computed hash to avoid redundant hashing.
+func deserializePreimageLookupWithHash(state *state.State, sk statekey.StateKey, encodedValue []byte, preimageHash crypto.Hash) error {
 	serviceId, _, err := sk.ExtractServiceIDHash()
 	if err != nil {
 		return fmt.Errorf("deserialize preimage lookup: error extracting service ID: %w", err)
@@ -168,8 +172,7 @@ func deserializePreimageLookup(state *state.State, sk statekey.StateKey, encoded
 		serviceAccount.PreimageLookup = map[crypto.Hash][]byte{}
 	}
 
-	key := crypto.HashData(encodedValue)
-	serviceAccount.PreimageLookup[key] = encodedValue
+	serviceAccount.PreimageLookup[preimageHash] = encodedValue
 
 	state.Services[serviceId] = serviceAccount
 

@@ -175,18 +175,20 @@ func (s StateKey) IsServiceKey() bool {
 
 // Checks if the given state key is a preimage lookup key. We can exploit the fact
 // that the preimage key is always the hash of it's value.
-func (s StateKey) IsPreimageLookupKey(preimageValue []byte) (bool, error) {
+// Returns the computed hash for reuse if the key matches.
+func (s StateKey) IsPreimageLookupKey(preimageValue []byte) (bool, crypto.Hash, error) {
 	serviceID, _, err := s.ExtractServiceIDHash()
 	if err != nil {
-		return false, err
+		return false, crypto.Hash{}, err
 	}
 
-	preimageStateKey, err := NewPreimageLookup(serviceID, crypto.HashData(preimageValue))
+	preimageHash := crypto.HashData(preimageValue)
+	preimageStateKey, err := NewPreimageLookup(serviceID, preimageHash)
 	if err != nil {
-		return false, err
+		return false, crypto.Hash{}, err
 	}
 
-	return preimageStateKey == s, nil
+	return preimageStateKey == s, preimageHash, nil
 }
 
 // Extracts the chapter and service ID components from a state key of airty 2.
