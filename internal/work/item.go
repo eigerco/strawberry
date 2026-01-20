@@ -1,22 +1,57 @@
 package work
 
 import (
+	"io"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 // Segment (G)
 type Segment [constants.SizeOfSegment]byte
+
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (s *Segment) UnmarshalJAM(r io.Reader) error {
+	_, err := io.ReadFull(r, s[:])
+	return err
+}
 
 type ImportedSegment struct {
 	Hash  crypto.Hash
 	Index uint16
 }
 
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (is *ImportedSegment) UnmarshalJAM(r io.Reader) error {
+	if _, err := io.ReadFull(r, is.Hash[:]); err != nil {
+		return err
+	}
+	var buf [2]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return err
+	}
+	is.Index = jam.DecodeUint16(buf[:])
+	return nil
+}
+
 type Extrinsic struct {
 	Hash   crypto.Hash
 	Length uint32
+}
+
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (e *Extrinsic) UnmarshalJAM(r io.Reader) error {
+	if _, err := io.ReadFull(r, e.Hash[:]); err != nil {
+		return err
+	}
+	var buf [4]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return err
+	}
+	e.Length = jam.DecodeUint32(buf[:])
+	return nil
 }
 
 // Item represents I (14.2 v0.5.4)

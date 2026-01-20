@@ -2,6 +2,7 @@ package block
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
@@ -30,6 +31,17 @@ type CredentialSignature struct {
 	Signature      crypto.Ed25519Signature // The Ed25519 signature
 }
 
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (cs *CredentialSignature) UnmarshalJAM(r io.Reader) error {
+	var buf [2]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return err
+	}
+	cs.ValidatorIndex = jam.DecodeUint16(buf[:])
+	_, err := io.ReadFull(r, cs.Signature[:])
+	return err
+}
+
 // WorkReport represents a work report in the JAM state
 // R ≡ {s ∈ Y, c ∈ C, c ∈ NC, a ∈ H, t ∈ B, l ∈ ⟦H → H⟧, d ∈ ⟦D⟧1:I, g ∈ NG} (eq. 11.2 v 0.7.0)
 // E(rs, rc, rc, ra, rg , ↕rt, ↕rl, ↕rd)
@@ -53,6 +65,30 @@ type AvailabilitySpecification struct {
 	SegmentCount              uint16      // Segment count (n)
 }
 
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (as *AvailabilitySpecification) UnmarshalJAM(r io.Reader) error {
+	if _, err := io.ReadFull(r, as.WorkPackageHash[:]); err != nil {
+		return err
+	}
+	var buf [4]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return err
+	}
+	as.AuditableWorkBundleLength = jam.DecodeUint32(buf[:])
+	if _, err := io.ReadFull(r, as.ErasureRoot[:]); err != nil {
+		return err
+	}
+	if _, err := io.ReadFull(r, as.SegmentRoot[:]); err != nil {
+		return err
+	}
+	var buf2 [2]byte
+	if _, err := io.ReadFull(r, buf2[:]); err != nil {
+		return err
+	}
+	as.SegmentCount = jam.DecodeUint16(buf2[:])
+	return nil
+}
+
 // RefinementContext describes the context of the chain at the point that the report's corresponding work-package was evaluated.
 //
 //	C ≡ {a ∈ H, s ∈ H, b ∈ H, l ∈ H, t ∈ NT, p ∈ {[H]}} (eq. 11.4 v 0.7.0)
@@ -69,10 +105,35 @@ type RefinementContextAnchor struct {
 	PosteriorBeefyRoot crypto.Hash // Posterior beefy root (b)
 }
 
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (rca *RefinementContextAnchor) UnmarshalJAM(r io.Reader) error {
+	if _, err := io.ReadFull(r, rca.HeaderHash[:]); err != nil {
+		return err
+	}
+	if _, err := io.ReadFull(r, rca.PosteriorStateRoot[:]); err != nil {
+		return err
+	}
+	_, err := io.ReadFull(r, rca.PosteriorBeefyRoot[:])
+	return err
+}
+
 // l ∈ H, t ∈ N_T
 type RefinementContextLookupAnchor struct {
 	HeaderHash crypto.Hash      // HeaderHash of the anchor (l)
 	Timeslot   jamtime.Timeslot // Timeslot (t)
+}
+
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (rcla *RefinementContextLookupAnchor) UnmarshalJAM(r io.Reader) error {
+	if _, err := io.ReadFull(r, rcla.HeaderHash[:]); err != nil {
+		return err
+	}
+	var buf [4]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return err
+	}
+	rcla.Timeslot = jamtime.Timeslot(jam.DecodeUint32(buf[:]))
+	return nil
 }
 
 // GuarantorAssignments represents the mapping of validators to cores and their keys

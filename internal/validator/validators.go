@@ -1,12 +1,15 @@
 package validator
 
 import (
+	"io"
+
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safrole"
+	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 )
 
 // ValidatorState represents the state related to validators
@@ -32,6 +35,21 @@ type ValidatorStatistics struct {
 	NumOfBytesAllPreimages      uint32 // Number of bytes across all preimages (d) - The total number of octets across all preimages introduced by the validator.
 	NumOfGuaranteedReports      uint32 // Number of guaranteed reports (g) - The number of reports guaranteed by the validator.
 	NumOfAvailabilityAssurances uint32 // Number of availability assurances (a) - The number of assurances of availability made by the validator.
+}
+
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (vs *ValidatorStatistics) UnmarshalJAM(r io.Reader) error {
+	var buf [24]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return err
+	}
+	vs.NumOfBlocks = jam.DecodeUint32(buf[0:4])
+	vs.NumOfTickets = jam.DecodeUint32(buf[4:8])
+	vs.NumOfPreimages = jam.DecodeUint32(buf[8:12])
+	vs.NumOfBytesAllPreimages = jam.DecodeUint32(buf[12:16])
+	vs.NumOfGuaranteedReports = jam.DecodeUint32(buf[16:20])
+	vs.NumOfAvailabilityAssurances = jam.DecodeUint32(buf[20:24])
+	return nil
 }
 
 type CoreStatistics struct {

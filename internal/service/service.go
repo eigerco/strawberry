@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"maps"
 	"slices"
 
@@ -447,9 +448,29 @@ type PreImageMetaKey struct {
 	Hash   crypto.Hash    // Hash of the preimage ()
 	Length PreimageLength // Length (presupposed) of the preimage ()
 }
+
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (pmk *PreImageMetaKey) UnmarshalJAM(r io.Reader) error {
+	if _, err := io.ReadFull(r, pmk.Hash[:]); err != nil {
+		return err
+	}
+	var buf [4]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return err
+	}
+	pmk.Length = PreimageLength(jam.DecodeUint32(buf[:]))
+	return nil
+}
+
 type PreimageHistoricalTimeslots []jamtime.Timeslot // Metadata for preimages (l) - TODO: There is a MaxHistoricalTimeslotsForPreimageMeta.
 
 type Memo [TransferMemoSizeBytes]byte
+
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (m *Memo) UnmarshalJAM(r io.Reader) error {
+	_, err := io.ReadFull(r, m[:])
+	return err
+}
 
 // DeferredTransfer X ≡ (s ∈ Ns, d ∈ Ns, a ∈ Nb, m ∈ B_WT, g ∈ Ng) (eq. 12.14 v0.7.1)
 type DeferredTransfer struct {
@@ -458,6 +479,32 @@ type DeferredTransfer struct {
 	Balance              uint64          // balance value (a)
 	Memo                 Memo            // memo (m)
 	GasLimit             uint64          // gas limit (g)
+}
+
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (dt *DeferredTransfer) UnmarshalJAM(r io.Reader) error {
+	var buf [4]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return err
+	}
+	dt.SenderServiceIndex = block.ServiceId(jam.DecodeUint32(buf[:]))
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return err
+	}
+	dt.ReceiverServiceIndex = block.ServiceId(jam.DecodeUint32(buf[:]))
+	var buf8 [8]byte
+	if _, err := io.ReadFull(r, buf8[:]); err != nil {
+		return err
+	}
+	dt.Balance = jam.DecodeUint64(buf8[:])
+	if _, err := io.ReadFull(r, dt.Memo[:]); err != nil {
+		return err
+	}
+	if _, err := io.ReadFull(r, buf8[:]); err != nil {
+		return err
+	}
+	dt.GasLimit = jam.DecodeUint64(buf8[:])
+	return nil
 }
 
 // cloneMapOfSlices creates a deep copy of a map where values are slices.

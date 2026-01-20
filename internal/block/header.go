@@ -2,6 +2,7 @@ package block
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
@@ -30,6 +31,16 @@ type ValidatorKeys struct {
 	Ed25519      ed25519.PublicKey
 }
 
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (vk *ValidatorKeys) UnmarshalJAM(r io.Reader) error {
+	if _, err := io.ReadFull(r, vk.Bandersnatch[:]); err != nil {
+		return err
+	}
+	vk.Ed25519 = make([]byte, crypto.Ed25519PublicSize)
+	_, err := io.ReadFull(r, vk.Ed25519)
+	return err
+}
+
 // EpochMarker consists of epoch randomness and a sequence of
 // Bandersnatch keys defining the Bandersnatch validator keys (kb) beginning in the next epoch.
 type EpochMarker struct {
@@ -38,7 +49,33 @@ type EpochMarker struct {
 	Keys           [constants.NumberOfValidators]ValidatorKeys
 }
 
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (em *EpochMarker) UnmarshalJAM(r io.Reader) error {
+	if _, err := io.ReadFull(r, em.Entropy[:]); err != nil {
+		return err
+	}
+	if _, err := io.ReadFull(r, em.TicketsEntropy[:]); err != nil {
+		return err
+	}
+	for i := range em.Keys {
+		if err := em.Keys[i].UnmarshalJAM(r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type WinningTicketMarker [constants.TimeslotsPerEpoch]Ticket
+
+// UnmarshalJAM implements the JAM codec Unmarshaler interface.
+func (wtm *WinningTicketMarker) UnmarshalJAM(r io.Reader) error {
+	for i := range wtm {
+		if err := wtm[i].UnmarshalJAM(r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // Hash returns the hash of the header
 func (h Header) Hash() (crypto.Hash, error) {
