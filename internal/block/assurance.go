@@ -34,11 +34,11 @@ func (a *Assurance) UnmarshalJAM(r io.Reader) error {
 	if _, err := io.ReadFull(r, a.Bitfield[:]); err != nil {
 		return err
 	}
-	var buf [2]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 2)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
-	a.ValidatorIndex = jam.DecodeUint16(buf[:])
+	a.ValidatorIndex = jam.DecodeUint16(buf)
 	_, err := io.ReadFull(r, a.Signature[:])
 	return err
 }

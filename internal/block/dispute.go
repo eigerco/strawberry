@@ -45,11 +45,11 @@ func (v *Verdict) UnmarshalJAM(r io.Reader) error {
 	if _, err := io.ReadFull(r, v.ReportHash[:]); err != nil {
 		return err
 	}
-	var buf [4]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
-	v.EpochIndex = jamtime.Epoch(jam.DecodeUint32(buf[:]))
+	v.EpochIndex = jamtime.Epoch(jam.DecodeUint32(buf))
 	for i := range v.Judgements {
 		if err := v.Judgements[i].UnmarshalJAM(r); err != nil {
 			return err
@@ -91,8 +91,8 @@ func (f *Fault) UnmarshalJAM(r io.Reader) error {
 	if _, err := io.ReadFull(r, f.ReportHash[:]); err != nil {
 		return err
 	}
-	var b [1]byte
-	if _, err := io.ReadFull(r, b[:]); err != nil {
+	b := make([]byte, 1)
+	if _, err := io.ReadFull(r, b); err != nil {
 		return err
 	}
 	f.IsValid = b[0] != 0
@@ -113,8 +113,8 @@ type Judgement struct {
 
 // UnmarshalJAM implements the JAM codec Unmarshaler interface.
 func (j *Judgement) UnmarshalJAM(r io.Reader) error {
-	var buf [3]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 3)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
 	j.IsValid = buf[0] != 0
@@ -136,10 +136,10 @@ func (vs *VerdictSummary) UnmarshalJAM(r io.Reader) error {
 	if _, err := io.ReadFull(r, vs.ReportHash[:]); err != nil {
 		return err
 	}
-	var buf [2]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 2)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
-	vs.VoteCount = jam.DecodeUint16(buf[:])
+	vs.VoteCount = jam.DecodeUint16(buf)
 	return nil
 }

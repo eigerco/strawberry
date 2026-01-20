@@ -39,8 +39,8 @@ type ValidatorStatistics struct {
 
 // UnmarshalJAM implements the JAM codec Unmarshaler interface.
 func (vs *ValidatorStatistics) UnmarshalJAM(r io.Reader) error {
-	var buf [24]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 24)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
 	vs.NumOfBlocks = jam.DecodeUint32(buf[0:4])

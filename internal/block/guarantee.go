@@ -33,11 +33,11 @@ type CredentialSignature struct {
 
 // UnmarshalJAM implements the JAM codec Unmarshaler interface.
 func (cs *CredentialSignature) UnmarshalJAM(r io.Reader) error {
-	var buf [2]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 2)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
-	cs.ValidatorIndex = jam.DecodeUint16(buf[:])
+	cs.ValidatorIndex = jam.DecodeUint16(buf)
 	_, err := io.ReadFull(r, cs.Signature[:])
 	return err
 }
@@ -70,22 +70,22 @@ func (as *AvailabilitySpecification) UnmarshalJAM(r io.Reader) error {
 	if _, err := io.ReadFull(r, as.WorkPackageHash[:]); err != nil {
 		return err
 	}
-	var buf [4]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
-	as.AuditableWorkBundleLength = jam.DecodeUint32(buf[:])
+	as.AuditableWorkBundleLength = jam.DecodeUint32(buf)
 	if _, err := io.ReadFull(r, as.ErasureRoot[:]); err != nil {
 		return err
 	}
 	if _, err := io.ReadFull(r, as.SegmentRoot[:]); err != nil {
 		return err
 	}
-	var buf2 [2]byte
-	if _, err := io.ReadFull(r, buf2[:]); err != nil {
+	buf2 := make([]byte, 2)
+	if _, err := io.ReadFull(r, buf2); err != nil {
 		return err
 	}
-	as.SegmentCount = jam.DecodeUint16(buf2[:])
+	as.SegmentCount = jam.DecodeUint16(buf2)
 	return nil
 }
 
@@ -128,11 +128,11 @@ func (rcla *RefinementContextLookupAnchor) UnmarshalJAM(r io.Reader) error {
 	if _, err := io.ReadFull(r, rcla.HeaderHash[:]); err != nil {
 		return err
 	}
-	var buf [4]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
-	rcla.Timeslot = jamtime.Timeslot(jam.DecodeUint32(buf[:]))
+	rcla.Timeslot = jamtime.Timeslot(jam.DecodeUint32(buf))
 	return nil
 }
 

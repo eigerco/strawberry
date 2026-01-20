@@ -21,8 +21,8 @@ func (t *Ticket) UnmarshalJAM(r io.Reader) error {
 	if _, err := io.ReadFull(r, t.Identifier[:]); err != nil {
 		return err
 	}
-	var b [1]byte
-	if _, err := io.ReadFull(r, b[:]); err != nil {
+	b := make([]byte, 1)
+	if _, err := io.ReadFull(r, b); err != nil {
 		return err
 	}
 	t.EntryIndex = b[0]
@@ -39,8 +39,8 @@ type TicketProof struct {
 
 // UnmarshalJAM implements the JAM codec Unmarshaler interface.
 func (tp *TicketProof) UnmarshalJAM(r io.Reader) error {
-	var b [1]byte
-	if _, err := io.ReadFull(r, b[:]); err != nil {
+	b := make([]byte, 1)
+	if _, err := io.ReadFull(r, b); err != nil {
 		return err
 	}
 	tp.EntryIndex = b[0]

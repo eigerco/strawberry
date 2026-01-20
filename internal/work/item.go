@@ -28,11 +28,11 @@ func (is *ImportedSegment) UnmarshalJAM(r io.Reader) error {
 	if _, err := io.ReadFull(r, is.Hash[:]); err != nil {
 		return err
 	}
-	var buf [2]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 2)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
-	is.Index = jam.DecodeUint16(buf[:])
+	is.Index = jam.DecodeUint16(buf)
 	return nil
 }
 
@@ -46,11 +46,11 @@ func (e *Extrinsic) UnmarshalJAM(r io.Reader) error {
 	if _, err := io.ReadFull(r, e.Hash[:]); err != nil {
 		return err
 	}
-	var buf [4]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
-	e.Length = jam.DecodeUint32(buf[:])
+	e.Length = jam.DecodeUint32(buf)
 	return nil
 }
 

@@ -454,11 +454,11 @@ func (pmk *PreImageMetaKey) UnmarshalJAM(r io.Reader) error {
 	if _, err := io.ReadFull(r, pmk.Hash[:]); err != nil {
 		return err
 	}
-	var buf [4]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
-	pmk.Length = PreimageLength(jam.DecodeUint32(buf[:]))
+	pmk.Length = PreimageLength(jam.DecodeUint32(buf))
 	return nil
 }
 
@@ -483,27 +483,27 @@ type DeferredTransfer struct {
 
 // UnmarshalJAM implements the JAM codec Unmarshaler interface.
 func (dt *DeferredTransfer) UnmarshalJAM(r io.Reader) error {
-	var buf [4]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
-	dt.SenderServiceIndex = block.ServiceId(jam.DecodeUint32(buf[:]))
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
+	dt.SenderServiceIndex = block.ServiceId(jam.DecodeUint32(buf))
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
 	}
-	dt.ReceiverServiceIndex = block.ServiceId(jam.DecodeUint32(buf[:]))
-	var buf8 [8]byte
-	if _, err := io.ReadFull(r, buf8[:]); err != nil {
+	dt.ReceiverServiceIndex = block.ServiceId(jam.DecodeUint32(buf))
+	buf8 := make([]byte, 8)
+	if _, err := io.ReadFull(r, buf8); err != nil {
 		return err
 	}
-	dt.Balance = jam.DecodeUint64(buf8[:])
+	dt.Balance = jam.DecodeUint64(buf8)
 	if _, err := io.ReadFull(r, dt.Memo[:]); err != nil {
 		return err
 	}
-	if _, err := io.ReadFull(r, buf8[:]); err != nil {
+	if _, err := io.ReadFull(r, buf8); err != nil {
 		return err
 	}
-	dt.GasLimit = jam.DecodeUint64(buf8[:])
+	dt.GasLimit = jam.DecodeUint64(buf8)
 	return nil
 }
 
