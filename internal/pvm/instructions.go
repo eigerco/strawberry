@@ -232,7 +232,7 @@ func opcodeValid(c Opcode) bool {
 		BranchEqImm, BranchNeImm, BranchLtUImm, BranchLeUImm,
 		BranchGeUImm, BranchGtUImm, BranchLtSImm,
 		BranchLeSImm, BranchGeSImm, BranchGtSImm,
-		MoveReg, Sbrk, CountSetBits64, CountSetBits32, LeadingZeroBits64, LeadingZeroBits32,
+		MoveReg, CountSetBits64, CountSetBits32, LeadingZeroBits64, LeadingZeroBits32,
 		TrailingZeroBits64, TrailingZeroBits32, SignExtend8, SignExtend16, ZeroExtend16, ReverseBytes,
 		StoreIndU8, StoreIndU16, StoreIndU32, StoreIndU64, LoadIndU8, LoadIndI8,
 		LoadIndU16, LoadIndI16, LoadIndU32, LoadIndI32, LoadIndU64,

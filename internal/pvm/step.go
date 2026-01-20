@@ -27,7 +27,8 @@ func (i *Instance) step() (uint64, error) {
 			return 0, err
 		}
 		i.Fallthrough()
-
+	case Unlikely:
+		i.Fallthrough()
 	// (eq. A.21 v0.7.0)
 	case Ecalli:
 		if err := i.deductGas(EcalliCost); err != nil {
@@ -41,7 +42,7 @@ func (i *Instance) step() (uint64, error) {
 		if err := i.deductGas(LoadImm64Cost); err != nil {
 			return 0, err
 		}
-		i.LoadImm64(i.decodeArgsRegImmExt(i.instructionCounter, i.skipLen))
+		i.LoadImm64(i.decodeArgsRegImmExt(i.instructionCounter))
 
 	// (eq. A.23 v0.7.0)
 	case StoreImmU8:
