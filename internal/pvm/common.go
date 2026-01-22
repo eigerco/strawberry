@@ -2,6 +2,7 @@ package pvm
 
 import (
 	"bytes"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safemath"
@@ -24,11 +25,10 @@ const (
 // for practical reasons we define each memory segment separately
 // so we don't have to allocate [2^32]byte unnecessarily
 type Memory struct {
-	ro                 memorySegment
-	rw                 memorySegment
-	stack              memorySegment
-	args               memorySegment
-	currentHeapPointer uint32
+	ro    memorySegment
+	rw    memorySegment
+	stack memorySegment
+	args  memorySegment
 }
 
 type memorySegment struct {
@@ -54,7 +54,7 @@ func (m *Memory) Read(address uint32, data []byte) error {
 	if address >= m.stack.address && end <= m.stack.end {
 		memoryData = m.stack.data[address-m.stack.address : end-m.stack.address]
 		access = m.stack.access
-	} else if address >= m.rw.address && end <= m.currentHeapPointer {
+	} else if address >= m.rw.address && end <= m.rw.end {
 		memoryData = m.rw.data[address-m.rw.address : end-m.rw.address]
 		access = m.rw.access
 	} else if address >= m.ro.address && end <= m.ro.end {
@@ -95,7 +95,7 @@ func (m *Memory) Write(address uint32, data []byte) error {
 	if address >= m.stack.address && end <= m.stack.end {
 		memoryData = m.stack.data[address-m.stack.address : end-m.stack.address]
 		access = m.stack.access
-	} else if address >= m.rw.address && end <= m.currentHeapPointer {
+	} else if address >= m.rw.address && end <= m.rw.end {
 		memoryData = m.rw.data[address-m.rw.address : end-m.rw.address]
 		access = m.rw.access
 	} else if address >= m.ro.address && end <= m.ro.end {
@@ -121,43 +121,33 @@ func (m *Memory) Write(address uint32, data []byte) error {
 	return nil
 }
 
-func (m *Memory) Sbrk(size uint32) (uint32, error) {
-	if size == 0 {
-		return m.currentHeapPointer, nil
-	}
-
-	result := m.currentHeapPointer
-
-	nextPageBoundary, err := roundUpToPage(m.currentHeapPointer)
-	if err != nil {
-		return 0, ErrPanicf("unable to find the next page boundary: %s", err)
-	}
-	newHeapPointer := m.currentHeapPointer + size
-
-	if newHeapPointer > nextPageBoundary {
-		finalBoundary, err := roundUpToPage(newHeapPointer)
-		if err != nil {
-			return 0, ErrPanicf("unable to find the next page boundary: %s", err)
-		}
-		idxStart := nextPageBoundary / PageSize
-		idxEnd := finalBoundary / PageSize
-		pageCount := idxEnd - idxStart
-
-		m.allocatePages(idxStart, pageCount)
-	}
-
-	// Advance the heap
-	m.currentHeapPointer = newHeapPointer
-	return result, nil
+func (m *Memory) GetHeapMinPage() uint32 {
+	// (2Z_Z + Z(|o|)) / Z_P
+	// start of the heap
+	return m.rw.address / PageSize
 }
 
-func (m *Memory) allocatePages(startPage uint32, count uint32) {
-	required := (startPage + count) * PageSize
+func (m *Memory) GetHeapMaxPage() uint32 {
+	//(2³² - 3Z_Z - Z_I - P(s)) / Z_P
+	// This is simply one zone less than the start of the stack, since we have
+	// one zone padding between regions.
+	// eg (2³² - 2Z_Z - Z_I - P(s) - Z) / Z_P
+	return (m.stack.address - MemoryZoneSize) / PageSize
+}
+
+func (m *Memory) GetHeapAllocatedPages() uint32 {
+	return uint32(len(m.rw.data) / PageSize)
+}
+
+func (m *Memory) GrowHeapTo(targetPage uint32) {
+	required := (targetPage - m.GetHeapMinPage()) * PageSize
 	if uint32(len(m.rw.data)) < required {
 		// Grow rw_data to fit new allocation
 		newData := make([]byte, required)
 		copy(newData, m.rw.data)
 		m.rw.data = newData
+		// Correctly set the new heap end address
+		m.rw.end = m.rw.address + uint32(len(m.rw.data))
 	}
 }
 

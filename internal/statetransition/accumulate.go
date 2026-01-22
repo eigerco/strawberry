@@ -111,6 +111,8 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		switch hostCall {
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
+		case host_call.GrowHeapID:
+			gasCounter, regs, mem, err = host_call.GrowHeap(gasCounter, regs, mem)
 		case host_call.FetchID:
 			entropy := a.newEntropyPool[0]
 			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, nil, &entropy, nil, nil, nil, nil, accOperand)
