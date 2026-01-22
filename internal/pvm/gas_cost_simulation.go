@@ -91,10 +91,10 @@ func (e *execResources) sub(another execResources) {
 }
 
 func (e *execResources) greaterThan(another execResources) bool {
-	return e.ALU > another.ALU &&
-		e.Load > another.Load &&
-		e.Store > another.Store &&
-		e.Mul > another.Mul &&
+	return e.ALU > another.ALU ||
+		e.Load > another.Load ||
+		e.Store > another.Store ||
+		e.Mul > another.Mul ||
 		e.Div > another.Div
 }
 
@@ -121,9 +121,11 @@ func calculateBasicBlockCosts(p *program, basicBlockInstructions map[uint64]stru
 }
 
 func (s *simulationProgram) transition(state simulationState, instructionIndex uint64) (simulationState, bool) {
+	s.skipLen = s.program.skip(*state.instructionCounter)
 	s.computeCostsAndRegs(*state.instructionCounter)
-	// if n= 0 ∨ (ı(n) ≠ ∅ ∧ dˇ(c,k,ı(n)) ≤ d(n) ∧ ∣ s⃗(n)∣ < 32)
-	if instructionIndex == 0 || (state.instructionCounter != nil && uint64(s.decodeCost) <= state.decodingSlots) || len(state.scheduledInstructions) < 32 {
+
+	// if n = 0 ∨ (ı(n) ≠ ∅ ∧ dˇ(c,k,ı(n)) ≤ d(n) ∧ ∣ s⃗(n)∣ < 32)
+	if instructionIndex == 0 || (state.instructionCounter != nil && uint64(s.decodeCost) <= state.decodingSlots && len(state.scheduledInstructions) < 32) {
 		// X′
 		return s.ReorderBuffer(state, instructionIndex), true
 	}
@@ -155,12 +157,8 @@ func (s *simulationProgram) ReorderBuffer(state simulationState, instructionInde
 // ReorderBufferMov move_reg instruction is special-cased to be handled by the frontend of our virtual CPU, without being added to
 // the reorder buffer: X^mov
 func (s *simulationProgram) ReorderBufferMov(state simulationState, instructionIndex uint64) simulationState {
-
-	// we know that move instruction has only 2 registers
-	dstReg, srcReg := s.decodeArgsReg2(*state.instructionCounter)
-
 	// ı(n+1) = ı(n) + 1 + skip(ı(n))
-	*state.instructionCounter += uint64(1 + s.skip(*state.instructionCounter))
+	newInstructionCounter := *state.instructionCounter + uint64(1+s.skip(*state.instructionCounter))
 
 	// d(n+1) = d(n) − 1
 	state.decodingSlots -= 1
@@ -169,18 +167,24 @@ func (s *simulationProgram) ReorderBufferMov(state simulationState, instructionI
 	// j ∈ N ⇒ r⃗(n+1)_j ⎨
 	//					⎩ r(n)_j ∖ rˇ(c,k,ı(n)) otherwise
 	//
-	// if destination reg is the sane as source reg add to the resources list, if not remove it
+	// if destination reg is the same as source reg add to the resources list, if not remove it
 	for j := range state.regs {
-		if dstReg == srcReg {
-			if state.regs[dstReg] == nil {
-				state.regs[dstReg] = make(map[Reg]struct{})
+		if s.srcRegs.overlapsWith(s.srcRegs) {
+			if state.regs[j] == nil {
+				state.regs[j] = make(map[Reg]struct{})
 			}
-			state.regs[j][dstReg] = struct{}{}
+			for dstReg := range s.dstRegs {
+				state.regs[j][dstReg] = struct{}{}
+			}
 		} else {
-			delete(state.regs[j], dstReg)
+			for dstReg := range s.dstRegs {
+				delete(state.regs[j], dstReg)
+			}
 		}
 	}
-	return state
+	newState := state
+	newState.instructionCounter = &newInstructionCounter
+	return newState
 }
 
 // ReorderBufferDecode X^decode (eq. A.54)
@@ -274,6 +278,8 @@ func (s *simulationProgram) SimulateVirtualCPU(state simulationState, instructio
 				newScheduledInstructions = append(newScheduledInstructions, 2)
 			} else if state.scheduledInstructions[j] == 3 && state.instructionCost[j] == 0 {
 				newScheduledInstructions = append(newScheduledInstructions, 4)
+			} else {
+				newScheduledInstructions = append(newScheduledInstructions, state.scheduledInstructions[j])
 			}
 		}
 	}
@@ -395,6 +401,7 @@ func (s *simulationProgram) branchCostImm(instructionCounter uint64) uint8 {
 }
 
 func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
+	s.dstRegs, s.srcRegs = nil, nil
 	switch s.opcode(instructionCounter) {
 	case MoveReg:
 		dstReg, regA := s.decodeArgsReg2(instructionCounter)
@@ -775,36 +782,36 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.dstRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_u64 m 1 1 1 0 0 0
 	case StoreImmIndU8:
-		s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_imm_ind_u8 25 1 1 0 1 0 0
 	case StoreImmIndU16:
-		s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_imm_ind_u16 25 1 1 0 1 0 0
 	case StoreImmIndU32:
-		s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_imm_ind_u32 25 1 1 0 1 0 0
 	case StoreImmIndU64:
-		s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_imm_ind_u64 25 1 1 0 1 0 0
 	case StoreIndU8:
 		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
-		s.srcRegs = regsSet{regB: {}}
+		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_ind_u8 25 1 1 0 1 0 0
 	case StoreIndU16:
 		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
-		s.srcRegs = regsSet{regB: {}}
+		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_ind_u16 25 1 1 0 1 0 0
 	case StoreIndU32:
 		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
-		s.srcRegs = regsSet{regB: {}}
+		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_ind_u32 25 1 1 0 1 0 0
 	case StoreIndU64:
 		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
-		s.srcRegs = regsSet{regB: {}}
+		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_ind_u64 25 1 1 0 1 0 0
 	case StoreImmU8:
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_imm_u8 25 1 1 0 1 0 0
@@ -816,19 +823,19 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_imm_u64 25 1 1 0 1 0 0
 	case StoreU8:
 		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_u8 25 1 1 0 1 0 0
 	case StoreU16:
 		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_u16 25 1 1 0 1 0 0
 	case StoreU32:
 		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_u32 25 1 1 0 1 0 0
 	case StoreU64:
 		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 25, 1, execResources{1, 0, 1, 0, 0} // store_u64 25 1 1 0 1 0 0
 	case BranchEq:
 		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, s.skipLen)
@@ -856,43 +863,43 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.instrCost, s.decodeCost, s.executionCost = s.branchCost(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_ge_s b 1 1 0 0 0 0
 	case BranchEqImm:
 		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_eq_imm b 1 1 0 0 0 0
 	case BranchNeImm:
 		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_ne_imm b 1 1 0 0 0 0
 	case BranchLtUImm:
 		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_lt_u_imm b 1 1 0 0 0 0
 	case BranchLeUImm:
 		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_le_u_imm b 1 1 0 0 0 0
 	case BranchGeUImm:
 		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_ge_u_imm b 1 1 0 0 0 0
 	case BranchGtUImm:
 		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_gt_u_imm b 1 1 0 0 0 0
 	case BranchLtSImm:
 		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_lt_s_imm b 1 1 0 0 0 0
 	case BranchLeSImm:
 		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_le_s_imm b 1 1 0 0 0 0
 	case BranchGeSImm:
 		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_ge_s_imm b 1 1 0 0 0 0
 	case BranchGtSImm:
 		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_gt_s_imm b 1 1 0 0 0 0
 	case DivU32:
 		regDst, regA, regB := s.decodeArgsReg3(instructionCounter)
@@ -1012,7 +1019,7 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.instrCost, s.decodeCost, s.executionCost = 15, 1, execResources{0, 0, 0, 0, 0} // jump 15 1 0 0 0 0 0
 	case LoadImmJump:
 		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
-		s.srcRegs = regsSet{regA: {}}
+		s.dstRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 15, 1, execResources{0, 0, 0, 0, 0} // load_imm_jump 15 1 0 0 0 0 0
 	case JumpInd:
 		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
@@ -1025,8 +1032,9 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.instrCost, s.decodeCost, s.executionCost = 22, 1, execResources{0, 0, 0, 0, 0} // load_imm_jump_ind 22 1 0 0 0 0 0
 	case Ecalli:
 		s.instrCost, s.decodeCost, s.executionCost = 100, 4, execResources{1, 0, 0, 0, 0} // ecalli 100 4 1 0 0 0 0
+	default:
+		panic("unable to get cost for instruction")
 	}
-	panic("unable to get cost for instruction")
 }
 
 // Decode costs
