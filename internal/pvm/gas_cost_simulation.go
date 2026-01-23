@@ -121,6 +121,15 @@ func calculateBasicBlockCosts(p *program, basicBlockInstructions map[uint64]stru
 }
 
 func (s *simulationProgram) transition(state simulationState, instructionIndex uint64) (simulationState, bool) {
+	// if ı(n) = ∅ ∧ |s⃗(n)| = 0
+	if state.instructionCounter == nil {
+		if len(state.scheduledInstructions) == 0 {
+			return simulationState{}, false
+		}
+
+		return s.SimulateVirtualCPU(state, instructionIndex), true
+	}
+
 	s.skipLen = s.program.skip(*state.instructionCounter)
 	s.computeCostsAndRegs(*state.instructionCounter)
 
@@ -134,11 +143,6 @@ func (s *simulationProgram) transition(state simulationState, instructionIndex u
 	if _, ok := readyForExecution(&state, instructionIndex); ok && state.executionReadiness > 0 {
 		// X′′
 		return s.ExecuteNextPendingInstr(state, instructionIndex), true
-	}
-
-	// if ı(n) = ∅ ∧ |s⃗(n)| = 0
-	if state.instructionCounter == nil && len(state.scheduledInstructions) == 0 {
-		return simulationState{}, false
 	}
 
 	// otherwise X′′′
@@ -190,7 +194,7 @@ func (s *simulationProgram) ReorderBufferMov(state simulationState, instructionI
 // ReorderBufferDecode X^decode (eq. A.54)
 func (s *simulationProgram) ReorderBufferDecode(state simulationState, instructionIndex uint64) simulationState {
 	s.computeCostsAndRegs(*state.instructionCounter)
-	if s.opcode(*state.instructionCounter).IsBasicBlockTermination() { // // if opcode(c,k,ı(n)) ∈ T
+	if s.opcode(*state.instructionCounter).IsBasicBlockTermination() { // if opcode(c,k,ı(n)) ∈ T
 		// ı(n+1) = ∅
 		state.instructionCounter = nil
 	} else { // otherwise
@@ -198,14 +202,21 @@ func (s *simulationProgram) ReorderBufferDecode(state simulationState, instructi
 		*state.instructionCounter += 1 + uint64(s.skip(*state.instructionCounter))
 	}
 
+	// TODO
+	state.scheduledInstructions,
+		state.instructionCost,
+		state.instructionExecution,
+		state.portAvailability,
+		state.regs =
+		make([]uint64, state.instructionIndex+1), make([]uint64, state.instructionIndex+1),
+		make([]execResources, state.instructionIndex+1), make([][]int, state.instructionIndex+1),
+		make([]regsSet, state.instructionIndex+1)
+
 	// d(n+1) = d(n) − dˇ(c,k,ı(n))
 	state.decodingSlots -= uint64(s.decodeCost)
 
 	// s⃗(n+1)_n(n) = 1
 	state.scheduledInstructions[state.instructionIndex] = 1
-
-	// n(n+1) = n(n) + 1
-	state.instructionIndex += 1
 
 	// c⃗(n+1)_n(n) = cˇ(c,k,ı(n))
 	state.instructionCost[state.instructionIndex] = uint64(s.instrCost)
@@ -232,6 +243,10 @@ func (s *simulationProgram) ReorderBufferDecode(state simulationState, instructi
 			})
 		}
 	}
+
+	// n(n+1) = n(n) + 1
+	state.instructionIndex += 1
+
 	return state
 }
 
@@ -259,32 +274,6 @@ func (s *simulationProgram) SimulateVirtualCPU(state simulationState, instructio
 		panic("s, c and x must be the same length")
 	}
 
-	// 						⎧ ∅ 		if ∀ k ∈ N, 0 ≤ k ≤ j ⇒ s⃗(n)_k = 4
-	// 						⎪ 2 		if s⃗(n)_j = 1
-	// j ∈ N ⇒ s⃗(n+1)_j = 	⎨
-	// 						⎪ 4 		if s⃗(n)_j= 3 ∧ c⃗(n)_j = 0
-	//						⎩ s⃗(n)_j 	otherwise
-	var newScheduledInstructions []uint64
-	for j := range state.scheduledInstructions {
-		isFull := true
-		for k := range state.scheduledInstructions[:j+1] {
-			if state.scheduledInstructions[k] != 4 {
-				isFull = false
-				break
-			}
-		}
-		if !isFull {
-			if state.scheduledInstructions[j] == 1 {
-				newScheduledInstructions = append(newScheduledInstructions, 2)
-			} else if state.scheduledInstructions[j] == 3 && state.instructionCost[j] == 0 {
-				newScheduledInstructions = append(newScheduledInstructions, 4)
-			} else {
-				newScheduledInstructions = append(newScheduledInstructions, state.scheduledInstructions[j])
-			}
-		}
-	}
-	state.scheduledInstructions = newScheduledInstructions
-
 	// 						⎧ c⃗(n)_j - 1 	if s⃗(n)_j = 3
 	// j ∈ N ⇒ c⃗(n+1)_j = 	⎨
 	// 						⎩ c⃗(n)_j 		otherwise
@@ -293,6 +282,34 @@ func (s *simulationProgram) SimulateVirtualCPU(state simulationState, instructio
 			state.instructionCost[j] -= 1
 		}
 	}
+
+	// 						⎧ ∅ 		if ∀ k ∈ N, 0 ≤ k ≤ j ⇒ s⃗(n)_k = 4
+	// 						⎪ 2 		if s⃗(n)_j = 1
+	// j ∈ N ⇒ s⃗(n+1)_j = 	⎨
+	// 						⎪ 4 		if s⃗(n)_j= 3 ∧ c⃗(n)_j = 0
+	//						⎩ s⃗(n)_j 	otherwise
+	var newScheduledInstructions []uint64
+	for j := range state.scheduledInstructions {
+		isFull := true
+		// are all scheduled instructions before j not 4
+		for k := range state.scheduledInstructions[:j+1] {
+			if state.scheduledInstructions[k] != 4 {
+				isFull = false
+				break
+			}
+		}
+		if isFull {
+		} else if state.scheduledInstructions[j] == 1 {
+			newScheduledInstructions = append(newScheduledInstructions, 2)
+		} else if state.scheduledInstructions[j] == 3 && state.instructionCost[j] == 0 {
+			newScheduledInstructions = append(newScheduledInstructions, 4)
+		} else {
+			newScheduledInstructions = append(newScheduledInstructions, state.scheduledInstructions[j])
+		}
+	}
+
+	state.scheduledInstructions = newScheduledInstructions
+
 	//						⎧ ∅ 		if s⃗(n)_j = 3 ∧ c⃗(n)_j = 1
 	// j ∈ N ⇒ r⃗(n+1)_j = 	⎨
 	//						⎩ r⃗(n)_j 	otherwise
@@ -1023,7 +1040,7 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.instrCost, s.decodeCost, s.executionCost = 15, 1, execResources{0, 0, 0, 0, 0} // load_imm_jump 15 1 0 0 0 0 0
 	case JumpInd:
 		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
-		s.dstRegs = regsSet{regA: {}}
+		s.srcRegs = regsSet{regA: {}}
 		s.instrCost, s.decodeCost, s.executionCost = 22, 1, execResources{0, 0, 0, 0, 0} // jump_ind 22 1 0 0 0 0 0
 	case LoadImmJumpInd:
 		regA, regB, _, _ := s.decodeArgsReg2Imm2(instructionCounter, s.skipLen)
