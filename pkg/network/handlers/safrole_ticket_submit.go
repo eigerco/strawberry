@@ -2,12 +2,10 @@ package handlers
 
 import (
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
 
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/jamtime"
 	"github.com/eigerco/strawberry/internal/state"
 	"github.com/eigerco/strawberry/internal/store"
@@ -91,7 +89,7 @@ type safroleTicketSubmitMessage struct {
 // 1. Verify ticket proof against ring commitment
 // 2. Check that this node is the correct proxy (based on VRF output)
 // 3. Store ticket for later distribution via CE 132
-func (h *SafroleTicketSubmitRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (h *SafroleTicketSubmitRequestHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	return handleSafroleTicket(ctx, stream, &h.safroleTicketHandler, true)
 }
 
@@ -103,7 +101,7 @@ func (h *SafroleTicketSubmitRequestHandler) HandleStream(ctx context.Context, st
 // 1. Verify ticket proof is valid
 // 2. Store ticket for potential use in block sealing
 // 3. Ticket becomes available for lottery participation
-func (h *SafroleTicketDistributionRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (h *SafroleTicketDistributionRequestHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	return handleSafroleTicket(ctx, stream, &h.safroleTicketHandler, false)
 }
 
@@ -127,7 +125,7 @@ func (h *SafroleTicketDistributionRequestHandler) HandleStream(ctx context.Conte
 // - Ticket proofs are verified against the ring commitment of next epoch validators
 // - Proxy validation ensures tickets are only accepted by designated recipients
 // - Invalid tickets are rejected to prevent spam and ensure lottery integrity
-func handleSafroleTicket(ctx context.Context, stream quic.Stream, handler *safroleTicketHandler, requireProxyValidation bool) error {
+func handleSafroleTicket(ctx context.Context, stream *quic.Stream, handler *safroleTicketHandler, requireProxyValidation bool) error {
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return fmt.Errorf("read request message: %w", err)
@@ -189,7 +187,7 @@ type SafroleTicketSubmiter struct{}
 // --> Epoch Index ++ Ticket (Epoch index identifies when ticket will be used)
 // --> FIN
 // <-- FIN
-func (r *SafroleTicketSubmiter) Submit(ctx context.Context, stream quic.Stream, ticketProof block.TicketProof) error {
+func (r *SafroleTicketSubmiter) Submit(ctx context.Context, stream *quic.Stream, ticketProof block.TicketProof) error {
 	// Create the message with epoch index and ticket proof
 	msg := safroleTicketSubmitMessage{
 		EpochIndex:  jamtime.CurrentEpoch(), // When the ticket will be used

@@ -19,6 +19,7 @@ import (
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/pkg/network"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+
 	"github.com/quic-go/quic-go"
 )
 
@@ -71,7 +72,7 @@ type BlockAnnouncer struct {
 	mu                  sync.RWMutex                     // Protects the announced and peerLeaves maps
 	peerLeaves          map[crypto.Hash]jamtime.Timeslot // Peer's leaf blocks (blocks with no children)
 	announced           map[crypto.Hash]*block.Header    // Blocks we've announced to this peer TODO: Cleanup mehcanism
-	stream              quic.Stream                      // The QUIC stream for this connection
+	stream              *quic.Stream                     // The QUIC stream for this connection
 	ctx                 context.Context                  // Context for cancellation
 	cancel              context.CancelFunc               // Function to cancel the context
 	stateLock           sync.Mutex                       // Protects the connection state
@@ -88,7 +89,7 @@ type BlockAnnouncer struct {
 // NewBlockAnnouncer creates a new announcer for a given stream and peer.
 // It initializes the announcer in the SendingHandshake state and registers
 // it in the handler's Announcers map using the peer's Ed25519 key.
-func (bh *BlockAnnouncementHandler) NewBlockAnnouncer(bs *chain.BlockService, ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) *BlockAnnouncer {
+func (bh *BlockAnnouncementHandler) NewBlockAnnouncer(bs *chain.BlockService, ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) *BlockAnnouncer {
 	announcerCtx, cancel := context.WithCancel(ctx)
 	bh.mu.Lock()
 	defer bh.mu.Unlock()
@@ -117,7 +118,7 @@ func (bh *BlockAnnouncementHandler) NewBlockAnnouncer(bs *chain.BlockService, ct
 // Since UP streams should be unique per connection, it handles the case where a stream
 // already exists for the peer by keeping only the stream with the higher stream ID.
 // This implements the spec rule: "If exists: Close old connection, cleanup peer state."
-func (bh *BlockAnnouncementHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (bh *BlockAnnouncementHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	existingAnnouncer, exists := bh.Announcers[string(peerKey)]
 
 	if exists {

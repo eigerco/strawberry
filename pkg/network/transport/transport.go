@@ -2,7 +2,6 @@ package transport
 
 import (
 	"context"
-
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -10,31 +9,13 @@ import (
 	"time"
 
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
+	"github.com/eigerco/strawberry/pkg/network/cert"
 
 	"github.com/quic-go/quic-go"
 )
 
 // MaxIdleTimeout defines the maximum duration a connection can be idle before timing out
 const MaxIdleTimeout = 30 * time.Minute
-
-type QuicDialer interface {
-	DialAddr(ctx context.Context, addr string, tlsConf *tls.Config, quicConfig *quic.Config) (quic.Connection, error)
-}
-
-// Default implementation
-type DefaultQuicDialer struct{}
-
-func (d *DefaultQuicDialer) DialAddr(ctx context.Context, addr string, tlsConf *tls.Config, quicConfig *quic.Config) (quic.Connection, error) {
-	return quic.DialAddr(ctx, addr, tlsConf, quicConfig)
-}
-
-// CertValidator performs TLS certificate validation and public key extraction
-type CertValidator interface {
-	// ValidateCertificate checks if a certificate meets required criteria
-	ValidateCertificate(cert *x509.Certificate) error
-	// ExtractPublicKey retrieves the Ed25519 public key from a certificate
-	ExtractPublicKey(cert *x509.Certificate) (ed25519.PublicKey, error)
-}
 
 // ConnectionHandler defines how new connections are processed at the protocol level.
 // This interface separates transport-level connection handling from protocol-specific
@@ -57,7 +38,7 @@ type Config struct {
 	PrivateKey    ed25519.PrivateKey // Node's private key
 	TLSCert       *tls.Certificate   // TLS certificate
 	ListenAddr    *net.UDPAddr       // Address to listen on
-	CertValidator CertValidator      // Certificate validator
+	CertValidator *cert.Validator    // Certificate validator
 	Handler       ConnectionHandler  // Connection handler
 	Context       context.Context    // Context for transport lifecycle
 }
@@ -74,7 +55,6 @@ type Transport struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	done     chan struct{} // For clean shutdown of accept loop
-	dialer   QuicDialer
 }
 
 // NewTransport creates and configures a new transport instance.
@@ -99,7 +79,6 @@ func NewTransport(config Config) (*Transport, error) {
 		config: config,
 		ctx:    ctx,
 		cancel: cancel,
-		dialer: &DefaultQuicDialer{},
 	}, nil
 }
 
@@ -170,7 +149,7 @@ func (t *Transport) Connect(addr *net.UDPAddr) error {
 		},
 	}
 
-	quicConn, err := t.dialer.DialAddr(t.ctx, addr.AddrPort().String(), tlsConf, &quic.Config{
+	quicConn, err := quic.DialAddr(t.ctx, addr.AddrPort().String(), tlsConf, &quic.Config{
 		EnableDatagrams: true,
 		MaxIdleTimeout:  MaxIdleTimeout,
 	})
@@ -199,10 +178,6 @@ func (t *Transport) Stop() error {
 	}
 	<-t.done
 	return nil
-}
-
-func (t *Transport) SetDialer(dialer QuicDialer) {
-	t.dialer = dialer
 }
 
 // acceptLoop continuously accepts incoming connections
@@ -235,7 +210,7 @@ func (t *Transport) acceptLoop() {
 // 1. Extracts the peer's Ed25519 key from their certificate
 // 2. Creates a Conn wrapper around the QUIC connection
 // 3. Passes the connection to the protocol handler
-func (t *Transport) handleConnection(qConn quic.Connection) {
+func (t *Transport) handleConnection(qConn *quic.Conn) {
 	peerKey, err := t.config.CertValidator.ExtractPublicKey(qConn.ConnectionState().TLS.PeerCertificates[0])
 	if err != nil {
 		fmt.Printf("Failed to extract peer key: %v\n", err)

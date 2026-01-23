@@ -7,6 +7,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 	"github.com/eigerco/strawberry/internal/constants"
@@ -18,13 +20,14 @@ const (
 )
 
 var (
+	// Note: All slice parameters use uintptr because purego on ARM64 doesn't support slices
 	reedSolomonEncode func(
 		originalShardsCount C.size_t,
 		recoveryShardsCount C.size_t,
 		shardSize C.size_t,
-		originalShards []byte,
+		originalShards uintptr,
 		originalShardsLen C.size_t,
-		recoveryShardsOut []byte,
+		recoveryShardsOut uintptr,
 		recoveryShardsLen C.size_t,
 	) (cerr int)
 
@@ -32,15 +35,15 @@ var (
 		originalShardsCount C.size_t,
 		recoveryShardsCount C.size_t,
 		shardSize C.size_t,
-		originalShards []byte,
+		originalShards uintptr,
 		originalShardsLen C.size_t,
-		originalShardsIndexes []C.size_t,
-		recoveryShards []byte,
+		originalShardsIndexes uintptr,
+		recoveryShards uintptr,
 		recoveryShardsLen C.size_t,
-		recoveryShardsIndexes []C.size_t,
-		recoveredShards []byte,
+		recoveryShardsIndexes uintptr,
+		recoveredShards uintptr,
 		recoveredShardsLength C.size_t,
-		recoveredShardsIndexesOut []C.size_t,
+		recoveredShardsIndexesOut uintptr,
 	) (cerr int)
 )
 
@@ -130,11 +133,16 @@ func (r *Encoder) Encode(
 		C.size_t(r.originalShardsCount),
 		C.size_t(r.recoveryShardsCount),
 		C.size_t(shardSize),
-		flatOriginalShards,
+		slicePtr(flatOriginalShards),
 		C.size_t(len(flatOriginalShards)),
-		recoveryShardsOut,
+		slicePtr(recoveryShardsOut),
 		C.size_t(len(recoveryShardsOut)),
 	)
+
+	// Keep slices alive until after the FFI call completes
+	runtime.KeepAlive(flatOriginalShards)
+	runtime.KeepAlive(recoveryShardsOut)
+
 	if result != 0 {
 		return errors.New("unable to encode data")
 	}
@@ -193,15 +201,24 @@ func (r *Encoder) Decode(shards [][]byte) error {
 		C.size_t(r.originalShardsCount),
 		C.size_t(r.recoveryShardsCount),
 		C.size_t(shardSize),
-		flatOriginalShards,
+		slicePtr(flatOriginalShards),
 		C.size_t(len(flatOriginalShards)),
-		flatOriginalShardsIndexes,
-		flatRecoveryShards,
+		slicePtrSizeT(flatOriginalShardsIndexes),
+		slicePtr(flatRecoveryShards),
 		C.size_t(len(flatRecoveryShards)),
-		flatRecoveryShardsIndexes,
-		restoredShards,
+		slicePtrSizeT(flatRecoveryShardsIndexes),
+		slicePtr(restoredShards),
 		C.size_t(len(restoredShards)),
-		restoredShardsIndexes)
+		slicePtrSizeT(restoredShardsIndexes))
+
+	// Keep slices alive until after the FFI call completes
+	runtime.KeepAlive(flatOriginalShards)
+	runtime.KeepAlive(flatOriginalShardsIndexes)
+	runtime.KeepAlive(flatRecoveryShards)
+	runtime.KeepAlive(flatRecoveryShardsIndexes)
+	runtime.KeepAlive(restoredShards)
+	runtime.KeepAlive(restoredShardsIndexes)
+
 	if result != 0 {
 		return errors.New("unable to decode data")
 	}
@@ -234,6 +251,24 @@ func ShardCount(shards [][]byte) int {
 		}
 	}
 	return count
+}
+
+// slicePtr returns a pointer to the first element of a byte slice.
+// For empty slices, returns a dummy non-null pointer (Rust FFI requires non-null).
+func slicePtr(s []byte) uintptr {
+	if len(s) == 0 {
+		return uintptr(unsafe.Pointer(&struct{}{}))
+	}
+	return uintptr(unsafe.Pointer(&s[0]))
+}
+
+// slicePtrSizeT returns a pointer to the first element of a C.size_t slice.
+// For empty slices, returns a dummy non-null pointer (Rust FFI requires non-null).
+func slicePtrSizeT(s []C.size_t) uintptr {
+	if len(s) == 0 {
+		return uintptr(unsafe.Pointer(&struct{}{}))
+	}
+	return uintptr(unsafe.Pointer(&s[0]))
 }
 
 func init() {

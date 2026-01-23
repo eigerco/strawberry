@@ -1,4 +1,4 @@
-//go:build integration
+//go:build tiny && integration
 
 package network_test
 
@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"fmt"
@@ -102,6 +103,16 @@ func stopNode(t *testing.T, node *node.Node) {
 	if err := node.Stop(); err != nil {
 		t.Logf("Failed to stop node: %v", err)
 	}
+}
+
+func cleanupNodes(t *testing.T, nodes ...*node.Node) {
+	t.Helper()
+	t.Cleanup(func() {
+		for _, n := range nodes {
+			stopNode(t, n)
+		}
+		time.Sleep(200 * time.Millisecond) // Give OS time to release UDP ports
+	})
 }
 
 func createMockMetadata(t *testing.T, ipStr string, port uint16) []byte {
@@ -239,7 +250,7 @@ func NewExtendedWorkPackageSubmissionHandler(fetcher *MockImportSegmentsFetcher)
 }
 
 // Override HandleStream to record the received package before processing
-func (h *ExtendedWorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (h *ExtendedWorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	// Read the first message containing the core index and work package
 	msg1, err := handlers.ReadMessageWithContext(ctx, stream)
 	if err != nil {
@@ -295,14 +306,14 @@ func TestTwoNodesAnnounceBlocks(t *testing.T) {
 	nodes := setupNodes(ctx, t, state.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
+	cleanupNodes(t, node1, node2)
+
 	// Start both nodes
 	err := node1.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node1)
 
 	err = node2.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node2)
 
 	// Allow time for the nodes to start
 	time.Sleep(100 * time.Millisecond)
@@ -344,7 +355,7 @@ func TestTwoNodesAnnounceBlocks(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check if node2 has added the block to its known leaves
-	_, exists := node2.BlockService.KnownLeaves[headerHash]
+	exists := node2.BlockService.HasLeaf(headerHash)
 	require.True(t, exists, "Node2 should have the announced block in its known leaves")
 
 	// Verify the block is in node2's store
@@ -363,14 +374,14 @@ func TestTwoNodesRequestBlock(t *testing.T) {
 	nodes := setupNodes(ctx, t, state.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
+	cleanupNodes(t, node1, node2)
+
 	// Start both nodes
 	err := node1.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node1)
 
 	err = node2.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node2)
 
 	// Allow time for the nodes to start
 	time.Sleep(100 * time.Millisecond)
@@ -418,6 +429,7 @@ func TestTwoNodesSubmitWorkPackage(t *testing.T) {
 	nodes := setupNodes(ctx, t, state.State{}, 2)
 	node1 := nodes[0]
 	node2 := nodes[1]
+	cleanupNodes(t, node1, node2)
 
 	// Create a mock fetcher for tracking received packages
 	mockFetcher := NewMockImportSegmentsFetcher()
@@ -430,11 +442,9 @@ func TestTwoNodesSubmitWorkPackage(t *testing.T) {
 	// Start both nodes
 	err := node1.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node1)
 
 	err = node2.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node2)
 
 	// Allow time for the nodes to start
 	time.Sleep(100 * time.Millisecond)
@@ -548,18 +558,14 @@ func TestWorkPackageSubmissionToWorkReportGuarantee(t *testing.T) {
 	validator1 := nodes[4]
 	validator2 := nodes[5]
 
+	cleanupNodes(t, builderNode, mainGuarantor, remoteGuarantor2, remoteGuarantor3, validator1, validator2)
+
 	require.NoError(t, builderNode.Start())
-	defer stopNode(t, builderNode)
 	require.NoError(t, mainGuarantor.Start())
-	defer stopNode(t, mainGuarantor)
 	require.NoError(t, remoteGuarantor2.Start())
-	defer stopNode(t, remoteGuarantor2)
 	require.NoError(t, remoteGuarantor3.Start())
-	defer stopNode(t, remoteGuarantor3)
 	require.NoError(t, validator1.Start())
-	defer stopNode(t, validator1)
 	require.NoError(t, validator2.Start())
-	defer stopNode(t, validator2)
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -816,12 +822,19 @@ func TestTwoNodesDistributeShard(t *testing.T) {
 	node2 := nodes[1]
 
 	erasureRoot := testutils.RandomHash(t)
-	shardIndex := uint16(4)
+	coreIndex := uint16(3)
+	node1.ValidatorManager.Index = 1
+	// Mirror assignedShardIndex in pkg/network/node/node.go to keep expectations aligned.
+	shardIndex := (coreIndex*uint16(constants.ErasureCodingOriginalShards) + node1.ValidatorManager.Index) % constants.NumberOfValidators
 	expectedBundleShard := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	expectedSegmentShard := [][]byte{
-		{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
-		{13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
+	// Create segment shards with correct size based on build constants
+	segmentShard1 := make([]byte, handlers.SegmentShardSize)
+	segmentShard2 := make([]byte, handlers.SegmentShardSize)
+	for i := range segmentShard1 {
+		segmentShard1[i] = byte(i % 256)
+		segmentShard2[i] = byte((i + 128) % 256)
 	}
+	expectedSegmentShard := [][]byte{segmentShard1, segmentShard2}
 
 	hash1 := testutils.RandomHash(t)
 	hash2 := testutils.RandomHash(t)
@@ -832,15 +845,14 @@ func TestTwoNodesDistributeShard(t *testing.T) {
 	validatorSvc.On("ShardDistribution", mock.Anything, erasureRoot, shardIndex).Return(expectedBundleShard, expectedSegmentShard, expectedJustification, nil)
 
 	node2.ProtocolManager.Registry.RegisterHandler(protocol.StreamKindShardDist, handlers.NewShardDistributionHandler(validatorSvc))
+	cleanupNodes(t, node1, node2)
 
 	// Start both nodes
 	err := node1.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node1)
 
 	err = node2.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node2)
 
 	// Allow time for the nodes to start
 	time.Sleep(100 * time.Millisecond)
@@ -858,10 +870,8 @@ func TestTwoNodesDistributeShard(t *testing.T) {
 	node2Peer := node1.PeersSet.GetByAddress(node2Addr.String())
 	require.NotNil(t, node2Peer, "Node1 should have Node2 as a peer")
 
-	node1.ValidatorManager.Index = 1
-
 	// Send shards and justification
-	bundleShard, segmentShard, justification, err := node1.ShardDistributionSend(ctx, node2Peer.Ed25519Key, 3, erasureRoot)
+	bundleShard, segmentShard, justification, err := node1.ShardDistributionSend(ctx, node2Peer.Ed25519Key, coreIndex, erasureRoot)
 	require.NoError(t, err)
 	assert.Equal(t, expectedBundleShard, bundleShard)
 	assert.Equal(t, expectedSegmentShard, segmentShard)
@@ -891,15 +901,14 @@ func TestTwoNodesAuditShard(t *testing.T) {
 
 	err := node2.AvailabilityStore.PutShardsAndJustification(erasureRoot, shardIndex, expectedBundleShard, nil, expectedJustification)
 	require.NoError(t, err)
+	cleanupNodes(t, node1, node2)
 
 	// Start both nodes
 	err = node1.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node1)
 
 	err = node2.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node2)
 
 	// Allow time for the nodes to start
 	time.Sleep(100 * time.Millisecond)
@@ -939,23 +948,27 @@ func TestTwoNodesSegmentShard(t *testing.T) {
 	erasureRoot := testutils.RandomHash(t)
 	shardIndex := uint16(100)
 	segmentIndexes := []uint16{0, 1, 2}
-	expectedSegmentShard := [][]byte{
-		{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
-		{13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
-		{23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34},
+	// Create segment shards with correct size based on build constants
+	segmentShard1 := make([]byte, handlers.SegmentShardSize)
+	segmentShard2 := make([]byte, handlers.SegmentShardSize)
+	segmentShard3 := make([]byte, handlers.SegmentShardSize)
+	for i := range segmentShard1 {
+		segmentShard1[i] = byte(i % 256)
+		segmentShard2[i] = byte((i + 64) % 256)
+		segmentShard3[i] = byte((i + 128) % 256)
 	}
+	expectedSegmentShard := [][]byte{segmentShard1, segmentShard2, segmentShard3}
 
 	err := node2.AvailabilityStore.PutShardsAndJustification(erasureRoot, shardIndex, nil, expectedSegmentShard, nil)
 	require.NoError(t, err)
+	cleanupNodes(t, node1, node2)
 
 	// Start both nodes
 	err = node1.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node1)
 
 	err = node2.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node2)
 
 	// Allow time for the nodes to start
 	time.Sleep(100 * time.Millisecond)
@@ -994,11 +1007,16 @@ func TestTwoNodesSegmentJustificationShard(t *testing.T) {
 	erasureRoot := testutils.RandomHash(t)
 	shardIndex := uint16(77)
 	segmentIndexes := []uint16{0, 1, 2}
-	expectedSegmentShard := [][]byte{
-		{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
-		{13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
-		{23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34},
+	// Create segment shards with correct size based on build constants
+	segmentShard1 := make([]byte, handlers.SegmentShardSize)
+	segmentShard2 := make([]byte, handlers.SegmentShardSize)
+	segmentShard3 := make([]byte, handlers.SegmentShardSize)
+	for i := range segmentShard1 {
+		segmentShard1[i] = byte(i % 256)
+		segmentShard2[i] = byte((i + 64) % 256)
+		segmentShard3[i] = byte((i + 128) % 256)
 	}
+	expectedSegmentShard := [][]byte{segmentShard1, segmentShard2, segmentShard3}
 	hash1 := testutils.RandomHash(t)
 	hash2 := testutils.RandomHash(t)
 	hash3 := testutils.RandomHash(t)
@@ -1008,15 +1026,14 @@ func TestTwoNodesSegmentJustificationShard(t *testing.T) {
 
 	err := node2.AvailabilityStore.PutShardsAndJustification(erasureRoot, shardIndex, nil, expectedSegmentShard, baseJustification)
 	require.NoError(t, err)
+	cleanupNodes(t, node1, node2)
 
 	// Start both nodes
 	err = node1.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node1)
 
 	err = node2.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node2)
 
 	// Allow time for the nodes to start
 	time.Sleep(100 * time.Millisecond)
@@ -1066,15 +1083,14 @@ func TestTwoNodesStateRequest(t *testing.T) {
 	// Store the trie in node2's state trie
 	hash, err := node2.StateTrieStore.MerklizeAndCommit(pairs)
 	require.NoError(t, err)
+	cleanupNodes(t, node1, node2)
 
 	// Start both nodes
 	err = node1.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node1)
 
 	err = node2.Start()
 	require.NoError(t, err)
-	defer stopNode(t, node2)
 
 	// Allow time for the nodes to start
 	time.Sleep(100 * time.Millisecond)
@@ -1199,27 +1215,30 @@ func TestAnnounceBlocksAndDistributeShards(t *testing.T) {
 	erasureRoot := testutils.RandomHash(t)
 
 	bundleShard := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	segmentsShards := [][]byte{
-		{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
-		{13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24},
+	// Create segment shards with correct size based on build constants
+	segmentShard1 := make([]byte, handlers.SegmentShardSize)
+	segmentShard2 := make([]byte, handlers.SegmentShardSize)
+	for i := range segmentShard1 {
+		segmentShard1[i] = byte(i % 256)
+		segmentShard2[i] = byte((i + 128) % 256)
 	}
+	segmentsShards := [][]byte{segmentShard1, segmentShard2}
 
 	hash1 := testutils.RandomHash(t)
 	hash2 := testutils.RandomHash(t)
 
 	justification := [][]byte{hash1[:], hash2[:], append(hash1[:], hash2[:]...)}
 
+	cleanupNodes(t, nodes[node1Id], nodes[guarantor1Id], nodes[assurer1Id])
+
 	err := nodes[node1Id].Start()
 	require.NoError(t, err)
-	defer stopNode(t, nodes[node1Id])
 
 	err = nodes[guarantor1Id].Start()
 	require.NoError(t, err)
-	defer stopNode(t, nodes[guarantor1Id])
 
 	err = nodes[assurer1Id].Start()
 	require.NoError(t, err)
-	defer stopNode(t, nodes[assurer1Id])
 
 	// Allow time for the nodes to start
 	time.Sleep(100 * time.Millisecond)
@@ -1294,9 +1313,9 @@ func TestTwoNodesSendAndDistributeSafroleTicket(t *testing.T) {
 	defer cancel()
 
 	nodes := setupNodes(ctx, t, state.State{}, 6)
+	cleanupNodes(t, nodes...)
 	for _, node := range nodes {
 		node.Start()
-		defer stopNode(t, node)
 	}
 
 	sender := nodes[0]
@@ -1337,7 +1356,7 @@ func TestTwoNodesSendAndDistributeSafroleTicket(t *testing.T) {
 	err = nodes[proxyValidatorIndex].DistributeTicketToPeer(ctx, ticket, sender.ValidatorManager.Keys.EdPub)
 	require.NoError(t, err)
 
-	time.Sleep(5000 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	// Check if ProxyValidator has distributed the ticket to all validators
 	// Check if Node1 has received the ticket
 	resultTicket, err = sender.TicketStore.GetTicket(uint32(jamtime.CurrentEpoch()), hash)
@@ -1350,9 +1369,9 @@ func TestReconstructSegmentsFromAssurers(t *testing.T) {
 	defer cancel()
 
 	nodes := setupNodes(ctx, t, state.State{}, 4)
+	cleanupNodes(t, nodes...)
 	for _, node := range nodes {
 		node.Start()
-		defer stopNode(t, node)
 	}
 
 	node1 := nodes[0]
@@ -1369,8 +1388,8 @@ func TestReconstructSegmentsFromAssurers(t *testing.T) {
 	require.NoError(t, err)
 	segmentShards2, err := erasurecoding.Encode(segment2[:])
 	require.NoError(t, err)
-	require.Len(t, segmentShards1, 6)
-	require.Len(t, segmentShards2, 6)
+	require.Len(t, segmentShards1, constants.NumberOfValidators)
+	require.Len(t, segmentShards2, constants.NumberOfValidators)
 
 	// Store shards in assurers
 	erasureRoot := testutils.RandomHash(t)

@@ -2,15 +2,13 @@ package handlers
 
 import (
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
 	"time"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/chain"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
 	"github.com/quic-go/quic-go"
 )
@@ -59,7 +57,7 @@ type blockRequestMessage struct {
 // either forward (for ascending) or backward (for descending), limited by MaxBlocks.
 // For ascending requests, the sequence starts with a child of the given block.
 // For descending requests, the sequence starts with the given block itself.
-func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (h *BlockRequestHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	// Read the request message
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
@@ -128,7 +126,7 @@ type BlockRequester struct{}
 // Returns:
 //   - Sequence of blocks if successful
 //   - Error if request fails, response invalid, or context cancelled
-func (r *BlockRequester) RequestBlocks(ctx context.Context, stream quic.Stream, headerHash [32]byte, ascending bool, maxBlocks uint32) ([]block.Block, error) {
+func (r *BlockRequester) RequestBlocks(ctx context.Context, stream *quic.Stream, headerHash [32]byte, ascending bool, maxBlocks uint32) ([]block.Block, error) {
 	direction := byte(0)
 	if !ascending {
 		direction = 1

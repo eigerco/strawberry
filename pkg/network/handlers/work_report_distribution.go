@@ -2,16 +2,13 @@ package handlers
 
 import (
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
 	"log"
 
-	"github.com/quic-go/quic-go"
-
 	"github.com/eigerco/strawberry/internal/block"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"github.com/quic-go/quic-go"
 )
 
 // WorkReportDistributionHandler processes incoming CE-135 streams
@@ -23,7 +20,7 @@ func NewWorkReportDistributionHandler() *WorkReportDistributionHandler {
 	return &WorkReportDistributionHandler{}
 }
 
-func (h *WorkReportDistributionHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (h *WorkReportDistributionHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return fmt.Errorf("failed to read guarantee: %w", err)
@@ -62,7 +59,7 @@ func NewWorkReportDistributionSender() *WorkReportDistributionSender {
 // <-- FIN
 func (s *WorkReportDistributionSender) SendGuarantee(
 	ctx context.Context,
-	stream quic.Stream,
+	stream *quic.Stream,
 	validatorIndex uint16,
 	guaranteeData []byte,
 ) error {

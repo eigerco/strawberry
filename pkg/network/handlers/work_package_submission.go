@@ -2,17 +2,14 @@ package handlers
 
 import (
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
 
-	"github.com/quic-go/quic-go"
-
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/d3l"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"github.com/quic-go/quic-go"
 )
 
 // WorkPackageSubmissionHandler processes incoming CE-133 submission streams
@@ -42,7 +39,7 @@ func NewWorkPackageSubmissionHandler(fetcher d3l.SegmentsFetcher, wpSharingHandl
 //
 // Then fetches imported segments (if needed), wraps the data into a bundle,
 // and starts validation, refinement, and distribution.
-func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (h *WorkPackageSubmissionHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	msg1, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return fmt.Errorf("failed to read message 1: %w", err)
@@ -129,7 +126,7 @@ type WorkPackageSubmitter struct{}
 //
 //	Message 1: [Core Index (u16) ++ work.Package]
 //	Message 2: [Extrinsic data]
-func (s *WorkPackageSubmitter) SubmitWorkPackage(ctx context.Context, stream quic.Stream, coreIndex uint16, pkg work.Package, extrinsics []byte) error {
+func (s *WorkPackageSubmitter) SubmitWorkPackage(ctx context.Context, stream *quic.Stream, coreIndex uint16, pkg work.Package, extrinsics []byte) error {
 	coreIndexBytes, err := jam.Marshal(coreIndex)
 	if err != nil {
 		return fmt.Errorf("failed to marshal core index: %w", err)
