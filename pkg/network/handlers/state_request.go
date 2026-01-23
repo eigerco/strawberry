@@ -3,13 +3,11 @@ package handlers
 import (
 	"bytes"
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"encoding/binary"
 	"fmt"
 
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/merkle/trie"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -59,7 +57,7 @@ type stateRequestMessage struct {
 // <-- [Boundary Node]
 // <-- [Key ++ Value]
 // <-- FIN
-func (h *StateRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (h *StateRequestHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	// Read the request message
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
@@ -182,7 +180,7 @@ type StateRequester struct{}
 // Returns:
 // - A TrieRangeResult containing the boundary nodes and key-value pairs
 // - An error if the request or response processing fails
-func (h *StateRequester) RequestState(ctx context.Context, stream quic.Stream, headerHash crypto.Hash, keyStart [31]byte, keyEnd [31]byte, maxSize uint32) (store.TrieRangeResult, error) {
+func (h *StateRequester) RequestState(ctx context.Context, stream *quic.Stream, headerHash crypto.Hash, keyStart [31]byte, keyEnd [31]byte, maxSize uint32) (store.TrieRangeResult, error) {
 	// Create the request message byte array
 	content := make([]byte, hashSize+keySize+keySize+maxSizeSize)
 	copy(content[:keyStartOffset], headerHash[:])                   // First 32 bytes: header hash

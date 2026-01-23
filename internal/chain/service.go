@@ -201,6 +201,14 @@ func (bs *BlockService) RemoveLeaf(hash crypto.Hash) {
 	delete(bs.KnownLeaves, hash)
 }
 
+// HasLeaf checks if a block hash exists in the set of known leaves.
+func (bs *BlockService) HasLeaf(hash crypto.Hash) bool {
+	bs.mu.RLock()
+	defer bs.mu.RUnlock()
+	_, exists := bs.KnownLeaves[hash]
+	return exists
+}
+
 // IsDescendantOfFinalized checks if a block is a descendant of the latest finalized block
 // by walking back through its ancestors until we either:
 // - Find the latest finalized block (true)

@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"strings"
+
+	"github.com/eigerco/strawberry/pkg/network/transport"
 )
 
 // Config represents the configuration for a protocol Manager
@@ -44,7 +46,7 @@ func NewManager(config Config) (*Manager, error) {
 
 // OnConnection is called when a new transport connection is established.
 // It sets up a protocol connection and starts a stream handling goroutine.
-func (m *Manager) OnConnection(conn TransportConn) *ProtocolConn {
+func (m *Manager) OnConnection(conn *transport.Conn) *ProtocolConn {
 	protoConn := NewProtocolConn(conn, m.Registry)
 	go m.handleStreams(protoConn)
 	return protoConn

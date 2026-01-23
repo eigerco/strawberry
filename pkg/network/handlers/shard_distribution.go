@@ -2,20 +2,16 @@ package handlers
 
 import (
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
 	"slices"
 
 	"github.com/eigerco/strawberry/internal/constants"
-	"github.com/eigerco/strawberry/pkg/network/protocol"
-
-	"github.com/quic-go/quic-go"
-
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/validator"
+	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"github.com/quic-go/quic-go"
 )
 
 const SegmentShardSize = 4104 / constants.ErasureCodingOriginalShards
@@ -51,7 +47,7 @@ type ErasureRootAndShardIndex struct {
 // <-- [Segment Shard] (Should include all exported and proof segment shards with the given index)
 // <-- Justification
 // <-- FIN
-func (h *ShardDistributionHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (h *ShardDistributionHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return fmt.Errorf("unable to read message %w", err)
@@ -134,7 +130,7 @@ func decodeJustification(justificationBytes []byte) (justification [][]byte, err
 type ShardDistributionSender struct{}
 
 // ShardDistribution implements the sender side of the CE 137 protocol for more details check ShardDistributionHandler
-func (s *ShardDistributionSender) ShardDistribution(ctx context.Context, stream quic.Stream, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
+func (s *ShardDistributionSender) ShardDistribution(ctx context.Context, stream *quic.Stream, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, segmentShard [][]byte, justification [][]byte, err error) {
 	messageBytes, err := jam.Marshal(ErasureRootAndShardIndex{ErasureRoot: erasureRoot, ShardIndex: shardIndex})
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to encode erasure root and shard index: %w", err)

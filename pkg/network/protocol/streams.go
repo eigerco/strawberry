@@ -2,11 +2,10 @@ package protocol
 
 import (
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
 	"sync"
+
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 
 	"github.com/quic-go/quic-go"
 )
@@ -37,7 +36,7 @@ const (
 
 // StreamHandler processes individual QUIC streams within a connection
 type StreamHandler interface {
-	HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error
+	HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error
 }
 
 // StreamKind represents the type of stream (Unique Persistent or Common Ephemeral)

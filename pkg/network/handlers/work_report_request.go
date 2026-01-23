@@ -2,17 +2,14 @@ package handlers
 
 import (
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
-
-	"github.com/quic-go/quic-go"
 
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/store"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"github.com/quic-go/quic-go"
 )
 
 // WorkReportRequestHandler handles CE-136: inbound work-report requests.
@@ -40,7 +37,7 @@ func NewWorkReportRequestHandler(store *store.WorkReport) *WorkReportRequestHand
 //	<-- FIN
 //
 // This handler assumes that the node has previously stored the requested work report during the guarantee process
-func (h *WorkReportRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (h *WorkReportRequestHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return fmt.Errorf("failed to read message: %w", err)
@@ -95,7 +92,7 @@ func NewWorkReportRequester() *WorkReportRequester {
 // If the remote peer cannot fulfill the request, or if an error occurs during transmission, an error is returned
 func (r *WorkReportRequester) RequestWorkReport(
 	ctx context.Context,
-	stream quic.Stream,
+	stream *quic.Stream,
 	hash crypto.Hash,
 ) (*block.WorkReport, error) {
 	reqBytes, err := jam.Marshal(hash)

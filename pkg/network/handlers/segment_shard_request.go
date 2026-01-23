@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/quic-go/quic-go"
-
 	"github.com/eigerco/strawberry/internal/constants"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"github.com/quic-go/quic-go"
 )
 
 // NewSegmentShardRequestHandler creates a new segment shard request handler
@@ -42,7 +41,7 @@ type ErasureRootShardAndSegmentIndexes struct {
 // --> FIN
 // <-- [Segment Shard]
 // <-- FIN
-func (s *SegmentShardRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (s *SegmentShardRequestHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	requestMsg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return fmt.Errorf("failed to read segment shard request: %w", err)
@@ -75,7 +74,7 @@ func (s *SegmentShardRequestHandler) HandleStream(ctx context.Context, stream qu
 type SegmentShardRequestSender struct{}
 
 // SegmentShardRequest implements the sending of the CE 139 protocol, for more details reference SegmentShardRequestHandler
-func (s *SegmentShardRequestSender) SegmentShardRequest(ctx context.Context, stream quic.Stream, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, err error) {
+func (s *SegmentShardRequestSender) SegmentShardRequest(ctx context.Context, stream *quic.Stream, erasureRoot crypto.Hash, shardIndex uint16, segmentIndexes []uint16) (segmentShards [][]byte, err error) {
 	bb, err := jam.Marshal(ErasureRootShardAndSegmentIndexes{
 		ErasureRoot:    erasureRoot,
 		ShardIndex:     shardIndex,

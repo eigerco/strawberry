@@ -2,13 +2,10 @@ package handlers
 
 import (
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
 
 	"github.com/eigerco/strawberry/internal/crypto"
-
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
@@ -37,7 +34,7 @@ type AuditShardRequestHandler struct {
 // <-- Bundle Shard
 // <-- Justification
 // <-- FIN
-func (h *AuditShardRequestHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (h *AuditShardRequestHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	msg, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
 		return fmt.Errorf("unable to read message %w", err)
@@ -73,7 +70,7 @@ func (h *AuditShardRequestHandler) HandleStream(ctx context.Context, stream quic
 type AuditShardRequestSender struct{}
 
 // AuditShardRequest implements the sender side of the CE 138 protocol for more details see AuditShardRequestHandler
-func (s *AuditShardRequestSender) AuditShardRequest(ctx context.Context, stream quic.Stream, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, justification [][]byte, err error) {
+func (s *AuditShardRequestSender) AuditShardRequest(ctx context.Context, stream *quic.Stream, erasureRoot crypto.Hash, shardIndex uint16) (bundleShard []byte, justification [][]byte, err error) {
 	reqBytes, err := jam.Marshal(ErasureRootAndShardIndex{
 		ErasureRoot: erasureRoot,
 		ShardIndex:  shardIndex,

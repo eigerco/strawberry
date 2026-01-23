@@ -2,27 +2,23 @@ package handlers
 
 import (
 	"context"
-
-	"github.com/eigerco/strawberry/internal/crypto/ed25519"
-
 	"fmt"
 	"log"
 	"sync"
 
-	"github.com/eigerco/strawberry/internal/validator"
-
-	"github.com/quic-go/quic-go"
-
 	"github.com/eigerco/strawberry/internal/authorization"
 	"github.com/eigerco/strawberry/internal/crypto"
+	"github.com/eigerco/strawberry/internal/crypto/ed25519"
 	"github.com/eigerco/strawberry/internal/refine"
 	"github.com/eigerco/strawberry/internal/service"
 	"github.com/eigerco/strawberry/internal/store"
+	"github.com/eigerco/strawberry/internal/validator"
 	"github.com/eigerco/strawberry/internal/work"
 	"github.com/eigerco/strawberry/internal/work/results"
 	"github.com/eigerco/strawberry/pkg/network/peer"
 	"github.com/eigerco/strawberry/pkg/network/protocol"
 	"github.com/eigerco/strawberry/pkg/serialization/codec/jam"
+	"github.com/quic-go/quic-go"
 )
 
 // WorkPackageSharingHandler processes incoming CE-134 streams
@@ -77,7 +73,7 @@ func (h *WorkPackageSharingHandler) SetCurrentCore(core uint16) {
 //  2. [Work-Package Bundle]
 //
 // [Work-Report Hash ++ Ed25519 Signature].
-func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream quic.Stream, peerKey ed25519.PublicKey) error {
+func (h *WorkPackageSharingHandler) HandleStream(ctx context.Context, stream *quic.Stream, peerKey ed25519.PublicKey) error {
 	// Read Core Index and Segments-Root Mappings
 	msg1, err := ReadMessageWithContext(ctx, stream)
 	if err != nil {
