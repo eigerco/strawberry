@@ -254,7 +254,7 @@ func ShardCount(shards [][]byte) int {
 }
 
 // slicePtr returns a pointer to the first element of a byte slice.
-// For empty slices, returns a dummy non-null pointer (Rust FFI requires non-null).
+// For empty slices, returns a dummy non-null pointer (our rust implementation requires non-null).
 func slicePtr(s []byte) uintptr {
 	if len(s) == 0 {
 		return uintptr(unsafe.Pointer(&struct{}{}))
@@ -263,7 +263,7 @@ func slicePtr(s []byte) uintptr {
 }
 
 // slicePtrSizeT returns a pointer to the first element of a C.size_t slice.
-// For empty slices, returns a dummy non-null pointer (Rust FFI requires non-null).
+// For empty slices, returns a dummy non-null pointer (our rust implementation requires non-null).
 func slicePtrSizeT(s []C.size_t) uintptr {
 	if len(s) == 0 {
 		return uintptr(unsafe.Pointer(&struct{}{}))
