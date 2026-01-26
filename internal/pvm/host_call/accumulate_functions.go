@@ -70,11 +70,6 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	return gas, withCode(regs, OK), mem, ctxPair, nil
 }
 
-// Helper to check if a service id coming from a register is a uint32.
-func isServiceId(s uint64) bool {
-	return s <= math.MaxUint32
-}
-
 // Assign ΩA(ϱ, φ, μ, (x, y)) (v0.7.1)
 //
 // Function: assign = 15
@@ -130,6 +125,10 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 	}
 
 	// (▸, WHO, ...) otherwise if a ∉ NS
+	// First check if newAssigner doesn't overflow, otherwise it truncates to 0.
+	if !isServiceId(newAssigner) {
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
 	if _, exists := ctxPair.RegularCtx.AccumulationState.ServiceState[block.ServiceId(newAssigner)]; !exists {
 		return gas, withCode(regs, WHO), mem, ctxPair, nil
 	}
@@ -400,6 +399,9 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 	// let d = xd ∪ (xu)d
 	allServices := ctxPair.RegularCtx.AccumulationState.ServiceState
 
+	if !isServiceId(receiverId) {
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
 	receiverService, ok := allServices[block.ServiceId(receiverId)]
 	// if d !∈ K(d)
 	if !ok {
@@ -444,6 +446,9 @@ func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, t
 		return gas, regs, mem, ctxPair, ErrPanicf(err.Error())
 	}
 
+	if !isServiceId(d) {
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
+	}
 	if block.ServiceId(d) == ctxPair.RegularCtx.ServiceId {
 		// d = x_s => WHO
 		return gas, withCode(regs, WHO), mem, ctxPair, nil
@@ -734,6 +739,8 @@ func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	ss := block.ServiceId(omega7)
 	if uint64(omega7) == math.MaxUint64 {
 		ss = serviceId // s* = s
+	} else if !isServiceId(omega7) {
+		return gas, withCode(regs, WHO), mem, ctxPair, nil
 	}
 
 	// i = µ[o..o+z]
