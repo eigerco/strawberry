@@ -2,6 +2,7 @@ package pvm
 
 import (
 	"bytes"
+
 	"github.com/eigerco/strawberry/internal/block"
 	"github.com/eigerco/strawberry/internal/crypto"
 	"github.com/eigerco/strawberry/internal/safemath"
@@ -40,6 +41,10 @@ type memorySegment struct {
 
 // Read reads from the set of readable indices (Vμ) (implements eq. A.7 v0.7.2)
 func (m *Memory) Read(address uint32, data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
 		return ErrForbiddenMemoryAccess
@@ -82,6 +87,10 @@ func (m *Memory) Read(address uint32, data []byte) error {
 
 // Write writes to the set of writeable indices (Vμ*) (implements eq. A.7 v0.7.2)
 func (m *Memory) Write(address uint32, data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+
 	// ☇ if min(x) mod 2^32 < 2^16
 	if address < 1<<16 {
 		return ErrForbiddenMemoryAccess
