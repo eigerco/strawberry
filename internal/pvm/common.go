@@ -56,10 +56,12 @@ func (m *Memory) Read(address uint32, data []byte) error {
 	var memoryData []byte
 	access := Inaccessible
 
+	allocatedHeapEnd := m.rw.address + uint32(len(m.rw.data))
+
 	if address >= m.stack.address && end <= m.stack.end {
 		memoryData = m.stack.data[address-m.stack.address : end-m.stack.address]
 		access = m.stack.access
-	} else if address >= m.rw.address && end <= m.currentHeapPointer {
+	} else if address >= m.rw.address && end <= allocatedHeapEnd {
 		memoryData = m.rw.data[address-m.rw.address : end-m.rw.address]
 		access = m.rw.access
 	} else if address >= m.ro.address && end <= m.ro.end {
