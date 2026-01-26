@@ -230,3 +230,8 @@ func writeFromOffset(
 	}
 	return nil
 }
+
+// Helper to check if a service id coming from a register is a uint32.
+func isServiceId(s uint64) bool {
+	return s <= math.MaxUint32
+}

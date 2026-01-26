@@ -224,6 +224,9 @@ func Lookup(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAc
 	a := s
 	serviceExists := true
 	if uint64(omega7) != math.MaxUint64 && omega7 != uint64(serviceId) {
+		if !isServiceId(omega7) {
+			return gas, withCode(regs, NONE), mem, nil
+		}
 		a, serviceExists = serviceState[block.ServiceId(omega7)] //d[φ₇]
 	}
 
@@ -274,6 +277,8 @@ func Read(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAcco
 	ss := block.ServiceId(omega7)
 	if uint64(omega7) == math.MaxUint64 {
 		ss = serviceId // s* = s
+	} else if !isServiceId(omega7) {
+		return gas, withCode(regs, NONE), mem, nil
 	}
 
 	a := s.Clone()
@@ -397,6 +402,9 @@ func Info(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, serviceId block.Servi
 
 	account, exists := serviceState[serviceId]
 	if uint64(omega7) != math.MaxUint64 {
+		if !isServiceId(omega7) {
+			return gas, withCode(regs, NONE), mem, nil
+		}
 		account, exists = serviceState[block.ServiceId(omega7)]
 	}
 	if !exists {
