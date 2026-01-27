@@ -2,6 +2,7 @@ package pvm
 
 import (
 	"errors"
+
 	"github.com/eigerco/strawberry/internal/safemath"
 )
 
@@ -113,7 +114,6 @@ func InitializeMemory(roData, rwData, argsData []byte, stackSize uint32, initial
 	mem.rw.end = mem.rw.address + uint32(len(mem.rw.data))
 	mem.stack.end = mem.stack.address + uint32(len(mem.stack.data))
 	mem.args.end = mem.args.address + uint32(len(mem.args.data))
-	mem.currentHeapPointer = mem.rw.end
 	return mem, nil
 }
 
@@ -144,7 +144,6 @@ func InitializeCustomMemory(roAddr, rwAddr, stackAddr, argsAddr, roSize, rwSize,
 	mem.rw.end = mem.rw.address + uint32(len(mem.rw.data))
 	mem.stack.end = mem.stack.address + uint32(len(mem.stack.data))
 	mem.args.end = mem.args.address + uint32(len(mem.args.data))
-	mem.currentHeapPointer = mem.rw.end
 	return mem
 }
 

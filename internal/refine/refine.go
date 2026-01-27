@@ -107,6 +107,8 @@ func (r *Refine) InvokePVM(
 		switch hostCall {
 		case host_call.GasID:
 			gasCounter, regs, err = host_call.GasRemaining(gasCounter, regs)
+		case host_call.GrowHeapID:
+			gasCounter, regs, mem, err = host_call.GrowHeap(gasCounter, regs, mem)
 		case host_call.FetchID:
 			zeroHash := crypto.Hash{}
 			// TODO we need to pass the preimage data `x` instead of nil (where x = [[x ∣ (H(x), ∣x∣) <− wx] ∣ w <− pw])

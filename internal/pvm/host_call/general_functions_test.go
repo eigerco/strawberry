@@ -510,6 +510,223 @@ func TestWrite(t *testing.T) {
 	require.Equal(t, pvm.Gas(80), gasRemaining)
 }
 
+func TestGrowHeap(t *testing.T) {
+	t.Run("out_of_gas", func(t *testing.T) {
+		pp := &pvm.ProgramBlob{
+			ProgramMemorySizes: pvm.ProgramMemorySizes{
+				InitialHeapPages: 10,
+			},
+		}
+
+		mem, regs, err := pvm.InitializeStandardProgram(pp, nil)
+		require.NoError(t, err)
+
+		// Set target page (doesn't matter for this test)
+		regs[pvm.A0] = 0
+
+		// Call with gas less than GrowHeapCost (100)
+		gasRemaining, _, _, err := host_call.GrowHeap(pvm.Gas(99), regs, mem)
+		require.ErrorIs(t, err, pvm.ErrOutOfGas)
+		require.Equal(t, pvm.Gas(99), gasRemaining)
+	})
+
+	t.Run("successful_growth", func(t *testing.T) {
+		pp := &pvm.ProgramBlob{
+			ProgramMemorySizes: pvm.ProgramMemorySizes{
+				InitialHeapPages: 10,
+			},
+		}
+
+		mem, regs, err := pvm.InitializeStandardProgram(pp, nil)
+		require.NoError(t, err)
+
+		minPage := mem.GetHeapMinPage()
+		currentPages := mem.GetHeapAllocatedPages()
+		currentPage := minPage + currentPages
+
+		// Request 5 more pages
+		targetPage := currentPage + 5
+		regs[pvm.A0] = uint64(targetPage)
+
+		// g = 100 + 5 * 10 = 150
+		expectedGasCost := pvm.Gas(100 + 5*10)
+
+		gasRemaining, regsOut, memOut, err := host_call.GrowHeap(pvm.Gas(200), regs, mem)
+		require.NoError(t, err)
+
+		// Check gas consumed
+		require.Equal(t, pvm.Gas(200)-expectedGasCost, gasRemaining)
+
+		// Check A0 returns the new heap end page
+		require.Equal(t, uint64(targetPage), regsOut[pvm.A0])
+
+		// Check memory was actually grown
+		require.Equal(t, targetPage-minPage, memOut.GetHeapAllocatedPages())
+	})
+
+	t.Run("target_already_allocated", func(t *testing.T) {
+		pp := &pvm.ProgramBlob{
+			ProgramMemorySizes: pvm.ProgramMemorySizes{
+				InitialHeapPages: 10,
+			},
+		}
+
+		mem, regs, err := pvm.InitializeStandardProgram(pp, nil)
+		require.NoError(t, err)
+
+		minPage := mem.GetHeapMinPage()
+		currentPages := mem.GetHeapAllocatedPages()
+		currentPage := minPage + currentPages
+
+		// Request page that's already allocated (less than current)
+		targetPage := currentPage - 3
+		regs[pvm.A0] = uint64(targetPage)
+
+		// Only base cost since no new pages needed
+		expectedGasCost := pvm.Gas(100)
+
+		gasRemaining, regsOut, memOut, err := host_call.GrowHeap(pvm.Gas(200), regs, mem)
+		require.NoError(t, err)
+
+		// Check gas consumed (only base cost)
+		require.Equal(t, pvm.Gas(200)-expectedGasCost, gasRemaining)
+
+		// Check A0 returns current page (not target, since target < current)
+		require.Equal(t, uint64(currentPage), regsOut[pvm.A0])
+
+		// Check memory wasn't grown
+		require.Equal(t, currentPages, memOut.GetHeapAllocatedPages())
+	})
+
+	t.Run("target_exceeds_max_page", func(t *testing.T) {
+		pp := &pvm.ProgramBlob{
+			ProgramMemorySizes: pvm.ProgramMemorySizes{
+				InitialHeapPages: 10,
+				StackSize:        512,
+			},
+		}
+
+		mem, regs, err := pvm.InitializeStandardProgram(pp, nil)
+		require.NoError(t, err)
+
+		minPage := mem.GetHeapMinPage()
+		currentPages := mem.GetHeapAllocatedPages()
+		currentPage := minPage + currentPages
+		maxPage := mem.GetHeapMaxPage()
+
+		// Request page beyond max
+		targetPage := maxPage + 1
+		regs[pvm.A0] = uint64(targetPage)
+
+		// Should fall through to case 3: only base cost deducted
+		gasRemaining, regsOut, memOut, err := host_call.GrowHeap(pvm.Gas(10000), regs, mem)
+		require.NoError(t, err)
+
+		// Check only base cost consumed
+		require.Equal(t, pvm.Gas(10000-100), gasRemaining)
+
+		// Check A0 returns current page (not target)
+		require.Equal(t, uint64(currentPage), regsOut[pvm.A0])
+
+		// Check memory wasn't grown
+		require.Equal(t, currentPages, memOut.GetHeapAllocatedPages())
+	})
+
+	t.Run("insufficient_gas_for_pages", func(t *testing.T) {
+		pp := &pvm.ProgramBlob{
+			ProgramMemorySizes: pvm.ProgramMemorySizes{
+				InitialHeapPages: 10,
+			},
+		}
+
+		mem, regs, err := pvm.InitializeStandardProgram(pp, nil)
+		require.NoError(t, err)
+
+		minPage := mem.GetHeapMinPage()
+		currentPages := mem.GetHeapAllocatedPages()
+		currentPage := minPage + currentPages
+
+		// Request 10 more pages (would need 100 + 10*10 = 200 gas)
+		targetPage := currentPage + 10
+		regs[pvm.A0] = uint64(targetPage)
+
+		// Provide only 150 gas (enough for base cost but not all pages)
+		gasRemaining, regsOut, memOut, err := host_call.GrowHeap(pvm.Gas(150), regs, mem)
+		require.NoError(t, err)
+
+		// Falls through to case 3: only base cost deducted
+		require.Equal(t, pvm.Gas(50), gasRemaining)
+
+		// Check A0 returns current page (allocation failed)
+		require.Equal(t, uint64(currentPage), regsOut[pvm.A0])
+
+		// Check memory wasn't grown
+		require.Equal(t, currentPages, memOut.GetHeapAllocatedPages())
+	})
+
+	t.Run("zero_target_page", func(t *testing.T) {
+		pp := &pvm.ProgramBlob{
+			ProgramMemorySizes: pvm.ProgramMemorySizes{
+				InitialHeapPages: 10,
+			},
+		}
+
+		mem, regs, err := pvm.InitializeStandardProgram(pp, nil)
+		require.NoError(t, err)
+
+		minPage := mem.GetHeapMinPage()
+		currentPages := mem.GetHeapAllocatedPages()
+		currentPage := minPage + currentPages
+
+		// Request page 0 (way below minPage)
+		regs[pvm.A0] = 0
+
+		gasRemaining, regsOut, memOut, err := host_call.GrowHeap(pvm.Gas(200), regs, mem)
+		require.NoError(t, err)
+
+		// Only base cost since target < current
+		require.Equal(t, pvm.Gas(100), gasRemaining)
+
+		// Check A0 returns current page
+		require.Equal(t, uint64(currentPage), regsOut[pvm.A0])
+
+		// Check memory wasn't grown
+		require.Equal(t, currentPages, memOut.GetHeapAllocatedPages())
+	})
+
+	t.Run("exact_gas_for_growth", func(t *testing.T) {
+		pp := &pvm.ProgramBlob{
+			ProgramMemorySizes: pvm.ProgramMemorySizes{
+				InitialHeapPages: 10,
+			},
+		}
+
+		mem, regs, err := pvm.InitializeStandardProgram(pp, nil)
+		require.NoError(t, err)
+
+		minPage := mem.GetHeapMinPage()
+		currentPages := mem.GetHeapAllocatedPages()
+		currentPage := minPage + currentPages
+
+		// Request 3 more pages (needs exactly 100 + 3*10 = 130 gas)
+		targetPage := currentPage + 3
+		regs[pvm.A0] = uint64(targetPage)
+
+		// Provide exactly enough gas
+		gasRemaining, regsOut, memOut, err := host_call.GrowHeap(pvm.Gas(130), regs, mem)
+		require.NoError(t, err)
+
+		// All gas consumed
+		require.Equal(t, pvm.Gas(0), gasRemaining)
+
+		// Check A0 returns target page
+		require.Equal(t, uint64(targetPage), regsOut[pvm.A0])
+
+		// Check memory was grown
+		require.Equal(t, targetPage-minPage, memOut.GetHeapAllocatedPages())
+	})
+}
+
 func TestInfo(t *testing.T) {
 	pp := &pvm.ProgramBlob{
 		ProgramMemorySizes: pvm.ProgramMemorySizes{
