@@ -1,29 +1,6 @@
 {
   "name": "inst_store_u8",
-  "initial-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    305419896,
-    0,
-    0,
-    0,
-    0,
-    0
-  ],
   "initial-pc": 0,
-  "initial-page-map": [
-    {
-      "address": 131072,
-      "length": 4096,
-      "is-writable": true
-    }
-  ],
-  "initial-memory": [],
   "initial-gas": 10000,
   "program": [
     0,
@@ -36,30 +13,58 @@
     2,
     1
   ],
-  "expected-status": "panic",
-  "expected-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    305419896,
-    0,
-    0,
-    0,
-    0,
-    0
-  ],
-  "expected-pc": 5,
-  "expected-memory": [
+  "steps": [
     {
-      "address": 131072,
-      "contents": [
-        120
-      ]
+      "map": {
+        "address": 131072,
+        "length": 4096,
+        "is-writable": true
+      }
+    },
+    {
+      "set-reg": {
+        "reg": 7,
+        "value": 305419896
+      }
+    },
+    {
+      "run": {}
+    },
+    {
+      "assert": {
+        "status": "panic",
+        "gas": 9975,
+        "pc": 5,
+        "regs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          305419896,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "memory": [
+          {
+            "address": 131072,
+            "contents": [
+              120
+            ]
+          }
+        ]
+      }
     }
   ],
-  "expected-gas": 9998
+  "block-gas-costs": [
+    {
+      "pc": 0,
+      "cost": 25
+    }
+  ]
 }

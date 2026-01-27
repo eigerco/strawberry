@@ -1,29 +1,6 @@
 {
   "name": "inst_store_indirect_u16_with_offset_nok",
-  "initial-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    131072,
-    305419896,
-    0,
-    0,
-    0,
-    0
-  ],
   "initial-pc": 0,
-  "initial-page-map": [
-    {
-      "address": 131072,
-      "length": 4096,
-      "is-writable": true
-    }
-  ],
-  "initial-memory": [],
   "initial-gas": 10000,
   "program": [
     0,
@@ -35,24 +12,58 @@
     16,
     1
   ],
-  "expected-status": "page-fault",
-  "expected-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    131072,
-    305419896,
-    0,
-    0,
-    0,
-    0
+  "steps": [
+    {
+      "map": {
+        "address": 131072,
+        "length": 4096,
+        "is-writable": true
+      }
+    },
+    {
+      "set-reg": {
+        "reg": 7,
+        "value": 131072
+      }
+    },
+    {
+      "set-reg": {
+        "reg": 8,
+        "value": 305419896
+      }
+    },
+    {
+      "run": {}
+    },
+    {
+      "assert": {
+        "status": "page-fault",
+        "page-fault-address": 135168,
+        "gas": 9975,
+        "pc": 0,
+        "regs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          131072,
+          305419896,
+          0,
+          0,
+          0,
+          0
+        ],
+        "memory": []
+      }
+    }
   ],
-  "expected-pc": 0,
-  "expected-memory": [],
-  "expected-gas": 9998,
-  "expected-page-fault-address": 135168
+  "block-gas-costs": [
+    {
+      "pc": 0,
+      "cost": 25
+    }
+  ]
 }

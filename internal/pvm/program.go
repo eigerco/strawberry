@@ -162,6 +162,10 @@ func (p *program) skip(instructionCounter uint64) uint8 {
 //
 //nolint:unused
 func (p *program) opcode(instructionCounter uint64) Opcode {
+	if instructionCounter >= uint64(len(p.code)) {
+		return Trap
+	}
+
 	op := Opcode(p.code[instructionCounter])
 	if !opcodeValid(op) {
 		return Trap

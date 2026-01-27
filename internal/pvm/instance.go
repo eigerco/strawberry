@@ -17,7 +17,7 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit UGas, regs R
 			basicBlockInstructions[uint64(i)+1+uint64(p.skip(uint64(i)))] = struct{}{}
 		}
 	}
-
+	gasCostsMap := buildGasCostsMap(p, basicBlockInstructions)
 	return &Instance{
 		memory:                 memory,
 		regs:                   regs,
@@ -25,6 +25,7 @@ func Instantiate(program []byte, instructionOffset uint64, gasLimit UGas, regs R
 		gasRemaining:           Gas(gasLimit),
 		program:                p,
 		basicBlockInstructions: basicBlockInstructions,
+		gasCostsMap:            gasCostsMap,
 	}, nil
 }
 
@@ -35,24 +36,17 @@ type Instance struct {
 	regs                   Registers           // The registers (φ)
 	instructionCounter     uint64              // The instruction counter (ı)
 	gasRemaining           Gas                 // The gas counter (ϱ). For single step and basic invocation use Z_G (int64) according to GP the gas result can be negative
+	gasChange              bool                // ˜ϱ
 	basicBlockInstructions map[uint64]struct{} // ϖ
-
-	skipLen  uint8
-	loadBuf  [8]byte // reusable buffer for load operations
-	storeBuf [8]byte // reusable buffer for store operations
+	gasCostsMap            map[uint64]Gas      // ϱ∆
+	skipLen                uint8
+	loadBuf                [8]byte // reusable buffer for load operations
+	storeBuf               [8]byte // reusable buffer for store operations
 }
 
 // skip ı′ = ı + 1 + skip(ı) (eq. A.9 v0.7.2)
 func (i *Instance) skip() {
 	i.instructionCounter += 1 + uint64(i.skipLen)
-}
-
-func (i *Instance) deductGas(cost Gas) error {
-	if i.gasRemaining < cost {
-		return ErrOutOfGas
-	}
-	i.gasRemaining -= cost
-	return nil
 }
 
 func (i *Instance) setAndSkip(dst Reg, value uint64) {
@@ -97,4 +91,22 @@ func (i *Instance) djump(address uint32) error {
 	// (▸, j_(a/ZA)−1) otherwise
 	i.instructionCounter = instructionOffset
 	return nil
+}
+
+func (i *Instance) OverwriteGasCostsMap(gasCostsMap map[uint64]Gas) {
+	i.gasCostsMap = gasCostsMap
+}
+
+// basicBlockStart represents the start of a basic block for any ı within that basic block
+// L(ı) = max(j∈ ϖ ∣ j≤ ı) (eq. A.7)
+func (i *Instance) basicBlockStart(instrCounter uint64) uint64 {
+	var best uint64
+
+	for j := range i.basicBlockInstructions {
+		if j <= instrCounter && j > best {
+			best = j
+		}
+	}
+
+	return best
 }

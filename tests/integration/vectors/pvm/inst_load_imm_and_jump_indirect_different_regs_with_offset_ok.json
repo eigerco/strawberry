@@ -1,23 +1,6 @@
 {
   "name": "inst_load_imm_and_jump_indirect_different_regs_with_offset_ok",
-  "initial-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0
-  ],
   "initial-pc": 0,
-  "initial-page-map": [],
-  "initial-memory": [],
   "initial-gas": 10000,
   "program": [
     1,
@@ -51,23 +34,46 @@
     48,
     0
   ],
-  "expected-status": "panic",
-  "expected-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    18446744073709551518,
-    1234,
-    3735928559,
-    0,
-    0,
-    0
+  "steps": [
+    {
+      "run": {}
+    },
+    {
+      "assert": {
+        "status": "panic",
+        "gas": 9974,
+        "pc": 23,
+        "regs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          18446744073709551518,
+          1234,
+          3735928559,
+          0,
+          0,
+          0
+        ],
+        "memory": []
+      }
+    }
   ],
-  "expected-pc": 23,
-  "expected-memory": [],
-  "expected-gas": 9995
+  "block-gas-costs": [
+    {
+      "pc": 0,
+      "cost": 24
+    },
+    {
+      "pc": 12,
+      "cost": 2
+    },
+    {
+      "pc": 13,
+      "cost": 2
+    }
+  ]
 }

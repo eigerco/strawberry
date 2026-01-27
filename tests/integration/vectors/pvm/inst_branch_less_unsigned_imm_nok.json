@@ -1,23 +1,6 @@
 {
   "name": "inst_branch_less_unsigned_imm_nok",
-  "initial-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0
-  ],
   "initial-pc": 0,
-  "initial-page-map": [],
-  "initial-memory": [],
   "initial-gas": 10000,
   "program": [
     0,
@@ -45,23 +28,46 @@
     1,
     0
   ],
-  "expected-status": "panic",
-  "expected-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    18446744073709551606,
-    0,
-    0,
-    0,
-    0,
-    0
+  "steps": [
+    {
+      "run": {}
+    },
+    {
+      "assert": {
+        "status": "panic",
+        "gas": 9996,
+        "pc": 7,
+        "regs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          18446744073709551606,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "memory": []
+      }
+    }
   ],
-  "expected-pc": 7,
-  "expected-memory": [],
-  "expected-gas": 9997
+  "block-gas-costs": [
+    {
+      "pc": 0,
+      "cost": 2
+    },
+    {
+      "pc": 7,
+      "cost": 2
+    },
+    {
+      "pc": 8,
+      "cost": 2
+    }
+  ]
 }
