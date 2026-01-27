@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"path/filepath"
 	"testing"
 
@@ -108,10 +107,8 @@ func Test_PVM_Vectors(t *testing.T) {
 					require.NoError(t, err)
 					i.OverwriteGasCostsMap(gasCostMap)
 
-					log.Println("test1")
 					_, err = pvm.InvokeBasic(i)
 					require.NoError(t, err)
-					log.Println("test2")
 				}
 				if step.Map != nil {
 					if !step.Map.IsWritable {

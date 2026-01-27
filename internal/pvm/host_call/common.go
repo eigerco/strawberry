@@ -36,11 +36,13 @@ const (
 	InvokeCost
 	ExpungeCost
 	LogCost
+	GrowHeapCost = 100
 )
 
 const (
 	// General Functions
 	GasID = iota
+	GrowHeapID
 	FetchID
 	LookupID
 	ReadID

@@ -40,6 +40,65 @@ func GasRemaining(gas pvm.Gas, regs pvm.Registers) (pvm.Gas, pvm.Registers, erro
 	return gas, regs, nil
 }
 
+const (
+	GrowHeapPerPageCost pvm.Gas = 10
+)
+
+func GrowHeap(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory) (pvm.Gas, pvm.Registers, pvm.Memory, error) {
+	// case 1: (∞, ϱ, φ₇, (μₐ)ₐ...φ₇) if ϱ < 100
+	if gas < GrowHeapCost {
+		return gas, regs, mem, pvm.ErrOutOfGas
+	}
+
+	// let a = (2Z_Z + Z(|o|)) / Z_P
+	// start page index of heap region (start of rw boundary)
+	minPage := mem.GetHeapMinPage()
+
+	// let b = (2³² - 3Z_Z - Z_I - P(s)) / Z_P
+	// maximum page index (start of stack boundary minus one zone, since we have one zone of padding)
+	maxPage := mem.GetHeapMaxPage()
+
+	// let c = |{ p ∈ ℕ_a...b | μ_a[p] = W }|
+	// number of currently allocated heap pages
+	noCurrentPages := mem.GetHeapAllocatedPages()
+
+	// φ₇ = target absolute page
+	targetPage := uint32(regs[pvm.A0])
+
+	// pages to allocate: max(0, φ7 − a − c) =  max(0, φ₇ - (a + c))
+	currentPage := minPage + noCurrentPages // a + c
+
+	var pagesToAllocate uint32 = 0
+	if targetPage > currentPage {
+		pagesToAllocate = targetPage - currentPage
+	}
+
+	// g = 100 + max(0, φ7 − a − c) ⋅ 10
+	gasNeeded := GrowHeapCost + pvm.Gas(pagesToAllocate)*GrowHeapPerPageCost
+
+	// case 2: (▸, ϱ - g, max(a + c, φ₇), W)  otherwise if φ₇ ≤ b ∧ ϱ ≥ g
+	if targetPage <= maxPage && gas >= gasNeeded {
+		if targetPage > currentPage {
+			mem.GrowHeapTo(targetPage)
+		}
+
+		// φ'₇ = max(a + c, φ₇)
+		if targetPage > currentPage {
+			regs[pvm.A0] = uint64(targetPage)
+		} else {
+			regs[pvm.A0] = uint64(currentPage)
+		}
+
+		return gas - gasNeeded, regs, mem, nil
+	}
+
+	// case 3: (▸, ϱ - 100, a + c, (μₐ)ₐ...φ₇)  otherwise
+	// (φ₇ > b or ρ < g)
+	regs[pvm.A0] = uint64(currentPage)
+
+	return gas - GrowHeapCost, regs, mem, nil
+}
+
 // Fetch ΩY(ρ, φ, µ, p, n, r, i, i, x, o, t, ...)
 func Fetch(
 	gas pvm.Gas, // ρ

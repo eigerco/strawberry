@@ -42,7 +42,6 @@ const (
 	BranchGreaterOrEqualSignedImmCost   Gas = 1
 	BranchGreaterSignedImmCost          Gas = 1
 	MoveRegCost                         Gas = 1
-	SbrkCost                            Gas = 1
 	CountSetBits64Cost                  Gas = 1
 	CountSetBits32Cost                  Gas = 1
 	LeadingZeroBits64Cost               Gas = 1

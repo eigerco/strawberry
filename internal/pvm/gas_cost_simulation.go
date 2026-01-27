@@ -3,7 +3,6 @@ package pvm
 type simulationProgram struct {
 	*program
 
-	skipLen     uint8
 	srcRegs     regsSet       // ˇs(c,k,ı) - a set of source registers read by a given instruction
 	dstRegs     regsSet       // ˇr(c,k,ı) - a set of destination registers which are written by a given instruction
 	instrCycles uint8         // ˇc
@@ -100,7 +99,7 @@ func (e execResources) sub(another execResources) execResources {
 	}
 }
 
-// ∀a,b ∈ E; ∀ ⊕ ∈ { <,>,≤,≥ } ∶ a ⊕ b ≡ ⋀[ k∈{ A,L,S,M,D } ] a_k ⊕ b_k
+// ∀a,b ∈ E; ∀ ⊕ ∈ { <,>,≤,≥ } ∶ a ⊕ b ≡ ⋀ [ k∈{ A,L,S,M,D } ] a_k ⊕ b_k
 func (e execResources) greaterThan(another execResources) bool {
 	return e.ALU > another.ALU &&
 		e.Load > another.Load &&
@@ -142,7 +141,6 @@ func (s *simulationProgram) simulate(state simulationState) simulationState {
 
 	// if x_ı ≠ ∅ ∧ dˇ(c,k,xı) ≤ x_d ∧ l < 32
 	if state.instructionCounter != nil {
-		s.skipLen = s.program.skip(*state.instructionCounter)
 		s.computeCostsAndRegs(*state.instructionCounter)
 		if uint64(s.decodeSlots) <= state.decodeSlots && l < 32 {
 			// X′
@@ -401,6 +399,7 @@ func (s *simulationProgram) branchCostImm(instructionCounter uint64) uint8 {
 }
 
 func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
+	skip := s.skip(instructionCounter)
 	switch s.opcode(instructionCounter) {
 	case MoveReg:
 		dstReg, regA := s.decodeArgsReg2(instructionCounter)
@@ -443,42 +442,42 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, s.regsOverlaps(2, 3), execResources{1, 0, 0, 0, 0} // sub_32 2 P(2,3) 1 0 0 0 0
 	case AndImm:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, s.regsOverlaps(1, 2), execResources{1, 0, 0, 0, 0} // and_imm 1 P(1,2) 1 0 0 0 0
 	case XorImm:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, s.regsOverlaps(1, 2), execResources{1, 0, 0, 0, 0} // xor_imm 1 P(1,2) 1 0 0 0 0
 	case OrImm:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, s.regsOverlaps(1, 2), execResources{1, 0, 0, 0, 0} // or_imm 1 P(1,2) 1 0 0 0 0
 	case AddImm64:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, s.regsOverlaps(1, 2), execResources{1, 0, 0, 0, 0} // add_imm_64 1 P(1,2) 1 0 0 0 0
 	case ShloRImm64:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, s.regsOverlaps(1, 2), execResources{1, 0, 0, 0, 0} // shlo_r_imm_64 1 P(1,2) 1 0 0 0 0
 	case SharRImm64:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, s.regsOverlaps(1, 2), execResources{1, 0, 0, 0, 0} // shar_r_imm_64 1 P(1,2) 1 0 0 0 0
 	case ShloLImm64:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, s.regsOverlaps(1, 2), execResources{1, 0, 0, 0, 0} // shlo_l_imm_64 1 P(1,2) 1 0 0 0 0
 	case RotR64Imm:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, s.regsOverlaps(1, 2), execResources{1, 0, 0, 0, 0} // rot_r_64_imm 1 P(1,2) 1 0 0 0 0
@@ -488,27 +487,27 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.srcRegs = regsSet{regA: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, s.regsOverlaps(1, 2), execResources{1, 0, 0, 0, 0} // reverse_bytes 1 P(1,2) 1 0 0 0 0
 	case AddImm32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, s.regsOverlaps(2, 3), execResources{1, 0, 0, 0, 0} // add_imm_32 2 P(2,3) 1 0 0 0 0
 	case ShloRImm32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, s.regsOverlaps(2, 3), execResources{1, 0, 0, 0, 0} // shlo_r_imm_32 2 P(2,3) 1 0 0 0 0
 	case SharRImm32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, s.regsOverlaps(2, 3), execResources{1, 0, 0, 0, 0} // shar_r_imm_32 2 P(2,3) 1 0 0 0 0
 	case ShloLImm32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, s.regsOverlaps(2, 3), execResources{1, 0, 0, 0, 0} // shlo_l_imm_32 2 P(2,3) 1 0 0 0 0
 	case RotR32Imm:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, s.regsOverlaps(2, 3), execResources{1, 0, 0, 0, 0} // rot_r_32_imm 2 P(2,3) 1 0 0 0 0
@@ -608,42 +607,42 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, s.overlapsFirstSrcReg(instructionCounter, 3, 4), execResources{1, 0, 0, 0, 0} // rot_r_32 2 PS (3,4) 1 0 0 0 0
 	case ShloLImmAlt64:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, 3, execResources{1, 0, 0, 0, 0} // shlo_l_imm_alt_64 1 3 1 0 0 0 0
 	case ShloRImmAlt64:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, 3, execResources{1, 0, 0, 0, 0} // shlo_r_imm_alt_64 1 3 1 0 0 0 0
 	case SharRImmAlt64:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, 3, execResources{1, 0, 0, 0, 0} // shar_r_imm_alt_64 1 3 1 0 0 0 0
 	case RotR64ImmAlt:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, 3, execResources{1, 0, 0, 0, 0} // rot_r_64_imm_alt 1 3 1 0 0 0 0
 	case ShloLImmAlt32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, 4, execResources{1, 0, 0, 0, 0} // shlo_l_imm_alt_32 2 4 1 0 0 0 0
 	case ShloRImmAlt32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, 4, execResources{1, 0, 0, 0, 0} // shlo_r_imm_alt_32 2 4 1 0 0 0 0
 	case SharRImmAlt32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, 4, execResources{1, 0, 0, 0, 0} // shar_r_imm_alt_32 2 4 1 0 0 0 0
 	case RotR32ImmAlt:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, 4, execResources{1, 0, 0, 0, 0} // rot_r_32_imm_alt 2 4 1 0 0 0 0
@@ -658,22 +657,22 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 3, 3, execResources{1, 0, 0, 0, 0} // set_lt_s 3 3 1 0 0 0 0
 	case SetLtUImm:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 3, 3, execResources{1, 0, 0, 0, 0} // set_lt_u_imm 3 3 1 0 0 0 0
 	case SetLtSImm:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 3, 3, execResources{1, 0, 0, 0, 0} // set_lt_s_imm 3 3 1 0 0 0 0
 	case SetGtUImm:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 3, 3, execResources{1, 0, 0, 0, 0} // set_gt_u_imm 3 3 1 0 0 0 0
 	case SetGtSImm:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 3, 3, execResources{1, 0, 0, 0, 0} // set_gt_s_imm 3 3 1 0 0 0 0
@@ -688,12 +687,12 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, 2, execResources{1, 0, 0, 0, 0} // cmov_nz 2 2 1 0 0 0 0
 	case CmovIzImm:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, 3, execResources{1, 0, 0, 0, 0} // cmov_iz_imm 2 3 1 0 0 0 0
 	case CmovNzImm:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, 3, execResources{1, 0, 0, 0, 0} // cmov_nz_imm 2 3 1 0 0 0 0
@@ -718,112 +717,112 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 3, s.regsOverlaps(2, 3), execResources{1, 0, 0, 0, 0} // min_u 3 P(2,3) 1 0 0 0 0
 	case LoadIndU8:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_ind_u8 m 1 1 1 0 0 0
 	case LoadIndI8:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_ind_i8 m 1 1 1 0 0 0
 	case LoadIndU16:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_ind_u16 m 1 1 1 0 0 0
 	case LoadIndI16:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_ind_i16 m 1 1 1 0 0 0
 	case LoadIndU32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_ind_u32 m 1 1 1 0 0 0
 	case LoadIndI32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_ind_i32 m 1 1 1 0 0 0
 	case LoadIndU64:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_ind_u64 m 1 1 1 0 0 0
 	case LoadU8:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_u8 m 1 1 1 0 0 0
 	case LoadI8:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_i8 m 1 1 1 0 0 0
 	case LoadU16:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_u16 m 1 1 1 0 0 0
 	case LoadI16:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_i16 m 1 1 1 0 0 0
 	case LoadU32:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_u32 m 1 1 1 0 0 0
 	case LoadI32:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_i32 m 1 1 1 0 0 0
 	case LoadU64:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = memoryAccessCost, 1, execResources{1, 1, 0, 0, 0} // load_u64 m 1 1 1 0 0 0
 	case StoreImmIndU8:
-		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_imm_ind_u8 25 1 1 0 1 0 0
 	case StoreImmIndU16:
-		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_imm_ind_u16 25 1 1 0 1 0 0
 	case StoreImmIndU32:
-		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_imm_ind_u32 25 1 1 0 1 0 0
 	case StoreImmIndU64:
-		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImm2(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_imm_ind_u64 25 1 1 0 1 0 0
 	case StoreIndU8:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_ind_u8 25 1 1 0 1 0 0
 	case StoreIndU16:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_ind_u16 25 1 1 0 1 0 0
 	case StoreIndU32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_ind_u32 25 1 1 0 1 0 0
 	case StoreIndU64:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_ind_u64 25 1 1 0 1 0 0
@@ -840,102 +839,102 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.srcRegs, s.dstRegs = regsSet{}, regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_imm_u64 25 1 1 0 1 0 0
 	case StoreU8:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_u8 25 1 1 0 1 0 0
 	case StoreU16:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_u16 25 1 1 0 1 0 0
 	case StoreU32:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_u32 25 1 1 0 1 0 0
 	case StoreU64:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 25, 1, execResources{1, 0, 1, 0, 0} // store_u64 25 1 1 0 1 0 0
 	case BranchEq:
-		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCost(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_eq b 1 1 0 0 0 0
 	case BranchNe:
-		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCost(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_ne b 1 1 0 0 0 0
 	case BranchLtU:
-		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCost(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_lt_u b 1 1 0 0 0 0
 	case BranchLtS:
-		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCost(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_lt_s b 1 1 0 0 0 0
 	case BranchGeU:
-		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCost(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_ge_u b 1 1 0 0 0 0
 	case BranchGeS:
-		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Offset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCost(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_ge_s b 1 1 0 0 0 0
 	case BranchEqImm:
-		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_eq_imm b 1 1 0 0 0 0
 	case BranchNeImm:
-		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_ne_imm b 1 1 0 0 0 0
 	case BranchLtUImm:
-		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_lt_u_imm b 1 1 0 0 0 0
 	case BranchLeUImm:
-		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_le_u_imm b 1 1 0 0 0 0
 	case BranchGeUImm:
-		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_ge_u_imm b 1 1 0 0 0 0
 	case BranchGtUImm:
-		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_gt_u_imm b 1 1 0 0 0 0
 	case BranchLtSImm:
-		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_lt_s_imm b 1 1 0 0 0 0
 	case BranchLeSImm:
-		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_le_s_imm b 1 1 0 0 0 0
 	case BranchGeSImm:
-		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_ge_s_imm b 1 1 0 0 0 0
 	case BranchGtSImm:
-		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = s.branchCostImm(instructionCounter), 1, execResources{1, 0, 0, 0, 0} // branch_gt_s_imm b 1 1 0 0 0 0
@@ -995,17 +994,17 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, s.regsOverlaps(2, 3), execResources{1, 0, 0, 0, 0} // xnor 2 P(2,3) 1 0 0 0 0
 	case NegAddImm64:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 2, 3, execResources{1, 0, 0, 0, 0} // neg_add_imm_64 2 3 1 0 0 0 0
 	case NegAddImm32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 3, 4, execResources{1, 0, 0, 0, 0} // neg_add_imm_32 3 4 1 0 0 0 0
 	case LoadImm:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 1, 1, execResources{0, 0, 0, 0, 0} // load_imm 1 1 0 0 0 0 0
@@ -1025,12 +1024,12 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.srcRegs = regsSet{regA: {}, regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 4, s.regsOverlaps(2, 3), execResources{1, 0, 0, 1, 0} // mul_32 4 P(2,3) 1 0 0 1 0
 	case MulImm64:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 3, s.regsOverlaps(1, 2), execResources{1, 0, 0, 1, 0} // mul_imm_64 3 P(1,2) 1 0 0 1 0
 	case MulImm32:
-		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, s.skipLen)
+		regA, regB, _ := s.decodeArgsReg2Imm(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 4, s.regsOverlaps(2, 3), execResources{1, 0, 0, 1, 0} // mul_imm_32 4 P(2,3) 1 0 0 1 0
@@ -1062,17 +1061,17 @@ func (s *simulationProgram) computeCostsAndRegs(instructionCounter uint64) {
 		s.dstRegs, s.srcRegs = regsSet{}, regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 15, 1, execResources{0, 0, 0, 0, 0} // jump 15 1 0 0 0 0 0
 	case LoadImmJump:
-		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, s.skipLen)
+		regA, _, _ := s.decodeArgsRegImmOffset(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 15, 1, execResources{0, 0, 0, 0, 0} // load_imm_jump 15 1 0 0 0 0 0
 	case JumpInd:
-		regA, _ := s.decodeArgsRegImm(instructionCounter, s.skipLen)
+		regA, _ := s.decodeArgsRegImm(instructionCounter, skip)
 		s.srcRegs = regsSet{regA: {}}
 		s.dstRegs = regsSet{}
 		s.instrCycles, s.decodeSlots, s.execUnits = 22, 1, execResources{0, 0, 0, 0, 0} // jump_ind 22 1 0 0 0 0 0
 	case LoadImmJumpInd:
-		regA, regB, _, _ := s.decodeArgsReg2Imm2(instructionCounter, s.skipLen)
+		regA, regB, _, _ := s.decodeArgsReg2Imm2(instructionCounter, skip)
 		s.dstRegs = regsSet{regA: {}}
 		s.srcRegs = regsSet{regB: {}}
 		s.instrCycles, s.decodeSlots, s.execUnits = 22, 1, execResources{0, 0, 0, 0, 0} // load_imm_jump_ind 22 1 0 0 0 0 0
