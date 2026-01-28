@@ -24,15 +24,18 @@ func (i *Instance) step() (uint64, error) {
 	if !i.gasChange {
 		basicBlockCost := i.gasCostsMap[initialBlockStart]
 		if i.gasRemaining >= basicBlockCost {
+			i.gasChange = true
 			i.gasRemaining -= basicBlockCost
 		} else {
+			i.gasChange = false
 			return 0, ErrOutOfGas
 		}
 	}
 
+	var err error
 	switch opcode {
 	case Trap:
-		return 0, i.Trap()
+		err = i.Trap()
 	case Fallthrough:
 		i.Fallthrough()
 	case Unlikely:
@@ -48,79 +51,79 @@ func (i *Instance) step() (uint64, error) {
 
 	// (eq. A.23 v0.7.0)
 	case StoreImmU8:
-		return 0, i.StoreImmU8(i.decodeArgsImm2(i.instructionCounter, i.skipLen))
+		err = i.StoreImmU8(i.decodeArgsImm2(i.instructionCounter, i.skipLen))
 	case StoreImmU16:
-		return 0, i.StoreImmU16(i.decodeArgsImm2(i.instructionCounter, i.skipLen))
+		err = i.StoreImmU16(i.decodeArgsImm2(i.instructionCounter, i.skipLen))
 	case StoreImmU32:
-		return 0, i.StoreImmU32(i.decodeArgsImm2(i.instructionCounter, i.skipLen))
+		err = i.StoreImmU32(i.decodeArgsImm2(i.instructionCounter, i.skipLen))
 	case StoreImmU64:
-		return 0, i.StoreImmU64(i.decodeArgsImm2(i.instructionCounter, i.skipLen))
+		err = i.StoreImmU64(i.decodeArgsImm2(i.instructionCounter, i.skipLen))
 
 	// (eq. A.24 v0.7.0)
 	case Jump:
-		return 0, i.Jump(i.decodeArgsOffset(i.instructionCounter, i.skipLen))
+		err = i.Jump(i.decodeArgsOffset(i.instructionCounter, i.skipLen))
 
 	// (eq. A.25 v0.7.0)
 	case JumpInd:
-		return 0, i.JumpInd(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.JumpInd(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case LoadImm:
 		i.LoadImm(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case LoadU8:
-		return 0, i.LoadU8(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.LoadU8(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case LoadI8:
-		return 0, i.LoadI8(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.LoadI8(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case LoadU16:
-		return 0, i.LoadU16(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.LoadU16(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case LoadI16:
-		return 0, i.LoadI16(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.LoadI16(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case LoadU32:
-		return 0, i.LoadU32(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.LoadU32(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case LoadI32:
-		return 0, i.LoadI32(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.LoadI32(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case LoadU64:
-		return 0, i.LoadU64(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.LoadU64(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case StoreU8:
-		return 0, i.StoreU8(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.StoreU8(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case StoreU16:
-		return 0, i.StoreU16(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.StoreU16(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case StoreU32:
-		return 0, i.StoreU32(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.StoreU32(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 	case StoreU64:
-		return 0, i.StoreU64(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
+		err = i.StoreU64(i.decodeArgsRegImm(i.instructionCounter, i.skipLen))
 
 	// (eq. A.26 v0.7.0)
 	case StoreImmIndU8:
-		return 0, i.StoreImmIndU8(i.decodeArgsRegImm2(i.instructionCounter, i.skipLen))
+		err = i.StoreImmIndU8(i.decodeArgsRegImm2(i.instructionCounter, i.skipLen))
 	case StoreImmIndU16:
-		return 0, i.StoreImmIndU16(i.decodeArgsRegImm2(i.instructionCounter, i.skipLen))
+		err = i.StoreImmIndU16(i.decodeArgsRegImm2(i.instructionCounter, i.skipLen))
 	case StoreImmIndU32:
-		return 0, i.StoreImmIndU32(i.decodeArgsRegImm2(i.instructionCounter, i.skipLen))
+		err = i.StoreImmIndU32(i.decodeArgsRegImm2(i.instructionCounter, i.skipLen))
 	case StoreImmIndU64:
-		return 0, i.StoreImmIndU64(i.decodeArgsRegImm2(i.instructionCounter, i.skipLen))
+		err = i.StoreImmIndU64(i.decodeArgsRegImm2(i.instructionCounter, i.skipLen))
 
 	// (eq. A.27 v0.7.0)
 	case LoadImmJump:
-		return 0, i.LoadImmJump(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
+		err = i.LoadImmJump(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
 	case BranchEqImm:
-		return 0, i.BranchEqImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
+		err = i.BranchEqImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
 	case BranchNeImm:
-		return 0, i.BranchNeImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
+		err = i.BranchNeImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
 	case BranchLtUImm:
-		return 0, i.BranchLtUImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
+		err = i.BranchLtUImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
 	case BranchLeUImm:
-		return 0, i.BranchLeUImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
+		err = i.BranchLeUImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
 	case BranchGeUImm:
-		return 0, i.BranchGeUImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
+		err = i.BranchGeUImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
 	case BranchGtUImm:
-		return 0, i.BranchGtUImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
+		err = i.BranchGtUImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
 	case BranchLtSImm:
-		return 0, i.BranchLtSImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
+		err = i.BranchLtSImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
 	case BranchLeSImm:
-		return 0, i.BranchLeSImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
+		err = i.BranchLeSImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
 	case BranchGeSImm:
-		return 0, i.BranchGeSImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
+		err = i.BranchGeSImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
 	case BranchGtSImm:
-		return 0, i.BranchGtSImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
+		err = i.BranchGtSImm(i.decodeArgsRegImmOffset(i.instructionCounter, i.skipLen))
 
 	// (eq. A.28 v0.7.0)
 	case MoveReg:
@@ -148,27 +151,27 @@ func (i *Instance) step() (uint64, error) {
 
 	// (eq. A.29 v0.7.0)
 	case StoreIndU8:
-		return 0, i.StoreIndU8(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
+		err = i.StoreIndU8(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case StoreIndU16:
-		return 0, i.StoreIndU16(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
+		err = i.StoreIndU16(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case StoreIndU32:
-		return 0, i.StoreIndU32(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
+		err = i.StoreIndU32(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case StoreIndU64:
-		return 0, i.StoreIndU64(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
+		err = i.StoreIndU64(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case LoadIndU8:
-		return 0, i.LoadIndU8(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
+		err = i.LoadIndU8(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case LoadIndI8:
-		return 0, i.LoadIndI8(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
+		err = i.LoadIndI8(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case LoadIndU16:
-		return 0, i.LoadIndU16(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
+		err = i.LoadIndU16(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case LoadIndI16:
-		return 0, i.LoadIndI16(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
+		err = i.LoadIndI16(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case LoadIndU32:
-		return 0, i.LoadIndU32(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
+		err = i.LoadIndU32(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case LoadIndI32:
-		return 0, i.LoadIndI32(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
+		err = i.LoadIndI32(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case LoadIndU64:
-		return 0, i.LoadIndU64(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
+		err = i.LoadIndU64(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case AddImm32:
 		i.AddImm32(i.decodeArgsReg2Imm(i.instructionCounter, i.skipLen))
 	case AndImm:
@@ -234,21 +237,21 @@ func (i *Instance) step() (uint64, error) {
 
 	// (eq. A.30 v0.7.0)
 	case BranchEq:
-		return 0, i.BranchEq(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
+		err = i.BranchEq(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
 	case BranchNe:
-		return 0, i.BranchNe(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
+		err = i.BranchNe(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
 	case BranchLtU:
-		return 0, i.BranchLtU(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
+		err = i.BranchLtU(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
 	case BranchLtS:
-		return 0, i.BranchLtS(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
+		err = i.BranchLtS(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
 	case BranchGeU:
-		return 0, i.BranchGeU(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
+		err = i.BranchGeU(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
 	case BranchGeS:
-		return 0, i.BranchGeS(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
+		err = i.BranchGeS(i.decodeArgsReg2Offset(i.instructionCounter, i.skipLen))
 
 	// (eq. A.31 v0.7.0)
 	case LoadImmJumpInd:
-		return 0, i.LoadImmJumpInd(i.decodeArgsReg2Imm2(i.instructionCounter, i.skipLen))
+		err = i.LoadImmJumpInd(i.decodeArgsReg2Imm2(i.instructionCounter, i.skipLen))
 
 	// (eq. A.32 v0.7.0)
 	case Add32:
@@ -335,7 +338,7 @@ func (i *Instance) step() (uint64, error) {
 		i.MinUnsigned(i.decodeArgsReg3(i.instructionCounter))
 	default:
 		// c_n if kn = 1 ∧ cn ∈ U otherwise 0 (eq. A.19 v0.7.2)
-		return 0, i.Trap()
+		err = i.Trap()
 	}
 
 	// { F if ˜ϱ′ = F ∨ ı′ < ı ∨ L(ı′) ≠ L(ı) otherwise ⊺ (eq. A.9)
@@ -345,7 +348,7 @@ func (i *Instance) step() (uint64, error) {
 	} else {
 		i.gasChange = true
 	}
-	return 0, nil
+	return 0, err
 }
 
 // Zn∈N∶ N28n → Z_−2^8n−1...2^8n−1 (eq. A.10 v0.7.2)

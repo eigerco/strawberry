@@ -107,6 +107,5 @@ func (i *Instance) basicBlockStart(instrCounter uint64) uint64 {
 			best = j
 		}
 	}
-
 	return best
 }

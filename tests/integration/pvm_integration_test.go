@@ -100,6 +100,7 @@ func Test_PVM_Vectors(t *testing.T) {
 			var roAddr, rwAddr, stackAddr, roSize, rwSize, stackSize uint32
 			var regs pvm.Registers
 			var mem pvm.Memory
+			var executionErr error
 			for _, step := range tc.Steps {
 				if step.Run != nil {
 					mem = pvm.InitializeCustomMemory(roAddr, rwAddr, stackAddr, 1<<32-1, roSize, rwSize, stackSize, 0)
@@ -107,8 +108,7 @@ func Test_PVM_Vectors(t *testing.T) {
 					require.NoError(t, err)
 					i.OverwriteGasCostsMap(gasCostMap)
 
-					_, err = pvm.InvokeBasic(i)
-					require.NoError(t, err)
+					_, executionErr = pvm.InvokeBasic(i)
 				}
 				if step.Map != nil {
 					if !step.Map.IsWritable {
@@ -138,7 +138,7 @@ func Test_PVM_Vectors(t *testing.T) {
 					assert.NoError(t, err)
 				}
 				if step.Assert != nil {
-					assert.Equal(t, step.Assert.Status, error2status(err))
+					assert.Equal(t, step.Assert.Status, error2status(executionErr))
 					instructionCounter, gas, regs, mem := i.Results()
 
 					// TODO expected-page-fault-address
@@ -146,6 +146,7 @@ func Test_PVM_Vectors(t *testing.T) {
 					//if errors.As(err, &errPageFault) {
 					//	assert.Equal(t, step.Assert.PageFaultAddress, uint64(errPageFault.Address))
 					//}
+
 					assert.Equal(t, step.Assert.Gas, gas)
 
 					assert.Equal(t, int(step.Assert.Pc), int(instructionCounter))
@@ -190,6 +191,9 @@ func error2status(err error) string {
 	}
 	if errors.Is(err, pvm.ErrHostCall) {
 		return "host_call"
+	}
+	if errors.Is(err, pvm.ErrOutOfGas) {
+		return "out-of-gas"
 	}
 	var errPanic *pvm.ErrPanic
 	var errPageFault *pvm.ErrPageFault
