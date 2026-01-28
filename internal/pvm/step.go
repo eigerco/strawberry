@@ -33,17 +33,19 @@ func (i *Instance) step() (uint64, error) {
 	}
 
 	var err error
+	var hostcall uint64
 	switch opcode {
 	case Trap:
 		err = i.Trap()
 	case Fallthrough:
 		i.Fallthrough()
 	case Unlikely:
-		i.Fallthrough()
+		i.Unlikely()
 	// (eq. A.21 v0.7.0)
 	case Ecalli:
 		// ε = ħ × νX
-		return i.decodeArgsImm(i.instructionCounter, i.skipLen), ErrHostCall
+		hostcall = i.decodeArgsImm(i.instructionCounter, i.skipLen)
+		err = ErrHostCall
 
 	// (eq. A.22 v0.7.0)
 	case LoadImm64:
@@ -348,7 +350,7 @@ func (i *Instance) step() (uint64, error) {
 	} else {
 		i.gasChange = true
 	}
-	return 0, err
+	return hostcall, err
 }
 
 // Zn∈N∶ N28n → Z_−2^8n−1...2^8n−1 (eq. A.10 v0.7.2)

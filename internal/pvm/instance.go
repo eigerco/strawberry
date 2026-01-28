@@ -93,8 +93,63 @@ func (i *Instance) djump(address uint32) error {
 	return nil
 }
 
+// OverwriteMemoryMapRO overwrites memory map for read-only memory
+func (i *Instance) OverwriteMemoryMapRO(address, length uint32) {
+	i.memory.ro = memorySegment{
+		address: address,
+		end:     address + length,
+		data:    make([]byte, length),
+		access:  ReadOnly,
+	}
+}
+
+// OverwriteMemoryMapRW overwrites memory map for read-write memory
+func (i *Instance) OverwriteMemoryMapRW(address, length uint32) {
+	i.memory.rw = memorySegment{
+		address: address,
+		end:     address + length,
+		data:    make([]byte, length),
+		access:  ReadWrite,
+	}
+}
+
+// OverwriteMemoryMapStack overwrites memory map for stack memory
+func (i *Instance) OverwriteMemoryMapStack(address, length uint32) {
+	i.memory.stack = memorySegment{
+		address: address,
+		end:     address + length,
+		data:    make([]byte, length),
+		access:  ReadWrite,
+	}
+}
+
+// OverwriteMemory overwrites memory regardless if the memory page is writable or not
+func (i *Instance) OverwriteMemory(address uint32, contents []byte) error {
+	pageIndex := address / PageSize
+	access := i.memory.GetAccess(pageIndex)
+	err := i.memory.SetAccess(pageIndex, ReadWrite)
+	if err != nil {
+		return err
+	}
+	if err = i.memory.Write(address, contents); err != nil {
+		return err
+	}
+	return i.memory.SetAccess(pageIndex, access)
+}
+
+// OverwriteRegister overwrites one register
+func (i *Instance) OverwriteRegister(index, value uint64) {
+	i.regs[index] = value
+}
+
+// OverwriteGasCostsMap overwrites gas cost map
 func (i *Instance) OverwriteGasCostsMap(gasCostsMap map[uint64]Gas) {
 	i.gasCostsMap = gasCostsMap
+}
+
+// OverwriteSkip advances the instruction counter by the necessary skip amount
+func (i *Instance) OverwriteSkip() {
+	i.skip()
 }
 
 // basicBlockStart represents the start of a basic block for any ı within that basic block

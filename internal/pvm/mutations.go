@@ -17,6 +17,11 @@ func (i *Instance) Fallthrough() {
 	i.skip()
 }
 
+// Unlikely unlikely
+func (i *Instance) Unlikely() {
+	i.skip()
+}
+
 // LoadImm64 load_imm_64 φ′A = νX
 func (i *Instance) LoadImm64(dst Reg, imm uint64) {
 	i.setAndSkip(dst, imm)
