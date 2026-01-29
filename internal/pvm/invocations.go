@@ -35,8 +35,8 @@ func InvokeWholeProgram[X any](p []byte, entryPoint uint64, initialGas UGas, arg
 	gasUsed := initialGas - UGas(max(gasRemaining, 0))
 
 	if errors.Is(err, ErrHalt) {
-		maybeAddr := regs[A0]
-		result := make([]byte, regs[A1])
+		maybeAddr := regs[R7]
+		result := make([]byte, regs[R8])
 		if maybeAddr > math.MaxUint32 {
 			return gasUsed, []byte{}, x1, nil
 		}

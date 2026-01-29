@@ -21,7 +21,7 @@ func Bless(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	gas -= BlessCost
 
 	// let [m, a, v, r, o, n] = φ7...13
-	managerServiceId, assignServiceAddr, designateServiceId, createProtectedServiceId, addr, servicesNr := regs[A0], regs[A1], regs[A2], regs[A3], regs[A4], regs[A5]
+	managerServiceId, assignServiceAddr, designateServiceId, createProtectedServiceId, addr, servicesNr := regs[R7], regs[R8], regs[R9], regs[R10], regs[R11], regs[R12]
 
 	// let g = {(s ↦ g) where E4(s) ⌢ E8(g) = μ_o+12i⋅⋅⋅+12 | i ∈ Nn} if No⋅⋅⋅+12n ⊂ Vμ otherwise ∇
 	gasPerServiceId := make(map[block.ServiceId]uint64)
@@ -91,7 +91,7 @@ func Assign(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) 
 	gas -= AssignCost
 
 	// let [c, o, a] = φ7···+3
-	core, addr, newAssigner := regs[A0], regs[A1], regs[A2]
+	core, addr, newAssigner := regs[R7], regs[R8], regs[R9]
 
 	// Read the queue from memory first (can panic on invalid memory access)
 	// q = [μo+32i···+32 | i ← NQ] if No···+32Q ⊆ Vμ otherwise ∇
@@ -152,7 +152,7 @@ func Designate(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPai
 	)
 
 	// let o = φ7
-	addr := regs[A0]
+	addr := regs[R7]
 	for i := 0; i < constants.NumberOfValidators; i++ {
 		bytes := make([]byte, 336)
 		valAddr, ok := safemath.Add(addr, 336*uint64(i))
@@ -191,7 +191,7 @@ func Checkpoint(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPa
 	ctxPair.ExceptionalCtx = ctxPair.RegularCtx.Clone()
 
 	// Set the new ϱ' value into φ′7
-	regs[A0] = uint64(gas)
+	regs[R7] = uint64(gas)
 
 	return gas, regs, mem, ctxPair, nil
 }
@@ -220,12 +220,12 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 	gas -= NewCost
 
 	// let [o, l, g, m, f, i] = φ7..+6
-	addr := regs[A0]
-	preimageLength := regs[A1]
-	gasLimitAccumulator := regs[A2]
-	gasLimitTransfer := regs[A3]
-	gratisStorageOffset := regs[A4]
-	desiredId := regs[A5]
+	addr := regs[R7]
+	preimageLength := regs[R8]
+	gasLimitAccumulator := regs[R9]
+	gasLimitTransfer := regs[R10]
+	gratisStorageOffset := regs[R11]
+	desiredId := regs[R12]
 
 	// (▸, HUH, x_i, (x_e)_d) otherwise if f ≠ 0 ∧ x_s ≠ (x_e)_m
 	xsId := ctxPair.RegularCtx.ServiceId
@@ -330,7 +330,7 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 			return gas, withCode(regs, FULL), mem, ctxPair, nil
 		}
 
-		regs[A0] = uint64(actualServiceId)
+		regs[R7] = uint64(actualServiceId)
 		ctxPair.RegularCtx.AccumulationState.ServiceState[actualServiceId] = account
 		ctxPair.RegularCtx.AccumulationState.ServiceState[xsId] = s
 		return gas, regs, mem, ctxPair, nil
@@ -338,7 +338,7 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 
 	// Regular path
 	// (▸, x_i, i*, (x_e)_d ∪ d) otherwise
-	regs[A0] = uint64(actualServiceId)
+	regs[R7] = uint64(actualServiceId)
 	nextId := service.BumpIndex(ctxPair.RegularCtx.NewServiceId, ctxPair.RegularCtx.AccumulationState.ServiceState)
 	ctxPair.RegularCtx.NewServiceId = nextId
 	ctxPair.RegularCtx.AccumulationState.ServiceState[actualServiceId] = account
@@ -351,7 +351,7 @@ func New(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, tim
 func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	gas -= UpgradeCost
 	// let [o, g, m] = φ7...10
-	addr, gasLimitAccumulator, gasLimitTransfer := regs[A0], regs[A1], regs[A2]
+	addr, gasLimitAccumulator, gasLimitTransfer := regs[R7], regs[R8], regs[R9]
 
 	// c = μo⋅⋅⋅+32 if No⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	codeHash := make([]byte, 32)
@@ -374,7 +374,7 @@ func Upgrade(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair)
 // Transfer ΩT(ϱ, φ, μ, (x, y))
 func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	// let (d, a, l, o) = φ7..11
-	receiverId, amount, gasLimit, o := regs[A0], regs[A1], regs[A2], regs[A3]
+	receiverId, amount, gasLimit, o := regs[R7], regs[R8], regs[R9], regs[R10]
 
 	gas -= TransferBaseCost
 
@@ -434,7 +434,7 @@ func Transfer(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair
 func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, timeslot jamtime.Timeslot) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	gas -= EjectCost
 
-	d, o := regs[A0], regs[A1]
+	d, o := regs[R7], regs[R8]
 
 	// let h = μo..o+32 if Zo..o+32 ⊂ Vμ
 	h := make([]byte, 32)
@@ -506,7 +506,7 @@ func Eject(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, t
 func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	gas -= QueryCost
 
-	addr, preimageMetaKeyLength := regs[A0], regs[A1]
+	addr, preimageMetaKeyLength := regs[R7], regs[R8]
 
 	// let h = μo..o+32 if Zo..o+32 ⊂ Vμ
 	h := make([]byte, 32)
@@ -529,23 +529,23 @@ func Query(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (
 	a, exists := serviceAccount.GetPreimageMeta(k)
 	if !exists {
 		// a = ∇ => (NONE, 0)
-		regs[A1] = 0
+		regs[R8] = 0
 		return gas, withCode(regs, NONE), mem, ctxPair, nil
 	}
 
 	switch len(a) {
 	case 0:
 		// a = [] => (0, 0)
-		regs[A0], regs[A1] = 0, 0
+		regs[R7], regs[R8] = 0, 0
 	case 1:
 		// a = [x] => (1 + 2^32 * x, 0)
-		regs[A0], regs[A1] = 1+(uint64(a[0])<<32), 0
+		regs[R7], regs[R8] = 1+(uint64(a[0])<<32), 0
 	case 2:
 		// a = [x, y] => (2 + 2^32 * x, y)
-		regs[A0], regs[A1] = 2+(uint64(a[0])<<32), uint64(a[1])
+		regs[R7], regs[R8] = 2+(uint64(a[0])<<32), uint64(a[1])
 	case 3:
 		// a = [x, y, z] => (3 + 2^32 * x, y + 2^32 * z)
-		regs[A0], regs[A1] = 3+(uint64(a[0])<<32), uint64(a[1])+(uint64(a[2])<<32)
+		regs[R7], regs[R8] = 3+(uint64(a[0])<<32), uint64(a[1])+(uint64(a[2])<<32)
 	}
 
 	return gas, regs, mem, ctxPair, nil
@@ -556,7 +556,7 @@ func Solicit(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	gas -= SolicitCost
 
 	// let [o, z] = φ7,8
-	addr, preimageLength := regs[A0], regs[A1]
+	addr, preimageLength := regs[R7], regs[R8]
 	// let h = μo⋅⋅⋅+32 if Zo⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	preimageHashBytes := make([]byte, 32)
 	if addr > math.MaxUint32 {
@@ -615,7 +615,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 	gas -= ForgetCost
 
 	// let [o, z] = φ0,1
-	addr, preimageLength := regs[A0], regs[A1]
+	addr, preimageLength := regs[R7], regs[R8]
 
 	// let h = μo⋅⋅⋅+32 if Zo⋅⋅⋅+32 ⊂ Vμ otherwise ∇
 	preimageHashBytes := make([]byte, 32)
@@ -705,7 +705,7 @@ func Forget(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair, 
 func Yield(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair) (Gas, Registers, Memory, AccumulateContextPair, error) {
 	gas -= YieldCost
 
-	addr := regs[A0]
+	addr := regs[R7]
 
 	// let h = μo..o+32 if Zo..o+32 ⊂ Vμ otherwise ∇
 	hBytes := make([]byte, 32)
@@ -729,8 +729,8 @@ func Provide(gas Gas, regs Registers, mem Memory, ctxPair AccumulateContextPair,
 	gas -= ProvideCost
 
 	// let [o, z] = φ8,9
-	o, z := regs[A1], regs[A2]
-	omega7 := regs[A0]
+	o, z := regs[R8], regs[R9]
+	omega7 := regs[R7]
 
 	// let d = xd ∪ (xu)d
 	allServices := ctxPair.RegularCtx.AccumulationState.ServiceState

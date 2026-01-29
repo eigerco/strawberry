@@ -149,31 +149,31 @@ type Reg byte
 
 func (r Reg) String() string {
 	switch r {
-	case RA:
+	case R0:
 		return "ra"
-	case SP:
+	case R1:
 		return "sp"
-	case T0:
+	case R2:
 		return "t0"
-	case T1:
+	case R3:
 		return "t1"
-	case T2:
+	case R4:
 		return "t2"
-	case S0:
+	case R5:
 		return "s0"
-	case S1:
+	case R6:
 		return "s1"
-	case A0:
+	case R7:
 		return "a0"
-	case A1:
+	case R8:
 		return "a1"
-	case A2:
+	case R9:
 		return "a2"
-	case A3:
+	case R10:
 		return "a3"
-	case A4:
+	case R11:
 		return "a4"
-	case A5:
+	case R12:
 		return "a5"
 	default:
 		return "UNKNOWN"
@@ -181,19 +181,19 @@ func (r Reg) String() string {
 }
 
 const (
-	RA Reg = 0
-	SP Reg = 1
-	T0 Reg = 2
-	T1 Reg = 3
-	T2 Reg = 4
-	S0 Reg = 5
-	S1 Reg = 6
-	A0 Reg = 7
-	A1 Reg = 8
-	A2 Reg = 9
-	A3 Reg = 10
-	A4 Reg = 11
-	A5 Reg = 12
+	R0  Reg = 0
+	R1  Reg = 1
+	R2  Reg = 2
+	R3  Reg = 3
+	R4  Reg = 4
+	R5  Reg = 5
+	R6  Reg = 6
+	R7  Reg = 7
+	R8  Reg = 8
+	R9  Reg = 9
+	R10 Reg = 10
+	R11 Reg = 11
+	R12 Reg = 12
 )
 
 // IsBasicBlockTermination (eq A.3)

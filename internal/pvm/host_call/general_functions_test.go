@@ -33,7 +33,7 @@ func TestGasRemaining(t *testing.T) {
 	gasRemaining, regs, err := host_call.GasRemaining(initialGas, initialRegs)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(90), regs[pvm.A0])
+	assert.Equal(t, uint64(90), regs[pvm.R7])
 	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }
 
@@ -286,12 +286,12 @@ func TestFetch(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			regs[pvm.A0] = ho
-			regs[pvm.A1] = offset
-			regs[pvm.A2] = length
-			regs[pvm.A3] = tc.dataID
-			regs[pvm.A4] = tc.idx1
-			regs[pvm.A5] = tc.idx2
+			regs[pvm.R7] = ho
+			regs[pvm.R8] = offset
+			regs[pvm.R9] = length
+			regs[pvm.R10] = tc.dataID
+			regs[pvm.R11] = tc.idx1
+			regs[pvm.R12] = tc.idx2
 
 			expect := tc.expect()
 
@@ -307,7 +307,7 @@ func TestFetch(t *testing.T) {
 			err = memOut.Read(uint32(ho), actual)
 			require.NoError(t, err)
 			require.Equal(t, expect, actual)
-			require.Equal(t, uint64(len(expect)), regsOut[pvm.A0])
+			require.Equal(t, uint64(len(expect)), regsOut[pvm.R7])
 			require.Equal(t, pvm.Gas(90), gasLeft)
 		})
 	}
@@ -329,7 +329,7 @@ func TestLookup(t *testing.T) {
 
 		// Set A1 to point to valid readable memory
 		h := pvm.RWAddressBase
-		initialRegs[pvm.A1] = uint64(h)
+		initialRegs[pvm.R8] = uint64(h)
 
 		// Write 32 bytes at that address (key data, content doesn't matter for this test)
 		err = mem.Write(uint32(h), make([]byte, 32))
@@ -337,7 +337,7 @@ func TestLookup(t *testing.T) {
 
 		gasRemaining, regs, _, err := host_call.Lookup(initialGas, initialRegs, mem, service.ServiceAccount{}, 1, make(service.ServiceState))
 		require.NoError(t, err)
-		assert.Equal(t, uint64(host_call.NONE), regs[pvm.A0])
+		assert.Equal(t, uint64(host_call.NONE), regs[pvm.R7])
 		assert.Equal(t, pvm.Gas(90), gasRemaining)
 	})
 
@@ -354,11 +354,11 @@ func TestLookup(t *testing.T) {
 		err = mem.Write(uint32(ho), dataToHash)
 		require.NoError(t, err)
 
-		initialRegs[pvm.A0] = uint64(serviceId)
-		initialRegs[pvm.A1] = uint64(ho)       // h
-		initialRegs[pvm.A2] = uint64(bo)       // o
-		initialRegs[pvm.A3] = 0                // f
-		initialRegs[pvm.A4] = uint64(len(val)) // l
+		initialRegs[pvm.R7] = uint64(serviceId)
+		initialRegs[pvm.R8] = uint64(ho)        // h
+		initialRegs[pvm.R9] = uint64(bo)        // o
+		initialRegs[pvm.R10] = 0                // f
+		initialRegs[pvm.R11] = uint64(len(val)) // l
 		sa := service.ServiceAccount{
 			PreimageLookup: map[crypto.Hash][]byte{
 				crypto.Hash(dataToHash): val,
@@ -376,7 +376,7 @@ func TestLookup(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, val, actualValue)
-		assert.Equal(t, uint64(len(val)), regs[pvm.A0])
+		assert.Equal(t, uint64(len(val)), regs[pvm.R7])
 		assert.Equal(t, pvm.Gas(90), gasRemaining)
 	})
 }
@@ -414,12 +414,12 @@ func TestRead(t *testing.T) {
 	kz := uint32(len(keyData))
 	vLen := uint64(len(value))
 
-	initialRegs[pvm.A0] = uint64(serviceId)
-	initialRegs[pvm.A1] = uint64(ko)
-	initialRegs[pvm.A2] = uint64(kz)
-	initialRegs[pvm.A3] = uint64(bo)
-	initialRegs[pvm.A4] = 0    // f = offset (starting at 0)
-	initialRegs[pvm.A5] = vLen // l = length (32 bytes)
+	initialRegs[pvm.R7] = uint64(serviceId)
+	initialRegs[pvm.R8] = uint64(ko)
+	initialRegs[pvm.R9] = uint64(kz)
+	initialRegs[pvm.R10] = uint64(bo)
+	initialRegs[pvm.R11] = 0    // f = offset (starting at 0)
+	initialRegs[pvm.R12] = vLen // l = length (32 bytes)
 
 	err = mem.Write(uint32(ko), keyData)
 	require.NoError(t, err)
@@ -431,7 +431,7 @@ func TestRead(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, value, actualValue)
-	assert.Equal(t, uint64(len(value)), regs[pvm.A0])
+	assert.Equal(t, uint64(len(value)), regs[pvm.R7])
 
 	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }
@@ -464,10 +464,10 @@ func TestWrite(t *testing.T) {
 	vo := pvm.RWAddressBase + 100
 	vz := uint32(len(value))
 
-	initialRegs[pvm.A0] = uint64(ko)
-	initialRegs[pvm.A1] = uint64(kz)
-	initialRegs[pvm.A2] = uint64(vo)
-	initialRegs[pvm.A3] = uint64(vz)
+	initialRegs[pvm.R7] = uint64(ko)
+	initialRegs[pvm.R8] = uint64(kz)
+	initialRegs[pvm.R9] = uint64(vo)
+	initialRegs[pvm.R10] = uint64(vz)
 	err = mem.Write(uint32(ko), keyData)
 	require.NoError(t, err)
 	err = mem.Write(uint32(vo), value)
@@ -486,7 +486,7 @@ func TestWrite(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, keyData, actualKey)
 
-	require.Equal(t, uint64(host_call.NONE), regs[pvm.A0])
+	require.Equal(t, uint64(host_call.NONE), regs[pvm.R7])
 	require.NotNil(t, updatedSa)
 	storedValue, keyExists := updatedSa.GetStorage(k)
 	require.True(t, keyExists)
@@ -498,7 +498,7 @@ func TestWrite(t *testing.T) {
 	require.Equal(t, pvm.Gas(90), gasRemaining)
 
 	// Second call: Delete
-	initialRegs[pvm.A3] = 0 // vz = 0 → delete
+	initialRegs[pvm.R10] = 0 // vz = 0 → delete
 
 	gasRemaining, _, mem, updatedSa, err = host_call.Write(gasRemaining, initialRegs, mem, updatedSa, serviceId)
 	require.NoError(t, err)
@@ -543,15 +543,15 @@ func TestInfo(t *testing.T) {
 	expectedByteLength := uint64(96)
 
 	omega1 := pvm.RWAddressBase
-	initialRegs[pvm.A0] = uint64(serviceId)
-	initialRegs[pvm.A1] = uint64(omega1)
-	initialRegs[pvm.A2] = 0
-	initialRegs[pvm.A3] = expectedByteLength
+	initialRegs[pvm.R7] = uint64(serviceId)
+	initialRegs[pvm.R8] = uint64(omega1)
+	initialRegs[pvm.R9] = 0
+	initialRegs[pvm.R10] = expectedByteLength
 
 	gasRemaining, regs, mem, err := host_call.Info(initialGas, initialRegs, mem, serviceId, serviceState)
 	require.NoError(t, err)
 
-	require.Equal(t, expectedByteLength, regs[pvm.A0])
+	require.Equal(t, expectedByteLength, regs[pvm.R7])
 
 	receivedAccountInfo := make([]byte, 32+6*8+4*4)
 	err = mem.Read(uint32(omega1), receivedAccountInfo)

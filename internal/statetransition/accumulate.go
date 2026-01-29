@@ -155,7 +155,7 @@ func (a *Accumulator) InvokePVM(accState state.AccumulationState, newTime jamtim
 		case host_call.LogID:
 			gasCounter, regs, mem, err = host_call.Log(gasCounter, regs, mem, nil, &serviceIndex)
 		default:
-			regs[pvm.A0] = uint64(host_call.WHAT)
+			regs[pvm.R7] = uint64(host_call.WHAT)
 			gasCounter -= AccumulateCost
 		}
 		// otherwise if ϱ′ < 0

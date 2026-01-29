@@ -74,11 +74,11 @@ func TestHistoricalLookup(t *testing.T) {
 	offset := uint64(0)
 	length := uint64(len(preimage))
 
-	initialRegs[pvm.A0] = uint64(serviceId)
-	initialRegs[pvm.A1] = uint64(ho)
-	initialRegs[pvm.A2] = uint64(bo)
-	initialRegs[pvm.A3] = offset
-	initialRegs[pvm.A4] = length
+	initialRegs[pvm.R7] = uint64(serviceId)
+	initialRegs[pvm.R8] = uint64(ho)
+	initialRegs[pvm.R9] = uint64(bo)
+	initialRegs[pvm.R10] = offset
+	initialRegs[pvm.R11] = length
 
 	err = mem.Write(uint32(ho), hashKey[:])
 	require.NoError(t, err)
@@ -104,7 +104,7 @@ func TestHistoricalLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, preimage, actualValue)
-	assert.Equal(t, uint64(len(preimage)), regsOut[pvm.A0])
+	assert.Equal(t, uint64(len(preimage)), regsOut[pvm.R7])
 
 	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }
@@ -129,8 +129,8 @@ func TestExport(t *testing.T) {
 
 	exportOffset := uint64(10)
 
-	initialRegs[pvm.A0] = uint64(p)
-	initialRegs[pvm.A1] = uint64(len(dataToExport))
+	initialRegs[pvm.R7] = uint64(p)
+	initialRegs[pvm.R8] = uint64(len(dataToExport))
 
 	ctxPair := pvm.RefineContextPair{
 		Segments: []work.Segment{},
@@ -145,7 +145,7 @@ func TestExport(t *testing.T) {
 	)
 	require.NoError(t, err)
 	// We expect φ7 = ς + |e| = 10 + 1 = 11
-	assert.Equal(t, exportOffset+1, regsOut[pvm.A0])
+	assert.Equal(t, exportOffset+1, regsOut[pvm.R7])
 
 	require.Len(t, ctxPair.Segments, 1)
 	seg := ctxPair.Segments[0]
@@ -176,9 +176,9 @@ func TestMachine(t *testing.T) {
 	err = mem.Write(uint32(po), p)
 	require.NoError(t, err)
 
-	initialRegs[pvm.A0] = uint64(po)
-	initialRegs[pvm.A1] = uint64(pz)
-	initialRegs[pvm.A2] = i
+	initialRegs[pvm.R7] = uint64(po)
+	initialRegs[pvm.R8] = uint64(pz)
+	initialRegs[pvm.R9] = i
 
 	ctxPair := pvm.RefineContextPair{
 		IntegratedPVMMap: make(map[uint64]pvm.IntegratedPVM),
@@ -193,7 +193,7 @@ func TestMachine(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(0), regsOut[pvm.A0])
+	assert.Equal(t, uint64(0), regsOut[pvm.R7])
 
 	require.Len(t, ctxPair.IntegratedPVMMap, 1)
 	vm, exists := ctxPair.IntegratedPVMMap[0]
@@ -244,10 +244,10 @@ func TestPeek(t *testing.T) {
 		Segments: []work.Segment{},
 	}
 
-	initialRegs[pvm.A0] = n
-	initialRegs[pvm.A1] = uint64(o)
-	initialRegs[pvm.A2] = s
-	initialRegs[pvm.A3] = z
+	initialRegs[pvm.R7] = n
+	initialRegs[pvm.R8] = uint64(o)
+	initialRegs[pvm.R9] = s
+	initialRegs[pvm.R10] = z
 
 	gasRemaining, regsOut, memOut, _, err := host_call.Peek(
 		initialGas,
@@ -257,7 +257,7 @@ func TestPeek(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(host_call.OK), regsOut[pvm.A0])
+	assert.Equal(t, uint64(host_call.OK), regsOut[pvm.R7])
 
 	actualValue := make([]byte, z)
 	err = memOut.Read(uint32(o), actualValue)
@@ -306,10 +306,10 @@ func TestPoke(t *testing.T) {
 		Segments: []work.Segment{},
 	}
 
-	initialRegs[pvm.A0] = n
-	initialRegs[pvm.A1] = s
-	initialRegs[pvm.A2] = o
-	initialRegs[pvm.A3] = z
+	initialRegs[pvm.R7] = n
+	initialRegs[pvm.R8] = s
+	initialRegs[pvm.R9] = o
+	initialRegs[pvm.R10] = z
 
 	gasRemaining, regsOut, _, _, err := host_call.Poke(
 		initialGas,
@@ -319,7 +319,7 @@ func TestPoke(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(host_call.OK), regsOut[pvm.A0])
+	assert.Equal(t, uint64(host_call.OK), regsOut[pvm.R7])
 
 	actual := make([]byte, z)
 	vm := ctxPair.IntegratedPVMMap[n]
@@ -403,10 +403,10 @@ func TestPages_Modes(t *testing.T) {
 				IntegratedPVMMap: map[uint64]pvm.IntegratedPVM{n: {Ram: innerMem}},
 			}
 
-			initialRegs[pvm.A0] = n
-			initialRegs[pvm.A1] = p
-			initialRegs[pvm.A2] = c
-			initialRegs[pvm.A3] = tc.mode
+			initialRegs[pvm.R7] = n
+			initialRegs[pvm.R8] = p
+			initialRegs[pvm.R9] = c
+			initialRegs[pvm.R10] = tc.mode
 
 			gasRemaining, regsOut, _, _, err := host_call.Pages(
 				initialGas,
@@ -415,7 +415,7 @@ func TestPages_Modes(t *testing.T) {
 				ctxPair,
 			)
 			require.NoError(t, err)
-			require.Equal(t, uint64(host_call.OK), regsOut[pvm.A0])
+			require.Equal(t, uint64(host_call.OK), regsOut[pvm.R7])
 
 			innerPVMRam := ctxPair.IntegratedPVMMap[n].Ram
 			for pageIndex := p; pageIndex < p+c; pageIndex++ {
@@ -473,12 +473,12 @@ func TestInvoke(t *testing.T) {
 		}},
 	}
 
-	initialRegs[pvm.A0] = pvmKey
-	initialRegs[pvm.A1] = uint64(addr)
+	initialRegs[pvm.R7] = pvmKey
+	initialRegs[pvm.R8] = uint64(addr)
 
 	gasRemaining, regsOut, _, _, err := host_call.Invoke(initialGas, initialRegs, mem, ctxPair)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(host_call.PANIC), regsOut[pvm.A0])
+	assert.Equal(t, uint64(host_call.PANIC), regsOut[pvm.R7])
 
 	assert.Equal(t, pvm.Gas(90), gasRemaining)
 
@@ -520,7 +520,7 @@ func TestExpunge(t *testing.T) {
 		InstructionCounter: ic,
 	}
 
-	initialRegs[pvm.A0] = n
+	initialRegs[pvm.R7] = n
 
 	gasRemaining, regsOut, _, _, err := host_call.Expunge(
 		initialGas,
@@ -529,7 +529,7 @@ func TestExpunge(t *testing.T) {
 		ctxPair,
 	)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(ic), regsOut[pvm.A0])
+	assert.Equal(t, uint64(ic), regsOut[pvm.R7])
 
 	assert.Equal(t, pvm.Gas(90), gasRemaining)
 }

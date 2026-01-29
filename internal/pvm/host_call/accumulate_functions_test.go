@@ -87,8 +87,8 @@ func TestAccumulate(t *testing.T) {
 			name: "bless",
 			fn:   fnStd(Bless),
 			alloc: alloc{
-				A1: make([]byte, uint32(4*constants.TotalNumberOfCores)),
-				A4: slices.Concat(
+				R8: make([]byte, uint32(4*constants.TotalNumberOfCores)),
+				R11: slices.Concat(
 					encodeNumber(t, uint32(123)),
 					encodeNumber(t, uint64(12341234)),
 					encodeNumber(t, uint32(234)),
@@ -98,13 +98,13 @@ func TestAccumulate(t *testing.T) {
 				),
 			},
 			initialRegs: deltaRegs{
-				A0: 111,
-				A2: 333,
-				A3: 444,
-				A5: 3,
+				R7:  111,
+				R9:  333,
+				R10: 444,
+				R12: 3,
 			},
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(OK),
+				R7: uint64(OK),
 			},
 
 			initialGas:  100,
@@ -126,11 +126,11 @@ func TestAccumulate(t *testing.T) {
 			name: "assign",
 			fn:   fnStd(Assign),
 			alloc: alloc{
-				A1: slices.Concat(transform(authHashes, hash2bytes)...),
+				R8: slices.Concat(transform(authHashes, hash2bytes)...),
 			},
 			initialRegs: deltaRegs{
-				A0: 1,   // core id
-				A2: 340, // new assigner
+				R7: 1,   // core id
+				R9: 340, // new assigner
 			},
 			X: AccumulateContext{
 				ServiceId: 0, // current service - must match AssignedServiceIds[1]
@@ -146,7 +146,7 @@ func TestAccumulate(t *testing.T) {
 			initialGas:  100,
 			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(OK),
+				R7: uint64(OK),
 			},
 			expectedX: AccumulateContext{
 				ServiceId: 0,
@@ -166,13 +166,13 @@ func TestAccumulate(t *testing.T) {
 			name: "designate",
 			fn:   fnStd(Designate),
 			alloc: alloc{
-				A0: slices.Concat(transform(validatorKeys, validatorKey2bytes)...),
+				R7: slices.Concat(transform(validatorKeys, validatorKey2bytes)...),
 			},
 			initialRegs: deltaRegs{},
 			initialGas:  100,
 			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(OK),
+				R7: uint64(OK),
 			},
 			expectedX: AccumulateContext{
 				AccumulationState: state.AccumulationState{
@@ -186,7 +186,7 @@ func TestAccumulate(t *testing.T) {
 			initialGas:  100,
 			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(90),
+				R7: uint64(90),
 			},
 			expectedX: checkpointCtx,
 			expectedY: checkpointCtx,
@@ -196,11 +196,11 @@ func TestAccumulate(t *testing.T) {
 			fn:         fnWithExtra[jamtime.Timeslot](New),
 			extraParam: jamtime.Timeslot(200),
 			alloc: alloc{
-				A0: hash2bytes(randomHash),
+				R7: hash2bytes(randomHash),
 			},
-			initialRegs: deltaRegs{A1: 100, A2: 100, A3: 100},
+			initialRegs: deltaRegs{R8: 100, R9: 100, R10: 100},
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(newServiceID),
+				R7: uint64(newServiceID),
 			},
 			initialGas:  100,
 			expectedGas: 90,
@@ -249,11 +249,11 @@ func TestAccumulate(t *testing.T) {
 			name: "upgrade",
 			fn:   fnStd(Upgrade),
 			alloc: alloc{
-				A0: hash2bytes(randomHash),
+				R7: hash2bytes(randomHash),
 			},
-			initialRegs: deltaRegs{A1: 3453453453, A2: 456456456},
+			initialRegs: deltaRegs{R8: 3453453453, R9: 456456456},
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(OK),
+				R7: uint64(OK),
 			},
 			initialGas:  100,
 			expectedGas: 90,
@@ -277,15 +277,15 @@ func TestAccumulate(t *testing.T) {
 			name: "transfer",
 			fn:   fnStd(Transfer),
 			alloc: alloc{
-				A3: fixedSizeBytes(service.TransferMemoSizeBytes, []byte("memo message")),
+				R10: fixedSizeBytes(service.TransferMemoSizeBytes, []byte("memo message")),
 			},
 			initialRegs: deltaRegs{
-				A0: 1234,       // d: receiver
-				A1: 1000000000, // a
-				A2: 80,         // g
+				R7: 1234,       // d: receiver
+				R8: 1000000000, // a
+				R9: 80,         // g
 			},
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(OK),
+				R7: uint64(OK),
 			},
 			initialGas:  100,
 			expectedGas: 10,
@@ -329,10 +329,10 @@ func TestAccumulate(t *testing.T) {
 			initialGas: 100,
 			extraParam: jamtime.Timeslot(200),
 			initialRegs: deltaRegs{
-				A0: 999,
+				R7: 999,
 			},
 			alloc: alloc{
-				A1: hash2bytes(randomHash),
+				R8: hash2bytes(randomHash),
 			},
 			X: AccumulateContext{
 				ServiceId: 222,
@@ -377,7 +377,7 @@ func TestAccumulate(t *testing.T) {
 			},
 			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(OK),
+				R7: uint64(OK),
 			},
 			// After success:
 			//   - The ejected service 999 is removed
@@ -398,10 +398,10 @@ func TestAccumulate(t *testing.T) {
 			fn:         fnStd(Query),
 			initialGas: 100,
 			initialRegs: deltaRegs{
-				A1: 123,
+				R8: 123,
 			},
 			alloc: alloc{
-				A0: hash2bytes(randomHash),
+				R7: hash2bytes(randomHash),
 			},
 			X: AccumulateContext{
 				ServiceId: 999,
@@ -412,8 +412,8 @@ func TestAccumulate(t *testing.T) {
 				},
 			},
 			expectedDeltaRegs: deltaRegs{
-				A0: 0,
-				A1: 0,
+				R7: 0,
+				R8: 0,
 			},
 			expectedGas: 90,
 			expectedX: AccumulateContext{
@@ -430,10 +430,10 @@ func TestAccumulate(t *testing.T) {
 			fn:         fnStd(Query),
 			initialGas: 100,
 			initialRegs: deltaRegs{
-				A1: 123,
+				R8: 123,
 			},
 			alloc: alloc{
-				A0: hash2bytes(randomHash),
+				R7: hash2bytes(randomHash),
 			},
 			X: AccumulateContext{
 				ServiceId: 999,
@@ -444,8 +444,8 @@ func TestAccumulate(t *testing.T) {
 				},
 			},
 			expectedDeltaRegs: deltaRegs{
-				A0: 1 + (uint64(11) << 32),
-				A1: 0,
+				R7: 1 + (uint64(11) << 32),
+				R8: 0,
 			},
 			expectedGas: 90,
 			expectedX: AccumulateContext{
@@ -462,10 +462,10 @@ func TestAccumulate(t *testing.T) {
 			fn:         fnStd(Query),
 			initialGas: 100,
 			initialRegs: deltaRegs{
-				A1: 123,
+				R8: 123,
 			},
 			alloc: alloc{
-				A0: hash2bytes(randomHash),
+				R7: hash2bytes(randomHash),
 			},
 			X: AccumulateContext{
 				ServiceId: 999,
@@ -476,8 +476,8 @@ func TestAccumulate(t *testing.T) {
 				},
 			},
 			expectedDeltaRegs: deltaRegs{
-				A0: 2 + (uint64(11) << 32),
-				A1: uint64(12),
+				R7: 2 + (uint64(11) << 32),
+				R8: uint64(12),
 			},
 			expectedGas: 90,
 			expectedX: AccumulateContext{
@@ -494,10 +494,10 @@ func TestAccumulate(t *testing.T) {
 			fn:         fnStd(Query),
 			initialGas: 100,
 			initialRegs: deltaRegs{
-				A1: 123,
+				R8: 123,
 			},
 			alloc: alloc{
-				A0: hash2bytes(randomHash),
+				R7: hash2bytes(randomHash),
 			},
 			X: AccumulateContext{
 				ServiceId: 999,
@@ -508,8 +508,8 @@ func TestAccumulate(t *testing.T) {
 				},
 			},
 			expectedDeltaRegs: deltaRegs{
-				A0: 3 + (uint64(11) << 32),
-				A1: uint64(12) + (uint64(13) << 32),
+				R7: 3 + (uint64(11) << 32),
+				R8: uint64(12) + (uint64(13) << 32),
 			},
 			expectedGas: 90,
 			expectedX: AccumulateContext{
@@ -524,16 +524,16 @@ func TestAccumulate(t *testing.T) {
 			name: "solicit_new_preimage",
 			fn:   fnWithExtra[jamtime.Timeslot](Solicit),
 			alloc: alloc{
-				A0: hash2bytes(randomHash),
+				R7: hash2bytes(randomHash),
 			},
 			initialRegs: deltaRegs{
-				A1: 256, // z: preimage length
+				R8: 256, // z: preimage length
 			},
 			extraParam:  jamtime.Timeslot(1000),
 			initialGas:  100,
 			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(OK),
+				R7: uint64(OK),
 			},
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
@@ -570,16 +570,16 @@ func TestAccumulate(t *testing.T) {
 			name: "solicit_append_timeslot",
 			fn:   fnWithExtra[jamtime.Timeslot](Solicit),
 			alloc: alloc{
-				A0: hash2bytes(randomHash),
+				R7: hash2bytes(randomHash),
 			},
 			initialRegs: deltaRegs{
-				A1: 256, // z: preimage length
+				R8: 256, // z: preimage length
 			},
 			extraParam:  jamtime.Timeslot(1000),
 			initialGas:  100,
 			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(OK),
+				R7: uint64(OK),
 			},
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
@@ -627,16 +627,16 @@ func TestAccumulate(t *testing.T) {
 			name: "solicit_invalid_timeslots",
 			fn:   fnWithExtra[jamtime.Timeslot](Solicit),
 			alloc: alloc{
-				A0: hash2bytes(randomHash),
+				R7: hash2bytes(randomHash),
 			},
 			initialRegs: deltaRegs{
-				A1: 256,
+				R8: 256,
 			},
 			extraParam:  jamtime.Timeslot(1000),
 			initialGas:  100,
 			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(HUH),
+				R7: uint64(HUH),
 			},
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
@@ -684,16 +684,16 @@ func TestAccumulate(t *testing.T) {
 			name: "solicit_insufficient_balance",
 			fn:   fnWithExtra[jamtime.Timeslot](Solicit),
 			alloc: alloc{
-				A0: hash2bytes(randomHash),
+				R7: hash2bytes(randomHash),
 			},
 			initialRegs: deltaRegs{
-				A1: 256,
+				R8: 256,
 			},
 			extraParam:  jamtime.Timeslot(1000),
 			initialGas:  100,
 			expectedGas: 90,
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(FULL),
+				R7: uint64(FULL),
 			},
 			X: AccumulateContext{
 				ServiceId: currentServiceID,
@@ -719,9 +719,9 @@ func TestAccumulate(t *testing.T) {
 			name:              "forget_0",
 			fn:                fnWithExtra[jamtime.Timeslot](Forget),
 			extraParam:        jamtime.Timeslot(0),
-			alloc:             alloc{A0: hash2bytes(randomHash)},
-			initialRegs:       deltaRegs{A1: 123},
-			expectedDeltaRegs: deltaRegs{A0: uint64(OK)},
+			alloc:             alloc{R7: hash2bytes(randomHash)},
+			initialRegs:       deltaRegs{R8: 123},
+			expectedDeltaRegs: deltaRegs{R7: uint64(OK)},
 			initialGas:        100,
 			expectedGas:       90,
 			X: AccumulateContext{
@@ -764,9 +764,9 @@ func TestAccumulate(t *testing.T) {
 		}, {
 			name:              "forget_1",
 			fn:                fnWithExtra[jamtime.Timeslot](Forget),
-			alloc:             alloc{A0: hash2bytes(randomHash)},
-			initialRegs:       deltaRegs{A1: 123},
-			expectedDeltaRegs: deltaRegs{A0: uint64(OK)},
+			alloc:             alloc{R7: hash2bytes(randomHash)},
+			initialRegs:       deltaRegs{R8: 123},
+			expectedDeltaRegs: deltaRegs{R7: uint64(OK)},
 			initialGas:        100,
 			expectedGas:       90,
 			extraParam:        randomTimeslot2,
@@ -819,9 +819,9 @@ func TestAccumulate(t *testing.T) {
 		}, {
 			name:              "forget_2",
 			fn:                fnWithExtra[jamtime.Timeslot](Forget),
-			alloc:             alloc{A0: hash2bytes(randomHash)},
-			initialRegs:       deltaRegs{A1: 123},
-			expectedDeltaRegs: deltaRegs{A0: uint64(OK)},
+			alloc:             alloc{R7: hash2bytes(randomHash)},
+			initialRegs:       deltaRegs{R8: 123},
+			expectedDeltaRegs: deltaRegs{R7: uint64(OK)},
 			initialGas:        100,
 			expectedGas:       90,
 			extraParam:        randomTimeslot2 + constants.PreimageExpulsionPeriod + 1,
@@ -865,9 +865,9 @@ func TestAccumulate(t *testing.T) {
 		}, {
 			name:              "forget_3",
 			fn:                fnWithExtra[jamtime.Timeslot](Forget),
-			alloc:             alloc{A0: hash2bytes(randomHash)},
-			initialRegs:       deltaRegs{A1: 123},
-			expectedDeltaRegs: deltaRegs{A0: uint64(OK)},
+			alloc:             alloc{R7: hash2bytes(randomHash)},
+			initialRegs:       deltaRegs{R8: 123},
+			expectedDeltaRegs: deltaRegs{R7: uint64(OK)},
 			initialGas:        100,
 			expectedGas:       90,
 			extraParam:        randomTimeslot2 + constants.PreimageExpulsionPeriod + 1,
@@ -923,13 +923,13 @@ func TestAccumulate(t *testing.T) {
 			fn:         fnStd(Yield),
 			initialGas: 100,
 			alloc: alloc{
-				A0: hash2bytes(randomHash),
+				R7: hash2bytes(randomHash),
 			},
 			X: AccumulateContext{
 				ServiceId: 999,
 			},
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(OK),
+				R7: uint64(OK),
 			},
 			expectedGas: 90,
 			expectedX: AccumulateContext{
@@ -943,9 +943,9 @@ func TestAccumulate(t *testing.T) {
 			extraParam: block.ServiceId(1),
 			initialGas: 100,
 			alloc: alloc{
-				A1: hash2bytes(randomHash),
+				R8: hash2bytes(randomHash),
 			},
-			initialRegs: deltaRegs{A0: 1, A2: 32},
+			initialRegs: deltaRegs{R7: 1, R9: 32},
 			X: AccumulateContext{
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
@@ -955,7 +955,7 @@ func TestAccumulate(t *testing.T) {
 				},
 			},
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(OK),
+				R7: uint64(OK),
 			},
 			expectedGas: 90,
 			expectedX: AccumulateContext{
@@ -976,9 +976,9 @@ func TestAccumulate(t *testing.T) {
 			extraParam: block.ServiceId(1),
 			initialGas: 100,
 			alloc: alloc{
-				A1: hash2bytes(randomHash),
+				R8: hash2bytes(randomHash),
 			},
-			initialRegs: deltaRegs{A0: 1, A2: 32},
+			initialRegs: deltaRegs{R7: 1, R9: 32},
 			X: AccumulateContext{
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
@@ -991,7 +991,7 @@ func TestAccumulate(t *testing.T) {
 				},
 			},
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(HUH),
+				R7: uint64(HUH),
 			},
 			expectedGas: 90,
 			expectedX: AccumulateContext{
@@ -1012,9 +1012,9 @@ func TestAccumulate(t *testing.T) {
 			extraParam: block.ServiceId(1),
 			initialGas: 100,
 			alloc: alloc{
-				A1: hash2bytes(randomHash),
+				R8: hash2bytes(randomHash),
 			},
-			initialRegs: deltaRegs{A0: 1, A2: 32},
+			initialRegs: deltaRegs{R7: 1, R9: 32},
 			X: AccumulateContext{
 				AccumulationState: state.AccumulationState{
 					ServiceState: service.ServiceState{
@@ -1023,7 +1023,7 @@ func TestAccumulate(t *testing.T) {
 				},
 			},
 			expectedDeltaRegs: deltaRegs{
-				A0: uint64(WHO),
+				R7: uint64(WHO),
 			},
 			expectedGas: 90,
 			expectedX: AccumulateContext{
@@ -1043,7 +1043,7 @@ func TestAccumulate(t *testing.T) {
 			}
 			rwAddress := RWAddressBase
 			for addrReg, v := range tc.alloc {
-				require.Greater(t, addrReg, S1)
+				require.Greater(t, addrReg, R6)
 				err = mem.Write(uint32(rwAddress), v)
 				require.NoError(t, err)
 

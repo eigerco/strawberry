@@ -35,7 +35,7 @@ func GasRemaining(gas pvm.Gas, regs pvm.Registers) (pvm.Gas, pvm.Registers, erro
 	gas -= GasRemainingCost
 
 	// Set the new ϱ' value into φ′7
-	regs[pvm.A0] = uint64(gas)
+	regs[pvm.R7] = uint64(gas)
 
 	return gas, regs, nil
 }
@@ -55,12 +55,12 @@ func Fetch(
 ) (pvm.Gas, pvm.Registers, pvm.Memory, error) {
 	gas -= FetchCost
 
-	output := regs[pvm.A0] // φ7
-	offset := regs[pvm.A1] // φ8
-	length := regs[pvm.A2] // φ9
-	dataID := regs[pvm.A3] // φ10
-	idx1 := regs[pvm.A4]   // φ11
-	idx2 := regs[pvm.A5]   // φ12
+	output := regs[pvm.R7]  // φ7
+	offset := regs[pvm.R8]  // φ8
+	length := regs[pvm.R9]  // φ9
+	dataID := regs[pvm.R10] // φ10
+	idx1 := regs[pvm.R11]   // φ11
+	idx2 := regs[pvm.R12]   // φ12
 
 	var v []byte
 
@@ -207,7 +207,7 @@ func Fetch(
 		return gas, regs, mem, err
 	}
 
-	regs[pvm.A0] = uint64(len(v))
+	regs[pvm.R7] = uint64(len(v))
 	return gas, regs, mem, nil
 }
 
@@ -215,7 +215,7 @@ func Fetch(
 func Lookup(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (pvm.Gas, pvm.Registers, pvm.Memory, error) {
 	gas -= LookupCost
 
-	omega7 := regs[pvm.A0]
+	omega7 := regs[pvm.R7]
 
 	// let a =
 	//   s           if φ₇ ∈ { s, 2⁶⁴ − 1 }
@@ -231,7 +231,7 @@ func Lookup(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAc
 	}
 
 	// let [h, o] = φ₈‥₊₂
-	h, o := regs[pvm.A1], regs[pvm.A2]
+	h, o := regs[pvm.R8], regs[pvm.R9]
 
 	// let v = ∇ if N_h‥₊₃₂ ⊄ Vμ (read fault → panic)
 	key := make([]byte, 32)
@@ -259,12 +259,12 @@ func Lookup(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAc
 	// let l = min(φ₁₁, |v| − f)
 	// μ′_o‥₊l = v_f‥₊l
 	// (ε′, φ′₇, μ′) = (☇, φ₇, μ) if N_o‥₊l ⊄ V*μ (write fault → panic)
-	if err := writeFromOffset(&mem, o, v, regs[pvm.A3], regs[pvm.A4]); err != nil {
+	if err := writeFromOffset(&mem, o, v, regs[pvm.R10], regs[pvm.R11]); err != nil {
 		return gas, regs, mem, err // err is a panic
 	}
 
 	// (ε′, φ′₇, μ′) = (▸, |v|, v_f‥₊l)
-	regs[pvm.A0] = uint64(len(v))
+	regs[pvm.R7] = uint64(len(v))
 	return gas, regs, mem, nil
 }
 
@@ -272,7 +272,7 @@ func Lookup(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAc
 func Read(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAccount, serviceId block.ServiceId, serviceState service.ServiceState) (pvm.Gas, pvm.Registers, pvm.Memory, error) {
 	gas -= ReadCost
 
-	omega7 := regs[pvm.A0]
+	omega7 := regs[pvm.R7]
 	// s* = φ7
 	ss := block.ServiceId(omega7)
 	if uint64(omega7) == math.MaxUint64 {
@@ -291,7 +291,7 @@ func Read(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAcco
 	}
 
 	// let [ko, kz, o] = φ8..+3
-	ko, kz, o := regs[pvm.A1], regs[pvm.A2], regs[pvm.A3]
+	ko, kz, o := regs[pvm.R8], regs[pvm.R9], regs[pvm.R10]
 
 	// read key data from memory at ko..ko+kz
 	keyData := make([]byte, kz)
@@ -315,11 +315,11 @@ func Read(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAcco
 		return gas, withCode(regs, NONE), mem, nil
 	}
 
-	if err = writeFromOffset(&mem, o, v, regs[pvm.A4], regs[pvm.A5]); err != nil {
+	if err = writeFromOffset(&mem, o, v, regs[pvm.R11], regs[pvm.R12]); err != nil {
 		return gas, regs, mem, err
 	}
 
-	regs[pvm.A0] = uint64(len(v))
+	regs[pvm.R7] = uint64(len(v))
 	return gas, regs, mem, nil
 }
 
@@ -327,10 +327,10 @@ func Read(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAcco
 func Write(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAccount, serviceId block.ServiceId) (pvm.Gas, pvm.Registers, pvm.Memory, service.ServiceAccount, error) {
 	gas -= WriteCost
 
-	ko := regs[pvm.A0]
-	kz := regs[pvm.A1]
-	vo := regs[pvm.A2]
-	vz := regs[pvm.A3]
+	ko := regs[pvm.R7]
+	kz := regs[pvm.R8]
+	vo := regs[pvm.R9]
+	vz := regs[pvm.R10]
 
 	//µko⋅⋅⋅+kz
 	keyData := make([]byte, kz)
@@ -389,7 +389,7 @@ func Write(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAcc
 	}
 
 	// otherwise a.ThresholdBalance() <= a.Balance
-	regs[pvm.A0] = storageItemLength // l
+	regs[pvm.R7] = storageItemLength // l
 	return gas, regs, mem, a, err    // return service account 'a' as opposed to 's' for not successful paths
 }
 
@@ -397,8 +397,8 @@ func Write(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, s service.ServiceAcc
 func Info(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, serviceId block.ServiceId, serviceState service.ServiceState) (pvm.Gas, pvm.Registers, pvm.Memory, error) {
 	gas -= InfoCost
 
-	omega7 := regs[pvm.A0]
-	o := regs[pvm.A1]
+	omega7 := regs[pvm.R7]
+	o := regs[pvm.R8]
 
 	account, exists := serviceState[serviceId]
 	if uint64(omega7) != math.MaxUint64 {
@@ -431,12 +431,12 @@ func Info(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, serviceId block.Servi
 		jam.EncodeUint32(uint32(account.ParentService)),
 	)
 
-	if err = writeFromOffset(&mem, o, v, regs[pvm.A2], regs[pvm.A3]); err != nil {
+	if err = writeFromOffset(&mem, o, v, regs[pvm.R9], regs[pvm.R10]); err != nil {
 		return gas, regs, mem, pvm.ErrPanicf(err.Error())
 	}
 
 	// φ′7 = |v|
-	regs[pvm.A0] = uint64(len(v))
+	regs[pvm.R7] = uint64(len(v))
 
 	return gas, regs, mem, nil
 }
@@ -446,7 +446,7 @@ func Log(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, core *uint16, serviceI
 	gas -= LogCost
 
 	fullMsg := &bytes.Buffer{}
-	lvl := regs[pvm.A0]
+	lvl := regs[pvm.R7]
 
 	// Write level
 	switch lvl {
@@ -472,10 +472,10 @@ func Log(gas pvm.Gas, regs pvm.Registers, mem pvm.Memory, core *uint16, serviceI
 		_, _ = fmt.Fprintf(fullMsg, "#%d", *serviceId)
 	}
 
-	to := regs[pvm.A1]
-	tz := regs[pvm.A2]
-	xo := regs[pvm.A3]
-	xz := regs[pvm.A4]
+	to := regs[pvm.R8]
+	tz := regs[pvm.R9]
+	xo := regs[pvm.R10]
+	xz := regs[pvm.R11]
 
 	// Write target
 	if to != 0 && tz != 0 {
