@@ -21,19 +21,47 @@ import (
 var testvectors embed.FS
 
 type TestCase struct {
-	Name                     string        `json:"name"`
-	InitialRegs              pvm.Registers `json:"initial-regs"`
-	InitialPc                uint64        `json:"initial-pc"`
-	InitialPageMap           []Page        `json:"initial-page-map"`
-	InitialMemory            []MemoryChunk `json:"initial-memory"`
-	InitialGas               pvm.UGas      `json:"initial-gas"`
-	Program                  []byte        `json:"program"`
-	ExpectedStatus           string        `json:"expected-status"`
-	ExpectedRegs             pvm.Registers `json:"expected-regs"`
-	ExpectedPc               uint64        `json:"expected-pc"`
-	ExpectedMemory           []MemoryChunk `json:"expected-memory"`
-	ExpectedGas              pvm.Gas       `json:"expected-gas"`
-	ExpectedPageFaultAddress uint64        `json:"expected-page-fault-address"`
+	Name string `json:"name"`
+	//InitialRegs pvm.Registers `json:"initial-regs"`
+	InitialPc  uint64   `json:"initial-pc"`
+	InitialGas pvm.UGas `json:"initial-gas"`
+	Program    []byte   `json:"program"`
+
+	Steps []Step `json:"steps"`
+
+	BlockGasCosts []blockGasCosts `json:"block-gas-costs"`
+}
+
+type Step struct {
+	Run any `json:"run"`
+
+	SetReg *SetReg `json:"set-reg"`
+
+	Assert *Assert `json:"assert"`
+
+	Map *Page `json:"map"`
+
+	Write *MemoryChunk `json:"write"`
+}
+
+type Assert struct {
+	Status           string        `json:"status"`
+	Hostcall         uint64        `json:"hostcall"`
+	PageFaultAddress int           `json:"page-fault-address"`
+	Gas              pvm.Gas       `json:"gas"`
+	Pc               uint64        `json:"pc"`
+	Regs             pvm.Registers `json:"regs"`
+	Memory           []MemoryChunk `json:"memory"`
+}
+
+type SetReg struct {
+	Reg   uint64 `json:"reg"`
+	Value uint64 `json:"value"`
+}
+
+type blockGasCosts struct {
+	Pc   uint64  `json:"pc"`
+	Cost pvm.Gas `json:"cost"`
 }
 
 type Page struct {
@@ -65,65 +93,73 @@ func Test_PVM_Vectors(t *testing.T) {
 			if err := json.NewDecoder(f).Decode(tc); err != nil {
 				t.Fatal(file.Name(), err)
 			}
-			mem := getMemoryMap(tc.InitialPageMap)
 
-			for _, initialMem := range tc.InitialMemory {
-				pageIndex := initialMem.Address / pvm.PageSize
-				access := mem.GetAccess(pageIndex)
-				err = mem.SetAccess(pageIndex, pvm.ReadWrite)
-				assert.NoError(t, err)
-				err := mem.Write(initialMem.Address, initialMem.Contents)
-				if err != nil {
-					t.Fatal(err)
-				}
-				err = mem.SetAccess(pageIndex, access)
-				assert.NoError(t, err)
+			gasCostMap := make(map[uint64]pvm.Gas)
+			for _, gasCost := range tc.BlockGasCosts {
+				gasCostMap[gasCost.Pc] = gasCost.Cost
 			}
-			i, err := pvm.Instantiate(tc.Program, tc.InitialPc, tc.InitialGas, tc.InitialRegs, mem)
+
+			i, err := pvm.Instantiate(tc.Program, tc.InitialPc, tc.InitialGas, pvm.Registers{}, pvm.Memory{})
 			require.NoError(t, err)
+			i.OverwriteGasCostsMap(gasCostMap)
 
-			_, err = pvm.InvokeBasic(i)
+			var (
+				rwPageSet    bool
+				executionErr error
+				hostcall     uint64
+			)
 
-			assert.Equal(t, tc.ExpectedStatus, error2status(err))
-			instructionCounter, gas, regs, mem := i.Results()
-
-			var errPageFault *pvm.ErrPageFault
-			if errors.As(err, &errPageFault) {
-				assert.Equal(t, tc.ExpectedPageFaultAddress, uint64(errPageFault.Address))
-			} else {
-				// We only check gas when there is no page fault because the expected value is wrong in tests (it charges an extra gas unit).
-				assert.Equal(t, tc.ExpectedGas, gas)
-			}
-
-			assert.Equal(t, int(tc.ExpectedPc), int(instructionCounter))
-			assert.Equal(t, tc.ExpectedRegs, regs)
-			for _, expectedMem := range tc.ExpectedMemory {
-				data := make([]byte, len(expectedMem.Contents))
-				err := mem.Read(expectedMem.Address, data)
-				if err != nil {
-					t.Fatal(err)
+			for j, step := range tc.Steps {
+				if step.Run != nil {
+					if errors.Is(executionErr, pvm.ErrHostCall) {
+						// skip the host call to resume execution
+						i.OverwriteSkip()
+					}
+					hostcall, executionErr = pvm.InvokeBasic(i)
 				}
-				assert.Equal(t, expectedMem.Contents, data)
+				if step.Map != nil {
+					if !step.Map.IsWritable {
+						i.OverwriteMemoryMapRO(step.Map.Address, step.Map.Length)
+					} else if step.Map.IsWritable && rwPageSet {
+						i.OverwriteMemoryMapStack(step.Map.Address, step.Map.Length)
+					} else {
+						i.OverwriteMemoryMapRW(step.Map.Address, step.Map.Length)
+						rwPageSet = true
+					}
+				}
+				if step.SetReg != nil {
+					i.OverwriteRegister(step.SetReg.Reg, step.SetReg.Value)
+				}
+				if step.Write != nil {
+					err = i.OverwriteMemory(step.Write.Address, step.Write.Contents)
+					assert.NoError(t, err)
+				}
+				if step.Assert != nil {
+					assert.Equal(t, step.Assert.Status, error2status(executionErr))
+					instructionCounter, gas, regs, mem := i.Results()
+
+					var errPageFault *pvm.ErrPageFault
+					if errors.As(err, &errPageFault) {
+						assert.Equal(t, step.Assert.PageFaultAddress, uint64(errPageFault.Address))
+					}
+
+					assert.Equal(t, int(step.Assert.Hostcall), int(hostcall), "step %d", j)
+
+					assert.Equal(t, step.Assert.Gas, gas)
+
+					assert.Equal(t, int(step.Assert.Pc), int(instructionCounter), "step %d", j)
+					assert.Equal(t, step.Assert.Regs, regs, "step %d", j)
+					for _, expectedMem := range step.Assert.Memory {
+						data := make([]byte, len(expectedMem.Contents))
+						err := mem.Read(expectedMem.Address, data)
+						if assert.NoError(t, err, "step %d", j) {
+							assert.Equal(t, expectedMem.Contents, data, "step %d", j)
+						}
+					}
+				}
 			}
 		})
 	}
-}
-
-func getMemoryMap(pageMap []Page) pvm.Memory {
-	var roAddr, rwAddr, stackAddr, roSize, rwSize, stackSize uint32
-	for _, page := range pageMap {
-		if !page.IsWritable {
-			roAddr = page.Address
-			roSize = page.Length
-		} else if page.IsWritable && stackAddr == 0 {
-			stackAddr = page.Address
-			stackSize = page.Length
-		} else {
-			rwAddr = page.Address
-			rwSize = page.Length
-		}
-	}
-	return pvm.InitializeCustomMemory(roAddr, rwAddr, stackAddr, 1<<32-1, roSize, rwSize, stackSize, 0)
 }
 
 func error2status(err error) string {
@@ -134,7 +170,10 @@ func error2status(err error) string {
 		return "halt"
 	}
 	if errors.Is(err, pvm.ErrHostCall) {
-		return "host_call"
+		return "ecalli"
+	}
+	if errors.Is(err, pvm.ErrOutOfGas) {
+		return "out-of-gas"
 	}
 	var errPanic *pvm.ErrPanic
 	var errPageFault *pvm.ErrPageFault

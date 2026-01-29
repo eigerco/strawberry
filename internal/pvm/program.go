@@ -162,6 +162,10 @@ func (p *program) skip(instructionCounter uint64) uint8 {
 //
 //nolint:unused
 func (p *program) opcode(instructionCounter uint64) Opcode {
+	if instructionCounter >= uint64(len(p.code)) {
+		return Trap
+	}
+
 	op := Opcode(p.code[instructionCounter])
 	if !opcodeValid(op) {
 		return Trap
@@ -191,7 +195,7 @@ func (p *program) decodeArgsImm(instructionCounter uint64, skipLen uint8) (value
 	return valueX
 }
 
-func (p *program) decodeArgsRegImmExt(instructionCounter uint64, skipLen uint8) (regA Reg, valueX uint64) {
+func (p *program) decodeArgsRegImmExt(instructionCounter uint64) (regA Reg, valueX uint64) {
 	if instr := p.instructionsCache[instructionCounter]; instr != nil {
 		return instr.reg[0], instr.val[0]
 	}

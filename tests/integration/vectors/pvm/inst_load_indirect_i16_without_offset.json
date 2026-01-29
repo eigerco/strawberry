@@ -1,39 +1,6 @@
 {
   "name": "inst_load_indirect_i16_without_offset",
-  "initial-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    131072,
-    0,
-    0,
-    0,
-    0,
-    0
-  ],
   "initial-pc": 0,
-  "initial-page-map": [
-    {
-      "address": 131072,
-      "length": 4096,
-      "is-writable": true
-    }
-  ],
-  "initial-memory": [
-    {
-      "address": 131072,
-      "contents": [
-        129,
-        130,
-        131,
-        132
-      ]
-    }
-  ],
   "initial-gas": 10000,
   "program": [
     0,
@@ -43,33 +10,72 @@
     120,
     1
   ],
-  "expected-status": "panic",
-  "expected-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    131072,
-    18446744073709519489,
-    0,
-    0,
-    0,
-    0
-  ],
-  "expected-pc": 2,
-  "expected-memory": [
+  "steps": [
     {
-      "address": 131072,
-      "contents": [
-        129,
-        130,
-        131,
-        132
-      ]
+      "map": {
+        "address": 131072,
+        "length": 4096,
+        "is-writable": true
+      }
+    },
+    {
+      "write": {
+        "address": 131072,
+        "contents": [
+          129,
+          130,
+          131,
+          132
+        ]
+      }
+    },
+    {
+      "set-reg": {
+        "reg": 7,
+        "value": 131072
+      }
+    },
+    {
+      "run": {}
+    },
+    {
+      "assert": {
+        "status": "panic",
+        "gas": 9975,
+        "pc": 2,
+        "regs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          131072,
+          18446744073709519489,
+          0,
+          0,
+          0,
+          0
+        ],
+        "memory": [
+          {
+            "address": 131072,
+            "contents": [
+              129,
+              130,
+              131,
+              132
+            ]
+          }
+        ]
+      }
     }
   ],
-  "expected-gas": 9998
+  "block-gas-costs": [
+    {
+      "pc": 0,
+      "cost": 25
+    }
+  ]
 }

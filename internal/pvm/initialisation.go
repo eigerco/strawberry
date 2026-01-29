@@ -117,36 +117,6 @@ func InitializeMemory(roData, rwData, argsData []byte, stackSize uint32, initial
 	return mem, nil
 }
 
-func InitializeCustomMemory(roAddr, rwAddr, stackAddr, argsAddr, roSize, rwSize, stackSize, argsSize uint32) Memory {
-	mem := Memory{
-		ro: memorySegment{
-			address: roAddr,
-			access:  ReadOnly,
-			data:    make([]byte, roSize),
-		},
-		rw: memorySegment{
-			address: rwAddr,
-			access:  ReadWrite,
-			data:    make([]byte, rwSize),
-		},
-		stack: memorySegment{
-			address: stackAddr,
-			access:  ReadWrite,
-			data:    make([]byte, stackSize),
-		},
-		args: memorySegment{
-			address: argsAddr,
-			access:  ReadOnly,
-			data:    make([]byte, argsSize),
-		},
-	}
-	mem.ro.end = mem.ro.address + uint32(len(mem.ro.data))
-	mem.rw.end = mem.rw.address + uint32(len(mem.rw.data))
-	mem.stack.end = mem.stack.address + uint32(len(mem.stack.data))
-	mem.args.end = mem.args.address + uint32(len(mem.args.data))
-	return mem
-}
-
 // InitializeRegisters (eq. A.43 v0.7.2)
 func InitializeRegisters(argsLen int) Registers {
 	return Registers{

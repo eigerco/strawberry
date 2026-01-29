@@ -1,23 +1,6 @@
 {
   "name": "inst_add_32",
-  "initial-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    2,
-    0,
-    0,
-    0,
-    0
-  ],
   "initial-pc": 0,
-  "initial-page-map": [],
-  "initial-memory": [],
   "initial-gas": 10000,
   "program": [
     0,
@@ -28,23 +11,50 @@
     9,
     1
   ],
-  "expected-status": "panic",
-  "expected-regs": [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    2,
-    3,
-    0,
-    0,
-    0
+  "steps": [
+    {
+      "set-reg": {
+        "reg": 7,
+        "value": 1
+      }
+    },
+    {
+      "set-reg": {
+        "reg": 8,
+        "value": 2
+      }
+    },
+    {
+      "run": {}
+    },
+    {
+      "assert": {
+        "status": "panic",
+        "gas": 9998,
+        "pc": 3,
+        "regs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          2,
+          3,
+          0,
+          0,
+          0
+        ],
+        "memory": []
+      }
+    }
   ],
-  "expected-pc": 3,
-  "expected-memory": [],
-  "expected-gas": 9998
+  "block-gas-costs": [
+    {
+      "pc": 0,
+      "cost": 2
+    }
+  ]
 }
