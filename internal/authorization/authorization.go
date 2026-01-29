@@ -67,7 +67,7 @@ func (a *Authorization) InvokePVM(
 			gasCounter, regs, mem, err = host_call.Fetch(gasCounter, regs, mem, &workPackage, nil, nil, nil, nil, nil, nil)
 		default:
 			// (▸, ϱ−10, [φ0,…,φ6, WHAT, φ8,…], µ)
-			regs[pvm.A0] = uint64(host_call.WHAT)
+			regs[pvm.R7] = uint64(host_call.WHAT)
 			gasCounter -= isAuthorizedCost
 		}
 

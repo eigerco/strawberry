@@ -186,7 +186,7 @@ func (p *program) decodeArgsImm(instructionCounter uint64, skipLen uint8) (value
 	lenX := uint64(min(4, skipLen))
 
 	// νX ≡ X_lX(E−1lX (ζı+1⋅⋅⋅+lX))
-	valueX = sext(jam.DecodeUint64(p.code[instructionCounter+1:instructionCounter+1+lenX]), lenX)
+	valueX = signedExtension(jam.DecodeUint64(p.code[instructionCounter+1:instructionCounter+1+lenX]), lenX)
 	p.instructionsCache[instructionCounter] = &instructionCache{val: [2]uint64{valueX}}
 	return valueX
 }
@@ -214,10 +214,10 @@ func (p *program) decodeArgsImm2(instructionCounter uint64, skipLen uint8) (valu
 	lenY := uint64(min(4, max(0, int(skipLen)-int(lenX)-1)))
 
 	// νX ≡ X_lX (E−1lX (ζı+2⋅⋅⋅+lX))
-	valueX = sext(jam.DecodeUint64(p.code[instructionCounter+2:instructionCounter+2+lenX]), lenX)
+	valueX = signedExtension(jam.DecodeUint64(p.code[instructionCounter+2:instructionCounter+2+lenX]), lenX)
 
 	// νY ≡ XlY (E−1lY (ζı+2+lX ⋅⋅⋅+lY))
-	valueY = sext(jam.DecodeUint64(p.code[instructionCounter+2+lenX:instructionCounter+2+lenX+lenY]), lenY)
+	valueY = signedExtension(jam.DecodeUint64(p.code[instructionCounter+2+lenX:instructionCounter+2+lenX+lenY]), lenY)
 	p.instructionsCache[instructionCounter] = &instructionCache{val: [2]uint64{valueX, valueY}}
 	return valueX, valueY
 }
@@ -245,7 +245,7 @@ func (p *program) decodeArgsRegImm(instructionCounter uint64, skipLen uint8) (re
 	regA = Reg(min(12, p.code[instructionCounter+1]%16))
 
 	// νX ≡ X_lX(E−1_lX(ζı+2...+lX))
-	valueX = sext(jam.DecodeUint64(p.code[instructionCounter+2:instructionCounter+2+lenX]), lenX)
+	valueX = signedExtension(jam.DecodeUint64(p.code[instructionCounter+2:instructionCounter+2+lenX]), lenX)
 	p.instructionsCache[instructionCounter] = &instructionCache{reg: [3]Reg{regA}, val: [2]uint64{valueX}}
 	return regA, valueX
 }
@@ -263,10 +263,10 @@ func (p *program) decodeArgsRegImm2(instructionCounter uint64, skipLen uint8) (r
 	lenY := uint64(min(4, max(0, int(skipLen)-int(lenX)-1)))
 
 	// νX = X_lX (E−1lX (ζı+2⋅⋅⋅+lX))
-	valueX = sext(jam.DecodeUint64(p.code[instructionCounter+2:instructionCounter+2+lenX]), lenX)
+	valueX = signedExtension(jam.DecodeUint64(p.code[instructionCounter+2:instructionCounter+2+lenX]), lenX)
 
 	// νY = X_lY(E−1lY (ζı+2+lX ⋅⋅⋅+lY))
-	valueY = sext(jam.DecodeUint64(p.code[instructionCounter+2+lenX:instructionCounter+2+lenX+lenY]), lenY)
+	valueY = signedExtension(jam.DecodeUint64(p.code[instructionCounter+2+lenX:instructionCounter+2+lenX+lenY]), lenY)
 	p.instructionsCache[instructionCounter] = &instructionCache{reg: [3]Reg{regA}, val: [2]uint64{valueX, valueY}}
 	return regA, valueX, valueY
 }
@@ -283,7 +283,7 @@ func (p *program) decodeArgsRegImmOffset(instructionCounter uint64, skipLen uint
 	lenY := uint64(min(4, max(0, int(skipLen)-int(lenX)-1)))
 
 	// νX = X_lX(E−1lX (ζı+2...+lX))
-	valueX = sext(jam.DecodeUint64(p.code[instructionCounter+2:instructionCounter+2+lenX]), lenX)
+	valueX = signedExtension(jam.DecodeUint64(p.code[instructionCounter+2:instructionCounter+2+lenX]), lenX)
 	// νY = ı + ZlY(E−1lY (ζı+2+lX⋅⋅⋅+lY))
 	valueY = uint64(int64(instructionCounter) + signed(jam.DecodeUint64(p.code[instructionCounter+2+lenX:instructionCounter+2+lenX+lenY]), lenY))
 	p.instructionsCache[instructionCounter] = &instructionCache{reg: [3]Reg{regA}, val: [2]uint64{valueX, valueY}}
@@ -315,7 +315,7 @@ func (p *program) decodeArgsReg2Imm(instructionCounter uint64, skipLen uint8) (r
 	regB = Reg(min(12, p.code[instructionCounter+1]/16))
 
 	// νX ≡ X_lX(E−1lX(ζı+2...+lX))
-	valueX = sext(jam.DecodeUint64(p.code[instructionCounter+2:instructionCounter+2+lenX]), lenX)
+	valueX = signedExtension(jam.DecodeUint64(p.code[instructionCounter+2:instructionCounter+2+lenX]), lenX)
 	p.instructionsCache[instructionCounter] = &instructionCache{reg: [3]Reg{regA, regB}, val: [2]uint64{valueX}}
 	return regA, regB, valueX
 }
@@ -353,7 +353,7 @@ func (p *program) decodeArgsReg2Imm2(instructionCounter uint64, skipLen uint8) (
 	// νX = X_lX(E−1lX (ζı+3⋅⋅⋅+lX))
 	valueX = jam.DecodeUint64(p.code[instructionCounter+3 : instructionCounter+3+lenX])
 	// vY = X_lY(E−1lY (ζı+3+lX ⋅⋅⋅+lY))
-	valueY = sext(jam.DecodeUint64(p.code[instructionCounter+3+lenX:instructionCounter+3+lenX+lenY]), lenY)
+	valueY = signedExtension(jam.DecodeUint64(p.code[instructionCounter+3+lenX:instructionCounter+3+lenX+lenY]), lenY)
 
 	p.instructionsCache[instructionCounter] = &instructionCache{reg: [3]Reg{regA, regB}, val: [2]uint64{valueX, valueY}}
 	return regA, regB, valueX, valueY

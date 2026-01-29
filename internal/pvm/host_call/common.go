@@ -203,7 +203,7 @@ func readNumber[U interface{ ~uint32 | ~uint64 | ~int64 }](mem Memory, addr uint
 }
 
 func withCode(regs Registers, s Code) Registers {
-	regs[A0] = uint64(s)
+	regs[R7] = uint64(s)
 	return regs
 }
 

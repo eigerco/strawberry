@@ -151,10 +151,10 @@ func InitializeCustomMemory(roAddr, rwAddr, stackAddr, argsAddr, roSize, rwSize,
 // InitializeRegisters (eq. A.43 v0.7.2)
 func InitializeRegisters(argsLen int) Registers {
 	return Registers{
-		RA: AddressReturnToHost, // 2^32 − 2^16 		if i = 0
-		SP: StackAddressHigh,    // 2^32 − 2Z_Z − Z_I 	if i = 1
-		A0: ArgsAddressLow,      // 2^32 − Z_Z − Z_I 	if i = 7
-		A1: uint64(argsLen),     // |a| 				if i = 8
+		R0: AddressReturnToHost, // 2^32 − 2^16 		if i = 0
+		R1: StackAddressHigh,    // 2^32 − 2Z_Z − Z_I 	if i = 1
+		R7: ArgsAddressLow,      // 2^32 − Z_Z − Z_I 	if i = 7
+		R8: uint64(argsLen),     // |a| 				if i = 8
 		// 0 otherwise
 	}
 }

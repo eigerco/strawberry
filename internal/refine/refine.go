@@ -128,7 +128,7 @@ func (r *Refine) InvokePVM(
 		case host_call.ExpungeID:
 			gasCounter, regs, mem, ctxPair, err = host_call.Expunge(gasCounter, regs, mem, ctxPair)
 		default:
-			regs[pvm.A0] = uint64(host_call.WHAT)
+			regs[pvm.R7] = uint64(host_call.WHAT)
 			gasCounter -= RefineCost
 		}
 		// otherwise if ϱ′ < 0

@@ -769,7 +769,7 @@ func signed(value uint64, length uint64) int64 {
 }
 
 // Xn∈{0,1,2,3,4,8}∶ N^28n → N_R (eq. A.16 v0.7.2)
-func sext(value uint64, length uint64) uint64 {
+func signedExtension(value uint64, length uint64) uint64 {
 	if length == 0 {
 		return 0
 	}

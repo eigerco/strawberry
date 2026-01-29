@@ -30,7 +30,7 @@ func HistoricalLookup(
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	gas -= HistoricalLookupCost
 
-	omega7 := regs[A0]
+	omega7 := regs[R7]
 
 	lookupID := block.ServiceId(omega7)
 	if omega7 == math.MaxUint64 {
@@ -43,7 +43,7 @@ func HistoricalLookup(
 	}
 
 	// let [h, o] = φ8..+2
-	addressToRead, addressToWrite := regs[A1], regs[A2]
+	addressToRead, addressToWrite := regs[R8], regs[R9]
 
 	hashData := make([]byte, 32)
 	if addressToRead > math.MaxUint32 {
@@ -60,12 +60,12 @@ func HistoricalLookup(
 		return gas, withCode(regs, NONE), mem, ctxPair, nil
 	}
 
-	if err := writeFromOffset(&mem, addressToWrite, v, regs[A3], regs[A4]); err != nil {
+	if err := writeFromOffset(&mem, addressToWrite, v, regs[R10], regs[R11]); err != nil {
 		return gas, regs, mem, ctxPair, err
 	}
 
 	// set φ7 to |v|
-	regs[A0] = uint64(len(v))
+	regs[R7] = uint64(len(v))
 
 	return gas, regs, mem, ctxPair, nil
 }
@@ -80,8 +80,8 @@ func Export(
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	gas -= ExportCost
 
-	p := regs[A0]               // φ7
-	requestedLength := regs[A1] // φ8
+	p := regs[R7]               // φ7
+	requestedLength := regs[R8] // φ8
 
 	// let z = min(φ8,WG)
 	z := min(requestedLength, constants.SizeOfSegment)
@@ -110,7 +110,7 @@ func Export(
 	ctxPair.Segments = append(ctxPair.Segments, segmentData)
 
 	// φ7 = ς + |e|
-	regs[A0] = exportOffset + uint64(len(ctxPair.Segments))
+	regs[R7] = exportOffset + uint64(len(ctxPair.Segments))
 
 	return gas, regs, mem, ctxPair, nil
 }
@@ -125,9 +125,9 @@ func Machine(
 	gas -= MachineCost
 
 	// let [po, pz, i] = φ7...10
-	po := regs[A0]
-	pz := regs[A1]
-	i := regs[A2]
+	po := regs[R7]
+	pz := regs[R8]
+	i := regs[R9]
 
 	// p = µ[po ... po+pz]
 	p := make([]byte, pz)
@@ -155,7 +155,7 @@ func Machine(
 	}
 
 	// (φ′7,m′) = (n, m ∪ {n ↦ {p,u,i}})
-	regs[A0] = n
+	regs[R7] = n
 	ctxPair.IntegratedPVMMap[n] = pvm
 
 	return gas, regs, mem, ctxPair, nil
@@ -170,7 +170,7 @@ func Peek(
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	gas -= PeekCost
 
-	n, o, sReg, z := regs[A0], regs[A1], regs[A2], regs[A3]
+	n, o, sReg, z := regs[R7], regs[R8], regs[R9], regs[R10]
 
 	u, exists := ctxPair.IntegratedPVMMap[n]
 	if !exists {
@@ -209,7 +209,7 @@ func Poke(
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	gas -= PokeCost
 
-	n, sReg, o, z := regs[A0], regs[A1], regs[A2], regs[A3]
+	n, sReg, o, z := regs[R7], regs[R8], regs[R9], regs[R10]
 
 	innerPVM, exists := ctxPair.IntegratedPVMMap[n]
 	if !exists {
@@ -249,7 +249,7 @@ func Pages(
 	gas -= PagesCost
 
 	// let [n, p, c, r] = φ7⋅⋅⋅+4
-	n, p, c, r := regs[A0], regs[A1], regs[A2], regs[A3]
+	n, p, c, r := regs[R7], regs[R8], regs[R9], regs[R10]
 
 	// m[n]u if n ∈ K(m);
 	u, exists := ctxPair.IntegratedPVMMap[n]
@@ -322,7 +322,7 @@ func Invoke(
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	gas -= InvokeCost
 	// let [n, o] = φ7,8
-	pvmKey, addr := regs[A0], regs[A1]
+	pvmKey, addr := regs[R7], regs[R8]
 
 	// let (g, w) = (g, w) ∶ E8(g) ⌢ E#8(w) = μo⋅⋅⋅+112 if No⋅⋅⋅+112 ⊂ V∗μ
 	invokeGas, err := readNumber[UGas](mem, addr, 8)
@@ -382,13 +382,13 @@ func Invoke(
 		}
 		if errors.Is(invokeErr, ErrHostCall) {
 			updateIntegratedPVM(true, resultInstr, resultMem)
-			regs[A1] = uint64(hostCall)
+			regs[R8] = uint64(hostCall)
 			return gas, withCode(regs, HOST), mem, ctxPair, nil // (HOST, h, μ*, m*)
 		}
 		pageFault := &ErrPageFault{}
 		if errors.As(invokeErr, &pageFault) {
 			updateIntegratedPVM(false, resultInstr, resultMem)
-			regs[A1] = uint64(pageFault.Address)
+			regs[R8] = uint64(pageFault.Address)
 			return gas, withCode(regs, FAULT), mem, ctxPair, nil
 		}
 		panicErr := &ErrPanic{}
@@ -414,7 +414,7 @@ func Expunge(
 ) (Gas, Registers, Memory, RefineContextPair, error) {
 	gas -= ExpungeCost
 
-	n := regs[A0]
+	n := regs[R7]
 
 	pvm, exists := ctxPair.IntegratedPVMMap[n]
 	if !exists {
@@ -422,7 +422,7 @@ func Expunge(
 	}
 
 	// (φ′7, m′) = (m[n]i, m ∖ n)
-	regs[A0] = uint64(pvm.InstructionCounter)
+	regs[R7] = uint64(pvm.InstructionCounter)
 	delete(ctxPair.IntegratedPVMMap, n)
 
 	return gas, regs, mem, ctxPair, nil

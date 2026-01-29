@@ -133,7 +133,7 @@ func (i *Instance) LoadI32(dst Reg, address uint64) error {
 	if err := i.memory.Read(uint32(address), slice); err != nil {
 		return err
 	}
-	i.setAndSkip(dst, sext(uint64(binary.LittleEndian.Uint32(slice)), 4))
+	i.setAndSkip(dst, signedExtension(uint64(binary.LittleEndian.Uint32(slice)), 4))
 	return nil
 }
 
@@ -465,7 +465,7 @@ func (i *Instance) LoadIndU64(dst Reg, base Reg, offset uint64) error {
 
 // AddImm32 add_imm_32 φ′A = X4((φB + νX) mod 2^32)
 func (i *Instance) AddImm32(dst Reg, regA Reg, value uint64) {
-	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]+value)), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(i.regs[regA]+value)), 4))
 }
 
 // AndImm and_imm ∀i ∈ N64 ∶ B8(φ′A)_i = B8(φB)_i ∧ B8(νX)_i
@@ -485,7 +485,7 @@ func (i *Instance) OrImm(dst Reg, regA Reg, value uint64) {
 
 // MulImm32 mul_imm_32 φ′A = X4((φB ⋅ νX) mod 2^32)
 func (i *Instance) MulImm32(dst Reg, regA Reg, value uint64) {
-	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]*value)), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(i.regs[regA]*value)), 4))
 }
 
 // SetLtUImm set_lt_u_imm φ′A = φB < νX
@@ -500,12 +500,12 @@ func (i *Instance) SetLtSImm(dst Reg, regA Reg, value uint64) {
 
 // ShloLImm32 shlo_l_imm_32 φ′A = X4((φB ⋅ 2^νX mod 32) mod 2^32)
 func (i *Instance) ShloLImm32(dst Reg, regA Reg, value uint64) {
-	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])<<value), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(i.regs[regA])<<value), 4))
 }
 
 // ShloRImm32 shlo_r_imm_32 φ′A = X4(⌊ φB mod 2^32 ÷ 2^νX mod 32 ⌋)
 func (i *Instance) ShloRImm32(dst Reg, regA Reg, value uint64) {
-	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])>>value), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(i.regs[regA])>>value), 4))
 }
 
 // SharRImm32 shar_r_imm_32 φ′A = Z−1_8(⌊ Z4(φB mod 2^32) ÷ 2^νX mod 32 ⌋)
@@ -515,7 +515,7 @@ func (i *Instance) SharRImm32(dst Reg, regA Reg, value uint64) {
 
 // NegAddImm32 neg_add_imm_32 φ′A = X4((νX + 2^32 − φB) mod 2^32)
 func (i *Instance) NegAddImm32(dst Reg, regA Reg, value uint64) {
-	i.setAndSkip(dst, sext(uint64(uint32(value-i.regs[regA])), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(value-i.regs[regA])), 4))
 }
 
 // SetGtUImm set_gt_u_imm φ′A = φB > νX
@@ -530,12 +530,12 @@ func (i *Instance) SetGtSImm(dst Reg, regA Reg, value uint64) {
 
 // ShloLImmAlt32 shlo_l_imm_alt_32 φ′A = X4((νX ⋅ 2φB mod 32) mod 2^32)
 func (i *Instance) ShloLImmAlt32(dst Reg, regB Reg, value uint64) {
-	i.setAndSkip(dst, sext(uint64(uint32(value<<(i.regs[regB]&31))), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(value<<(i.regs[regB]&31))), 4))
 }
 
 // SharRImmAlt32 shlo_r_imm_alt_32 φ′A = X4(⌊ νX mod 2^32 ÷ 2^φB mod 32 ⌋)
 func (i *Instance) SharRImmAlt32(dst Reg, regB Reg, value uint64) {
-	i.setAndSkip(dst, sext(uint64(uint32(value)>>uint32(i.regs[regB]&31)), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(value)>>uint32(i.regs[regB]&31)), 4))
 }
 
 // ShloRImmAlt32 shar_r_imm_alt_32 φ′A = Z−1_8(⌊ Z4(νX mod 2^32) ÷ 2φB mod 32 ⌋)
@@ -572,12 +572,12 @@ func (i *Instance) MulImm64(dst Reg, regA Reg, value uint64) {
 
 // ShloLImm64 shlo_l_imm_64 φ′A = X8((φB ⋅ 2^νX mod 64) mod 2^64)
 func (i *Instance) ShloLImm64(dst Reg, regA Reg, value uint64) {
-	i.setAndSkip(dst, sext(i.regs[regA]<<value, 8))
+	i.setAndSkip(dst, signedExtension(i.regs[regA]<<value, 8))
 }
 
 // ShloRImm64 shlo_r_imm_64 φ′A = X8(⌊ φB ÷ 2^νX mod 64 ⌋)
 func (i *Instance) ShloRImm64(dst Reg, regA Reg, value uint64) {
-	i.setAndSkip(dst, sext(i.regs[regA]>>value, 8))
+	i.setAndSkip(dst, signedExtension(i.regs[regA]>>value, 8))
 }
 
 // SharRImm64 shar_r_imm_64 φ′A = Z−1_8(⌊ Z8(φB) ÷ 2νX mod 64 ⌋)
@@ -617,12 +617,12 @@ func (i *Instance) RotateRight64ImmAlt(dst Reg, regA Reg, value uint64) {
 
 // RotateRight32Imm rot_r_32_imm φ′A = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_i = B4(φB)_{(i+νX ) mod 32}
 func (i *Instance) RotateRight32Imm(dst Reg, regA Reg, value uint64) {
-	i.setAndSkip(dst, sext(uint64(bits.RotateLeft32(uint32(i.regs[regA]), -int(value))), 4))
+	i.setAndSkip(dst, signedExtension(uint64(bits.RotateLeft32(uint32(i.regs[regA]), -int(value))), 4))
 }
 
 // RotateRight32ImmAlt rot_r_32_imm_alt φ′A = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_i = B4(νX)_{(i+φB) mod 32}
 func (i *Instance) RotateRight32ImmAlt(dst Reg, regA Reg, value uint64) {
-	i.setAndSkip(dst, sext(uint64(bits.RotateLeft32(uint32(value), -int(uint32(i.regs[regA])))), 4))
+	i.setAndSkip(dst, signedExtension(uint64(bits.RotateLeft32(uint32(value), -int(uint32(i.regs[regA])))), 4))
 }
 
 // BranchEq branch_eq branch(νX, φA = φB)
@@ -664,17 +664,17 @@ func (i *Instance) LoadImmJumpInd(regA Reg, base Reg, value, offset uint64) erro
 
 // Add32 add_32 φ′D = X4((φA + φB) mod 2^32)
 func (i *Instance) Add32(dst Reg, regA, regB Reg) {
-	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]+i.regs[regB])), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(i.regs[regA]+i.regs[regB])), 4))
 }
 
 // Sub32 sub_32 φ′D = X4((φA + 2^32 − (φB mod 2^32)) mod 2^32)
 func (i *Instance) Sub32(dst Reg, regA, regB Reg) {
-	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]-i.regs[regB])), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(i.regs[regA]-i.regs[regB])), 4))
 }
 
 // Mul32 mul_32 φ′D = X4((φA ⋅ φB) mod 2^32)
 func (i *Instance) Mul32(dst Reg, regA, regB Reg) {
-	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA]*i.regs[regB])), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(i.regs[regA]*i.regs[regB])), 4))
 }
 
 // DivU32 div_u_32 φ′D = 2^64 − 1 if φB mod 2^32 = 0 otherwise X4(⌊ (φA mod 2^32) ÷ (φB mod 2^32) ⌋)
@@ -683,7 +683,7 @@ func (i *Instance) DivU32(dst Reg, regA, regB Reg) {
 	if rhs == 0 {
 		i.regs[dst] = math.MaxUint64
 	} else {
-		i.regs[dst] = sext(uint64(lhs/rhs), 4)
+		i.regs[dst] = signedExtension(uint64(lhs/rhs), 4)
 	}
 	i.skip()
 }
@@ -710,9 +710,9 @@ func (i *Instance) DivS32(dst Reg, regA, regB Reg) {
 func (i *Instance) RemU32(dst Reg, regA, regB Reg) {
 	lhs, rhs := uint32(i.regs[regA]), uint32(i.regs[regB])
 	if rhs == 0 {
-		i.regs[dst] = sext(uint64(lhs), 4)
+		i.regs[dst] = signedExtension(uint64(lhs), 4)
 	} else {
-		i.regs[dst] = sext(uint64(lhs%rhs), 4)
+		i.regs[dst] = signedExtension(uint64(lhs%rhs), 4)
 	}
 	i.skip()
 }
@@ -735,12 +735,12 @@ func (i *Instance) RemS32(dst Reg, regA, regB Reg) {
 
 // ShloL32 shlo_l_32 φ′D = X4((φA ⋅ 2φB mod 32) mod 2^32)
 func (i *Instance) ShloL32(dst Reg, regA, regB Reg) {
-	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])<<(uint32(i.regs[regB])%32)), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(i.regs[regA])<<(uint32(i.regs[regB])%32)), 4))
 }
 
 // ShloR32 shlo_r_32 φ′D = X4(⌊ (φA mod 2^32) ÷ 2φB mod 32 ⌋)
 func (i *Instance) ShloR32(dst Reg, regA, regB Reg) {
-	i.setAndSkip(dst, sext(uint64(uint32(i.regs[regA])>>(uint32(i.regs[regB])%32)), 4))
+	i.setAndSkip(dst, signedExtension(uint64(uint32(i.regs[regA])>>(uint32(i.regs[regB])%32)), 4))
 }
 
 // SharR32 shar_r_32 φ′D = Z−1_8(⌊ Z4(φA mod 2^32) ÷ 2φB mod 32 ⌋)
@@ -909,7 +909,7 @@ func (i *Instance) RotateLeft64(dst Reg, regA, regB Reg) {
 
 // RotateLeft32 rot_l_32 φ′D = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_{(i+φB) mod 32} = B4(φA)_i
 func (i *Instance) RotateLeft32(dst Reg, regA, regB Reg) {
-	i.setAndSkip(dst, sext(uint64(bits.RotateLeft32(uint32(i.regs[regA]), int(i.regs[regB]))), 4))
+	i.setAndSkip(dst, signedExtension(uint64(bits.RotateLeft32(uint32(i.regs[regA]), int(i.regs[regB]))), 4))
 }
 
 // RotateRight64 rot_r_64 ∀i ∈ N64 ∶ B8(φ′D)_i = B8(φA)_{(i+φB ) mod 64}
@@ -919,7 +919,7 @@ func (i *Instance) RotateRight64(dst Reg, regA, regB Reg) {
 
 // RotateRight32 rot_r_32 φ′D = X4(x) where x ∈ N2^32, ∀i ∈ N32 ∶ B4(x)_i = B4(φA)_{(i+φB) mod 32}
 func (i *Instance) RotateRight32(dst Reg, regA, regB Reg) {
-	i.setAndSkip(dst, sext(uint64(bits.RotateLeft32(uint32(i.regs[regA]), -int(i.regs[regB]))), 4))
+	i.setAndSkip(dst, signedExtension(uint64(bits.RotateLeft32(uint32(i.regs[regA]), -int(i.regs[regB]))), 4))
 }
 
 // AndInverted and_inv ∀i ∈ N64 ∶ B8(φ′D)_i = B8(φA)i ∧ ¬B8(φB)_i
